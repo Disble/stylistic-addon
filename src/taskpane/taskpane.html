@@ -32,12 +32,16 @@
         <pre id="doc-preview" class="doc-preview" style="display: none;"></pre>
 
         <div class="stylistic-section">
-            <button id="btn-test-suggestion" class="stylistic-btn stylistic-btn--primary ms-font-m">
-                <i class="ms-Icon ms-Icon--EditNote"></i> Sugerencia de prueba
+            <button id="btn-analyze" class="stylistic-btn stylistic-btn--primary ms-font-m">
+                <i class="ms-Icon ms-Icon--AnalyticsView"></i>
+                <span id="btn-analyze-label">Analizar y sugerir</span>
             </button>
-            <p class="ms-font-xs ms-fontColor-neutralSecondary hint-text">
-                Busca la primera palabra del documento y la reemplaza como Track Change.
-            </p>
+        </div>
+
+        <div id="results-panel" class="results-panel" style="display: none;">
+            <h2 class="ms-font-m-plus results-title">Resultados</h2>
+            <div id="results-summary" class="results-summary ms-font-s"></div>
+            <ul id="results-list" class="results-list ms-font-s"></ul>
         </div>
 
         <div id="status-bar" class="stylistic-status" style="display: none;"></div>

@@ -115,10 +115,76 @@ body {
   color: #a80000;
 }
 
-/* Hint text */
-.hint-text {
-  margin: 6px 0 0;
-  padding-left: 2px;
+/* Results panel */
+.results-panel {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #d2d0ce;
+  border-radius: 4px;
+}
+
+.results-title {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: #323130;
+}
+
+.results-summary {
+  margin-bottom: 8px;
+  color: #605e5c;
+}
+
+.results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.results-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid #f3f2f1;
+}
+
+.results-list li:last-child {
+  border-bottom: none;
+}
+
+.result-change {
+  color: #323130;
+}
+
+.result-original {
+  text-decoration: line-through;
+  color: #a80000;
+}
+
+.result-arrow {
+  color: #605e5c;
+  margin: 0 4px;
+}
+
+.result-suggested {
+  color: #107c10;
+  font-weight: 600;
+}
+
+.result-justification {
+  display: block;
+  color: #605e5c;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.result-failed {
+  color: #a80000;
+  font-style: italic;
+}
+
+/* Button disabled state */
+.stylistic-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Sideload message */
