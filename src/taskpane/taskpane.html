@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stylistic</title>
+
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"/>
+    <link href="taskpane.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body class="ms-font-m ms-Fabric">
+    <section id="sideload-msg" class="sideload-msg">
+        <h2 class="ms-font-xl">Please <a target="_blank" href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a> your add-in to see app body.</h2>
+    </section>
+
+    <main id="app-body" style="display: none;">
+        <header class="stylistic-header">
+            <h1 class="ms-font-xl">Stylistic</h1>
+            <p class="ms-font-s ms-fontColor-neutralSecondary">Editorial suggestions via Track Changes</p>
+        </header>
+
+        <div class="stylistic-section">
+            <button id="btn-read" class="stylistic-btn ms-font-m">
+                <i class="ms-Icon ms-Icon--ReadingMode"></i> Leer documento
+            </button>
+        </div>
+
+        <pre id="doc-preview" class="doc-preview" style="display: none;"></pre>
+
+        <div class="stylistic-section">
+            <button id="btn-test-suggestion" class="stylistic-btn stylistic-btn--primary ms-font-m">
+                <i class="ms-Icon ms-Icon--EditNote"></i> Sugerencia de prueba
+            </button>
+            <p class="ms-font-xs ms-fontColor-neutralSecondary hint-text">
+                Busca la primera palabra del documento y la reemplaza como Track Change.
+            </p>
+        </div>
+
+        <div id="status-bar" class="stylistic-status" style="display: none;"></div>
+    </main>
+</body>
+
+</html>

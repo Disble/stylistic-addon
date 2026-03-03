@@ -1,0 +1,132 @@
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #fafafa;
+}
+
+#app-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* Header */
+.stylistic-header {
+  padding: 20px 0 12px;
+  border-bottom: 2px solid #0078d7;
+  margin-bottom: 16px;
+}
+
+.stylistic-header h1 {
+  margin: 0;
+  color: #0078d7;
+  font-weight: 600;
+}
+
+.stylistic-header p {
+  margin: 4px 0 0;
+}
+
+/* Sections */
+.stylistic-section {
+  margin-bottom: 16px;
+}
+
+/* Buttons */
+.stylistic-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #d2d0ce;
+  border-radius: 4px;
+  background: #fff;
+  color: #323130;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.stylistic-btn:hover {
+  background: #f3f2f1;
+  border-color: #0078d7;
+}
+
+.stylistic-btn:active {
+  background: #edebe9;
+}
+
+.stylistic-btn--primary {
+  background: #0078d7;
+  color: #fff;
+  border-color: #0078d7;
+}
+
+.stylistic-btn--primary:hover {
+  background: #106ebe;
+  border-color: #106ebe;
+}
+
+.stylistic-btn--primary:active {
+  background: #005a9e;
+}
+
+/* Document preview */
+.doc-preview {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #d2d0ce;
+  border-radius: 4px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  color: #323130;
+}
+
+/* Status bar */
+.stylistic-status {
+  position: sticky;
+  bottom: 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  text-align: center;
+  margin-top: auto;
+  font-size: 12px;
+}
+
+.stylistic-status.success {
+  background: #dff6dd;
+  color: #107c10;
+}
+
+.stylistic-status.error {
+  background: #fde7e9;
+  color: #a80000;
+}
+
+/* Hint text */
+.hint-text {
+  margin: 6px 0 0;
+  padding-left: 2px;
+}
+
+/* Sideload message */
+.sideload-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  height: 100%;
+}
