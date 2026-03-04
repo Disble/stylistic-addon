@@ -55,31 +55,14 @@
             <ul id="results-list" class="results-list ms-font-s"></ul>
         </div>
 
-        <div id="status-bar" class="stylistic-status" style="display: none;"></div>
-
-        <hr class="poc-divider" />
-        <div class="poc-section">
-            <h2 class="ms-font-m-plus poc-title">PoC: Tracked Change Comparison</h2>
-            <p class="ms-font-s ms-fontColor-neutralSecondary">
-                Escribe texto en el documento, luego ingresa el texto original y el reemplazo.
-                Prueba ambos métodos y compara cuántos tracked changes genera cada uno.
-            </p>
-            <label for="poc-original" class="stylistic-label ms-font-s">Texto original</label>
-            <input id="poc-original" type="text" class="stylistic-input ms-font-m" placeholder="ej: hola" />
-            <label for="poc-replacement" class="stylistic-label ms-font-s">Texto de reemplazo</label>
-            <input id="poc-replacement" type="text" class="stylistic-input ms-font-m" placeholder="ej: adios" />
-            <div class="poc-buttons">
-                <button id="btn-poc-inserttext" class="stylistic-btn stylistic-btn--poc ms-font-m">
-                    <i class="ms-Icon ms-Icon--TestBeaker"></i>
-                    <span id="btn-poc-inserttext-label">A: insertText + TrackAll</span>
-                </button>
-                <button id="btn-poc-ooxml" class="stylistic-btn stylistic-btn--poc stylistic-btn--poc-alt ms-font-m">
-                    <i class="ms-Icon ms-Icon--TestBeaker"></i>
-                    <span id="btn-poc-ooxml-label">B: OOXML markup</span>
-                </button>
-            </div>
-            <div id="poc-result" class="poc-result ms-font-s" style="display: none;"></div>
+        <div class="stylistic-section" id="cleanup-section" style="display: none;">
+            <button id="btn-cleanup" class="stylistic-btn stylistic-btn--secondary ms-font-m">
+                <i class="ms-Icon ms-Icon--EraseTool"></i>
+                <span id="btn-cleanup-label">Limpiar comentarios resueltos</span>
+            </button>
         </div>
+
+        <div id="status-bar" class="stylistic-status" style="display: none;"></div>
     </main>
 </body>
 

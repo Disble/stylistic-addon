@@ -18,7 +18,7 @@ Stylistic is a **frontend-only** Word add-in that communicates with a **Mastra b
 │                                                 │
 │  taskpane.ts — UI orchestrator                  │
 │  ├── wordApi.ts    — Read document, apply       │
-│  │                   Track Changes in batches   │
+│  │                   Track Changes via OOXML    │
 │  ├── mastraClient.ts — Workflow execution       │
 │  │                     via @mastra/client-js     │
 │  └── chunker.ts    — Split large texts at       │
@@ -32,7 +32,7 @@ Stylistic is a **frontend-only** Word add-in that communicates with a **Mastra b
 | Layer | Module | Responsibility | Imports Office.js? |
 |---|---|---|---|
 | UI | `taskpane.ts` | Event handling, progress, rendering | No (delegates) |
-| API | `wordApi.ts` | Document read/write, Track Changes | Yes (only module) |
+| API | `wordApi.ts` | Document read/write, OOXML tracked changes, comment cleanup | Yes (only module) |
 | Backend | `mastraClient.ts` | Workflow execution, retry logic | No |
 | Chunker | `chunker.ts` | Text splitting at paragraph boundaries | No |
 | Config | `config.ts` | Internal constants and defaults | No |
@@ -44,8 +44,10 @@ See [docs/architecture.md](docs/architecture.md) for a detailed walkthrough.
 
 - **AI-powered analysis** — detects redundancy, filler words, style issues, and more via a Mastra workflow
 - **Native Track Changes** — suggestions appear as real Word revisions (strikethrough + underline), reviewable from the Review tab
+- **Justification comments** — each tracked change includes a Word comment with the editorial category and reason
+- **Comment cleanup** — a "Limpiar comentarios resueltos" button removes orphaned comments after the user accepts/rejects tracked changes
 - **Large document support** — handles documents with 200,000+ words through paragraph-boundary chunking
-- **Batched application** — suggestions are applied in independent batches, preventing data loss on errors
+- **Severity levels** — suggestions include severity (high/medium/low) for prioritization
 - **Reliability first** — retry logic with exponential backoff, partial success reporting, preserve-and-restore tracking mode
 - **Non-destructive** — preserves the document's original tracking mode after analysis
 - **Simple UI** — one-click analysis with a profile dropdown, progress bar, and results panel
@@ -84,6 +86,7 @@ This starts the dev server on `https://localhost:3000` and sideloads the add-in 
 2. Click **"Analizar y sugerir"**.
 3. Watch the progress bar as chunks are analyzed and suggestions are applied.
 4. Open the **Review** tab to accept or reject tracked changes.
+5. Click **"Limpiar comentarios resueltos"** to remove comments from resolved changes.
 
 ## Project Structure
 
@@ -94,9 +97,9 @@ stylistic-addon/
 │   │   ├── commands.ts          # Ribbon command handler
 │   │   └── commands.html
 │   ├── lib/
-│   │   ├── types.ts             # Shared interfaces (Suggestion, InsertionResult, etc.)
-│   │   ├── config.ts            # Constants (Mastra URL, batch sizes, retry policy)
-│   │   ├── wordApi.ts           # Office.js abstraction layer (read + batched write)
+│   │   ├── types.ts             # Shared interfaces (Suggestion, WorkflowInput, etc.)
+│   │   ├── config.ts            # Constants (Mastra URL, retry policy)
+│   │   ├── wordApi.ts           # Office.js abstraction (OOXML tracked changes + cleanup)
 │   │   ├── mastraClient.ts      # Mastra workflow client with retry logic
 │   │   └── chunker.ts           # Paragraph-boundary text splitting
 │   └── taskpane/
@@ -139,7 +142,7 @@ stylistic-addon/
 | Word Online | Supported (no version constraint) |
 | Mastra Server | `@mastra/client-js` v1.7.1 compatible |
 
-The add-in requires **WordApi 1.6** for `changeTrackingMode` support. Word Online has full support regardless of client version.
+The add-in requires **WordApi 1.6** for `changeTrackingMode` and tracked change range comparison support. Word Online has full support regardless of client version.
 
 ## Dependencies
 
@@ -164,7 +167,7 @@ The add-in requires **WordApi 1.6** for `changeTrackingMode` support. Word Onlin
 - **Co-authoring** — the add-in should not be used while multiple authors are actively editing the same document.
 - **DRM/RMS protected documents** — protected documents cannot be modified by add-ins.
 - **Backend required** — the add-in requires a running Mastra server with the editorial workflow deployed.
-- **Language** — currently supports Spanish text analysis only.
+- **Language** — currently sends `"es"` (Spanish) as the language code. Multi-language support requires a language selector in the UI.
 
 ## Contributing
 

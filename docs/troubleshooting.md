@@ -155,9 +155,41 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Possible causes:**
 
-1. **The text was already replaced** by a previous suggestion in the same batch. This happens when one suggestion's replacement removes text that another suggestion targets.
+1. **The text was already replaced** by a previous suggestion. Since each suggestion is applied in its own `Word.run`, earlier replacements may remove text that later suggestions target.
 2. **Backend returned non-exact matches.** The `originalText` from the workflow must be an exact, case-sensitive substring of the document text. See [api-contract.md](api-contract.md) for details.
 3. **Hidden characters.** The document may contain non-breaking spaces, soft hyphens, or other invisible characters that break the match.
+
+---
+
+## Comment Cleanup Issues
+
+### "Limpiar comentarios" button doesn't appear
+
+**Symptom:** After applying suggestions, the cleanup button is not visible.
+
+**Cause:** No suggestions were successfully applied. The button only appears when `successCount > 0`.
+
+**Fix:** Verify that suggestions were applied by checking the results panel.
+
+---
+
+### Cleanup deletes 0 comments
+
+**Symptom:** Clicking "Limpiar comentarios resueltos" shows "0 eliminado(s)".
+
+**Cause:** All tracked changes are still pending — none have been accepted or rejected yet.
+
+**Expected behavior.** The cleanup only removes comments for resolved tracked changes. Accept or reject some tracked changes first, then click cleanup.
+
+---
+
+### Cleanup keeps comments it shouldn't
+
+**Symptom:** After accepting all tracked changes, some Stylistic comments remain.
+
+**Possible cause:** The comment cleanup uses range colocation (comparing the document position of comments and tracked changes). If a comment's anchor range was shifted by other edits, the position comparison may not detect it as orphaned.
+
+**Fix:** Run the cleanup again — after the first pass removes some comments, the remaining ones may now be correctly identified. If comments persist, manually delete them from the Review pane.
 
 ---
 

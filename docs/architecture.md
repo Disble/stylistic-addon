@@ -7,37 +7,36 @@ This document describes the layered architecture of Stylistic, the data flow bet
 1. **Separation of concerns** — each module owns a single responsibility. The UI never calls Word directly. The Word API layer never calls the backend. The backend client never touches the DOM.
 2. **No frontend business logic** — all text analysis is performed server-side by a Mastra workflow. The frontend is purely UI/UX + transport.
 3. **Preserve-and-restore** — the add-in always reads the document's `changeTrackingMode` before modifying it and restores it when done, even if an error occurs (via `try/finally`).
-4. **Batched operations** — suggestions are applied in groups via separate `Word.run` calls, each independently committed. This prevents a single failure from losing all progress.
-5. **Reliability over speed** — every chunk and batch has retry logic. Partial failures are reported, not fatal. The user gets as many suggestions as possible.
+4. **Per-suggestion isolation** — each suggestion is applied in its own `Word.run` call. This prevents stale ranges after OOXML insertions shift text, and ensures partial failures don't lose already-applied changes.
+5. **Reliability over speed** — every chunk has retry logic. Partial failures are reported, not fatal. The user gets as many suggestions as possible.
 
 ## System Overview
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Word Add-in (Frontend)            │
-│                                                     │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  taskpane.ts — UI orchestrator                │  │
-│  │  Events, progress, rendering                  │  │
-│  └──────┬──────────────┬──────────────┬──────────┘  │
-│         │              │              │              │
-│  ┌──────▼──────┐ ┌─────▼──────┐ ┌────▼─────┐       │
-│  │ wordApi.ts  │ │mastraClient│ │chunker.ts│       │
-│  │ Office.js   │ │ .ts        │ │ text     │       │
-│  │ read/write  │ │ workflow   │ │ splitting│       │
-│  └──────┬──────┘ │ execution  │ └──────────┘       │
-│         │        └─────┬──────┘                     │
-│         ▼              │                             │
-│  ┌────────────┐        │                             │
-│  │ Word       │        │  HTTP (Mastra client-js)    │
-│  │ Document   │        │                             │
-│  └────────────┘        ▼                             │
-│                 ┌──────────────┐                     │
-│                 │ Mastra Server│                     │
-│                 │ (Backend)    │                     │
-│                 └──────────────┘                     │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│  Word Add-in (Frontend)                         │
+│                                                 │
+│  taskpane.ts — UI orchestrator                  │
+│  ├── wordApi.ts    — Read document, apply       │
+│  │                   Track Changes via OOXML    │
+│  ├── mastraClient.ts — Workflow execution       │
+│  │                     via @mastra/client-js     │
+│  └── chunker.ts    — Split large texts at       │
+│                      paragraph boundaries       │
+├─────────────────────────────────────────────────┤
+│  Mastra Backend (separate application)          │
+│  └── editorial-workflow — AI text analysis      │
+└─────────────────────────────────────────────────┘
 ```
+
+| Layer | Module | Responsibility | Imports Office.js? |
+|---|---|---|---|
+| UI | `taskpane.ts` | Event handling, progress, rendering | No (delegates) |
+| API | `wordApi.ts` | Document read/write, OOXML tracked changes, comment cleanup | Yes (only module) |
+| Backend | `mastraClient.ts` | Workflow execution, retry logic | No |
+| Chunker | `chunker.ts` | Text splitting at paragraph boundaries | No |
+| Config | `config.ts` | Internal constants and defaults | No |
+| Types | `types.ts` | Shared interfaces | No |
 
 ## Module Map
 
@@ -45,8 +44,8 @@ This document describes the layered architecture of Stylistic, the data flow bet
 src/
 ├── lib/
 │   ├── types.ts          ← Shared interfaces (no runtime code)
-│   ├── config.ts         ← Constants (URLs, batch sizes, retry policy)
-│   ├── wordApi.ts        ← Word API abstraction (only Office.js consumer)
+│   ├── config.ts         ← Constants (URLs, retry policy)
+│   ├── wordApi.ts        ← Word API abstraction (OOXML tracked changes + cleanup)
 │   ├── mastraClient.ts   ← Mastra workflow client (@mastra/client-js wrapper)
 │   └── chunker.ts        ← Text chunking (pure function, paragraph-boundary)
 └── taskpane/
@@ -67,7 +66,6 @@ taskpane.ts
 
 wordApi.ts
 ├── imports types.ts
-├── imports config.ts
 └── uses global: Word (Office.js)
 
 mastraClient.ts
@@ -111,7 +109,7 @@ taskpane.ts: handleAnalyze()
         │         └── returns TextChunk[]
         │
         ├──► For each chunk (sequential):
-        │     └── mastraClient.analyzeChunk(chunk, profile)
+        │     └── mastraClient.analyzeChunk(chunk, profile, language)
         │           └── workflow.createRun() → run.start({ inputData })
         │           └── retry on failure (up to 3 times, exponential backoff)
         │           └── returns ChunkResult { suggestions[], error? }
@@ -121,25 +119,76 @@ taskpane.ts: handleAnalyze()
         │
         ├──► wordApi.applySuggestionsInBatches(suggestions, onProgress)
         │         │
-        │         ├── Word.run #1: save + set TrackAll
-        │         ├── Word.run #2..N: for each batch of 30:
-        │         │     ├── Enqueue body.search() for each suggestion
-        │         │     ├── context.sync() (one round-trip)
-        │         │     ├── insertText(replace) for found matches
-        │         │     ├── context.sync() (commit)
-        │         │     └── report progress via callback
-        │         └── Word.run #final (finally): restore tracking mode
+        │         └── For each suggestion (one Word.run per suggestion):
+        │               ├── body.search(originalText, matchCase)
+        │               ├── Extract <w:rPr> formatting from matched range
+        │               ├── Disable changeTrackingMode
+        │               ├── Build OOXML package:
+        │               │     ├── <w:del> with original text
+        │               │     ├── <w:ins> with replacement text
+        │               │     └── <w:comment> with [Category] + justification
+        │               ├── range.insertOoxml(package, replace)
+        │               ├── Restore changeTrackingMode (in finally block)
+        │               └── Report progress via callback
         │         └── returns InsertionResult
+        │
+        ├──► Shows "Limpiar comentarios resueltos" button
         │
         └──► taskpane.ts: renderResults(suggestions, result, chunkErrors)
                   └── Displays applied/failed suggestions in the task pane
 ```
 
+### Comment Cleanup Flow
+
+After the user accepts or rejects tracked changes in Word, comments remain orphaned. The cleanup flow:
+
+```
+User clicks "Limpiar comentarios resueltos"
+        │
+        ▼
+taskpane.ts: handleCleanup()
+        │
+        └──► wordApi.cleanupResolvedComments()
+                  │
+                  ├── Sync 1: Load all tracked changes (author, type)
+                  │           and comments (authorName) from the document
+                  │
+                  ├── Filter to Stylistic-authored items only
+                  │
+                  ├── Sync 2: Get document ranges for each comment
+                  │           and tracked change via getRange()
+                  │
+                  ├── Sync 3: Compare every comment range against
+                  │           every TC range via compareLocationWith()
+                  │
+                  ├── For each Stylistic comment:
+                  │     └── If no TC overlaps → orphaned → delete()
+                  │     └── If TC overlaps → still pending → keep
+                  │
+                  └── Sync 4: Execute deletes
+                  └── returns { deleted, kept }
+```
+
+## OOXML Strategy
+
+All changes are applied via flat OPC OOXML packages rather than Word's `insertText()` API. Each package contains 4 parts:
+
+1. **`/_rels/.rels`** — Package relationships (points to document.xml)
+2. **`/word/_rels/document.xml.rels`** — Document relationships (points to comments.xml)
+3. **`/word/document.xml`** — Tracked change markup (`<w:del>` + `<w:ins>`) with comment anchors
+4. **`/word/comments.xml`** — Formatted justification (bold category + justification text)
+
+This approach ensures:
+- The tracked change blue card shows `w:author="Stylistic"` cleanly
+- The comment appears as a margin balloon with formatting
+- Original text formatting (`<w:rPr>`) is preserved in the tracked change
+- No double-tracking: the document's `changeTrackingMode` is temporarily disabled during OOXML insertion
+
 ## Key Design Decisions
 
 ### Why a Mastra workflow instead of a local analyzer?
 
-The PoC used a local regex-based analyzer (`analyzer.ts`). The production version uses an AI-powered backend for:
+The production version uses an AI-powered backend for:
 - **Semantic understanding** — AI can detect context-dependent issues that regex cannot.
 - **Extensibility** — new analysis rules are prompt changes, not code changes.
 - **Separation of concerns** — the frontend doesn't need to know about NLP, models, or prompts.
@@ -150,20 +199,18 @@ Mastra provides a typed SDK that handles workflow execution, run management, and
 
 ### Why chunk on the frontend?
 
-The backend's AI model has a context window limit. Rather than sending a 1.2 MB document and hoping the backend handles it, the frontend:
+The backend's AI model has a context window limit. Rather than sending a large document and hoping the backend handles it, the frontend:
 1. Chunks at paragraph boundaries (preserving semantic context).
 2. Sends chunks sequentially (one workflow execution per chunk).
 3. Retries individual chunks on failure (not the entire document).
 4. Reports chunk-level progress to the user.
 
-### Why separate Word.run per batch?
+### Why one Word.run per suggestion?
 
-Each `Word.run` is an independent transaction. Changes from `Word.run #3` are committed to the document before `Word.run #4` starts. If `#4` fails:
-- Suggestions from batches 1–3 are already saved as tracked changes.
-- The user doesn't lose progress.
-- The failure is reported, not catastrophic.
-
-The alternative (one `Word.run` for all suggestions) risks losing everything if it fails mid-execution.
+Each suggestion is applied in its own `Word.run` to avoid stale ranges. After an OOXML insertion replaces a range, all subsequent ranges in the document may shift. By using a fresh `Word.run` per suggestion:
+- Each search starts from a clean document state
+- A failure in suggestion N doesn't affect suggestions 1..(N-1)
+- Progress is reported after each individual suggestion
 
 ### Why `start()` instead of `stream()` for workflows?
 
@@ -176,13 +223,20 @@ The alternative (one `Word.run` for all suggestions) risks losing everything if 
 
 Multiple chunks may contain the same phrase. Without deduplication, the second `body.search()` for the same `originalText` would find the already-replaced text and fail. Deduplication is a data integrity measure (preventing duplicate Track Changes), not business logic.
 
+### Why range colocation for comment cleanup?
+
+Comments and tracked changes have no direct link in the Word API. The cleanup uses `Comment.getRange()` and `TrackedChange.getRange()` with `Range.compareLocationWith()` to determine if a comment is still anchored to a pending tracked change. This approach:
+- Uses the document as the source of truth (no in-memory state)
+- Works across sessions (no registry to persist)
+- Never deletes comments it can't positively identify as orphaned
+
 ## Error Handling Strategy
 
 Errors are handled at four levels:
 
 | Level | Module | Strategy |
 |---|---|---|
-| Word API | `wordApi.ts` | `try/finally` ensures tracking mode is always restored. Each batch is independent. |
+| Word API | `wordApi.ts` | `try/finally` ensures tracking mode is always restored. Each suggestion is independent. |
 | Backend | `mastraClient.ts` | Retry with exponential backoff (3 attempts). Never throws — returns empty result on failure. |
 | Orchestrator | `taskpane.ts` | `try/catch` around the full pipeline. Errors translated via `toUserMessage()`. Partial results are preserved. |
 | UI | `taskpane.ts` | `setAnalyzeLoading(false)` runs in `finally`. Progress bar resets on completion. |
@@ -191,5 +245,5 @@ Errors are handled at four levels:
 
 The system is designed for partial success:
 - If 3/5 chunks succeed → suggestions from those 3 chunks are applied.
-- If 25/30 suggestions in a batch are found → those 25 are applied, 5 are reported as "not found".
+- If 25/30 suggestions are found → those 25 are applied, 5 are reported as "not found".
 - The results panel always shows the complete picture: applied count, failed count, and chunk errors.

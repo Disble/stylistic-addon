@@ -35,17 +35,14 @@ The workflow must accept this `inputData`:
 
 ```typescript
 interface WorkflowInput {
-  /** Text chunk to analyze (up to ~100K characters). */
+  /** Text to analyze (up to ~100K characters). */
   text: string;
 
   /** Analysis profile: "general", "formal", or "academic". */
   profile: string;
 
-  /** Zero-based index of this chunk within the full document. */
-  chunkIndex: number;
-
-  /** Total number of chunks the document was split into. */
-  totalChunks: number;
+  /** ISO 639-1 language code of the text (e.g., "es", "en"). */
+  language: string;
 }
 ```
 
@@ -55,10 +52,15 @@ interface WorkflowInput {
 {
   "text": "Básicamente, es completamente necesario utilizar este periodo de tiempo con el objetivo de realizar la tarea.",
   "profile": "formal",
-  "chunkIndex": 0,
-  "totalChunks": 1
+  "language": "es"
 }
 ```
+
+### Notes on Input Fields
+
+- **`text`** — The frontend chunks large documents at paragraph boundaries and sends each chunk as a separate workflow execution. The backend receives plain text and should not assume anything about document structure.
+- **`profile`** — Determines the editorial analysis style. If the backend doesn't differentiate between profiles, it can ignore the field — the frontend handles this gracefully.
+- **`language`** — The text's language. Currently the frontend always sends `"es"` (Spanish). The backend should use this to select the appropriate editorial rules and justification language.
 
 ## Output Format
 
@@ -66,6 +68,7 @@ On `status: "success"`, `result.result` must conform to:
 
 ```typescript
 interface WorkflowOutput {
+  /** Array of editorial suggestions for the analyzed text. */
   suggestions: Array<{
     /** EXACT substring from the input text (case-sensitive). */
     originalText: string;
@@ -78,7 +81,13 @@ interface WorkflowOutput {
 
     /** Category label (e.g., "Redundancia", "Muletilla", "Elección de palabra"). */
     category: string;
+
+    /** How critical the suggestion is. */
+    severity: "high" | "medium" | "low";
   }>;
+
+  /** Optional warnings from the backend (e.g., "text too short for meaningful analysis"). */
+  warnings?: string[];
 }
 ```
 
@@ -91,35 +100,48 @@ interface WorkflowOutput {
       "originalText": "Básicamente, ",
       "suggestedText": "",
       "justification": "Muletilla que debilita la afirmación.",
-      "category": "Muletilla"
+      "category": "Muletilla",
+      "severity": "medium"
     },
     {
       "originalText": "completamente necesario",
       "suggestedText": "necesario",
       "justification": "\"Necesario\" ya implica completitud.",
-      "category": "Redundancia"
+      "category": "Redundancia",
+      "severity": "high"
     },
     {
       "originalText": "utilizar",
       "suggestedText": "usar",
       "justification": "\"Usar\" es más simple y directo.",
-      "category": "Elección de palabra"
+      "category": "Elección de palabra",
+      "severity": "low"
     },
     {
       "originalText": "periodo de tiempo",
       "suggestedText": "periodo",
       "justification": "\"Periodo\" ya denota tiempo.",
-      "category": "Redundancia"
+      "category": "Redundancia",
+      "severity": "high"
     },
     {
       "originalText": "con el objetivo de",
       "suggestedText": "para",
       "justification": "\"Para\" es más directo.",
-      "category": "Elección de palabra"
+      "category": "Elección de palabra",
+      "severity": "medium"
     }
   ]
 }
 ```
+
+### Severity Guidelines
+
+| Severity | When to use | Example |
+|---|---|---|
+| `high` | Clear errors, redundancies, grammatical issues | "periodo de tiempo" → "periodo" |
+| `medium` | Stylistic improvements, filler words | "Básicamente, " → "" |
+| `low` | Minor preferences, optional simplifications | "utilizar" → "usar" |
 
 ## Critical Constraint: Exact Substring Matching
 
@@ -147,8 +169,6 @@ The `profile` field tells the workflow what analysis style to apply:
 | `formal` | Business and professional tone | Conservative |
 | `academic` | Academic and technical writing | Conservative, respects domain terms |
 
-The backend may adjust the AI model's instructions based on the profile. If the backend doesn't differentiate between profiles, it can ignore the field — the frontend handles this gracefully.
-
 ## Error Handling
 
 The frontend handles workflow failures gracefully:
@@ -174,4 +194,4 @@ The backend should be able to handle 100K characters in a single workflow execut
 
 ## Language
 
-The current version analyzes **Spanish text only**. The `text` field will always contain Spanish content. Justification messages should also be in Spanish.
+The `language` field indicates the text's language as an ISO 639-1 code. Currently the frontend sends `"es"` (Spanish). Justification messages should match the text language (Spanish justifications for Spanish text).

@@ -8,17 +8,16 @@
  * Business logic and backend communication MUST NOT live here (SRP).
  *
  * Key design decisions:
- * - **Strategy pattern for tracked changes:** suggestions are classified as
- *   insert, delete, or replace. All types use the normal Word API under
- *   `TrackAll` mode via `insertText(replace)` / `range.delete()`. Word's
- *   native tracking engine handles revision creation.
+ * - **OOXML as primary strategy:** all change types (insert, delete, replace)
+ *   are applied via flat OPC OOXML packages containing tracked-change markup
+ *   (`<w:del>`, `<w:ins>`) and a formatted Word comment with the justification.
+ *   The comment shows as a margin balloon with bold category and justification
+ *   text. The tracked change blue card shows "Stylistic" as author.
+ * - **Per-suggestion processing:** each suggestion is applied in its own
+ *   `Word.run` to avoid stale ranges after OOXML insertions shift text.
  * - **Preserve-and-restore pattern:** the document's `changeTrackingMode` is
  *   saved before modification and restored in a `finally` block, even on error.
- * - **Batched application:** suggestions are applied in groups of
- *   {@link WORD_API_BATCH_SIZE} via separate `Word.run` calls. Each batch
- *   is an independent commit — if batch N fails, batches 1..(N-1) are already
- *   persisted in the document. This maximizes reliability for large documents.
- * - **Progress callbacks:** the caller receives updates after each batch,
+ * - **Progress callbacks:** the caller receives updates after each suggestion,
  *   enabling real-time UI progress reporting.
  *
  * @module wordApi
@@ -30,7 +29,6 @@ import {
   ProgressCallback,
   ChangeType,
 } from "./types";
-import { WORD_API_BATCH_SIZE } from "./config";
 
 // ---------------------------------------------------------------------------
 // Document Reading
@@ -55,22 +53,18 @@ export async function getDocumentText(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /**
- * Applies an array of suggestions as native Word tracked changes, processing
- * them in batches for reliability and progress reporting.
+ * Applies an array of suggestions as native Word tracked changes with
+ * embedded justification comments, processing them one at a time via OOXML.
  *
- * Uses the **Strategy pattern** internally:
- * - Delete suggestions: `range.delete()` under TrackAll.
- * - Insert/Replace suggestions: `insertText(replace)` under TrackAll.
- *
- * Word's native tracking engine creates the revision marks. For replacements,
- * `insertText(replace)` under `TrackAll` lets Word handle the replacement
- * as a single atomic operation.
- *
- * Each `Word.run` is independent — changes are committed after each batch.
- * If batch 5 fails, batches 1–4 are already persisted.
+ * Each suggestion is applied in its own `Word.run`:
+ * 1. Search for the original text.
+ * 2. Extract formatting (`<w:rPr>`) from the matched range.
+ * 3. Disable tracking (to avoid double-tracking the OOXML insertion).
+ * 4. Build and insert the OOXML package (tracked change + comment).
+ * 5. Restore tracking mode.
  *
  * @param suggestions - Array of {@link Suggestion} objects to apply.
- * @param onProgress  - Optional callback invoked after each batch completes.
+ * @param onProgress  - Optional callback invoked after each suggestion.
  * @returns An {@link InsertionResult} with success count and failed suggestions.
  */
 export async function applySuggestionsInBatches(
@@ -81,36 +75,93 @@ export async function applySuggestionsInBatches(
     return { successCount: 0, failedSuggestions: [] };
   }
 
-  const batches = createBatches(suggestions, WORD_API_BATCH_SIZE);
   const allFailed: Suggestion[] = [];
   let totalSuccess = 0;
 
-  // Phase 1: Save tracking mode and enable TrackAll
-  const previousMode = await saveAndEnableTrackAll();
+  for (const suggestion of suggestions) {
+    const result = await applySingleSuggestion(suggestion);
 
-  try {
-    // Phase 2: Apply each batch in a separate Word.run
-    for (const batch of batches) {
-      const batchResult = await applyBatch(batch);
-
-      totalSuccess += batchResult.successCount;
-      allFailed.push(...batchResult.failedSuggestions);
-
-      if (onProgress) {
-        onProgress(
-          "applying",
-          totalSuccess,
-          suggestions.length,
-          `Aplicando sugerencia ${totalSuccess} de ${suggestions.length}...`
-        );
-      }
+    if (result.success) {
+      totalSuccess++;
+    } else {
+      allFailed.push(suggestion);
     }
-  } finally {
-    // Phase 3: Always restore the previous tracking mode
-    await restoreTrackingMode(previousMode);
+
+    if (onProgress) {
+      onProgress(
+        "applying",
+        totalSuccess + allFailed.length,
+        suggestions.length,
+        `Aplicando sugerencia ${totalSuccess + allFailed.length} de ${suggestions.length}...`
+      );
+    }
   }
 
   return { successCount: totalSuccess, failedSuggestions: allFailed };
+}
+
+// ---------------------------------------------------------------------------
+// Internal: Single Suggestion Application
+// ---------------------------------------------------------------------------
+
+/**
+ * Applies a single suggestion as a tracked change with an embedded comment.
+ *
+ * @param suggestion - The suggestion to apply.
+ * @returns An object indicating success or failure.
+ */
+async function applySingleSuggestion(
+  suggestion: Suggestion
+): Promise<{ success: boolean }> {
+  return Word.run(async (context) => {
+    // Search for the original text
+    const results = context.document.body.search(
+      suggestion.originalText,
+      { matchCase: true, matchWholeWord: false }
+    );
+    results.load("items");
+    await context.sync();
+
+    if (results.items.length === 0) {
+      return { success: false };
+    }
+
+    const range = results.items[0];
+
+    // Extract formatting from the original range
+    const rangeOoxml = range.getOoxml();
+    await context.sync();
+    const runProps = extractRunProperties(rangeOoxml.value);
+
+    // Save tracking mode and disable it (OOXML contains its own markup)
+    context.document.load("changeTrackingMode");
+    await context.sync();
+    const previousMode = context.document.changeTrackingMode;
+    context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
+    await context.sync();
+
+    try {
+      // Build and insert the OOXML package
+      const type = classifyChange(suggestion);
+      const ooxml = buildTrackedChangeOoxml(
+        suggestion.originalText,
+        suggestion.suggestedText,
+        suggestion.justification,
+        suggestion.category,
+        type,
+        runProps
+      );
+      range.insertOoxml(ooxml, Word.InsertLocation.replace);
+      await context.sync();
+
+      return { success: true };
+    } finally {
+      // Restore tracking mode
+      context.document.changeTrackingMode =
+        previousMode as Word.ChangeTrackingMode;
+      await context.sync();
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -119,10 +170,6 @@ export async function applySuggestionsInBatches(
 
 /**
  * Determines the type of tracked change operation for a suggestion.
- *
- * - `"delete"`: originalText is non-empty, suggestedText is empty.
- * - `"insert"`: originalText is empty, suggestedText is non-empty.
- * - `"replace"`: both are non-empty and different.
  *
  * @param suggestion - The suggestion to classify.
  * @returns The {@link ChangeType} for this suggestion.
@@ -137,244 +184,111 @@ function classifyChange(suggestion: Suggestion): ChangeType {
 }
 
 // ---------------------------------------------------------------------------
-// Internal: Tracking Mode Management
+// Comment Cleanup
 // ---------------------------------------------------------------------------
 
 /**
- * Saves the document's current `changeTrackingMode` and sets it to `TrackAll`.
+ * Deletes Stylistic comments whose tracked changes have been resolved
+ * (accepted or rejected by the user). Keeps comments for still-pending
+ * tracked changes and never touches comments from other authors.
  *
- * @returns The previous tracking mode value, to be restored later.
+ * Pattern: Range Colocation
+ * Uses the Word API's spatial range comparison to determine which comments
+ * are still anchored to a pending tracked change. No in-memory registry
+ * needed — the document itself is the source of truth.
+ *
+ * 1. Load all Stylistic comments and tracked changes.
+ * 2. Get the document range for each (comment.getRange(), tc.getRange()).
+ * 3. For each comment, check if any TC range overlaps with it.
+ * 4. No overlap → orphaned (TC was resolved) → delete.
+ * 5. Overlap found → TC still pending → keep.
+ *
+ * @returns Counts of deleted and kept Stylistic comments.
  */
-async function saveAndEnableTrackAll(): Promise<string> {
+export async function cleanupResolvedComments(): Promise<{
+  deleted: number;
+  kept: number;
+}> {
   return Word.run(async (context) => {
-    context.document.load("changeTrackingMode");
+    // Sync 1: load collections with properties
+    const tracked = context.document.body.getTrackedChanges();
+    const comments = context.document.body.getComments();
+    tracked.load({ select: "author,type" });
+    comments.load({ select: "authorName" });
     await context.sync();
 
-    const previousMode = context.document.changeTrackingMode;
-    context.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
-    await context.sync();
+    const stylisticComments = comments.items.filter(
+      (c) => c.authorName === "Stylistic"
+    );
+    const stylisticTCs = tracked.items.filter(
+      (tc) => tc.author === "Stylistic"
+    );
 
-    return previousMode;
-  });
-}
+    if (stylisticComments.length === 0) {
+      return { deleted: 0, kept: 0 };
+    }
 
-/**
- * Restores the document's `changeTrackingMode` to a previously saved value.
- * Swallows errors to avoid masking the original error in a `finally` block.
- *
- * @param mode - The tracking mode to restore.
- */
-async function restoreTrackingMode(mode: string): Promise<void> {
-  try {
-    await Word.run(async (context) => {
-      context.document.changeTrackingMode =
-        mode as Word.ChangeTrackingMode;
+    // All TCs resolved → delete all Stylistic comments, skip range comparison
+    if (stylisticTCs.length === 0) {
+      for (const comment of stylisticComments) {
+        comment.delete();
+      }
       await context.sync();
-    });
-  } catch {
-    // Swallow — restoring the mode is best-effort.
-    // Failing here should not mask the primary operation's result.
-  }
-}
+      return { deleted: stylisticComments.length, kept: 0 };
+    }
 
-// ---------------------------------------------------------------------------
-// Internal: Batch Application (Strategy Dispatcher)
-// ---------------------------------------------------------------------------
-
-/**
- * Applies a single batch of suggestions using the Strategy pattern.
- *
- * All suggestions are applied in a single `Word.run` with TrackAll active.
- * Each suggestion is dispatched to the appropriate strategy based on its type:
- * - Delete: `range.delete()`
- * - Insert/Replace: `range.insertText(suggestedText, replace)`
- *
- * @param batch - Array of suggestions to apply in this batch.
- * @returns An {@link InsertionResult} for this batch only.
- */
-async function applyBatch(batch: Suggestion[]): Promise<InsertionResult> {
-  return Word.run(async (context) => {
-    const failed: Suggestion[] = [];
-    let successCount = 0;
-
-    // Enqueue all searches in a single batch (no syncs yet)
-    const searchResults = batch.map((suggestion) => {
-      const results = context.document.body.search(
-        suggestion.originalText,
-        { matchCase: true, matchWholeWord: false }
-      );
-      results.load("items");
-      return { suggestion, results };
-    });
-
-    // Execute all searches in one round-trip
+    // Sync 2: get document ranges for each comment and TC
+    const commentRanges = stylisticComments.map((c) => c.getRange());
+    const tcRanges = stylisticTCs.map((tc) => tc.getRange());
     await context.sync();
 
-    // Apply changes for found matches using the appropriate strategy
-    for (const { suggestion, results } of searchResults) {
-      if (results.items.length === 0) {
-        failed.push(suggestion);
-        continue;
+    // Sync 3: compare each comment range against each TC range
+    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
+      [];
+    for (let i = 0; i < commentRanges.length; i++) {
+      comparisons[i] = [];
+      for (let j = 0; j < tcRanges.length; j++) {
+        comparisons[i][j] = commentRanges[i].compareLocationWith(tcRanges[j]);
+      }
+    }
+    await context.sync();
+
+    // Evaluate: a comment is colocated with a TC if their ranges overlap
+    const overlapping: Word.LocationRelation[] = [
+      "Equal" as Word.LocationRelation,
+      "Contains" as Word.LocationRelation,
+      "ContainsStart" as Word.LocationRelation,
+      "ContainsEnd" as Word.LocationRelation,
+      "Inside" as Word.LocationRelation,
+      "InsideStart" as Word.LocationRelation,
+      "InsideEnd" as Word.LocationRelation,
+      "OverlapsBefore" as Word.LocationRelation,
+      "OverlapsAfter" as Word.LocationRelation,
+    ];
+
+    let deleted = 0;
+    let kept = 0;
+
+    for (let i = 0; i < stylisticComments.length; i++) {
+      let hasColocatedTC = false;
+      for (let j = 0; j < tcRanges.length; j++) {
+        if (overlapping.includes(comparisons[i][j].value)) {
+          hasColocatedTC = true;
+          break;
+        }
       }
 
-      const type = classifyChange(suggestion);
-      if (type === "delete") {
-        results.items[0].delete();
+      if (hasColocatedTC) {
+        kept++;
       } else {
-        // "insert" or "replace" — Word handles both via insertText
-        results.items[0].insertText(
-          suggestion.suggestedText,
-          Word.InsertLocation.replace
-        );
+        stylisticComments[i].delete();
+        deleted++;
       }
-      successCount++;
     }
 
-    // Commit all changes in one round-trip
+    // Sync 4: execute deletes
     await context.sync();
-
-    return { successCount, failedSuggestions: failed };
-  });
-}
-
-// ---------------------------------------------------------------------------
-// PoC: Tracked Change Test Methods
-// ---------------------------------------------------------------------------
-
-/**
- * PoC Method A: Uses `insertText(replace)` under `TrackAll` mode.
- *
- * This is the standard Word API approach. Word's native tracking engine
- * handles revision creation. According to the documentation, this should
- * produce a single combined tracked change for replacements.
- *
- * @param originalText  - Exact text to find in the document (case-sensitive).
- * @param suggestedText - Replacement text for the tracked change.
- * @returns An object with `success` status and a descriptive `message`.
- */
-export async function pocInsertTextReplace(
-  originalText: string,
-  suggestedText: string
-): Promise<{ success: boolean; message: string }> {
-  return Word.run(async (context) => {
-    // Save and enable TrackAll
-    context.document.load("changeTrackingMode");
-    await context.sync();
-    const previousMode = context.document.changeTrackingMode;
-    context.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
-    await context.sync();
-
-    try {
-      const results = context.document.body.search(originalText, {
-        matchCase: true,
-        matchWholeWord: false,
-      });
-      results.load("items");
-      await context.sync();
-
-      if (results.items.length === 0) {
-        return {
-          success: false,
-          message: `"${originalText}" no encontrado en el documento.`,
-        };
-      }
-
-      if (!suggestedText) {
-        // Delete only
-        results.items[0].delete();
-      } else {
-        // Replace
-        results.items[0].insertText(
-          suggestedText,
-          Word.InsertLocation.replace
-        );
-      }
-      await context.sync();
-
-      const action = suggestedText
-        ? `"${originalText}" → "${suggestedText}"`
-        : `"${originalText}" eliminado`;
-
-      return {
-        success: true,
-        message: `[insertText] ${action} — aplicado con TrackAll.`,
-      };
-    } finally {
-      context.document.changeTrackingMode =
-        previousMode as Word.ChangeTrackingMode;
-      await context.sync();
-    }
-  });
-}
-
-/**
- * PoC Method B: Uses OOXML `<w:del>` + `<w:ins>` markup with tracking OFF.
- *
- * Builds a flat OPC OOXML package containing tracked change markup and
- * inserts it via `insertOoxml()`. According to research, Word may
- * strip/reprocess revision markup during `insertOoxml()`.
- *
- * @param originalText  - Exact text to find in the document (case-sensitive).
- * @param suggestedText - Replacement text for the tracked change.
- * @returns An object with `success` status and a descriptive `message`.
- */
-export async function pocInsertOoxmlReplace(
-  originalText: string,
-  suggestedText: string
-): Promise<{ success: boolean; message: string }> {
-  if (!suggestedText) {
-    // For deletion, delegate to insertText approach (OOXML not needed)
-    return pocInsertTextReplace(originalText, suggestedText);
-  }
-
-  return Word.run(async (context) => {
-    // Save and disable tracking so the OOXML insertion isn't double-tracked
-    context.document.load("changeTrackingMode");
-    await context.sync();
-    const previousMode = context.document.changeTrackingMode;
-    context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
-    await context.sync();
-
-    try {
-      const results = context.document.body.search(originalText, {
-        matchCase: true,
-        matchWholeWord: false,
-      });
-      results.load("items");
-      await context.sync();
-
-      if (results.items.length === 0) {
-        return {
-          success: false,
-          message: `"${originalText}" no encontrado en el documento.`,
-        };
-      }
-
-      const range = results.items[0];
-
-      // Extract formatting from the original range
-      const rangeOoxml = range.getOoxml();
-      await context.sync();
-      const runProps = extractRunProperties(rangeOoxml.value);
-
-      // Build and insert the tracked change OOXML
-      const ooxml = buildTrackedChangeOoxml(
-        originalText,
-        suggestedText,
-        runProps
-      );
-      range.insertOoxml(ooxml, Word.InsertLocation.replace);
-      await context.sync();
-
-      return {
-        success: true,
-        message: `[OOXML] "${originalText}" → "${suggestedText}" — insertado con OOXML markup.`,
-      };
-    } finally {
-      context.document.changeTrackingMode =
-        previousMode as Word.ChangeTrackingMode;
-      await context.sync();
-    }
+    return { deleted, kept };
   });
 }
 
@@ -383,39 +297,97 @@ export async function pocInsertOoxmlReplace(
 // ---------------------------------------------------------------------------
 
 /**
- * Builds an Office Open XML (flat OPC) package that represents a single
- * tracked change: a deletion of `original` and an insertion of `replacement`,
- * both under the same author and timestamp.
+ * Builds a flat OPC OOXML package with tracked change markup and a
+ * formatted Word comment containing the justification.
  *
- * Word renders adjacent `<w:del>` + `<w:ins>` elements with the same author
- * and date as one combined revision in the Review pane.
+ * Package structure (4 parts, no [Content_Types].xml):
+ * - `/_rels/.rels` → points to word/document.xml
+ * - `/word/_rels/document.xml.rels` → points to word/comments.xml
+ * - `/word/document.xml` → tracked change + comment anchors
+ * - `/word/comments.xml` → formatted justification (bold category + text)
  *
- * The package includes the required `/_rels/.rels` relationship part to
- * ensure Word can locate the document content.
+ * The comment appears as a margin balloon (when "Show Revisions in
+ * Balloons" is active) with the category in bold and the justification
+ * as a separate paragraph. The tracked change blue card shows
+ * `w:author="Stylistic"` cleanly.
  *
- * @param original    - The text being replaced (shown as strikethrough).
- * @param replacement - The new text (shown as underlined insertion).
- * @param runPropertiesXml - Optional serialized `<w:rPr>` element to preserve
- *                           formatting from the original range.
+ * @param original           - The text being replaced/deleted.
+ * @param replacement        - The new text (empty for delete-only).
+ * @param justification      - Reason for the change (comment body).
+ * @param category           - Category label (bold in comment).
+ * @param changeType         - The type of change (insert/delete/replace).
+ * @param runPropertiesXml   - Optional `<w:rPr>` XML to preserve formatting.
  * @returns A flat OPC XML string suitable for `Range.insertOoxml()`.
  */
 function buildTrackedChangeOoxml(
   original: string,
   replacement: string,
+  justification: string,
+  category: string,
+  changeType: ChangeType,
   runPropertiesXml?: string | null
 ): string {
   const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
   const escapedOriginal = escapeXml(original);
   const escapedReplacement = escapeXml(replacement);
+  const escapedCategory = escapeXml(category);
+  const escapedJustification = escapeXml(justification);
 
-  // Build run properties element if available
-  const rPrBlock = runPropertiesXml
+  const rPr = runPropertiesXml
     ? `                ${runPropertiesXml}\n`
     : "";
+
+  // Build tracked change body based on type
+  let changeBody = "";
+
+  if (changeType === "delete" || changeType === "replace") {
+    changeBody +=
+      `            <w:del w:id="1" w:author="Stylistic" w:date="${now}">\n` +
+      `              <w:r>\n` +
+      `${rPr}                <w:delText xml:space="preserve">${escapedOriginal}</w:delText>\n` +
+      `              </w:r>\n` +
+      `            </w:del>\n`;
+  }
+
+  if (changeType === "insert" || changeType === "replace") {
+    changeBody +=
+      `            <w:ins w:id="2" w:author="Stylistic" w:date="${now}">\n` +
+      `              <w:r>\n` +
+      `${rPr}                <w:t xml:space="preserve">${escapedReplacement}</w:t>\n` +
+      `              </w:r>\n` +
+      `            </w:ins>\n`;
+  }
+
+  // Build comment paragraphs: bold category + each justification line as <w:p>
+  const justificationParagraphs = justification
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map(
+      (line) =>
+        `          <w:p>\n` +
+        `            <w:r>\n` +
+        `              <w:t>${escapeXml(line)}</w:t>\n` +
+        `            </w:r>\n` +
+        `          </w:p>`
+    )
+    .join("\n");
+
+  const categoryParagraph = category
+    ? `          <w:p>\n` +
+      `            <w:r>\n` +
+      `              <w:rPr><w:b/></w:rPr>\n` +
+      `              <w:t>[${escapedCategory}]</w:t>\n` +
+      `            </w:r>\n` +
+      `          </w:p>\n`
+    : "";
+
+  const commentBody = categoryParagraph + justificationParagraphs;
 
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
     '<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">',
+
+    // Part 1: Package relationships
     '  <pkg:part pkg:name="/_rels/.rels"',
     '    pkg:contentType="application/vnd.openxmlformats-package.relationships+xml">',
     "    <pkg:xmlData>",
@@ -426,27 +398,50 @@ function buildTrackedChangeOoxml(
     "      </Relationships>",
     "    </pkg:xmlData>",
     "  </pkg:part>",
+
+    // Part 2: Document relationships (links to comments.xml)
+    '  <pkg:part pkg:name="/word/_rels/document.xml.rels"',
+    '    pkg:contentType="application/vnd.openxmlformats-package.relationships+xml">',
+    "    <pkg:xmlData>",
+    '      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    '        <Relationship Id="rId1"',
+    '          Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"',
+    '          Target="comments.xml"/>',
+    "      </Relationships>",
+    "    </pkg:xmlData>",
+    "  </pkg:part>",
+
+    // Part 3: Document content (tracked change + comment anchors)
     '  <pkg:part pkg:name="/word/document.xml"',
     '    pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">',
     "    <pkg:xmlData>",
     '      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
     "        <w:body>",
     "          <w:p>",
-    `            <w:del w:id="0" w:author="Stylistic" w:date="${now}">`,
-    "              <w:r>",
-    `${rPrBlock}                <w:delText xml:space="preserve">${escapedOriginal}</w:delText>`,
-    "              </w:r>",
-    "            </w:del>",
-    `            <w:ins w:id="1" w:author="Stylistic" w:date="${now}">`,
-    "              <w:r>",
-    `${rPrBlock}                <w:t xml:space="preserve">${escapedReplacement}</w:t>`,
-    "              </w:r>",
-    "            </w:ins>",
+    '            <w:commentRangeStart w:id="0"/>',
+    changeBody +
+    '            <w:commentRangeEnd w:id="0"/>',
+    "            <w:r>",
+    '              <w:commentReference w:id="0"/>',
+    "            </w:r>",
     "          </w:p>",
     "        </w:body>",
     "      </w:document>",
     "    </pkg:xmlData>",
     "  </pkg:part>",
+
+    // Part 4: Comments (formatted justification)
+    '  <pkg:part pkg:name="/word/comments.xml"',
+    '    pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml">',
+    "    <pkg:xmlData>",
+    '      <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+    `        <w:comment w:id="0" w:author="Stylistic" w:initials="St" w:date="${now}">`,
+    commentBody,
+    "        </w:comment>",
+    "      </w:comments>",
+    "    </pkg:xmlData>",
+    "  </pkg:part>",
+
     "</pkg:package>",
   ].join("\n");
 }
@@ -497,23 +492,4 @@ function escapeXml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
-}
-
-// ---------------------------------------------------------------------------
-// Internal: Utility
-// ---------------------------------------------------------------------------
-
-/**
- * Splits an array into fixed-size sub-arrays (batches).
- *
- * @param items     - The array to split.
- * @param batchSize - Maximum items per batch.
- * @returns An array of batches.
- */
-function createBatches<T>(items: T[], batchSize: number): T[][] {
-  const batches: T[][] = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    batches.push(items.slice(i, i + batchSize));
-  }
-  return batches;
 }

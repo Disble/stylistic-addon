@@ -76,13 +76,13 @@ export async function checkConnection(): Promise<boolean> {
  */
 export async function analyzeChunk(
   chunk: TextChunk,
-  profile: string
+  profile: string,
+  language: string
 ): Promise<ChunkResult> {
   const inputData: WorkflowInput = {
     text: chunk.text,
     profile,
-    chunkIndex: chunk.index,
-    totalChunks: chunk.total,
+    language,
   };
 
   let lastError = "";
@@ -144,6 +144,7 @@ function mapSuggestions(
     suggestedText: s.suggestedText,
     justification: s.justification,
     category: s.category,
+    severity: s.severity,
   }));
 }
 

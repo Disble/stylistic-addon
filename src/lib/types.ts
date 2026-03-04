@@ -35,6 +35,9 @@ export interface Suggestion {
 
   /** Editorial category label (e.g., "Redundancia", "Muletilla"). */
   category: string;
+
+  /** How critical the suggestion is. */
+  severity: "high" | "medium" | "low";
 }
 
 /**
@@ -79,17 +82,14 @@ export interface TextChunk {
  * Must match the workflow's `inputSchema` on the backend.
  */
 export interface WorkflowInput {
-  /** Text chunk to analyze. */
+  /** Text to analyze. */
   text: string;
 
   /** Analysis profile identifier (e.g., "general", "formal", "academic"). */
   profile: string;
 
-  /** Zero-based index of this chunk. */
-  chunkIndex: number;
-
-  /** Total number of chunks in the document. */
-  totalChunks: number;
+  /** ISO 639-1 language code of the text (e.g., "es", "en"). */
+  language: string;
 }
 
 /**
@@ -108,6 +108,9 @@ export interface WorkflowSuggestion {
 
   /** Editorial category label. */
   category: string;
+
+  /** How critical the suggestion is. */
+  severity: "high" | "medium" | "low";
 }
 
 /**
@@ -115,8 +118,11 @@ export interface WorkflowSuggestion {
  * Accessed via `result.result` after a workflow run completes.
  */
 export interface WorkflowOutput {
-  /** Array of editorial suggestions for the analyzed chunk. */
+  /** Array of editorial suggestions for the analyzed text. */
   suggestions: WorkflowSuggestion[];
+
+  /** Optional warnings from the backend (e.g., "text too short for meaningful analysis"). */
+  warnings?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -174,9 +180,13 @@ export interface ChunkResult {
 /**
  * Type of tracked change operation, used by the Strategy pattern in wordApi.
  *
- * - `"insert"` — Text insertion only (normal Word API with TrackAll).
- * - `"delete"` — Text deletion only (normal Word API with TrackAll).
- * - `"replace"` — Combined deletion + insertion via OOXML (last resort).
+ * All types are applied via OOXML markup (`<w:del>`, `<w:ins>`) with an
+ * attached Word comment containing the justification. This produces a rich
+ * Review pane UI showing author, description, and reason for each change.
+ *
+ * - `"insert"` — Text insertion only (`<w:ins>` markup).
+ * - `"delete"` — Text deletion only (`<w:del>` markup).
+ * - `"replace"` — Combined deletion + insertion (`<w:del>` + `<w:ins>`).
  */
 export type ChangeType = "insert" | "delete" | "replace";
 

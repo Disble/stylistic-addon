@@ -26,8 +26,7 @@
 import {
   getDocumentText,
   applySuggestionsInBatches,
-  pocInsertTextReplace,
-  pocInsertOoxmlReplace,
+  cleanupResolvedComments,
 } from "../lib/wordApi";
 import { checkConnection, analyzeChunk } from "../lib/mastraClient";
 import { splitText } from "../lib/chunker";
@@ -55,10 +54,7 @@ Office.onReady((info) => {
     document.getElementById("sideload-msg")!.style.display = "none";
     document.getElementById("app-body")!.style.display = "flex";
     document.getElementById("btn-analyze")!.onclick = handleAnalyze;
-    document.getElementById("btn-poc-inserttext")!.onclick = () =>
-      handlePocTest("insertText");
-    document.getElementById("btn-poc-ooxml")!.onclick = () =>
-      handlePocTest("ooxml");
+    document.getElementById("btn-cleanup")!.onclick = handleCleanup;
   }
 });
 
@@ -271,6 +267,7 @@ function deduplicateByOriginalText(suggestions: Suggestion[]): Suggestion[] {
 async function handleAnalyze(): Promise<void> {
   setAnalyzeLoading(true);
   document.getElementById("results-panel")!.style.display = "none";
+  document.getElementById("cleanup-section")!.style.display = "none";
 
   try {
     // Phase 1: Read document
@@ -310,7 +307,7 @@ async function handleAnalyze(): Promise<void> {
         `Analizando fragmento ${chunk.index + 1} de ${chunks.length}...`
       );
 
-      const chunkResult: ChunkResult = await analyzeChunk(chunk, profile);
+      const chunkResult: ChunkResult = await analyzeChunk(chunk, profile, "es");
 
       allSuggestions.push(...chunkResult.suggestions);
       if (chunkResult.error) {
@@ -344,6 +341,11 @@ async function handleAnalyze(): Promise<void> {
     updateProgress("done", 1, 1, "");
     renderResults(uniqueSuggestions, result, chunkErrors);
 
+    // Show cleanup button if any suggestions were applied
+    if (result.successCount > 0) {
+      document.getElementById("cleanup-section")!.style.display = "block";
+    }
+
     if (result.failedSuggestions.length > 0 && result.successCount > 0) {
       showStatus(
         `${result.successCount} aplicada(s), ${result.failedSuggestions.length} no encontrada(s).`,
@@ -369,62 +371,37 @@ async function handleAnalyze(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// PoC: Tracked Change Comparison (insertText vs OOXML)
+// Comment Cleanup Handler
 // ---------------------------------------------------------------------------
 
 /**
- * Handles PoC test button clicks for both methods.
- *
- * @param method - `"insertText"` uses normal Word API with TrackAll.
- *                 `"ooxml"` uses OOXML markup with tracking OFF.
+ * Handles the "Limpiar comentarios resueltos" button click.
+ * Deletes Stylistic comments whose tracked changes have been resolved.
  */
-async function handlePocTest(
-  method: "insertText" | "ooxml"
-): Promise<void> {
-  const originalInput = document.getElementById("poc-original") as HTMLInputElement;
-  const replacementInput = document.getElementById("poc-replacement") as HTMLInputElement;
-  const resultDiv = document.getElementById("poc-result")!;
+async function handleCleanup(): Promise<void> {
+  const btn = document.getElementById("btn-cleanup") as HTMLButtonElement;
+  const label = document.getElementById("btn-cleanup-label")!;
 
-  const btnA = document.getElementById("btn-poc-inserttext") as HTMLButtonElement;
-  const btnB = document.getElementById("btn-poc-ooxml") as HTMLButtonElement;
-  const labelA = document.getElementById("btn-poc-inserttext-label")!;
-  const labelB = document.getElementById("btn-poc-ooxml-label")!;
-
-  const original = originalInput.value.trim();
-  const replacement = replacementInput.value.trim();
-
-  if (!original) {
-    resultDiv.textContent = "Ingresa el texto original a buscar.";
-    resultDiv.className = "poc-result poc-error";
-    resultDiv.style.display = "block";
-    return;
-  }
-
-  // Disable both buttons
-  btnA.disabled = true;
-  btnB.disabled = true;
-  const activeLabel = method === "insertText" ? labelA : labelB;
-  const originalLabelText = activeLabel.textContent;
-  activeLabel.textContent = "Procesando...";
-  resultDiv.style.display = "none";
+  btn.disabled = true;
+  label.textContent = "Limpiando...";
 
   try {
-    const result =
-      method === "insertText"
-        ? await pocInsertTextReplace(original, replacement)
-        : await pocInsertOoxmlReplace(original, replacement);
+    const { deleted, kept } = await cleanupResolvedComments();
 
-    resultDiv.textContent = result.message;
-    resultDiv.className = result.success
-      ? "poc-result poc-success"
-      : "poc-result poc-error";
+    showStatus(
+      `${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`,
+      "success"
+    );
+
+    // If nothing left to clean, hide the button
+    if (kept === 0) {
+      document.getElementById("cleanup-section")!.style.display = "none";
+    }
   } catch (error) {
-    resultDiv.textContent = toUserMessage(error);
-    resultDiv.className = "poc-result poc-error";
+    showStatus(toUserMessage(error), "error");
   } finally {
-    resultDiv.style.display = "block";
-    btnA.disabled = false;
-    btnB.disabled = false;
-    activeLabel.textContent = originalLabelText;
+    btn.disabled = false;
+    label.textContent = "Limpiar comentarios resueltos";
   }
 }
+
