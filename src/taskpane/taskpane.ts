@@ -1,26 +1,43 @@
 /* global document, Office */
 
 /**
- * Task-pane orchestrator — wires UI events to the Word API and analyzer layers.
+ * Task-pane orchestrator — wires UI events to the Word API and Mastra
+ * backend layers.
  *
  * Responsibilities:
  * - Initialize the task pane when Office.js is ready.
- * - Bind DOM event handlers to the buttons in `taskpane.html`.
- * - Delegate document I/O to {@link wordApi} and text analysis to {@link analyzer}.
- * - Present results, errors, and loading states to the user.
+ * - Bind DOM event handlers to the UI controls in `taskpane.html`.
+ * - Coordinate the multi-phase analysis pipeline:
+ *   1. Read document text ({@link wordApi}).
+ *   2. Check backend connectivity ({@link mastraClient}).
+ *   3. Chunk text ({@link chunker}).
+ *   4. Analyze each chunk via the Mastra workflow ({@link mastraClient}).
+ *   5. Deduplicate suggestions.
+ *   6. Apply tracked changes in batches ({@link wordApi}).
+ *   7. Render results and status.
  *
  * This module contains **no** direct Word API calls — all go through `wordApi`.
- * It also contains **no** analysis logic — all goes through `analyzer`.
+ * It also contains **no** backend communication — all goes through `mastraClient`.
+ * It contains **no** business logic — analysis is entirely server-side.
  *
  * @module taskpane
  */
 
-import { getDocumentText, insertSuggestionsAsTrackedChanges } from "../lib/wordApi";
-import { analyze } from "../lib/analyzer";
-import { Suggestion, InsertionResult } from "../lib/types";
-
-/** Maximum number of characters displayed in the document preview pane. */
-const PREVIEW_MAX_CHARS = 200;
+import {
+  getDocumentText,
+  applySuggestionsInBatches,
+  pocInsertTextReplace,
+  pocInsertOoxmlReplace,
+} from "../lib/wordApi";
+import { checkConnection, analyzeChunk } from "../lib/mastraClient";
+import { splitText } from "../lib/chunker";
+import { DEFAULT_MAX_CHUNK_SIZE } from "../lib/config";
+import {
+  Suggestion,
+  InsertionResult,
+  ChunkResult,
+  AnalysisPhase,
+} from "../lib/types";
 
 /** Duration (ms) before the status bar message auto-hides. */
 const STATUS_DISPLAY_MS = 4000;
@@ -37,13 +54,16 @@ Office.onReady((info) => {
   if (info.host === Office.HostType.Word) {
     document.getElementById("sideload-msg")!.style.display = "none";
     document.getElementById("app-body")!.style.display = "flex";
-    document.getElementById("btn-read")!.onclick = handleReadDocument;
     document.getElementById("btn-analyze")!.onclick = handleAnalyze;
+    document.getElementById("btn-poc-inserttext")!.onclick = () =>
+      handlePocTest("insertText");
+    document.getElementById("btn-poc-ooxml")!.onclick = () =>
+      handlePocTest("ooxml");
   }
 });
 
 // ---------------------------------------------------------------------------
-// UI helpers
+// UI Helpers
 // ---------------------------------------------------------------------------
 
 /**
@@ -64,44 +84,61 @@ function showStatus(message: string, type: "success" | "error"): void {
 }
 
 /**
- * Renders a truncated preview of the document text in the `<pre>` element.
- * Text beyond {@link PREVIEW_MAX_CHARS} is replaced with "...".
- *
- * @param text - The full document text.
- */
-function showPreview(text: string): void {
-  const preview = document.getElementById("doc-preview")!;
-  const truncated = text.length > PREVIEW_MAX_CHARS ? text.substring(0, PREVIEW_MAX_CHARS) + "..." : text;
-  preview.textContent = truncated;
-  preview.style.display = "block";
-}
-
-/**
  * Toggles the "Analizar y sugerir" button between normal and loading states.
- * While loading, the button is disabled and its label reads "Analizando...".
  *
  * @param loading - `true` to enter loading state, `false` to restore.
  */
 function setAnalyzeLoading(loading: boolean): void {
   const btn = document.getElementById("btn-analyze") as HTMLButtonElement;
   const label = document.getElementById("btn-analyze-label")!;
+  const select = document.getElementById("profile-select") as HTMLSelectElement;
   btn.disabled = loading;
+  select.disabled = loading;
   label.textContent = loading ? "Analizando..." : "Analizar y sugerir";
+}
+
+/**
+ * Updates the progress bar and text in the progress area.
+ *
+ * @param phase   - Current analysis phase.
+ * @param current - Current step within the phase (1-based).
+ * @param total   - Total steps in the phase.
+ * @param message - Human-readable status text.
+ */
+function updateProgress(
+  phase: AnalysisPhase,
+  current: number,
+  total: number,
+  message: string
+): void {
+  const container = document.getElementById("progress-container")!;
+  const bar = document.getElementById("progress-bar")!;
+  const text = document.getElementById("progress-text")!;
+
+  container.style.display = "block";
+
+  const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+  bar.style.width = `${percentage}%`;
+  text.textContent = message;
+
+  if (phase === "done") {
+    setTimeout(() => {
+      container.style.display = "none";
+    }, 1000);
+  }
 }
 
 /**
  * Renders the results panel showing each suggestion and its outcome.
  *
- * For each suggestion, displays:
- * - **Applied**: original text (struck through) → suggested text (green) + justification.
- * - **Failed**: "Not found" message (red) + justification.
- *
- * @param suggestions - All suggestions produced by the analyzer.
- * @param result      - The {@link InsertionResult} from the Word API layer.
+ * @param suggestions  - All suggestions produced by the workflow.
+ * @param result       - The {@link InsertionResult} from the Word API layer.
+ * @param chunkErrors  - Error messages from failed chunks (if any).
  */
 function renderResults(
   suggestions: Suggestion[],
-  result: InsertionResult
+  result: InsertionResult,
+  chunkErrors: string[]
 ): void {
   const panel = document.getElementById("results-panel")!;
   const summary = document.getElementById("results-summary")!;
@@ -111,8 +148,15 @@ function renderResults(
   const applied = result.successCount;
   const failed = result.failedSuggestions.length;
 
-  summary.textContent = `${applied} de ${total} sugerencias aplicadas como Track Changes.`
-    + (failed > 0 ? ` ${failed} no encontrada(s) en el texto.` : "");
+  let summaryText =
+    `${applied} de ${total} sugerencias aplicadas como Track Changes.`;
+  if (failed > 0) {
+    summaryText += ` ${failed} no encontrada(s) en el texto.`;
+  }
+  if (chunkErrors.length > 0) {
+    summaryText += ` ${chunkErrors.length} fragmento(s) con error.`;
+  }
+  summary.textContent = summaryText;
 
   list.innerHTML = "";
 
@@ -122,10 +166,12 @@ function renderResults(
 
     if (isFailed) {
       li.innerHTML =
+        `<span class="result-category">${escapeHtml(s.category)}</span>` +
         `<span class="result-failed">No encontrado: "${escapeHtml(s.originalText)}"</span>` +
         `<span class="result-justification">${escapeHtml(s.justification)}</span>`;
     } else {
       li.innerHTML =
+        `<span class="result-category">${escapeHtml(s.category)}</span>` +
         `<span class="result-change">` +
         `<span class="result-original">${escapeHtml(s.originalText)}</span>` +
         `<span class="result-arrow">&rarr;</span>` +
@@ -142,10 +188,9 @@ function renderResults(
 
 /**
  * Escapes a string for safe insertion into innerHTML.
- * Uses the browser's own text-node escaping via a temporary `<div>`.
  *
  * @param str - Raw string that may contain HTML-special characters.
- * @returns The HTML-escaped string (safe for innerHTML assignment).
+ * @returns The HTML-escaped string.
  */
 function escapeHtml(str: string): string {
   const div = document.createElement("div");
@@ -155,12 +200,10 @@ function escapeHtml(str: string): string {
 
 /**
  * Translates a caught error into a user-friendly message.
- *
- * Recognizes common Office.js error codes and maps them to clear descriptions.
- * Falls back to the raw error message for unknown errors.
+ * Recognizes common Office.js error codes and maps them to descriptions.
  *
  * @param error - The caught error (may be an Error, OfficeExtension.Error, or unknown).
- * @returns A human-readable error description suitable for the status bar.
+ * @returns A human-readable error description.
  */
 function toUserMessage(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
@@ -178,46 +221,60 @@ function toUserMessage(error: unknown): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Event handlers
-// ---------------------------------------------------------------------------
+/**
+ * Returns the currently selected profile ID from the dropdown.
+ *
+ * @returns The selected profile identifier string.
+ */
+function getSelectedProfile(): string {
+  const select = document.getElementById("profile-select") as HTMLSelectElement;
+  return select.value;
+}
 
 /**
- * Handles the "Leer documento" button click.
- * Reads the full document text and displays a truncated preview.
+ * Removes duplicate suggestions that target the same original text.
+ * When multiple chunks return suggestions for the same phrase, only the first
+ * is kept. Comparison is case-insensitive.
+ *
+ * @param suggestions - The raw suggestion list (may contain duplicates).
+ * @returns A filtered list with unique `originalText` values.
  */
-async function handleReadDocument(): Promise<void> {
-  try {
-    const text = await getDocumentText();
-
-    if (!text || text.trim().length === 0) {
-      showStatus("El documento está vacío.", "error");
-      return;
-    }
-
-    showPreview(text);
-    showStatus(`Documento leído: ${text.length} caracteres en total.`, "success");
-  } catch (error) {
-    showStatus(toUserMessage(error), "error");
-  }
+function deduplicateByOriginalText(suggestions: Suggestion[]): Suggestion[] {
+  const seen = new Set<string>();
+  return suggestions.filter((s) => {
+    const key = s.originalText.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
+
+// ---------------------------------------------------------------------------
+// Main Event Handler
+// ---------------------------------------------------------------------------
 
 /**
  * Handles the "Analizar y sugerir" button click.
  *
- * Full flow:
- * 1. Reads the document text via {@link getDocumentText}.
- * 2. Runs the analyzer to produce {@link Suggestion} objects.
- * 3. Inserts suggestions as tracked changes via {@link insertSuggestionsAsTrackedChanges}.
- * 4. Renders the results panel and shows a status summary.
+ * Orchestrates the full multi-phase analysis pipeline:
+ * 1. Read document text.
+ * 2. Validate backend connectivity.
+ * 3. Chunk the text for the workflow.
+ * 4. Analyze each chunk via the Mastra editorial workflow.
+ * 5. Deduplicate and apply suggestions as tracked changes.
+ * 6. Render results and status.
  *
- * Handles edge cases: empty document, no suggestions found, partial failures,
- * and Office.js errors (translated via {@link toUserMessage}).
+ * Handles partial failures gracefully — if some chunks fail, the successful
+ * suggestions are still applied. Only a completely empty result set triggers
+ * an error state.
  */
 async function handleAnalyze(): Promise<void> {
   setAnalyzeLoading(true);
+  document.getElementById("results-panel")!.style.display = "none";
 
   try {
+    // Phase 1: Read document
+    updateProgress("reading", 0, 1, "Leyendo documento...");
     const text = await getDocumentText();
 
     if (!text || text.trim().length === 0) {
@@ -225,16 +282,67 @@ async function handleAnalyze(): Promise<void> {
       return;
     }
 
-    const suggestions = analyze(text);
+    // Phase 2: Check backend
+    updateProgress("connecting", 0, 1, "Conectando con el servidor...");
+    const connected = await checkConnection();
 
-    if (suggestions.length === 0) {
-      showStatus("No se encontraron sugerencias editoriales.", "success");
-      document.getElementById("results-panel")!.style.display = "none";
+    if (!connected) {
+      showStatus(
+        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.",
+        "error"
+      );
       return;
     }
 
-    const result = await insertSuggestionsAsTrackedChanges(suggestions);
-    renderResults(suggestions, result);
+    // Phase 3: Chunk text
+    const chunks = splitText(text, DEFAULT_MAX_CHUNK_SIZE);
+    const profile = getSelectedProfile();
+
+    // Phase 4: Analyze each chunk
+    const allSuggestions: Suggestion[] = [];
+    const chunkErrors: string[] = [];
+
+    for (const chunk of chunks) {
+      updateProgress(
+        "analyzing",
+        chunk.index + 1,
+        chunks.length,
+        `Analizando fragmento ${chunk.index + 1} de ${chunks.length}...`
+      );
+
+      const chunkResult: ChunkResult = await analyzeChunk(chunk, profile);
+
+      allSuggestions.push(...chunkResult.suggestions);
+      if (chunkResult.error) {
+        chunkErrors.push(chunkResult.error);
+      }
+    }
+
+    // Phase 5: Deduplicate
+    const uniqueSuggestions = deduplicateByOriginalText(allSuggestions);
+
+    if (uniqueSuggestions.length === 0) {
+      if (chunkErrors.length > 0) {
+        showStatus(
+          `El análisis falló en ${chunkErrors.length} fragmento(s). Intenta de nuevo.`,
+          "error"
+        );
+      } else {
+        showStatus("No se encontraron sugerencias editoriales.", "success");
+      }
+      updateProgress("done", 1, 1, "");
+      return;
+    }
+
+    // Phase 6: Apply as tracked changes
+    const result = await applySuggestionsInBatches(
+      uniqueSuggestions,
+      updateProgress
+    );
+
+    // Phase 7: Render results
+    updateProgress("done", 1, 1, "");
+    renderResults(uniqueSuggestions, result, chunkErrors);
 
     if (result.failedSuggestions.length > 0 && result.successCount > 0) {
       showStatus(
@@ -247,11 +355,76 @@ async function handleAnalyze(): Promise<void> {
         "success"
       );
     } else {
-      showStatus("Ninguna sugerencia pudo aplicarse al documento actual.", "error");
+      showStatus(
+        "Ninguna sugerencia pudo aplicarse al documento actual.",
+        "error"
+      );
     }
   } catch (error) {
+    updateProgress("done", 1, 1, "");
     showStatus(toUserMessage(error), "error");
   } finally {
     setAnalyzeLoading(false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PoC: Tracked Change Comparison (insertText vs OOXML)
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles PoC test button clicks for both methods.
+ *
+ * @param method - `"insertText"` uses normal Word API with TrackAll.
+ *                 `"ooxml"` uses OOXML markup with tracking OFF.
+ */
+async function handlePocTest(
+  method: "insertText" | "ooxml"
+): Promise<void> {
+  const originalInput = document.getElementById("poc-original") as HTMLInputElement;
+  const replacementInput = document.getElementById("poc-replacement") as HTMLInputElement;
+  const resultDiv = document.getElementById("poc-result")!;
+
+  const btnA = document.getElementById("btn-poc-inserttext") as HTMLButtonElement;
+  const btnB = document.getElementById("btn-poc-ooxml") as HTMLButtonElement;
+  const labelA = document.getElementById("btn-poc-inserttext-label")!;
+  const labelB = document.getElementById("btn-poc-ooxml-label")!;
+
+  const original = originalInput.value.trim();
+  const replacement = replacementInput.value.trim();
+
+  if (!original) {
+    resultDiv.textContent = "Ingresa el texto original a buscar.";
+    resultDiv.className = "poc-result poc-error";
+    resultDiv.style.display = "block";
+    return;
+  }
+
+  // Disable both buttons
+  btnA.disabled = true;
+  btnB.disabled = true;
+  const activeLabel = method === "insertText" ? labelA : labelB;
+  const originalLabelText = activeLabel.textContent;
+  activeLabel.textContent = "Procesando...";
+  resultDiv.style.display = "none";
+
+  try {
+    const result =
+      method === "insertText"
+        ? await pocInsertTextReplace(original, replacement)
+        : await pocInsertOoxmlReplace(original, replacement);
+
+    resultDiv.textContent = result.message;
+    resultDiv.className = result.success
+      ? "poc-result poc-success"
+      : "poc-result poc-error";
+  } catch (error) {
+    resultDiv.textContent = toUserMessage(error);
+    resultDiv.className = "poc-result poc-error";
+  } finally {
+    resultDiv.style.display = "block";
+    btnA.disabled = false;
+    btnB.disabled = false;
+    activeLabel.textContent = originalLabelText;
   }
 }

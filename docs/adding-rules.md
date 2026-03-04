@@ -1,155 +1,24 @@
 # Adding Rules
 
-This guide explains how to add new editorial rules to Stylistic's analysis engine. No framework knowledge is required — rules are declared as data, not code.
+In the production version of Stylistic, editorial rules are defined **server-side** in the Mastra workflow, not in the frontend. The frontend add-in has no local analysis logic — it sends text to the backend and receives suggestions.
 
-## How Rules Work
+## How It Works Now
 
-Every rule in Stylistic is an `AnalysisRule` object with three properties:
+1. The Word add-in reads the document text.
+2. The text is chunked and sent to the Mastra `editorial-workflow`.
+3. The workflow (AI-powered) analyzes the text and returns suggestions.
+4. The add-in applies suggestions as Track Changes.
 
-```typescript
-interface AnalysisRule {
-  id: string;                        // Stable ID, used as suggestion prefix
-  category: string;                  // Human-readable label for justifications
-  detect(text: string): Suggestion[];  // Scan text, return suggestions
-}
-```
+## Adding New Rules
 
-You don't implement `AnalysisRule` manually. Instead, you declare an array of patterns and use the `buildPatternRule()` factory:
+To add or modify editorial rules, update the **backend Mastra workflow**:
 
-```typescript
-const myRule = buildPatternRule("my-rule-id", "Category Name", [
-  {
-    pattern: /some phrase/gi,
-    replacement: "better phrase",
-    justification: "Explanation shown to the user.",
-  },
-]);
-```
+1. Modify the AI agent's system instructions in the workflow definition.
+2. Add new pattern categories (e.g., "Passive Voice", "Gender-inclusive language").
+3. Adjust the model's prompt to detect new patterns.
 
-## Step-by-Step
+The frontend does **not** need to change when rules are added or modified. The only requirement is that the workflow output conforms to the [API contract](api-contract.md).
 
-### 1. Define your patterns
+## Previous Approach (PoC)
 
-Open `src/lib/analyzer.ts`. Before the `rules` array, add your rule definition:
-
-```typescript
-const passiveVoiceRule = buildPatternRule("passive", "Voz pasiva", [
-  {
-    pattern: /fue realizado/gi,
-    replacement: "se realizó",
-    justification: "La voz activa es más directa y clara.",
-  },
-  {
-    pattern: /es requerido/gi,
-    replacement: "se requiere",
-    justification: "La voz activa es más directa y clara.",
-  },
-]);
-```
-
-### 2. Register the rule
-
-Add your rule to the `rules` array:
-
-```typescript
-const rules: AnalysisRule[] = [
-  redundancyRule,
-  fillerRule,
-  wordChoiceRule,
-  passiveVoiceRule,  // ← add here
-];
-```
-
-### 3. Build and test
-
-```bash
-npm run build
-npm start
-```
-
-Open Word, paste text containing your patterns, and click "Analizar y sugerir".
-
-That's it. No other files need to change.
-
-## Pattern Reference
-
-### PatternEntry fields
-
-| Field | Type | Description |
-|---|---|---|
-| `pattern` | `RegExp` | Regex to match. Use `g` for global, `i` for case-insensitive. |
-| `replacement` | `string` | Text to replace the match with. Use `""` to delete. |
-| `justification` | `string` | User-facing explanation. Shown in the results panel. |
-
-### Tips for writing patterns
-
-**Use the `gi` flags.** Global (`g`) finds all occurrences. Case-insensitive (`i`) catches "Utilizar" and "utilizar".
-
-```typescript
-pattern: /utilizar/gi
-```
-
-**Match optional punctuation.** Fillers often have a trailing comma and space:
-
-```typescript
-pattern: /en realidad,?\s*/gi
-replacement: ""
-```
-
-**Use `""` for deletions.** When the replacement is an empty string, the matched text is simply removed:
-
-```typescript
-{
-  pattern: /obviamente,?\s*/gi,
-  replacement: "",
-  justification: "If it's obvious, it doesn't need saying.",
-}
-```
-
-**Avoid overly broad patterns.** A pattern like `/el/gi` would match inside words like "modelo". Prefer specific multi-word phrases or use word boundaries:
-
-```typescript
-pattern: /\brealizar\b/gi
-```
-
-**Keep justifications concise.** They appear in a compact UI. One sentence is ideal.
-
-### Choosing a rule ID
-
-The `id` is used as a prefix for suggestion IDs (e.g., `"passive-0"`, `"passive-1"`). Use:
-
-- Lowercase, no spaces
-- Descriptive of the category
-- Unique across all rules
-
-### Choosing a category name
-
-The `category` is prepended to justification text in brackets (e.g., `[Voz pasiva] La voz activa es más directa.`). Use a short, human-readable label in the language of the target audience.
-
-## Deduplication Behavior
-
-If two rules flag the same text (e.g., *"en realidad"* is both a filler and a redundancy), only the first match is kept. The deduplication is case-insensitive and based on `originalText`.
-
-This means the order of rules in the `rules` array determines priority. Rules listed first take precedence.
-
-## Testing Rules Without Word
-
-Since `analyzer.ts` has zero dependencies on Office.js, you can test rules in isolation:
-
-```typescript
-import { analyze } from "./src/lib/analyzer";
-
-const suggestions = analyze(
-  "Básicamente, es completamente necesario utilizar este periodo de tiempo."
-);
-
-console.log(suggestions);
-// [
-//   { id: "filler-0", originalText: "Básicamente, ", suggestedText: "", ... },
-//   { id: "redundancy-0", originalText: "completamente necesario", suggestedText: "necesario", ... },
-//   { id: "wordchoice-0", originalText: "utilizar", suggestedText: "usar", ... },
-//   { id: "redundancy-1", originalText: "periodo de tiempo", suggestedText: "periodo", ... },
-// ]
-```
-
-This makes it straightforward to add unit tests for new rules using any test framework (Jest, Vitest, etc.).
+The proof-of-concept used a local `analyzer.ts` with regex-based pattern matching. This module was deleted in the production refactor. For historical reference, the pattern-based approach is documented in the git history.

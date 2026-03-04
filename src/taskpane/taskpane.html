@@ -8,34 +8,45 @@
     <title>Stylistic</title>
 
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-    <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"/>
+    <link rel="stylesheet"
+        href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css" />
     <link href="taskpane.css" rel="stylesheet" type="text/css" />
 </head>
 
 <body class="ms-font-m ms-Fabric">
     <section id="sideload-msg" class="sideload-msg">
-        <h2 class="ms-font-xl">Please <a target="_blank" href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a> your add-in to see app body.</h2>
+        <h2 class="ms-font-xl">Please <a target="_blank"
+                href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a>
+            your add-in to see app body.</h2>
     </section>
 
     <main id="app-body" style="display: none;">
         <header class="stylistic-header">
             <h1 class="ms-font-xl">Stylistic</h1>
-            <p class="ms-font-s ms-fontColor-neutralSecondary">Editorial suggestions via Track Changes</p>
+            <p class="ms-font-s ms-fontColor-neutralSecondary">Sugerencias editoriales con Track Changes</p>
         </header>
 
         <div class="stylistic-section">
-            <button id="btn-read" class="stylistic-btn ms-font-m">
-                <i class="ms-Icon ms-Icon--ReadingMode"></i> Leer documento
-            </button>
+            <label for="profile-select" class="stylistic-label ms-font-s">Perfil de análisis</label>
+            <select id="profile-select" class="stylistic-select ms-font-m">
+                <option value="general">General</option>
+                <option value="formal">Formal</option>
+                <option value="academic">Académico</option>
+            </select>
         </div>
-
-        <pre id="doc-preview" class="doc-preview" style="display: none;"></pre>
 
         <div class="stylistic-section">
             <button id="btn-analyze" class="stylistic-btn stylistic-btn--primary ms-font-m">
                 <i class="ms-Icon ms-Icon--AnalyticsView"></i>
                 <span id="btn-analyze-label">Analizar y sugerir</span>
             </button>
+        </div>
+
+        <div id="progress-container" class="progress-container" style="display: none;">
+            <div class="progress-bar-track">
+                <div id="progress-bar" class="progress-bar-fill"></div>
+            </div>
+            <p id="progress-text" class="progress-text ms-font-s"></p>
         </div>
 
         <div id="results-panel" class="results-panel" style="display: none;">
@@ -45,6 +56,30 @@
         </div>
 
         <div id="status-bar" class="stylistic-status" style="display: none;"></div>
+
+        <hr class="poc-divider" />
+        <div class="poc-section">
+            <h2 class="ms-font-m-plus poc-title">PoC: Tracked Change Comparison</h2>
+            <p class="ms-font-s ms-fontColor-neutralSecondary">
+                Escribe texto en el documento, luego ingresa el texto original y el reemplazo.
+                Prueba ambos métodos y compara cuántos tracked changes genera cada uno.
+            </p>
+            <label for="poc-original" class="stylistic-label ms-font-s">Texto original</label>
+            <input id="poc-original" type="text" class="stylistic-input ms-font-m" placeholder="ej: hola" />
+            <label for="poc-replacement" class="stylistic-label ms-font-s">Texto de reemplazo</label>
+            <input id="poc-replacement" type="text" class="stylistic-input ms-font-m" placeholder="ej: adios" />
+            <div class="poc-buttons">
+                <button id="btn-poc-inserttext" class="stylistic-btn stylistic-btn--poc ms-font-m">
+                    <i class="ms-Icon ms-Icon--TestBeaker"></i>
+                    <span id="btn-poc-inserttext-label">A: insertText + TrackAll</span>
+                </button>
+                <button id="btn-poc-ooxml" class="stylistic-btn stylistic-btn--poc stylistic-btn--poc-alt ms-font-m">
+                    <i class="ms-Icon ms-Icon--TestBeaker"></i>
+                    <span id="btn-poc-ooxml-label">B: OOXML markup</span>
+                </button>
+            </div>
+            <div id="poc-result" class="poc-result ms-font-s" style="display: none;"></div>
+        </div>
     </main>
 </body>
 

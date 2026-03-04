@@ -74,11 +74,52 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 ---
 
+## Backend Connection Issues
+
+### "Backend no disponible"
+
+**Symptom:** Clicking "Analizar y sugerir" shows this error immediately.
+
+**Cause:** The Mastra server is not running or the `editorial-workflow` is not registered.
+
+**Fix:**
+
+1. Verify the Mastra server is running at the URL configured in `src/lib/config.ts` (default: `http://localhost:4111`).
+2. Check that the `editorial-workflow` is registered in the Mastra configuration.
+3. Verify CORS is enabled for `https://localhost:3000` on the Mastra server.
+4. Check the browser console (F12) for CORS or network errors.
+
+---
+
+### Analysis takes too long or times out
+
+**Symptom:** The progress bar stalls on a chunk, and eventually an error is reported.
+
+**Cause:** The backend AI processing took longer than expected, or the chunk is too large.
+
+**Fix:**
+
+1. Check the Mastra server logs for errors or slow responses.
+2. Reduce `DEFAULT_MAX_CHUNK_SIZE` in `src/lib/config.ts` to send smaller chunks.
+3. Ensure the backend model has sufficient resources for processing.
+
+---
+
+### Some chunks fail but others succeed
+
+**Symptom:** The results show "N fragmento(s) con error" alongside successful suggestions.
+
+**Cause:** Individual chunks failed after retries (network issue, backend overload, or model error).
+
+**Expected behavior.** The add-in applies suggestions from successful chunks and reports failures. No manual retry is needed for the successful portion — those Track Changes are already in the document.
+
+---
+
 ## Runtime Issues
 
 ### "El documento está protegido o es de solo lectura"
 
-**Symptom:** Clicking "Analizar y sugerir" shows this error.
+**Symptom:** The analysis completes but Track Changes cannot be applied.
 
 **Cause:** The document has editing restrictions (DRM, password protection, or read-only mode).
 
@@ -102,21 +143,21 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Symptom:** The status bar shows this message even though the document contains text.
 
-**Cause:** The document text doesn't contain any patterns matched by the current rules.
+**Cause:** The backend workflow didn't find any editorial issues in the text.
 
-**Fix:** This is expected behavior. The analyzer only flags specific Spanish-language patterns. See [docs/adding-rules.md](adding-rules.md) to extend the rule set.
+**Expected behavior.** This is a valid result — the text may already be well-written for the selected profile.
 
 ---
 
-### Some suggestions show as "No encontrado"
+### Many suggestions show as "No encontrado"
 
-**Symptom:** The results panel marks certain suggestions as not found in the document.
+**Symptom:** The results panel marks many suggestions as not found in the document.
 
 **Possible causes:**
 
 1. **The text was already replaced** by a previous suggestion in the same batch. This happens when one suggestion's replacement removes text that another suggestion targets.
-2. **Case mismatch.** The search uses `matchCase: true`. If the document has "Realizar" but the pattern matches "realizar", it won't find it in case-sensitive mode.
-3. **Hidden characters.** The document may contain non-breaking spaces, soft hyphens, or other invisible characters that break the regex match.
+2. **Backend returned non-exact matches.** The `originalText` from the workflow must be an exact, case-sensitive substring of the document text. See [api-contract.md](api-contract.md) for details.
+3. **Hidden characters.** The document may contain non-breaking spaces, soft hyphens, or other invisible characters that break the match.
 
 ---
 
@@ -141,7 +182,9 @@ If your issue isn't listed here:
 1. Check the browser console (F12) for JavaScript errors.
 2. Run `npm run validate` to check the manifest.
 3. Try `npm stop && npm start` for a clean restart.
-4. Open an issue in the repository with:
+4. Verify the Mastra server is running and responsive.
+5. Open an issue in the repository with:
    - The error message (screenshot or text)
    - Your Word version (Desktop/Online, version number)
    - Your OS and Node.js version
+   - Whether the Mastra backend is running

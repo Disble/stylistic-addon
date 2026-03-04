@@ -4,18 +4,52 @@ A Microsoft Word add-in that analyzes Spanish-language documents and proposes ed
 
 ## Why Stylistic?
 
-Writers and editors working in Spanish frequently encounter redundant phrases, filler words, and unnecessarily complex expressions. Stylistic detects these patterns and inserts corrections as tracked changes, integrating seamlessly into the existing Word review workflow.
+Writers and editors working in Spanish frequently encounter redundant phrases, filler words, and unnecessarily complex expressions. Stylistic leverages AI to detect these patterns and inserts corrections as tracked changes, integrating seamlessly into the existing Word review workflow.
 
 **Key idea:** the add-in writes suggestions *as the document author would*, using Track Changes. The user reviews them with the same tools they already know.
 
+## Architecture
+
+Stylistic is a **frontend-only** Word add-in that communicates with a **Mastra backend** for AI-powered text analysis:
+
+```
+┌─────────────────────────────────────────────────┐
+│  Word Add-in (Frontend)                         │
+│                                                 │
+│  taskpane.ts — UI orchestrator                  │
+│  ├── wordApi.ts    — Read document, apply       │
+│  │                   Track Changes in batches   │
+│  ├── mastraClient.ts — Workflow execution       │
+│  │                     via @mastra/client-js     │
+│  └── chunker.ts    — Split large texts at       │
+│                      paragraph boundaries       │
+├─────────────────────────────────────────────────┤
+│  Mastra Backend (separate application)          │
+│  └── editorial-workflow — AI text analysis      │
+└─────────────────────────────────────────────────┘
+```
+
+| Layer | Module | Responsibility | Imports Office.js? |
+|---|---|---|---|
+| UI | `taskpane.ts` | Event handling, progress, rendering | No (delegates) |
+| API | `wordApi.ts` | Document read/write, Track Changes | Yes (only module) |
+| Backend | `mastraClient.ts` | Workflow execution, retry logic | No |
+| Chunker | `chunker.ts` | Text splitting at paragraph boundaries | No |
+| Config | `config.ts` | Internal constants and defaults | No |
+| Types | `types.ts` | Shared interfaces | No |
+
+See [docs/architecture.md](docs/architecture.md) for a detailed walkthrough.
+
 ## Features
 
-- **Redundancy detection** — flags pleonasms like *"completamente necesario"*, *"subir arriba"*, *"periodo de tiempo"*
-- **Filler word removal** — identifies weakening phrases like *"básicamente"*, *"obviamente"*, *"en realidad"*
-- **Word choice simplification** — suggests *"usar"* over *"utilizar"*, *"para"* over *"con el objetivo de"*, and more
+- **AI-powered analysis** — detects redundancy, filler words, style issues, and more via a Mastra workflow
 - **Native Track Changes** — suggestions appear as real Word revisions (strikethrough + underline), reviewable from the Review tab
-- **Non-destructive** — preserves the document's original tracking mode after analysis (preserve-and-restore pattern)
-- **Extensible rule engine** — adding new editorial rules requires only a pattern declaration, no framework code
+- **Large document support** — handles documents with 200,000+ words through paragraph-boundary chunking
+- **Batched application** — suggestions are applied in independent batches, preventing data loss on errors
+- **Reliability first** — retry logic with exponential backoff, partial success reporting, preserve-and-restore tracking mode
+- **Non-destructive** — preserves the document's original tracking mode after analysis
+- **Simple UI** — one-click analysis with a profile dropdown, progress bar, and results panel
+- **Extensible** — new analysis rules require only backend prompt changes, no frontend modifications
 
 ## Quick Start
 
@@ -23,7 +57,7 @@ Writers and editors working in Spanish frequently encounter redundant phrases, f
 
 - [Node.js](https://nodejs.org/) v18+
 - Microsoft Word (desktop or Word Online)
-- A code editor
+- A running [Mastra](https://mastra.ai/) server with the `editorial-workflow` deployed
 
 ### Setup
 
@@ -31,6 +65,10 @@ Writers and editors working in Spanish frequently encounter redundant phrases, f
 cd stylistic-addon
 npm install
 ```
+
+### Configure Backend
+
+The add-in expects a Mastra server at `http://localhost:4111` with the `editorial-workflow` registered. See [docs/api-contract.md](docs/api-contract.md) for the complete backend requirements.
 
 ### Run
 
@@ -40,39 +78,12 @@ npm start
 
 This starts the dev server on `https://localhost:3000` and sideloads the add-in into Word desktop. In Word, go to **Home** tab and click **Show Task Pane**.
 
-### Try it
+### Try It
 
-Paste this text into a Word document:
-
-> Básicamente, es completamente necesario utilizar este periodo de tiempo con el objetivo de realizar la tarea. Obviamente, el resultado final será muy único.
-
-Click **"Analizar y sugerir"**. The add-in will insert tracked changes for each detected issue. Open the **Review** tab to accept or reject them.
-
-## Architecture
-
-Stylistic follows a strict three-layer separation of concerns:
-
-```
-┌─────────────────────────────────────────┐
-│  taskpane.ts — UI orchestration         │
-│  Binds events, delegates, renders       │
-├─────────────────────────────────────────┤
-│  wordApi.ts — Word API abstraction      │  analyzer.ts — Business logic
-│  All Office.js calls live here          │  Pure functions, zero Office.js
-│  Preserve-and-restore tracking mode     │  Pattern-based rule engine
-├─────────────────────────────────────────┤
-│  types.ts — Shared interfaces (Suggestion, InsertionResult)               │
-└─────────────────────────────────────────┘
-```
-
-| Layer | Module | Responsibility | Imports Office.js? |
-|---|---|---|---|
-| UI | `taskpane.ts` | Event handling, rendering, loading states | No (delegates) |
-| API | `wordApi.ts` | Document read/write, track changes | Yes (only module) |
-| Logic | `analyzer.ts` | Text analysis, suggestion generation | No |
-| Types | `types.ts` | Shared interfaces | No |
-
-See [docs/architecture.md](docs/architecture.md) for a detailed walkthrough.
+1. Select an analysis profile from the dropdown (General, Formal, or Académico).
+2. Click **"Analizar y sugerir"**.
+3. Watch the progress bar as chunks are analyzed and suggestions are applied.
+4. Open the **Review** tab to accept or reject tracked changes.
 
 ## Project Structure
 
@@ -83,11 +94,13 @@ stylistic-addon/
 │   │   ├── commands.ts          # Ribbon command handler
 │   │   └── commands.html
 │   ├── lib/
-│   │   ├── types.ts             # Suggestion, InsertionResult interfaces
-│   │   ├── wordApi.ts           # Office.js abstraction layer
-│   │   └── analyzer.ts          # Rule-based text analysis engine
+│   │   ├── types.ts             # Shared interfaces (Suggestion, InsertionResult, etc.)
+│   │   ├── config.ts            # Constants (Mastra URL, batch sizes, retry policy)
+│   │   ├── wordApi.ts           # Office.js abstraction layer (read + batched write)
+│   │   ├── mastraClient.ts      # Mastra workflow client with retry logic
+│   │   └── chunker.ts           # Paragraph-boundary text splitting
 │   └── taskpane/
-│       ├── taskpane.ts          # UI orchestrator
+│       ├── taskpane.ts          # UI orchestrator (multi-phase analysis pipeline)
 │       ├── taskpane.html        # Task pane markup
 │       └── taskpane.css         # Styles (Fluent UI compatible)
 ├── assets/                      # Add-in icons (16, 32, 64, 80, 128px)
@@ -96,9 +109,10 @@ stylistic-addon/
 ├── tsconfig.json                # TypeScript configuration
 ├── package.json                 # Dependencies and scripts
 └── docs/                        # Extended documentation
-    ├── architecture.md
-    ├── adding-rules.md
-    └── troubleshooting.md
+    ├── architecture.md          # System design, data flow, decisions
+    ├── api-contract.md          # Backend requirements (Mastra workflow I/O)
+    ├── adding-rules.md          # How to extend analysis rules
+    └── troubleshooting.md       # Common issues and solutions
 ```
 
 ## Available Scripts
@@ -123,30 +137,40 @@ stylistic-addon/
 | Node.js | 18+ |
 | Word Desktop | 2019+ / Microsoft 365 |
 | Word Online | Supported (no version constraint) |
+| Mastra Server | `@mastra/client-js` v1.7.1 compatible |
 
 The add-in requires **WordApi 1.6** for `changeTrackingMode` support. Word Online has full support regardless of client version.
+
+## Dependencies
+
+| Package | Purpose |
+|---|---|
+| `@mastra/client-js` | Mastra workflow client SDK for backend communication |
+| `core-js` | Polyfills for older browser environments |
+| `regenerator-runtime` | Async/await support for transpiled code |
 
 ## Documentation
 
 | Document | Description |
 |---|---|
-| [Architecture](docs/architecture.md) | Layered design, data flow, and design decisions |
-| [Adding Rules](docs/adding-rules.md) | Step-by-step guide to creating new editorial rules |
+| [Architecture](docs/architecture.md) | System design, data flow, and design decisions |
+| [API Contract](docs/api-contract.md) | Backend requirements (Mastra workflow input/output) |
+| [Adding Rules](docs/adding-rules.md) | How to extend editorial analysis rules |
 | [Troubleshooting](docs/troubleshooting.md) | Common issues and their solutions |
 
 ## Known Limitations
 
-- **Author attribution** — tracked changes appear under the current user's name, not the add-in's. This is a Word API limitation and an accepted non-requirement.
+- **Author attribution** — tracked changes appear under the current user's name, not the add-in's. This is a Word API limitation.
 - **Co-authoring** — the add-in should not be used while multiple authors are actively editing the same document.
 - **DRM/RMS protected documents** — protected documents cannot be modified by add-ins.
-- **Performance** — documents with 50+ suggestions may experience slower processing. Future versions will batch in groups of 10-15.
+- **Backend required** — the add-in requires a running Mastra server with the editorial workflow deployed.
 - **Language** — currently supports Spanish text analysis only.
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/new-rule`)
-3. Read [docs/adding-rules.md](docs/adding-rules.md) if adding editorial rules
+2. Create a feature branch (`git checkout -b feature/improvement`)
+3. Read [docs/api-contract.md](docs/api-contract.md) if modifying backend integration
 4. Run `npm run lint` and `npm run build` before committing
 5. Open a Pull Request
 
