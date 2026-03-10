@@ -224,6 +224,52 @@ function classifyChange(suggestion: Suggestion): ChangeType {
 }
 
 // ---------------------------------------------------------------------------
+// Guard: Already-Applied Suggestions
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the set of original texts that Stylistic has already applied as
+ * tracked deletions in the document.
+ *
+ * **Guard Pattern** — called before the apply phase to prevent duplicate
+ * tracked changes when the user re-runs analysis on a document that already
+ * has pending Stylistic changes. A `<w:del>` node's text is still present in
+ * the document body and searchable, so without this guard, `body.search()`
+ * would find the already-deleted text and wrap it in a second tracked change.
+ *
+ * Implementation: loads all Stylistic tracked changes of type "Deleted",
+ * resolves their ranges in a single sync, and returns their text as a Set
+ * for O(1) lookup per suggestion.
+ *
+ * @returns A `Set<string>` of original texts already tracked as deletions.
+ */
+export async function getAppliedOriginalTexts(): Promise<Set<string>> {
+  console.log("🛡️ [WordApi] Consultando tracked changes de Stylistic existentes...");
+  return Word.run(async (context) => {
+    const tracked = context.document.body.getTrackedChanges();
+    tracked.load({ select: "author,type" });
+    await context.sync();
+
+    const stylisticDeletions = tracked.items.filter(
+      (tc) => tc.author === "Stylistic" && (tc.type as string) === "Deleted"
+    );
+
+    if (stylisticDeletions.length === 0) {
+      console.log("🛡️ [WordApi] Sin tracked deletions de Stylistic en el documento");
+      return new Set<string>();
+    }
+
+    const ranges = stylisticDeletions.map((tc) => tc.getRange());
+    ranges.forEach((r) => r.load("text"));
+    await context.sync();
+
+    const texts = new Set(ranges.map((r) => r.text));
+    console.log(`🛡️ [WordApi] ${texts.size} texto(s) ya rastreado(s): [${Array.from(texts).map((t) => `"${t.substring(0, 30)}"`).join(", ")}]`);
+    return texts;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Comment Cleanup
 // ---------------------------------------------------------------------------
 

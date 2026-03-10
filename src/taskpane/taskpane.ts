@@ -25,6 +25,7 @@
 
 import {
   getTextToAnalyze,
+  getAppliedOriginalTexts,
   applySuggestionsInBatches,
   cleanupResolvedComments,
 } from "../lib/wordApi";
@@ -352,11 +353,36 @@ async function handleAnalyze(): Promise<void> {
       return;
     }
 
+    // Phase 5b: Guard — filter out suggestions already present as tracked changes
+    // Prevents duplicate tracked changes when the user re-runs analysis on a
+    // document that still has pending Stylistic changes (deleted text remains
+    // searchable inside <w:del> nodes and would be matched again by body.search).
+    console.log("🛡️ [Taskpane] Fase 5b: Verificando sugerencias ya aplicadas...");
+    const appliedTexts = await getAppliedOriginalTexts();
+    const pendingSuggestions = uniqueSuggestions.filter(
+      (s) => !appliedTexts.has(s.originalText)
+    );
+    const skippedCount = uniqueSuggestions.length - pendingSuggestions.length;
+    if (skippedCount > 0) {
+      console.log(`🛡️ [Taskpane] ${skippedCount} sugerencia(s) ya aplicada(s) en el documento — omitidas`);
+    }
+
+    if (pendingSuggestions.length === 0) {
+      updateProgress("done", 1, 1, "");
+      showStatus(
+        skippedCount > 0
+          ? `Todas las sugerencias ya están aplicadas en el documento.`
+          : "No se encontraron sugerencias editoriales.",
+        "success"
+      );
+      return;
+    }
+
     // Phase 6: Apply as tracked changes
     console.log(
-      `📝 [Taskpane] Fase 6: Aplicando ${uniqueSuggestions.length} sugerencias como Track Changes...`
+      `📝 [Taskpane] Fase 6: Aplicando ${pendingSuggestions.length} sugerencias como Track Changes...`
     );
-    const result = await applySuggestionsInBatches(uniqueSuggestions, updateProgress);
+    const result = await applySuggestionsInBatches(pendingSuggestions, updateProgress);
     console.log(
       `📝 [Taskpane] Resultado: ${result.successCount} aplicadas, ${result.failedSuggestions.length} fallidas`
     );
@@ -364,7 +390,7 @@ async function handleAnalyze(): Promise<void> {
     // Phase 7: Render results
     console.log("🎨 [Taskpane] Fase 7: Renderizando resultados");
     updateProgress("done", 1, 1, "");
-    renderResults(uniqueSuggestions, result, chunkErrors, isSelection);
+    renderResults(pendingSuggestions, result, chunkErrors, isSelection);
     console.log("✅ [Taskpane] Pipeline completado exitosamente");
 
     // Show cleanup button if any suggestions were applied
@@ -373,14 +399,15 @@ async function handleAnalyze(): Promise<void> {
     }
 
     const scopeSuffix = isSelection ? " (selección)" : "";
+    const skippedSuffix = skippedCount > 0 ? ` ${skippedCount} ya aplicada(s).` : "";
     if (result.failedSuggestions.length > 0 && result.successCount > 0) {
       showStatus(
-        `${result.successCount} aplicada(s), ${result.failedSuggestions.length} no encontrada(s)${scopeSuffix}.`,
+        `${result.successCount} aplicada(s), ${result.failedSuggestions.length} no encontrada(s)${scopeSuffix}.${skippedSuffix}`,
         "success"
       );
     } else if (result.successCount > 0) {
       showStatus(
-        `${result.successCount} sugerencia(s) insertada(s) como Track Changes${scopeSuffix}.`,
+        `${result.successCount} sugerencia(s) insertada(s) como Track Changes${scopeSuffix}.${skippedSuffix}`,
         "success"
       );
     } else {
