@@ -23,12 +23,7 @@
  * @module wordApi
  */
 
-import {
-  Suggestion,
-  InsertionResult,
-  ProgressCallback,
-  ChangeType,
-} from "./types";
+import { Suggestion, InsertionResult, ProgressCallback, ChangeType } from "./types";
 
 // ---------------------------------------------------------------------------
 // Document Reading
@@ -40,10 +35,12 @@ import {
  * @returns The document body text. Returns an empty string for blank documents.
  */
 export async function getDocumentText(): Promise<string> {
+  console.log("📖 [WordApi] Leyendo texto del documento...");
   return Word.run(async (context) => {
     const body = context.document.body;
     body.load("text");
     await context.sync();
+    console.log(`📖 [WordApi] Texto obtenido — ${body.text.length} caracteres`);
     return body.text;
   });
 }
@@ -71,7 +68,9 @@ export async function applySuggestionsInBatches(
   suggestions: Suggestion[],
   onProgress?: ProgressCallback
 ): Promise<InsertionResult> {
+  console.log(`📝 [WordApi] applySuggestionsInBatches: ${suggestions.length} sugerencias`);
   if (suggestions.length === 0) {
+    console.log("📝 [WordApi] Sin sugerencias que aplicar");
     return { successCount: 0, failedSuggestions: [] };
   }
 
@@ -83,8 +82,12 @@ export async function applySuggestionsInBatches(
 
     if (result.success) {
       totalSuccess++;
+      console.log(`✅ [WordApi] Sugerencia "${suggestion.id}" aplicada OK`);
     } else {
       allFailed.push(suggestion);
+      console.warn(
+        `⚠️ [WordApi] Sugerencia "${suggestion.id}" falló — original no encontrado: "${suggestion.originalText.substring(0, 50)}..."`
+      );
     }
 
     if (onProgress) {
@@ -97,6 +100,7 @@ export async function applySuggestionsInBatches(
     }
   }
 
+  console.log(`📝 [WordApi] Batch completado: ${totalSuccess} éxitos, ${allFailed.length} fallos`);
   return { successCount: totalSuccess, failedSuggestions: allFailed };
 }
 
@@ -110,21 +114,26 @@ export async function applySuggestionsInBatches(
  * @param suggestion - The suggestion to apply.
  * @returns An object indicating success or failure.
  */
-async function applySingleSuggestion(
-  suggestion: Suggestion
-): Promise<{ success: boolean }> {
+async function applySingleSuggestion(suggestion: Suggestion): Promise<{ success: boolean }> {
+  console.log(
+    `🔍 [WordApi] Procesando sugerencia "${suggestion.id}": "${suggestion.originalText.substring(0, 40)}" → "${suggestion.suggestedText.substring(0, 40)}"`
+  );
   return Word.run(async (context) => {
     // Search for the original text
-    const results = context.document.body.search(
-      suggestion.originalText,
-      { matchCase: true, matchWholeWord: false }
-    );
+    const results = context.document.body.search(suggestion.originalText, {
+      matchCase: true,
+      matchWholeWord: false,
+    });
     results.load("items");
     await context.sync();
 
     if (results.items.length === 0) {
+      console.warn(`🔍 [WordApi] "${suggestion.id}": texto original no encontrado en documento`);
       return { success: false };
     }
+    console.log(
+      `🔍 [WordApi] "${suggestion.id}": encontrado ${results.items.length} coincidencia(s)`
+    );
 
     const range = results.items[0];
 
@@ -151,14 +160,15 @@ async function applySingleSuggestion(
         type,
         runProps
       );
+      console.log(`📄 [WordApi] "${suggestion.id}": insertando OOXML (tipo: ${type})`);
       range.insertOoxml(ooxml, Word.InsertLocation.replace);
       await context.sync();
+      console.log(`✅ [WordApi] "${suggestion.id}": OOXML insertado exitosamente`);
 
       return { success: true };
     } finally {
       // Restore tracking mode
-      context.document.changeTrackingMode =
-        previousMode as Word.ChangeTrackingMode;
+      context.document.changeTrackingMode = previousMode as Word.ChangeTrackingMode;
       await context.sync();
     }
   });
@@ -209,6 +219,7 @@ export async function cleanupResolvedComments(): Promise<{
   deleted: number;
   kept: number;
 }> {
+  console.log("🧽 [WordApi] Iniciando limpieza de comentarios resueltos...");
   return Word.run(async (context) => {
     // Sync 1: load collections with properties
     const tracked = context.document.body.getTrackedChanges();
@@ -217,14 +228,14 @@ export async function cleanupResolvedComments(): Promise<{
     comments.load({ select: "authorName" });
     await context.sync();
 
-    const stylisticComments = comments.items.filter(
-      (c) => c.authorName === "Stylistic"
-    );
-    const stylisticTCs = tracked.items.filter(
-      (tc) => tc.author === "Stylistic"
+    const stylisticComments = comments.items.filter((c) => c.authorName === "Stylistic");
+    const stylisticTCs = tracked.items.filter((tc) => tc.author === "Stylistic");
+    console.log(
+      `🧽 [WordApi] Encontrados ${stylisticComments.length} comentarios y ${stylisticTCs.length} tracked changes de Stylistic`
     );
 
     if (stylisticComments.length === 0) {
+      console.log("🧽 [WordApi] Sin comentarios de Stylistic — nada que limpiar");
       return { deleted: 0, kept: 0 };
     }
 
@@ -243,8 +254,7 @@ export async function cleanupResolvedComments(): Promise<{
     await context.sync();
 
     // Sync 3: compare each comment range against each TC range
-    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
-      [];
+    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] = [];
     for (let i = 0; i < commentRanges.length; i++) {
       comparisons[i] = [];
       for (let j = 0; j < tcRanges.length; j++) {
@@ -288,6 +298,7 @@ export async function cleanupResolvedComments(): Promise<{
 
     // Sync 4: execute deletes
     await context.sync();
+    console.log(`🧽 [WordApi] Limpieza completada: ${deleted} eliminados, ${kept} conservados`);
     return { deleted, kept };
   });
 }
@@ -333,9 +344,7 @@ function buildTrackedChangeOoxml(
   const escapedCategory = escapeXml(category);
   const escapedJustification = escapeXml(justification);
 
-  const rPr = runPropertiesXml
-    ? `                ${runPropertiesXml}\n`
-    : "";
+  const rPr = runPropertiesXml ? `                ${runPropertiesXml}\n` : "";
 
   // Build tracked change body based on type
   let changeBody = "";
@@ -419,8 +428,7 @@ function buildTrackedChangeOoxml(
     "        <w:body>",
     "          <w:p>",
     '            <w:commentRangeStart w:id="0"/>',
-    changeBody +
-    '            <w:commentRangeEnd w:id="0"/>',
+    changeBody + '            <w:commentRangeEnd w:id="0"/>',
     "            <w:r>",
     '              <w:commentReference w:id="0"/>',
     "            </w:r>",
@@ -462,8 +470,7 @@ function extractRunProperties(ooxml: string): string | null {
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(ooxml, "application/xml");
-    const nsW =
-      "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
     const rPr = doc.getElementsByTagNameNS(nsW, "rPr")[0];
     if (!rPr) return null;

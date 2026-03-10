@@ -31,12 +31,7 @@ import {
 import { checkConnection, analyzeChunk } from "../lib/mastraClient";
 import { splitText } from "../lib/chunker";
 import { DEFAULT_MAX_CHUNK_SIZE } from "../lib/config";
-import {
-  Suggestion,
-  InsertionResult,
-  ChunkResult,
-  AnalysisPhase,
-} from "../lib/types";
+import { Suggestion, InsertionResult, ChunkResult, AnalysisPhase } from "../lib/types";
 
 /** Duration (ms) before the status bar message auto-hides. */
 const STATUS_DISPLAY_MS = 4000;
@@ -144,8 +139,7 @@ function renderResults(
   const applied = result.successCount;
   const failed = result.failedSuggestions.length;
 
-  let summaryText =
-    `${applied} de ${total} sugerencias aplicadas como Track Changes.`;
+  let summaryText = `${applied} de ${total} sugerencias aplicadas como Track Changes.`;
   if (failed > 0) {
     summaryText += ` ${failed} no encontrada(s) en el texto.`;
   }
@@ -271,19 +265,26 @@ async function handleAnalyze(): Promise<void> {
 
   try {
     // Phase 1: Read document
+    console.log("🚀 [Taskpane] Pipeline iniciado");
     updateProgress("reading", 0, 1, "Leyendo documento...");
+    console.log("📖 [Taskpane] Fase 1: Leyendo documento...");
     const text = await getDocumentText();
+    console.log(`📖 [Taskpane] Documento leído — ${text.length} caracteres`);
 
     if (!text || text.trim().length === 0) {
+      console.warn("⚠️ [Taskpane] Documento vacío, abortando");
       showStatus("El documento está vacío. Escribe algo primero.", "error");
       return;
     }
 
     // Phase 2: Check backend
+    console.log("🔌 [Taskpane] Fase 2: Verificando conexión con backend...");
     updateProgress("connecting", 0, 1, "Conectando con el servidor...");
     const connected = await checkConnection();
+    console.log(`🔌 [Taskpane] Conexión: ${connected ? "✅ OK" : "❌ FALLO"}`);
 
     if (!connected) {
+      console.error("❌ [Taskpane] Backend no disponible, abortando");
       showStatus(
         "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.",
         "error"
@@ -292,10 +293,13 @@ async function handleAnalyze(): Promise<void> {
     }
 
     // Phase 3: Chunk text
+    console.log("✂️ [Taskpane] Fase 3: Dividiendo texto en chunks...");
     const chunks = splitText(text, DEFAULT_MAX_CHUNK_SIZE);
     const profile = getSelectedProfile();
+    console.log(`✂️ [Taskpane] ${chunks.length} chunk(s) generados — perfil: "${profile}"`);
 
     // Phase 4: Analyze each chunk
+    console.log("🤖 [Taskpane] Fase 4: Analizando chunks con Mastra...");
     const allSuggestions: Suggestion[] = [];
     const chunkErrors: string[] = [];
 
@@ -307,7 +311,13 @@ async function handleAnalyze(): Promise<void> {
         `Analizando fragmento ${chunk.index + 1} de ${chunks.length}...`
       );
 
+      console.log(
+        `🤖 [Taskpane] Enviando chunk ${chunk.index + 1}/${chunks.length} (${chunk.text.length} chars)`
+      );
       const chunkResult: ChunkResult = await analyzeChunk(chunk, profile, "es");
+      console.log(
+        `🤖 [Taskpane] Chunk ${chunk.index + 1} → ${chunkResult.suggestions.length} sugerencia(s)${chunkResult.error ? " ⚠️ con error: " + chunkResult.error : ""}`
+      );
 
       allSuggestions.push(...chunkResult.suggestions);
       if (chunkResult.error) {
@@ -316,9 +326,16 @@ async function handleAnalyze(): Promise<void> {
     }
 
     // Phase 5: Deduplicate
+    console.log(
+      `🧹 [Taskpane] Fase 5: Deduplicando — ${allSuggestions.length} sugerencias totales`
+    );
     const uniqueSuggestions = deduplicateByOriginalText(allSuggestions);
+    console.log(
+      `🧹 [Taskpane] ${uniqueSuggestions.length} sugerencias únicas (${allSuggestions.length - uniqueSuggestions.length} duplicadas removidas)`
+    );
 
     if (uniqueSuggestions.length === 0) {
+      console.warn(`⚠️ [Taskpane] Sin sugerencias. Errores de chunks: ${chunkErrors.length}`);
       if (chunkErrors.length > 0) {
         showStatus(
           `El análisis falló en ${chunkErrors.length} fragmento(s). Intenta de nuevo.`,
@@ -332,14 +349,19 @@ async function handleAnalyze(): Promise<void> {
     }
 
     // Phase 6: Apply as tracked changes
-    const result = await applySuggestionsInBatches(
-      uniqueSuggestions,
-      updateProgress
+    console.log(
+      `📝 [Taskpane] Fase 6: Aplicando ${uniqueSuggestions.length} sugerencias como Track Changes...`
+    );
+    const result = await applySuggestionsInBatches(uniqueSuggestions, updateProgress);
+    console.log(
+      `📝 [Taskpane] Resultado: ${result.successCount} aplicadas, ${result.failedSuggestions.length} fallidas`
     );
 
     // Phase 7: Render results
+    console.log("🎨 [Taskpane] Fase 7: Renderizando resultados");
     updateProgress("done", 1, 1, "");
     renderResults(uniqueSuggestions, result, chunkErrors);
+    console.log("✅ [Taskpane] Pipeline completado exitosamente");
 
     // Show cleanup button if any suggestions were applied
     if (result.successCount > 0) {
@@ -357,12 +379,10 @@ async function handleAnalyze(): Promise<void> {
         "success"
       );
     } else {
-      showStatus(
-        "Ninguna sugerencia pudo aplicarse al documento actual.",
-        "error"
-      );
+      showStatus("Ninguna sugerencia pudo aplicarse al documento actual.", "error");
     }
   } catch (error) {
+    console.error("💥 [Taskpane] Error en pipeline:", error);
     updateProgress("done", 1, 1, "");
     showStatus(toUserMessage(error), "error");
   } finally {
@@ -379,6 +399,7 @@ async function handleAnalyze(): Promise<void> {
  * Deletes Stylistic comments whose tracked changes have been resolved.
  */
 async function handleCleanup(): Promise<void> {
+  console.log("🧽 [Taskpane] Iniciando limpieza de comentarios resueltos...");
   const btn = document.getElementById("btn-cleanup") as HTMLButtonElement;
   const label = document.getElementById("btn-cleanup-label")!;
 
@@ -387,11 +408,9 @@ async function handleCleanup(): Promise<void> {
 
   try {
     const { deleted, kept } = await cleanupResolvedComments();
+    console.log(`🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`);
 
-    showStatus(
-      `${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`,
-      "success"
-    );
+    showStatus(`${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`, "success");
 
     // If nothing left to clean, hide the button
     if (kept === 0) {
@@ -404,4 +423,3 @@ async function handleCleanup(): Promise<void> {
     label.textContent = "Limpiar comentarios resueltos";
   }
 }
-

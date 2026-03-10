@@ -22,6 +22,7 @@
     "signout": "office-addin-dev-settings m365-account logout",
     "start": "office-addin-debugging start manifest.xml",
     "stop": "office-addin-debugging stop manifest.xml",
+    "typecheck": "tsc --noEmit",
     "validate": "office-addin-manifest validate manifest.xml",
     "watch": "webpack --mode development --watch"
   },

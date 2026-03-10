@@ -15,12 +15,7 @@
  */
 
 import { MastraClient } from "@mastra/client-js";
-import {
-  MASTRA_BASE_URL,
-  WORKFLOW_ID,
-  MAX_RETRIES,
-  RETRY_BASE_DELAY_MS,
-} from "./config";
+import { MASTRA_BASE_URL, WORKFLOW_ID, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "./config";
 import {
   TextChunk,
   Suggestion,
@@ -52,10 +47,15 @@ const client = new MastraClient({ baseUrl: MASTRA_BASE_URL });
  */
 export async function checkConnection(): Promise<boolean> {
   try {
+    console.log(
+      `🔌 [MastraClient] Verificando conexión → ${MASTRA_BASE_URL}, workflow: "${WORKFLOW_ID}"`
+    );
     const workflow = client.getWorkflow(WORKFLOW_ID);
     await workflow.details();
+    console.log("🔌 [MastraClient] ✅ Conexión exitosa");
     return true;
-  } catch {
+  } catch (err) {
+    console.error("🔌 [MastraClient] ❌ Conexión fallida:", err);
     return false;
   }
 }
@@ -85,32 +85,54 @@ export async function analyzeChunk(
     language,
   };
 
+  console.log(
+    `🤖 [MastraClient] analyzeChunk #${chunk.index} — ${chunk.text.length} chars, perfil: "${profile}", idioma: "${language}"`
+  );
   let lastError = "";
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      await delay(RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1));
+      const delayMs = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.warn(
+        `🔄 [MastraClient] Retry ${attempt}/${MAX_RETRIES} para chunk #${chunk.index} — esperando ${delayMs}ms`
+      );
+      await delay(delayMs);
     }
 
     try {
+      console.log(`🤖 [MastraClient] Chunk #${chunk.index} intento ${attempt}: creando run...`);
       const workflow = client.getWorkflow(WORKFLOW_ID);
       const run = await workflow.createRun();
-      const result = await run.start({ inputData });
+      console.log(
+        `🤖 [MastraClient] Chunk #${chunk.index} intento ${attempt}: ejecutando workflow...`
+      );
+      const result = await run.startAsync({ inputData });
+      console.log(
+        `🤖 [MastraClient] Chunk #${chunk.index} intento ${attempt}: status = "${result.status}"`
+      );
 
       if (result.status === "success") {
         const output = result.result as WorkflowOutput;
+        console.log(
+          `✅ [MastraClient] Chunk #${chunk.index} → ${output.suggestions?.length ?? 0} sugerencias raw del workflow`
+        );
         const suggestions = mapSuggestions(output.suggestions, chunk.index);
         return { chunkIndex: chunk.index, suggestions };
       }
 
       // Workflow returned a non-success status — treat as retryable
+      console.warn(`⚠️ [MastraClient] Chunk #${chunk.index} status no exitoso: "${result.status}"`);
       lastError = `Workflow status: ${result.status}`;
     } catch (error: unknown) {
       lastError = error instanceof Error ? error.message : String(error);
+      console.error(`💥 [MastraClient] Chunk #${chunk.index} intento ${attempt} error:`, lastError);
     }
   }
 
   // All retries exhausted
+  console.error(
+    `❌ [MastraClient] Chunk #${chunk.index} agotó ${MAX_RETRIES} reintentos. Último error: ${lastError}`
+  );
   return {
     chunkIndex: chunk.index,
     suggestions: [],
@@ -130,13 +152,12 @@ export async function analyzeChunk(
  * @param chunkIndex - Index of the chunk these suggestions belong to.
  * @returns Suggestions with assigned `id` fields.
  */
-function mapSuggestions(
-  raw: WorkflowSuggestion[] | undefined,
-  chunkIndex: number
-): Suggestion[] {
+function mapSuggestions(raw: WorkflowSuggestion[] | undefined, chunkIndex: number): Suggestion[] {
   if (!raw || !Array.isArray(raw)) {
+    console.warn(`⚠️ [MastraClient] mapSuggestions: chunk #${chunkIndex} sin sugerencias raw`);
     return [];
   }
+  console.log(`🗺️ [MastraClient] Mapeando ${raw.length} sugerencias para chunk #${chunkIndex}`);
 
   return raw.map((s, i) => ({
     id: `chunk${chunkIndex}-${i}`,

@@ -33,7 +33,9 @@ export function splitText(
   text: string,
   maxChunkSize: number = DEFAULT_MAX_CHUNK_SIZE
 ): TextChunk[] {
+  console.log(`✂️ [Chunker] splitText: ${text.length} chars, maxChunkSize: ${maxChunkSize}`);
   if (!text || text.trim().length === 0) {
+    console.log("✂️ [Chunker] Texto vacío, retornando 0 chunks");
     return [];
   }
 
@@ -46,8 +48,7 @@ export function splitText(
   for (const paragraph of paragraphs) {
     const separatorLength = currentLength > 0 ? 2 : 0; // "\n\n" between paragraphs
     const wouldExceed =
-      currentLength > 0 &&
-      currentLength + separatorLength + paragraph.length > maxChunkSize;
+      currentLength > 0 && currentLength + separatorLength + paragraph.length > maxChunkSize;
 
     if (wouldExceed) {
       // Finalize current chunk
@@ -87,6 +88,9 @@ export function splitText(
     chunk.total = chunks.length;
   }
 
+  console.log(
+    `✂️ [Chunker] Resultado: ${chunks.length} chunk(s) → [${chunks.map((c) => c.text.length + " chars").join(", ")}]`
+  );
   return chunks;
 }
 
