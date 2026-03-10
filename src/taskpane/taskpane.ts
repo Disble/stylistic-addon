@@ -24,7 +24,7 @@
  */
 
 import {
-  getDocumentText,
+  getTextToAnalyze,
   applySuggestionsInBatches,
   cleanupResolvedComments,
 } from "../lib/wordApi";
@@ -125,11 +125,13 @@ function updateProgress(
  * @param suggestions  - All suggestions produced by the workflow.
  * @param result       - The {@link InsertionResult} from the Word API layer.
  * @param chunkErrors  - Error messages from failed chunks (if any).
+ * @param isSelection  - Whether the analysis was scoped to a text selection.
  */
 function renderResults(
   suggestions: Suggestion[],
   result: InsertionResult,
-  chunkErrors: string[]
+  chunkErrors: string[],
+  isSelection: boolean = false
 ): void {
   const panel = document.getElementById("results-panel")!;
   const summary = document.getElementById("results-summary")!;
@@ -139,7 +141,8 @@ function renderResults(
   const applied = result.successCount;
   const failed = result.failedSuggestions.length;
 
-  let summaryText = `${applied} de ${total} sugerencias aplicadas como Track Changes.`;
+  const scopePrefix = isSelection ? "Sobre selección — " : "";
+  let summaryText = `${scopePrefix}${applied} de ${total} sugerencias aplicadas como Track Changes.`;
   if (failed > 0) {
     summaryText += ` ${failed} no encontrada(s) en el texto.`;
   }
@@ -264,15 +267,16 @@ async function handleAnalyze(): Promise<void> {
   document.getElementById("cleanup-section")!.style.display = "none";
 
   try {
-    // Phase 1: Read document
+    // Phase 1: Resolve text source (selection if active, full document otherwise)
     console.log("🚀 [Taskpane] Pipeline iniciado");
-    updateProgress("reading", 0, 1, "Leyendo documento...");
-    console.log("📖 [Taskpane] Fase 1: Leyendo documento...");
-    const text = await getDocumentText();
-    console.log(`📖 [Taskpane] Documento leído — ${text.length} caracteres`);
+    updateProgress("reading", 0, 1, "Leyendo texto...");
+    console.log("📖 [Taskpane] Fase 1: Resolviendo texto a analizar...");
+    const { text, isSelection } = await getTextToAnalyze();
+    const scope = isSelection ? "selección" : "documento";
+    console.log(`📖 [Taskpane] ${isSelection ? "Selección leída" : "Documento leído"} — ${text.length} caracteres`);
 
     if (!text || text.trim().length === 0) {
-      console.warn("⚠️ [Taskpane] Documento vacío, abortando");
+      console.warn("⚠️ [Taskpane] Texto vacío, abortando");
       showStatus("El documento está vacío. Escribe algo primero.", "error");
       return;
     }
@@ -293,10 +297,10 @@ async function handleAnalyze(): Promise<void> {
     }
 
     // Phase 3: Chunk text
-    console.log("✂️ [Taskpane] Fase 3: Dividiendo texto en chunks...");
+    console.log(`✂️ [Taskpane] Fase 3: Dividiendo ${scope} en chunks...`);
     const chunks = splitText(text, DEFAULT_MAX_CHUNK_SIZE);
     const profile = getSelectedProfile();
-    console.log(`✂️ [Taskpane] ${chunks.length} chunk(s) generados — perfil: "${profile}"`);
+    console.log(`✂️ [Taskpane] ${chunks.length} chunk(s) generados — perfil: "${profile}", ámbito: ${scope}`);
 
     // Phase 4: Analyze each chunk
     console.log("🤖 [Taskpane] Fase 4: Analizando chunks con Mastra...");
@@ -308,7 +312,7 @@ async function handleAnalyze(): Promise<void> {
         "analyzing",
         chunk.index + 1,
         chunks.length,
-        `Analizando fragmento ${chunk.index + 1} de ${chunks.length}...`
+        `Analizando fragmento ${chunk.index + 1} de ${chunks.length} (${scope})...`
       );
 
       console.log(
@@ -360,7 +364,7 @@ async function handleAnalyze(): Promise<void> {
     // Phase 7: Render results
     console.log("🎨 [Taskpane] Fase 7: Renderizando resultados");
     updateProgress("done", 1, 1, "");
-    renderResults(uniqueSuggestions, result, chunkErrors);
+    renderResults(uniqueSuggestions, result, chunkErrors, isSelection);
     console.log("✅ [Taskpane] Pipeline completado exitosamente");
 
     // Show cleanup button if any suggestions were applied
@@ -368,14 +372,15 @@ async function handleAnalyze(): Promise<void> {
       document.getElementById("cleanup-section")!.style.display = "block";
     }
 
+    const scopeSuffix = isSelection ? " (selección)" : "";
     if (result.failedSuggestions.length > 0 && result.successCount > 0) {
       showStatus(
-        `${result.successCount} aplicada(s), ${result.failedSuggestions.length} no encontrada(s).`,
+        `${result.successCount} aplicada(s), ${result.failedSuggestions.length} no encontrada(s)${scopeSuffix}.`,
         "success"
       );
     } else if (result.successCount > 0) {
       showStatus(
-        `${result.successCount} sugerencia(s) insertada(s) como Track Changes.`,
+        `${result.successCount} sugerencia(s) insertada(s) como Track Changes${scopeSuffix}.`,
         "success"
       );
     } else {

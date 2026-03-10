@@ -191,6 +191,29 @@ export interface ChunkResult {
 export type ChangeType = "insert" | "delete" | "replace";
 
 // ---------------------------------------------------------------------------
+// Text Source
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of the text-source resolution step at the start of the analysis
+ * pipeline. Encapsulates whether the text came from the user's active
+ * selection or from the full document body.
+ *
+ * Produced by `wordApi.getTextToAnalyze()` and consumed by the orchestrator
+ * to adapt progress messages and results labeling transparently.
+ */
+export interface TextSource {
+  /** The plain text to analyze (selection or full document). */
+  text: string;
+
+  /**
+   * `true` if the text was read from the user's current selection;
+   * `false` if it was read from the document body (no active selection).
+   */
+  isSelection: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
 

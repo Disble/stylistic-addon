@@ -23,11 +23,41 @@
  * @module wordApi
  */
 
-import { Suggestion, InsertionResult, ProgressCallback, ChangeType } from "./types";
+import { Suggestion, InsertionResult, ProgressCallback, ChangeType, TextSource } from "./types";
 
 // ---------------------------------------------------------------------------
 // Document Reading
 // ---------------------------------------------------------------------------
+
+/**
+ * Resolves the text to analyze: returns the current selection if it is
+ * non-empty, otherwise falls back to the full document body.
+ *
+ * Transparent selection mode — the caller does not need to check selection
+ * state itself. A single `Word.run` context is used: one `sync` for the
+ * selection, a second `sync` only when the fallback to body is needed.
+ *
+ * @returns A {@link TextSource} with the resolved text and its origin flag.
+ */
+export async function getTextToAnalyze(): Promise<TextSource> {
+  console.log("📖 [WordApi] Resolviendo texto a analizar...");
+  return Word.run(async (context) => {
+    const selection = context.document.getSelection();
+    selection.load("text");
+    await context.sync();
+
+    if (selection.text && selection.text.trim().length > 0) {
+      console.log(`📖 [WordApi] Selección activa — ${selection.text.length} caracteres`);
+      return { text: selection.text, isSelection: true };
+    }
+
+    const body = context.document.body;
+    body.load("text");
+    await context.sync();
+    console.log(`📖 [WordApi] Documento completo — ${body.text.length} caracteres`);
+    return { text: body.text, isSelection: false };
+  });
+}
 
 /**
  * Reads and returns the full plain-text content of the active document.
