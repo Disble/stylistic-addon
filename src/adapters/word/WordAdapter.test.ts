@@ -26,6 +26,7 @@ vi.mock("./ApplySuggestionCommand", () => ({
 
 vi.mock("./cleanup/CommentCleanup", () => ({
   cleanupResolvedComments: cleanupMocks.cleanupResolvedComments,
+  OVERLAPPING_RELATIONS: ["Equal", "Contains", "ContainsStart", "ContainsEnd", "Inside", "InsideStart", "InsideEnd", "OverlapsBefore", "OverlapsAfter"],
 }));
 
 import { WordAdapter } from "./WordAdapter";
@@ -356,6 +357,208 @@ describe("WordAdapter", () => {
       cleanupMocks.cleanupResolvedComments.mockRejectedValueOnce(new Error("cleanup failed"));
 
       await expect(adapter.cleanupResolvedComments()).rejects.toThrow("cleanup failed");
+    });
+  });
+
+  // Helper: builds a context mock using Content Controls
+  function makeResolveSuggestionContext({
+    ccFound = true,
+    spanTCItems = [] as any[],
+    comments = [] as any[],
+  }) {
+    const spanTCCollection = { items: spanTCItems, load: vi.fn() };
+    
+    const cc = {
+      getTrackedChanges: vi.fn(() => spanTCCollection),
+      getRange: vi.fn(() => ({ compareLocationWith: vi.fn() })),
+      delete: vi.fn(),
+    };
+
+    const ccsCollection = {
+      items: ccFound ? [cc] : [],
+      load: vi.fn(),
+    };
+
+    const commentsCollection = { items: comments, load: vi.fn() };
+
+    return {
+      document: {
+        contentControls: {
+          getByTag: vi.fn(() => ccsCollection),
+        },
+        body: {
+          getComments: vi.fn(() => commentsCollection),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+      _ccsCollection: ccsCollection,
+      _commentsCollection: commentsCollection,
+      _cc: cc,
+    };
+  }
+
+  describe("acceptSuggestion", () => {
+    it("3.1 - happy path: accepts 2 Stylistic TCs (Deleted+Added) and deletes colocated comment", async () => {
+      const suggestion = makeSuggestion({ id: "s-1", originalText: "texto original" });
+
+      const tcAccept1 = vi.fn();
+      const tcAccept2 = vi.fn();
+      const commentDeleteSpy = vi.fn();
+
+      const spanTCItems = [
+        { author: "Stylistic", type: "Deleted", accept: tcAccept1, reject: vi.fn() },
+        { author: "Stylistic", type: "Added", accept: tcAccept2, reject: vi.fn() },
+      ];
+
+      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const comment = {
+        authorName: "Stylistic",
+        getRange: vi.fn(() => commentRange),
+        delete: commentDeleteSpy,
+      };
+
+      const context = makeResolveSuggestionContext({
+        ccFound: true,
+        spanTCItems,
+        comments: [comment],
+      });
+
+      installWordWithContext(context);
+
+      const result = await adapter.acceptSuggestion(suggestion);
+
+      expect(result.status).toBe("accepted");
+      expect(result.trackedChangesAffected).toBe(2);
+      expect(result.commentDeleted).toBe(true);
+      expect(tcAccept1).toHaveBeenCalledOnce();
+      expect(tcAccept2).toHaveBeenCalledOnce();
+      expect(commentDeleteSpy).toHaveBeenCalledOnce();
+      expect(context._cc.delete).toHaveBeenCalledWith(true);
+    });
+
+    it("3.2 - already-resolved: Content Control not found", async () => {
+      const suggestion = makeSuggestion({ originalText: "texto original" });
+
+      const context = makeResolveSuggestionContext({ ccFound: false });
+      installWordWithContext(context);
+
+      const result = await adapter.acceptSuggestion(suggestion);
+
+      expect(result.status).toBe("already-resolved");
+      expect(result.trackedChangesAffected).toBe(0);
+      expect(result.commentDeleted).toBe(false);
+    });
+
+    it("3.4 - already-resolved: Content Control found but has NO Stylistic TCs", async () => {
+      const suggestion = makeSuggestion({ originalText: "texto original" });
+
+      const otherTC = {
+        author: "OtherUser",
+        type: "Deleted",
+        accept: vi.fn(),
+        reject: vi.fn(),
+      } as any;
+
+      const context = makeResolveSuggestionContext({
+        ccFound: true,
+        spanTCItems: [otherTC]
+      });
+      installWordWithContext(context);
+
+      const result = await adapter.acceptSuggestion(suggestion);
+
+      expect(result.status).toBe("already-resolved");
+      expect(result.trackedChangesAffected).toBe(0);
+      expect(context._cc.delete).toHaveBeenCalledWith(true);
+    });
+
+    it("3.5 - TCs found but no comment (comment already deleted)", async () => {
+      const suggestion = makeSuggestion({ originalText: "texto original" });
+      const tcAcceptSpy = vi.fn();
+
+      const spanTCItems = [
+        { author: "Stylistic", type: "Deleted", accept: tcAcceptSpy, reject: vi.fn() },
+      ];
+
+      const context = makeResolveSuggestionContext({
+        ccFound: true,
+        spanTCItems,
+        comments: [], // no comments
+      });
+      installWordWithContext(context);
+
+      const result = await adapter.acceptSuggestion(suggestion);
+
+      expect(result.status).toBe("accepted");
+      expect(result.trackedChangesAffected).toBe(1);
+      expect(result.commentDeleted).toBe(false);
+      expect(result.error).toBeUndefined();
+      expect(tcAcceptSpy).toHaveBeenCalledOnce();
+      expect(context._cc.delete).toHaveBeenCalledWith(true);
+    });
+
+    it("3.6 - Word.run throws: returns error status without throwing", async () => {
+      const suggestion = makeSuggestion({ originalText: "texto original" });
+
+      installRejectingWord(new Error("Document is read-only"));
+
+      const result = await adapter.acceptSuggestion(suggestion);
+
+      expect(result.status).toBe("error");
+      expect(result.error).toContain("Document is read-only");
+    });
+  });
+
+  describe("rejectSuggestion", () => {
+    it("3.7 - happy path: rejects 2 Stylistic TCs and deletes colocated comment", async () => {
+      const suggestion = makeSuggestion({ id: "s-1", originalText: "texto original" });
+
+      const tcReject1 = vi.fn();
+      const tcReject2 = vi.fn();
+      const tcAccept1 = vi.fn();
+      const tcAccept2 = vi.fn();
+      const commentDeleteSpy = vi.fn();
+
+      const spanTCItems = [
+        { author: "Stylistic", type: "Deleted", accept: tcAccept1, reject: tcReject1 },
+        { author: "Stylistic", type: "Added", accept: tcAccept2, reject: tcReject2 },
+      ];
+
+      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const comment = {
+        authorName: "Stylistic",
+        getRange: vi.fn(() => commentRange),
+        delete: commentDeleteSpy,
+      };
+
+      const context = makeResolveSuggestionContext({
+        ccFound: true,
+        spanTCItems,
+        comments: [comment],
+      });
+      installWordWithContext(context);
+
+      const result = await adapter.rejectSuggestion(suggestion);
+
+      expect(result.status).toBe("rejected");
+      expect(result.trackedChangesAffected).toBe(2);
+      expect(tcReject1).toHaveBeenCalledOnce();
+      expect(tcReject2).toHaveBeenCalledOnce();
+      expect(tcAccept1).not.toHaveBeenCalled();
+      expect(tcAccept2).not.toHaveBeenCalled();
+      expect(commentDeleteSpy).toHaveBeenCalledOnce();
+      expect(context._cc.delete).toHaveBeenCalledWith(true);
+    });
+
+    it("3.8 - already-resolved: Content Control not found", async () => {
+      const suggestion = makeSuggestion({ originalText: "texto original" });
+
+      const context = makeResolveSuggestionContext({ ccFound: false });
+      installWordWithContext(context);
+
+      const result = await adapter.rejectSuggestion(suggestion);
+
+      expect(result.status).toBe("already-resolved");
     });
   });
 });

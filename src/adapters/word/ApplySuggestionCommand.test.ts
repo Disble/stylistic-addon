@@ -92,12 +92,16 @@ function installWordContext(options: {
     onSync,
   } = options;
 
+  const insertedRange = {
+    insertContentControl: vi.fn(() => ({})),
+  };
   const range = {
     getOoxml: vi.fn(() => ({ value: rangeOoxml })),
     insertOoxml: vi.fn(() => {
       if (insertError) {
         throw insertError;
       }
+      return insertedRange;
     }),
   };
 

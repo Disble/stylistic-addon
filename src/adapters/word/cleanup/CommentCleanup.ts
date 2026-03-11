@@ -21,7 +21,7 @@
  */
 
 /** All `LocationRelation` values that indicate spatial overlap. */
-const OVERLAPPING_RELATIONS: string[] = [
+export const OVERLAPPING_RELATIONS: string[] = [
   "Equal",
   "Contains",
   "ContainsStart",

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { cleanupResolvedComments } from "./CommentCleanup";
+import { cleanupResolvedComments, OVERLAPPING_RELATIONS } from "./CommentCleanup";
 
 type FakeClientResult = { value: string };
 
@@ -188,3 +188,15 @@ describe("cleanupResolvedComments", () => {
     await expect(cleanupResolvedComments()).rejects.toThrow("Word sync failed");
   });
 });
+
+describe('OVERLAPPING_RELATIONS', () => {
+  it('should be exported and contain expected relation types', () => {
+    expect(OVERLAPPING_RELATIONS).toBeDefined()
+    expect(Array.isArray(OVERLAPPING_RELATIONS)).toBe(true)
+    expect(OVERLAPPING_RELATIONS).toContain('Equal')
+    expect(OVERLAPPING_RELATIONS).toContain('Contains')
+    expect(OVERLAPPING_RELATIONS).toContain('Inside')
+    expect(OVERLAPPING_RELATIONS).toContain('OverlapsBefore')
+    expect(OVERLAPPING_RELATIONS).toContain('OverlapsAfter')
+  })
+})

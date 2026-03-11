@@ -17,9 +17,9 @@
  */
 
 import { IDocumentPort } from "../../domain/ports";
-import { TextSource, Suggestion, InsertionResult, ProgressCallback } from "../../domain/types";
+import { TextSource, Suggestion, InsertionResult, ProgressCallback, SuggestionActionResult } from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
-import { cleanupResolvedComments } from "./cleanup/CommentCleanup";
+import { cleanupResolvedComments, OVERLAPPING_RELATIONS } from "./cleanup/CommentCleanup";
 
 export class WordAdapter implements IDocumentPort {
   /**
@@ -137,5 +137,118 @@ export class WordAdapter implements IDocumentPort {
    */
   async cleanupResolvedComments(): Promise<{ deleted: number; kept: number }> {
     return cleanupResolvedComments();
+  }
+
+  /**
+   * Shared implementation for accepting or rejecting Stylistic tracked changes
+   * associated with a suggestion. Also deletes the colocated Stylistic comment.
+   * Never throws — catches all errors and returns a result object.
+   */
+  private async resolveSuggestion(
+    suggestion: Suggestion,
+    action: "accept" | "reject"
+  ): Promise<SuggestionActionResult> {
+    try {
+      return await Word.run(async (context) => {
+        // 1. Find the Content Control by the suggestion ID tag
+        const ccs = context.document.contentControls.getByTag(suggestion.id);
+        ccs.load("items");
+        await context.sync();
+
+        if (ccs.items.length === 0) {
+          return {
+            status: "already-resolved" as const,
+            trackedChangesAffected: 0,
+            commentDeleted: false,
+          };
+        }
+
+        const cc = ccs.items[0];
+
+        // 2. Get all tracked changes inside the Content Control
+        const tcs = cc.getTrackedChanges();
+        tcs.load("items");
+        await context.sync();
+
+        const stylisticTCs = tcs.items.filter((tc: any) => tc.author === "Stylistic");
+
+        if (stylisticTCs.length === 0) {
+          // If the TCs are gone but the CC is left behind, clean it up
+          cc.delete(true); // true = keep content
+          await context.sync();
+          return {
+            status: "already-resolved" as const,
+            trackedChangesAffected: 0,
+            commentDeleted: false,
+          };
+        }
+
+        // 3. Accept or reject the tracked changes
+        for (const tc of stylisticTCs) {
+          if (action === "accept") {
+            tc.accept();
+          } else {
+            tc.reject();
+          }
+        }
+
+        // 4. Find and delete the colocated Stylistic comment
+        const comments = context.document.body.getComments();
+        comments.load("items");
+        await context.sync();
+
+        let commentDeleted = false;
+        const ccRange = cc.getRange();
+
+        for (const comment of comments.items) {
+          if (comment.authorName !== "Stylistic") continue;
+          const commentRange = comment.getRange();
+          const locationResult = commentRange.compareLocationWith(ccRange);
+          await context.sync();
+          if (OVERLAPPING_RELATIONS.includes(locationResult.value as string)) {
+            comment.delete();
+            commentDeleted = true;
+            break;
+          }
+        }
+
+        // 5. Delete the Content Control anchor itself
+        cc.delete(true); // true = keep content
+
+        await context.sync();
+
+        return {
+          status: action === "accept" ? ("accepted" as const) : ("rejected" as const),
+          trackedChangesAffected: stylisticTCs.length,
+          commentDeleted,
+        };
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        status: "error" as const,
+        trackedChangesAffected: 0,
+        commentDeleted: false,
+        error: message,
+      };
+    }
+  }
+
+  /**
+   * Accepts all Stylistic tracked changes associated with a suggestion.
+   * Also deletes the associated Stylistic comment if present.
+   * Never throws — returns a `SuggestionActionResult`.
+   */
+  async acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult> {
+    return this.resolveSuggestion(suggestion, "accept");
+  }
+
+  /**
+   * Rejects all Stylistic tracked changes associated with a suggestion.
+   * Also deletes the associated Stylistic comment if present.
+   * Never throws — returns a `SuggestionActionResult`.
+   */
+  async rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult> {
+    return this.resolveSuggestion(suggestion, "reject");
   }
 }

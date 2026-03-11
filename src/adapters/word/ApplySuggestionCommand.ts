@@ -136,7 +136,11 @@ export class ApplySuggestionCommand {
           console.log(
             `📄 [ApplySuggestionCommand] "${this.id}": insertando OOXML (tipo: ${changeType})`
           );
-          range.insertOoxml(ooxml, Word.InsertLocation.replace);
+          const insertedRange = range.insertOoxml(ooxml, Word.InsertLocation.replace);
+          const cc = insertedRange.insertContentControl();
+          cc.tag = this.suggestion.id;
+          cc.appearance = "Hidden";
+          cc.cannotDelete = false;
           await context.sync();
           console.log(`✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`);
 
