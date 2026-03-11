@@ -28,6 +28,8 @@ function makeMockDocumentPort(
     getAppliedOriginalTexts: vi.fn().mockResolvedValue(appliedTexts),
     applySuggestions: vi.fn(),
     cleanupResolvedComments: vi.fn(),
+    acceptSuggestion: vi.fn(),
+    rejectSuggestion: vi.fn(),
   };
 }
 

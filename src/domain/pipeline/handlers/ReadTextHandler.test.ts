@@ -13,6 +13,8 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     getAppliedOriginalTexts: vi.fn(),
     applySuggestions: vi.fn(),
     cleanupResolvedComments: vi.fn(),
+    acceptSuggestion: vi.fn(),
+    rejectSuggestion: vi.fn(),
   };
 
   const analysisPort: IAnalysisPort = {

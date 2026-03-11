@@ -27,6 +27,8 @@ function makeMockPorts(): { documentPort: IDocumentPort; analysisPort: IAnalysis
       getAppliedOriginalTexts: vi.fn(),
       applySuggestions: vi.fn(),
       cleanupResolvedComments: vi.fn(),
+      acceptSuggestion: vi.fn(),
+      rejectSuggestion: vi.fn(),
     },
     analysisPort: {
       checkConnection: vi.fn(),
