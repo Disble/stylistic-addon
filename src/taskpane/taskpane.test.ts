@@ -6,6 +6,8 @@ const taskpaneMocks = vi.hoisted(() => ({
   run: vi.fn<(ctx: any) => Promise<void>>(),
   wordAdapterConstructor: vi.fn(),
   cleanupResolvedComments: vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
+  acceptSuggestion: vi.fn(),
+  rejectSuggestion: vi.fn(),
   mastraAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
 }));
@@ -18,6 +20,14 @@ vi.mock("../adapters/word/WordAdapter", () => ({
 
     cleanupResolvedComments() {
       return taskpaneMocks.cleanupResolvedComments();
+    }
+
+    acceptSuggestion() {
+      return taskpaneMocks.acceptSuggestion();
+    }
+
+    rejectSuggestion() {
+      return taskpaneMocks.rejectSuggestion();
     }
   },
 }));
@@ -81,16 +91,53 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+class FakeClassList {
+  private classes = new Set<string>();
+
+  add(...names: string[]) {
+    for (const n of names) this.classes.add(n);
+  }
+
+  remove(...names: string[]) {
+    for (const n of names) this.classes.delete(n);
+  }
+
+  contains(name: string): boolean {
+    return this.classes.has(name);
+  }
+
+  toString(): string {
+    return Array.from(this.classes).join(" ");
+  }
+}
+
 class FakeElement {
   style = { display: "", width: "" };
-  className = "";
+  /** className string — synced with classList */
+  get className(): string {
+    return this.classList.toString();
+  }
+  set className(value: string) {
+    const cl = new FakeClassList();
+    for (const c of value.split(/\s+/).filter(Boolean)) cl.add(c);
+    this._classList = cl;
+  }
+  private _classList = new FakeClassList();
+  get classList(): FakeClassList {
+    return this._classList;
+  }
+
   disabled = false;
   value = "";
   onclick: ((ev: MouseEvent) => any) | null = null;
+  /** DOM children appended via appendChild */
   children: FakeElement[] = [];
+  /** Parent element reference (set when appended) */
+  parentElement: FakeElement | null = null;
 
   private text = "";
   private html = "";
+  private listeners = new Map<string, Array<(ev: any) => void>>();
 
   get textContent(): string {
     return this.text;
@@ -107,12 +154,94 @@ class FakeElement {
 
   set innerHTML(value: string) {
     this.html = value;
+    // Clear children when innerHTML is wiped
+    if (value === "") {
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
+      this.children = [];
+    }
   }
 
   appendChild(child: FakeElement): FakeElement {
+    child.parentElement = this;
     this.children.push(child);
     return child;
   }
+
+  addEventListener(event: string, handler: (ev: any) => void) {
+    if (!this.listeners.has(event)) this.listeners.set(event, []);
+    this.listeners.get(event)!.push(handler);
+  }
+
+  /** Synchronously fires all "click" listeners */
+  click() {
+    for (const handler of this.listeners.get("click") ?? []) {
+      handler({} as MouseEvent);
+    }
+  }
+
+  /**
+   * Searches appended children by CSS attribute selector or class selector.
+   * Supports: [attr="val"], [attr], .classname
+   * Also searches recursively into children's children.
+   */
+  querySelector(selector: string): FakeElement | null {
+    for (const child of this.children) {
+      if (matchesSelector(child, selector)) return child;
+      const nested = child.querySelector(selector);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  querySelectorAll(selector: string): FakeElement[] {
+    const results: FakeElement[] = [];
+    for (const child of this.children) {
+      if (matchesSelector(child, selector)) results.push(child);
+      const nested = child.querySelectorAll(selector);
+      for (const n of nested) results.push(n);
+    }
+    return results;
+  }
+
+  /** Removes this element from its parent */
+  remove() {
+    if (this.parentElement) {
+      const idx = this.parentElement.children.indexOf(this);
+      if (idx !== -1) this.parentElement.children.splice(idx, 1);
+      this.parentElement = null;
+    }
+  }
+
+  setAttribute(name: string, value: string) {
+    (this as any)[`_attr_${name}`] = value;
+  }
+
+  getAttribute(name: string): string | null {
+    return (this as any)[`_attr_${name}`] ?? null;
+  }
+}
+
+function matchesSelector(el: FakeElement, selector: string): boolean {
+  // [attr="value"]
+  const attrEqMatch = selector.match(/^\[([^\]="]+)="([^"]+)"\]$/);
+  if (attrEqMatch) {
+    const [, attr, val] = attrEqMatch;
+    return (el as any)[attr] === val || (el as any)[`_attr_${attr}`] === val;
+  }
+  // [attr]
+  const attrMatch = selector.match(/^\[([^\]="]+)\]$/);
+  if (attrMatch) {
+    const [, attr] = attrMatch;
+    return (el as any)[attr] !== undefined || (el as any)[`_attr_${attr}`] !== undefined;
+  }
+  // .className
+  const classMatch = selector.match(/^\.(.+)$/);
+  if (classMatch) {
+    return el.classList.contains(classMatch[1]);
+  }
+  return false;
 }
 
 class FakeDocument {
@@ -128,7 +257,7 @@ class FakeDocument {
     return this.elements.get(id) ?? null;
   }
 
-  createElement(): FakeElement {
+  createElement(_tagName?: string): FakeElement {
     return new FakeElement();
   }
 }
@@ -359,5 +488,233 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("btn-cleanup-label")!.textContent).toBe(
       "Limpiar comentarios resueltos"
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helper: render results via the pipeline emitter and return the list children
+// ---------------------------------------------------------------------------
+
+async function renderViaEmitter(
+  doc: FakeDocument,
+  suggestions: Suggestion[],
+  failedIds: string[] = []
+): Promise<FakeElement[]> {
+  const officeHarness = createOffice();
+  (globalThis as any).document = doc;
+  (globalThis as any).Office = officeHarness.office;
+
+  const failedSuggestions = suggestions.filter((s) => failedIds.includes(s.id));
+  const result: InsertionResult = {
+    successCount: suggestions.length - failedSuggestions.length,
+    failedSuggestions,
+  };
+
+  taskpaneMocks.run.mockImplementationOnce(async (ctx: any) => {
+    ctx.emitter.emitComplete(suggestions, result, [], false);
+  });
+
+  await importTaskpane();
+  officeHarness.triggerReady({ host: "Word" });
+  await doc.getElementById("btn-analyze")!.onclick?.({} as MouseEvent);
+
+  return doc.getElementById("results-list")!.children;
+}
+
+describe("Accept/Reject buttons", () => {
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    taskpaneMocks.orchestratorHandlers = [];
+    taskpaneMocks.run.mockResolvedValue(undefined);
+    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "accepted",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+    });
+    taskpaneMocks.rejectSuggestion.mockResolvedValue({
+      status: "rejected",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+    });
+
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    delete (globalThis as any).document;
+    delete (globalThis as any).Office;
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+    vi.useRealTimers();
+    delete (globalThis as any).document;
+    delete (globalThis as any).Office;
+  });
+
+  it("4.1 — renders accept and reject buttons for non-failed suggestions", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+    const s2 = makeSuggestion({ id: "s-2" });
+
+    const liItems = await renderViaEmitter(doc, [s1, s2]);
+
+    expect(liItems).toHaveLength(2);
+
+    const li1 = liItems[0];
+    const acceptBtn1 = li1.querySelector('[data-action="accept"]');
+    const rejectBtn1 = li1.querySelector('[data-action="reject"]');
+    expect(acceptBtn1).not.toBeNull();
+    expect(rejectBtn1).not.toBeNull();
+    expect(acceptBtn1!.getAttribute("data-suggestion-id")).toBe("s-1");
+    expect(rejectBtn1!.getAttribute("data-suggestion-id")).toBe("s-1");
+
+    const li2 = liItems[1];
+    const acceptBtn2 = li2.querySelector('[data-action="accept"]');
+    expect(acceptBtn2).not.toBeNull();
+    expect(acceptBtn2!.getAttribute("data-suggestion-id")).toBe("s-2");
+  });
+
+  it("4.2 — failed suggestions do NOT have accept/reject buttons", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-fail" });
+
+    const liItems = await renderViaEmitter(doc, [s1], ["s-fail"]);
+
+    expect(liItems).toHaveLength(1);
+    expect(liItems[0].querySelector('[data-action="accept"]')).toBeNull();
+    expect(liItems[0].querySelector('[data-action="reject"]')).toBeNull();
+  });
+
+  it("4.3 — clicking Accept: adds result-accepted class and removes buttons", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "accepted",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+
+    acceptBtn.click();
+    // Flush microtasks (async handler)
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(li.classList.contains("result-accepted")).toBe(true);
+    expect(li.querySelector('[data-action="accept"]')).toBeNull();
+    expect(li.querySelector('[data-action="reject"]')).toBeNull();
+  });
+
+  it("4.4 — clicking Reject: adds result-rejected class and removes buttons", async () => {
+    taskpaneMocks.rejectSuggestion.mockResolvedValue({
+      status: "rejected",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+
+    rejectBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(li.classList.contains("result-rejected")).toBe(true);
+    expect(li.querySelector('[data-action="reject"]')).toBeNull();
+    expect(li.querySelector('[data-action="accept"]')).toBeNull();
+  });
+
+  it("4.5 — already-resolved: adds class and shows '(ya resuelto)' text", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "already-resolved",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(li.classList.contains("result-already-resolved")).toBe(true);
+    // Find the note span — it should be a child with textContent "(ya resuelto)"
+    const noteSpan = li.querySelector(".result-already-resolved-note");
+    expect(noteSpan).not.toBeNull();
+    expect(noteSpan!.textContent).toBe("(ya resuelto)");
+  });
+
+  it("4.6 — error case: buttons re-enabled and showStatus called", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "error",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      error: "El documento está protegido",
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Buttons should be re-enabled
+    expect(acceptBtn.disabled).toBe(false);
+    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+    expect(rejectBtn.disabled).toBe(false);
+    // Status bar should show error message
+    expect(doc.getElementById("status-bar")!.textContent).toBe("El documento está protegido");
+    expect(doc.getElementById("status-bar")!.className).toBe("stylistic-status error");
+  });
+
+  it("4.7 — not-found case: buttons re-enabled", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "not-found",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      error: "Texto no encontrado",
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(acceptBtn.disabled).toBe(false);
+    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+    expect(rejectBtn.disabled).toBe(false);
   });
 });

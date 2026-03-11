@@ -208,8 +208,47 @@ function renderResults(
         `<span class="result-suggested">${escapeHtml(s.suggestedText)}</span>` +
         `</span>` +
         `<span class="result-justification">${escapeHtml(s.justification)}</span>`;
+
+      // Build accept/reject buttons programmatically so they are testable DOM nodes
+      const actionsSpan = document.createElement("span");
+      actionsSpan.className = "result-actions";
+
+      const acceptBtn = document.createElement("button");
+      acceptBtn.className = "result-action-btn";
+      acceptBtn.setAttribute("data-action", "accept");
+      acceptBtn.setAttribute("data-suggestion-id", s.id);
+      acceptBtn.setAttribute("aria-label", "Aceptar sugerencia");
+      acceptBtn.textContent = "✓";
+
+      const rejectBtn = document.createElement("button");
+      rejectBtn.className = "result-action-btn";
+      rejectBtn.setAttribute("data-action", "reject");
+      rejectBtn.setAttribute("data-suggestion-id", s.id);
+      rejectBtn.setAttribute("aria-label", "Rechazar sugerencia");
+      rejectBtn.textContent = "✗";
+
+      actionsSpan.appendChild(acceptBtn);
+      actionsSpan.appendChild(rejectBtn);
+      li.appendChild(actionsSpan);
     }
+
     list.appendChild(li);
+
+    if (!isFailed) {
+      const acceptBtn = li.querySelector("[data-action=\"accept\"]") as HTMLButtonElement | null;
+      const rejectBtn = li.querySelector("[data-action=\"reject\"]") as HTMLButtonElement | null;
+
+      if (acceptBtn) {
+        acceptBtn.addEventListener("click", () =>
+          handleAcceptSuggestion(s, li, acceptBtn, rejectBtn)
+        );
+      }
+      if (rejectBtn) {
+        rejectBtn.addEventListener("click", () =>
+          handleRejectSuggestion(s, li, acceptBtn, rejectBtn)
+        );
+      }
+    }
   }
 
   panel.style.display = "block";
@@ -245,6 +284,82 @@ function toUserMessage(error: unknown): string {
 function getSelectedProfile(): string {
   const select = document.getElementById("profile-select") as HTMLSelectElement;
   return select.value;
+}
+
+// ---------------------------------------------------------------------------
+// Accept / Reject Suggestion Handlers
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles the Accept button click on a suggestion card.
+ * Uses the Optimistic UI pattern: disables buttons immediately, then updates
+ * the card based on the result of `documentPort.acceptSuggestion`.
+ */
+async function handleAcceptSuggestion(
+  suggestion: Suggestion,
+  li: HTMLElement,
+  acceptBtn: HTMLButtonElement | null,
+  rejectBtn: HTMLButtonElement | null
+): Promise<void> {
+  if (acceptBtn) acceptBtn.disabled = true;
+  if (rejectBtn) rejectBtn.disabled = true;
+
+  const result = await documentPort.acceptSuggestion(suggestion);
+
+  if (
+    result.status === "accepted" ||
+    result.status === "rejected" ||
+    result.status === "already-resolved"
+  ) {
+    li.querySelector(".result-actions")?.remove();
+    li.classList.add(`result-${result.status}`);
+    if (result.status === "already-resolved") {
+      const note = document.createElement("span");
+      note.className = "result-already-resolved-note";
+      note.textContent = "(ya resuelto)";
+      li.appendChild(note);
+    }
+  } else {
+    if (acceptBtn) acceptBtn.disabled = false;
+    if (rejectBtn) rejectBtn.disabled = false;
+    showStatus(result.error ?? "Error desconocido", "error");
+  }
+}
+
+/**
+ * Handles the Reject button click on a suggestion card.
+ * Uses the Optimistic UI pattern: disables buttons immediately, then updates
+ * the card based on the result of `documentPort.rejectSuggestion`.
+ */
+async function handleRejectSuggestion(
+  suggestion: Suggestion,
+  li: HTMLElement,
+  acceptBtn: HTMLButtonElement | null,
+  rejectBtn: HTMLButtonElement | null
+): Promise<void> {
+  if (acceptBtn) acceptBtn.disabled = true;
+  if (rejectBtn) rejectBtn.disabled = true;
+
+  const result = await documentPort.rejectSuggestion(suggestion);
+
+  if (
+    result.status === "accepted" ||
+    result.status === "rejected" ||
+    result.status === "already-resolved"
+  ) {
+    li.querySelector(".result-actions")?.remove();
+    li.classList.add(`result-${result.status}`);
+    if (result.status === "already-resolved") {
+      const note = document.createElement("span");
+      note.className = "result-already-resolved-note";
+      note.textContent = "(ya resuelto)";
+      li.appendChild(note);
+    }
+  } else {
+    if (acceptBtn) acceptBtn.disabled = false;
+    if (rejectBtn) rejectBtn.disabled = false;
+    showStatus(result.error ?? "Error desconocido", "error");
+  }
 }
 
 // ---------------------------------------------------------------------------

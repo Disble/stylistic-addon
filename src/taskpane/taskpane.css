@@ -258,3 +258,64 @@ body {
   padding: 20px;
   height: 100%;
 }
+
+/* --- Batch Accept/Reject: Action Buttons --- */
+.result-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.result-action-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.result-action-btn[data-action="accept"] {
+  background: #d1fad1;
+  color: #107C10;
+}
+
+.result-action-btn[data-action="reject"] {
+  background: #fad1d1;
+  color: #a80000;
+}
+
+.result-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Batch Accept/Reject: Card Visual States --- */
+.result-accepted {
+  opacity: 0.6;
+  border-left: 3px solid #107C10;
+}
+
+.result-rejected {
+  opacity: 0.6;
+  border-left: 3px solid #a80000;
+}
+
+.result-rejected .result-suggested {
+  text-decoration: line-through;
+}
+
+.result-already-resolved {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.result-already-resolved-note {
+  font-size: 11px;
+  color: #666;
+  margin-left: 4px;
+}
