@@ -1,3 +1,5 @@
+/* global console */
+
 /**
  * Text chunking module — splits document text into sized chunks at paragraph
  * boundaries for sequential delivery to the Mastra editorial workflow.
@@ -6,12 +8,12 @@
  * - Never splits mid-paragraph (preserves semantic context for the AI).
  * - Paragraphs exceeding `maxChunkSize` are sent as-is (backend must handle).
  * - Small documents (< maxChunkSize) produce a single chunk.
- * - Pure function with no side effects — depends only on {@link types}.
+ * - Pure function with no side effects — depends only on domain types.
  *
  * @module chunker
  */
 
-import { TextChunk } from "./types";
+import { TextChunk } from "../domain/types";
 import { DEFAULT_MAX_CHUNK_SIZE } from "./config";
 
 /** Regex that matches paragraph separators: one or more blank lines. */
@@ -35,7 +37,6 @@ export function splitText(
 ): TextChunk[] {
   console.log(`✂️ [Chunker] splitText: ${text.length} chars, maxChunkSize: ${maxChunkSize}`);
   if (!text || text.trim().length === 0) {
-    console.log("✂️ [Chunker] Texto vacío, retornando 0 chunks");
     return [];
   }
 
@@ -46,21 +47,19 @@ export function splitText(
   let currentOffset = 0;
 
   for (const paragraph of paragraphs) {
-    const separatorLength = currentLength > 0 ? 2 : 0; // "\n\n" between paragraphs
+    const separatorLength = currentLength > 0 ? 2 : 0;
     const wouldExceed =
       currentLength > 0 && currentLength + separatorLength + paragraph.length > maxChunkSize;
 
     if (wouldExceed) {
-      // Finalize current chunk
       chunks.push({
         text: currentParts.join("\n\n"),
         index: chunks.length,
-        total: 0, // Patched after loop
+        total: 0,
         startOffset: currentOffset,
       });
 
       currentOffset += currentLength;
-      // Account for the separator between the finalized chunk and the next paragraph
       currentOffset += findSeparatorLength(text, currentOffset);
       currentParts = [paragraph];
       currentLength = paragraph.length;
@@ -73,7 +72,6 @@ export function splitText(
     }
   }
 
-  // Finalize last chunk
   if (currentParts.length > 0) {
     chunks.push({
       text: currentParts.join("\n\n"),
@@ -83,14 +81,11 @@ export function splitText(
     });
   }
 
-  // Patch total count on all chunks
   for (const chunk of chunks) {
     chunk.total = chunks.length;
   }
 
-  console.log(
-    `✂️ [Chunker] Resultado: ${chunks.length} chunk(s) → [${chunks.map((c) => c.text.length + " chars").join(", ")}]`
-  );
+  console.log(`✂️ [Chunker] ${chunks.length} chunk(s) generados`);
   return chunks;
 }
 
@@ -98,10 +93,6 @@ export function splitText(
  * Finds the length of the paragraph separator at a given position in the
  * original text. Accounts for `\r\n` vs `\n` line endings and multiple
  * blank lines.
- *
- * @param text   - The original full document text.
- * @param offset - Character offset where the separator starts.
- * @returns The number of characters consumed by the separator.
  */
 function findSeparatorLength(text: string, offset: number): number {
   let length = 0;

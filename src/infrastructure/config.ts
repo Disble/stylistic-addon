@@ -8,7 +8,7 @@
  * @module config
  */
 
-import { Profile } from "./types";
+import { Profile } from "../domain/types";
 
 // ---------------------------------------------------------------------------
 // Mastra Backend
@@ -46,7 +46,7 @@ export const WORD_API_BATCH_SIZE = 30;
 // Retry Policy
 // ---------------------------------------------------------------------------
 
-/** Maximum number of retry attempts per chunk or batch on transient failures. */
+/** Maximum number of retry attempts per chunk on transient failures. */
 export const MAX_RETRIES = 3;
 
 /** Base delay (ms) for exponential backoff between retries: base * 2^attempt. */

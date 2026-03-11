@@ -1,249 +1,297 @@
 # Architecture
 
-This document describes the layered architecture of Stylistic, the data flow between modules, and the key design decisions behind them.
+This document describes the architecture of Stylistic, the design patterns used, the data flow, and the rationale behind every key decision.
 
-## Design Principles
+---
 
-1. **Separation of concerns** — each module owns a single responsibility. The UI never calls Word directly. The Word API layer never calls the backend. The backend client never touches the DOM.
-2. **No frontend business logic** — all text analysis is performed server-side by a Mastra workflow. The frontend is purely UI/UX + transport.
-3. **Preserve-and-restore** — the add-in always reads the document's `changeTrackingMode` before modifying it and restores it when done, even if an error occurs (via `try/finally`).
-4. **Per-suggestion isolation** — each suggestion is applied in its own `Word.run` call. This prevents stale ranges after OOXML insertions shift text, and ensures partial failures don't lose already-applied changes.
-5. **Reliability over speed** — every chunk has retry logic. Partial failures are reported, not fatal. The user gets as many suggestions as possible.
+## Architectural Pattern: Hexagonal Architecture (Ports & Adapters)
 
-## System Overview
+Stylistic follows a **Hexagonal Architecture** (also known as Ports & Adapters), adapted for a TypeScript browser add-in. The dependency rule is strict: outer layers depend on inner layers; inner layers never depend on outer layers.
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Word Add-in (Frontend)                         │
-│                                                 │
-│  taskpane.ts — UI orchestrator                  │
-│  ├── wordApi.ts    — Read document, apply       │
-│  │                   Track Changes via OOXML    │
-│  ├── mastraClient.ts — Workflow execution       │
-│  │                     via @mastra/client-js     │
-│  └── chunker.ts    — Split large texts at       │
-│                      paragraph boundaries       │
-├─────────────────────────────────────────────────┤
-│  Mastra Backend (separate application)          │
-│  └── editorial-workflow — AI text analysis      │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  PRESENTATION (taskpane/)                                       │
+│  taskpane.ts — event binding, observer registration, render     │
+├─────────────────────────────────────────────────────────────────┤
+│  APPLICATION / DOMAIN (domain/)                                 │
+│  pipeline/ — Chain of Responsibility orchestrator + 7 handlers  │
+│  ports.ts  — IDocumentPort, IAnalysisPort (the port contracts)  │
+│  types.ts  — Shared interfaces (zero runtime code)             │
+├────────────────────────┬────────────────────────────────────────┤
+│  ADAPTER: Word         │  ADAPTER: Mastra                       │
+│  adapters/word/        │  adapters/mastra/ + RetryDecorator     │
+│  (implements           │  (implements                           │
+│   IDocumentPort)       │   IAnalysisPort)                       │
+├────────────────────────┴────────────────────────────────────────┤
+│  INFRASTRUCTURE (infrastructure/)                               │
+│  config.ts — constants         chunker.ts — pure text splitting │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-| Layer | Module | Responsibility | Imports Office.js? |
-|---|---|---|---|
-| UI | `taskpane.ts` | Event handling, progress, rendering | No (delegates) |
-| API | `wordApi.ts` | Document read/write, OOXML tracked changes, comment cleanup | Yes (only module) |
-| Backend | `mastraClient.ts` | Workflow execution, retry logic | No |
-| Chunker | `chunker.ts` | Text splitting at paragraph boundaries | No |
-| Config | `config.ts` | Internal constants and defaults | No |
-| Types | `types.ts` | Shared interfaces | No |
+### Why Hexagonal?
+
+| Goal | How the architecture achieves it |
+|------|----------------------------------|
+| **Testability** | The pipeline depends only on `IDocumentPort` and `IAnalysisPort`. Mock implementations can replace `WordAdapter` and `MastraAdapter` without Office.js or a real backend. |
+| **Extensibility** | Swapping the backend (e.g., from Mastra to a direct LLM API) requires only a new `IAnalysisPort` adapter. Swapping the document host (e.g., Google Docs) requires only a new `IDocumentPort` adapter. |
+| **Maintainability** | `wordApi.ts` (579 lines, 4 responsibilities) is replaced by three focused files: `WordAdapter.ts`, `OoxmlPackageBuilder.ts`, `CommentCleanup.ts`. |
+| **Scalability** | New analysis phases are added as a new `PipelineHandler` in the chain. No modifications to existing handlers or the orchestrator. |
+
+---
 
 ## Module Map
 
 ```
 src/
-├── lib/
-│   ├── types.ts          ← Shared interfaces (no runtime code)
-│   ├── config.ts         ← Constants (URLs, retry policy)
-│   ├── wordApi.ts        ← Word API abstraction (OOXML tracked changes + cleanup)
-│   ├── mastraClient.ts   ← Mastra workflow client (@mastra/client-js wrapper)
-│   └── chunker.ts        ← Text chunking (pure function, paragraph-boundary)
+├── domain/                         ← Zero framework dependencies
+│   ├── types.ts                    ← Shared interfaces (no runtime code)
+│   ├── ports.ts                    ← IDocumentPort, IAnalysisPort
+│   └── pipeline/
+│       ├── PipelineContext.ts      ← Shared state between handlers
+│       ├── PipelineStateMachine.ts ← State machine (State pattern)
+│       ├── PipelineEvents.ts       ← Event emitter (Observer pattern)
+│       ├── PipelineOrchestrator.ts ← Chain of Responsibility runner
+│       └── handlers/
+│           ├── ReadTextHandler.ts
+│           ├── CheckConnectionHandler.ts
+│           ├── ChunkTextHandler.ts
+│           ├── AnalyzeChunksHandler.ts
+│           ├── DeduplicateHandler.ts
+│           ├── GuardAppliedHandler.ts
+│           └── ApplySuggestionsHandler.ts
+│
+├── adapters/
+│   ├── word/
+│   │   ├── WordAdapter.ts          ← implements IDocumentPort
+│   │   ├── ApplySuggestionCommand.ts ← Command pattern
+│   │   ├── ooxml/
+│   │   │   └── OoxmlPackageBuilder.ts ← Builder pattern
+│   │   └── cleanup/
+│   │       └── CommentCleanup.ts   ← Range Colocation pattern
+│   ├── mastra/
+│   │   └── MastraAdapter.ts        ← implements IAnalysisPort
+│   └── RetryAnalysisDecorator.ts   ← Decorator pattern
+│
+├── infrastructure/
+│   ├── config.ts                   ← Constants (URLs, retry policy)
+│   └── chunker.ts                  ← Pure text splitting function
+│
 └── taskpane/
-    ├── taskpane.ts       ← UI orchestrator (event binding, progress, rendering)
-    ├── taskpane.html     ← Task pane markup
-    └── taskpane.css      ← Styling (Fluent UI compatible)
+    ├── taskpane.ts                 ← UI only: events, observers, render
+    ├── taskpane.html
+    └── taskpane.css
 ```
 
-### Dependency Graph
+---
 
-```
-taskpane.ts
-├── imports wordApi.ts
-├── imports mastraClient.ts
-├── imports chunker.ts
-├── imports config.ts
-└── imports types.ts
+## Design Patterns
 
-wordApi.ts
-├── imports types.ts
-└── uses global: Word (Office.js)
+### GoF Patterns — Currently Used
 
-mastraClient.ts
-├── imports types.ts
-├── imports config.ts
-└── imports @mastra/client-js
+| Pattern | Category | Location | Description |
+|---------|----------|----------|-------------|
+| **Chain of Responsibility** | Behavioral | `domain/pipeline/handlers/` | Each of the 7 analysis phases is an independent handler. The orchestrator runs them in sequence; any handler can abort the chain by setting `ctx.aborted = true`. |
+| **Command** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | Each suggestion is encapsulated as a `DocumentCommand` with an `execute()` method. Enables future `undo()` support without restructuring. |
+| **Observer** | Behavioral | `domain/pipeline/PipelineEvents.ts` | `PipelineEventEmitter` notifies registered `PipelineObserver` instances of phase starts, progress, completion, and aborts. The UI registers one observer; future analytics can register another without touching the pipeline. |
+| **State** | Behavioral | `domain/pipeline/PipelineStateMachine.ts` | Explicit state transitions (`idle → reading → connecting → chunking → analyzing → applying → done/error`) prevent concurrent runs and make lifecycle visible in code. |
+| **Strategy** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` selects `insert`, `delete`, or `replace` tracked-change type based on suggestion content. |
+| **Template Method** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `execute()` has a fixed algorithm skeleton: search → extract format → disable tracking → build OOXML → insert → restore tracking. |
+| **Iterator** | Behavioral | `handlers/AnalyzeChunksHandler.ts`, `adapters/word/WordAdapter.ts` | Sequential iteration over chunks and suggestions via `for...of`. |
+| **Singleton** | Creational | `adapters/mastra/MastraAdapter.ts` | Single `MastraClient` instance reused across all workflow calls. |
+| **Builder** | Creational | `adapters/word/ooxml/OoxmlPackageBuilder.ts` | Fluent API for constructing flat OPC OOXML packages: `.withDeletion().withInsertion().withComment().build()`. Replaces 120-line string concatenation. |
+| **Factory Method** | Creational | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` acts as a factory for `ChangeType` values used in OOXML construction. |
+| **Facade** | Structural | `adapters/word/WordAdapter.ts` | Exposes a clean `IDocumentPort` interface hiding the complexity of `Word.run`, `context.sync`, and OOXML package structure. |
+| **Decorator** | Structural | `adapters/RetryAnalysisDecorator.ts` | Wraps `IAnalysisPort` transparently to add retry-with-exponential-backoff without modifying `MastraAdapter`. |
 
-chunker.ts
-├── imports types.ts
-└── imports config.ts
+### Ports & Adapters (Hexagonal Architecture)
 
-config.ts
-└── imports types.ts
+| Port | Interface | Adapters |
+|------|-----------|---------|
+| Document Port | `IDocumentPort` | `WordAdapter` (Office.js) |
+| Analysis Port | `IAnalysisPort` | `RetryAnalysisDecorator` → `MastraAdapter` (@mastra/client-js) |
 
-types.ts
-└── (no imports)
-```
+### Domain Patterns (Non-GoF)
 
-The dependency graph is strictly acyclic. `types.ts` is at the bottom. `wordApi.ts`, `mastraClient.ts`, and `chunker.ts` are peers that never import each other. `taskpane.ts` is the composition root.
+| Pattern | Location | Description |
+|---------|----------|-------------|
+| **Preserve-and-Restore** | `ApplySuggestionCommand.ts` | `changeTrackingMode` saved before modification, restored in `finally` even on error. |
+| **Guard Clause** | `GuardAppliedHandler.ts` | Filters suggestions already applied as tracked changes. Prevents duplicates when user re-runs analysis. |
+| **Partial Success** | `AnalyzeChunksHandler.ts`, `WordAdapter.ts` | Chunk failures and suggestion failures are collected, not fatal. User gets maximum possible value. |
+| **Fail-Fast Gate** | `CheckConnectionHandler.ts` | Verifies backend connectivity before starting analysis. Aborts immediately if unavailable. |
+| **Range Colocation** | `CommentCleanup.ts` | Uses `Range.compareLocationWith()` to detect orphaned comments. Document is the source of truth — no in-memory registry. |
+| **Transparent Fallback** | `WordAdapter.getTextToAnalyze()` | Returns selection if active, full document otherwise. Caller receives `{ text, isSelection }` without knowing how it was resolved. |
+| **Null Return on Error** | `MastraAdapter.analyzeChunk()` | Never throws; always returns `ChunkResult` (with empty suggestions on failure). Enables partial success. |
+| **Retry + Exponential Backoff** | `RetryAnalysisDecorator.ts` | `delay = baseMs * 2^attempt` between retries. 3 max attempts. Separated from `MastraAdapter` via Decorator. |
+| **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after OOXML insertions shift document positions. |
+| **Composition Root** | `taskpane/taskpane.ts` | Single wiring point: instantiates adapters, decorators, orchestrator, and state machine. No other module knows the full dependency graph. |
+
+---
 
 ## Data Flow
 
-The main analysis flow follows this sequence:
+### Analysis Pipeline (Chain of Responsibility)
 
 ```
 User clicks "Analizar y sugerir"
         │
         ▼
 taskpane.ts: handleAnalyze()
+  - Creates PipelineContext { documentPort, analysisPort, emitter, profile }
+  - Registers UI PipelineObserver on emitter
+  - stateMachine.transition("reading")
         │
-        ├──► wordApi.getDocumentText()
-        │         └── Word.run → body.load("text") → context.sync()
-        │         └── returns plain text string
+        ▼
+PipelineOrchestrator.run(ctx)
         │
-        ├──► mastraClient.checkConnection()
-        │         └── client.getWorkflow() → workflow.details()
-        │         └── returns boolean (fail-fast gate)
+        ├──► ReadTextHandler
+        │       └── documentPort.getTextToAnalyze() → ctx.text, ctx.isSelection
+        │       └── Abort if text is empty
         │
-        ├──► chunker.splitText(text, maxChunkSize)
-        │         └── splits at paragraph boundaries
-        │         └── returns TextChunk[]
+        ├──► CheckConnectionHandler
+        │       └── analysisPort.checkConnection() → fail-fast gate
+        │       └── Abort if backend unreachable
         │
-        ├──► For each chunk (sequential):
-        │     └── mastraClient.analyzeChunk(chunk, profile, language)
-        │           └── workflow.createRun() → run.start({ inputData })
-        │           └── retry on failure (up to 3 times, exponential backoff)
-        │           └── returns ChunkResult { suggestions[], error? }
+        ├──► ChunkTextHandler
+        │       └── splitText(ctx.text, maxChunkSize) → ctx.chunks
         │
-        ├──► deduplicateByOriginalText(allSuggestions)
-        │         └── removes cross-chunk duplicates (case-insensitive)
+        ├──► AnalyzeChunksHandler
+        │       └── For each chunk (sequential):
+        │             analysisPort.analyzeChunk(chunk, profile, "es") → suggestions
+        │       └── Collects ctx.rawSuggestions, ctx.chunkErrors
+        │       └── Abort if zero suggestions
         │
-        ├──► wordApi.applySuggestionsInBatches(suggestions, onProgress)
-        │         │
-        │         └── For each suggestion (one Word.run per suggestion):
-        │               ├── body.search(originalText, matchCase)
-        │               ├── Extract <w:rPr> formatting from matched range
-        │               ├── Disable changeTrackingMode
-        │               ├── Build OOXML package:
-        │               │     ├── <w:del> with original text
-        │               │     ├── <w:ins> with replacement text
-        │               │     └── <w:comment> with [Category] + justification
-        │               ├── range.insertOoxml(package, replace)
-        │               ├── Restore changeTrackingMode (in finally block)
-        │               └── Report progress via callback
-        │         └── returns InsertionResult
+        ├──► DeduplicateHandler
+        │       └── Removes cross-chunk duplicates (case-insensitive)
+        │       └── Sets ctx.uniqueSuggestions
         │
-        ├──► Shows "Limpiar comentarios resueltos" button
+        ├──► GuardAppliedHandler
+        │       └── documentPort.getAppliedOriginalTexts() → Set<string>
+        │       └── Filters already-applied suggestions
+        │       └── Sets ctx.pendingSuggestions
+        │       └── Abort if nothing pending
         │
-        └──► taskpane.ts: renderResults(suggestions, result, chunkErrors)
-                  └── Displays applied/failed suggestions in the task pane
+        └──► ApplySuggestionsHandler
+                └── documentPort.applySuggestions(pending, onProgress)
+                      └── For each suggestion: new ApplySuggestionCommand(s).execute()
+                            └── Word.run: search → extract format → build OOXML → insert
+                └── emitter.emitComplete(suggestions, result, errors, isSelection)
+                └── Sets ctx.result
+
+taskpane.ts: PipelineObserver.onComplete()
+  └── renderResults() → updates DOM
+  └── Shows cleanup button if successCount > 0
 ```
 
-### Comment Cleanup Flow
-
-After the user accepts or rejects tracked changes in Word, comments remain orphaned. The cleanup flow:
+### Comment Cleanup Flow (Direct port call, no pipeline)
 
 ```
 User clicks "Limpiar comentarios resueltos"
         │
         ▼
 taskpane.ts: handleCleanup()
-        │
-        └──► wordApi.cleanupResolvedComments()
-                  │
-                  ├── Sync 1: Load all tracked changes (author, type)
-                  │           and comments (authorName) from the document
-                  │
-                  ├── Filter to Stylistic-authored items only
-                  │
-                  ├── Sync 2: Get document ranges for each comment
-                  │           and tracked change via getRange()
-                  │
-                  ├── Sync 3: Compare every comment range against
-                  │           every TC range via compareLocationWith()
-                  │
-                  ├── For each Stylistic comment:
-                  │     └── If no TC overlaps → orphaned → delete()
-                  │     └── If TC overlaps → still pending → keep
-                  │
-                  └── Sync 4: Execute deletes
-                  └── returns { deleted, kept }
+        └── documentPort.cleanupResolvedComments()
+              └── CommentCleanup.cleanupResolvedComments()
+                    ├── Sync 1: Load Stylistic comments and tracked changes
+                    ├── Sync 2: Get document ranges for each
+                    ├── Sync 3: Compare every comment range vs every TC range
+                    └── Sync 4: Delete orphaned comments, keep colocated ones
 ```
+
+---
 
 ## OOXML Strategy
 
-All changes are applied via flat OPC OOXML packages rather than Word's `insertText()` API. Each package contains 4 parts:
+All changes are applied via flat OPC OOXML packages built by `OoxmlPackageBuilder`. Each package contains 4 parts:
 
 1. **`/_rels/.rels`** — Package relationships (points to document.xml)
 2. **`/word/_rels/document.xml.rels`** — Document relationships (points to comments.xml)
 3. **`/word/document.xml`** — Tracked change markup (`<w:del>` + `<w:ins>`) with comment anchors
 4. **`/word/comments.xml`** — Formatted justification (bold category + justification text)
 
+Builder usage:
+```typescript
+const ooxml = new OoxmlPackageBuilder()
+  .withRunProperties(runPropsXml)          // preserve original formatting
+  .withChange(original, replacement, type, "Stylistic", isoDate)
+  .withComment(category, justification, "Stylistic", isoDate)
+  .build();
+```
+
 This approach ensures:
-- The tracked change blue card shows `w:author="Stylistic"` cleanly
-- The comment appears as a margin balloon with formatting
-- Original text formatting (`<w:rPr>`) is preserved in the tracked change
-- No double-tracking: the document's `changeTrackingMode` is temporarily disabled during OOXML insertion
+- Tracked change blue card shows `w:author="Stylistic"` cleanly
+- Comment appears as a margin balloon with bold category + justification
+- Original text formatting (`<w:rPr>`) is preserved
+- No double-tracking: `changeTrackingMode` is disabled during insertion (Preserve-and-Restore)
+
+---
+
+## Four Pillars Evaluation
+
+| Pillar | Status | Evidence |
+|--------|--------|---------|
+| **Maintainability** | ✅ Good | Each module has one responsibility. `wordApi.ts` (579 lines, 4 concerns) replaced by 3 focused files. `taskpane.ts` now only handles DOM events and rendering. |
+| **Testability** | ✅ Good | Pipeline depends only on `IDocumentPort` and `IAnalysisPort` interfaces. Mock adapters enable unit tests with no Office.js or Mastra dependency. `chunker.ts` and `deduplicateByOriginalText` (inside `DeduplicateHandler`) are pure functions. |
+| **Scalability** | ✅ Good | Chunking handles 200K+ word documents. Partial success philosophy maximizes results on large documents. New analysis phases are added as a new handler — O(1) change regardless of pipeline size. |
+| **Extensibility** | ✅ Good | New backend → new `IAnalysisPort` adapter (zero pipeline changes). New document host → new `IDocumentPort` adapter (zero pipeline changes). New analysis phase → new `PipelineHandler` inserted into orchestrator array. New cross-cutting concern → new `Decorator` wrapping a port. |
+
+---
 
 ## Key Design Decisions
 
-### Why a Mastra workflow instead of a local analyzer?
+### Why Chain of Responsibility for the pipeline?
 
-The production version uses an AI-powered backend for:
-- **Semantic understanding** — AI can detect context-dependent issues that regex cannot.
-- **Extensibility** — new analysis rules are prompt changes, not code changes.
-- **Separation of concerns** — the frontend doesn't need to know about NLP, models, or prompts.
+`handleAnalyze()` was a monolithic 160-line function with 7 phases. Chain of Responsibility makes each phase an independent, testable, replaceable handler. Adding a new phase (e.g., terminology verification, spellcheck pre-filter) requires creating one new file and inserting it into the handler array — no modifications to existing handlers or the orchestrator.
 
-### Why `@mastra/client-js` instead of raw `fetch`?
+### Why Command for suggestion application?
 
-Mastra provides a typed SDK that handles workflow execution, run management, and the Mastra HTTP protocol. Using raw `fetch` would require reimplementing the workflow run lifecycle (create run → start → poll for result).
+Each suggestion is encapsulated as a `DocumentCommand` with `execute()`. This enables:
+- Clear single responsibility: one command = one document mutation
+- Future `undo()` support without restructuring
+- Per-command result tracking (`CommandResult`)
 
-### Why chunk on the frontend?
+### Why Decorator for retry?
 
-The backend's AI model has a context window limit. Rather than sending a large document and hoping the backend handles it, the frontend:
-1. Chunks at paragraph boundaries (preserving semantic context).
-2. Sends chunks sequentially (one workflow execution per chunk).
-3. Retries individual chunks on failure (not the entire document).
-4. Reports chunk-level progress to the user.
+The original `mastraClient.ts` mixed retry logic with Mastra communication. The Decorator separates concerns: `MastraAdapter` only handles the HTTP protocol; `RetryAnalysisDecorator` only handles retry semantics. Tests can inject the bare adapter without retry overhead. Future concerns (circuit breaker, caching) can be added as additional decorators.
+
+### Why Observer for progress?
+
+The `ProgressCallback` was a single listener. `PipelineEventEmitter` supports multiple simultaneous observers. The UI subscribes one observer; future analytics or structured logging can subscribe additional observers without touching the pipeline.
+
+### Why State Machine for pipeline lifecycle?
+
+The `isRunning` boolean check (`btn.disabled`) was implicit state. `PipelineStateMachine` makes valid transitions explicit and validated. Concurrent pipeline runs are prevented at the state level — impossible to go from `idle` to `applying` without passing through all intermediate states.
 
 ### Why one Word.run per suggestion?
 
-Each suggestion is applied in its own `Word.run` to avoid stale ranges. After an OOXML insertion replaces a range, all subsequent ranges in the document may shift. By using a fresh `Word.run` per suggestion:
-- Each search starts from a clean document state
-- A failure in suggestion N doesn't affect suggestions 1..(N-1)
-- Progress is reported after each individual suggestion
+After an OOXML insertion replaces a range, all subsequent ranges in the document may shift. A fresh `Word.run` per suggestion means each search starts from a clean document state. A failure in suggestion N doesn't affect suggestions 1..(N-1). This is the Per-Resource Isolation pattern.
 
-### Why `start()` instead of `stream()` for workflows?
+### Why Builder for OOXML?
 
-`run.start()` waits for the complete result. `run.stream()` provides real-time events. We chose `start()` because:
-- We need the complete suggestion array before applying Track Changes.
-- Progress comes from chunk-level iteration, not intra-workflow events.
-- Retry logic is simpler with a single request-response per chunk.
+`buildTrackedChangeOoxml()` was 120 lines of string concatenation, opaque and hard to extend. `OoxmlPackageBuilder` provides a fluent API that makes intent clear and extension easy: adding a new OOXML part (e.g., footnotes, format-only changes) is additive, not invasive.
 
-### Why deduplicate in the orchestrator?
+### Why Range Colocation for comment cleanup?
 
-Multiple chunks may contain the same phrase. Without deduplication, the second `body.search()` for the same `originalText` would find the already-replaced text and fail. Deduplication is a data integrity measure (preventing duplicate Track Changes), not business logic.
-
-### Why range colocation for comment cleanup?
-
-Comments and tracked changes have no direct link in the Word API. The cleanup uses `Comment.getRange()` and `TrackedChange.getRange()` with `Range.compareLocationWith()` to determine if a comment is still anchored to a pending tracked change. This approach:
-- Uses the document as the source of truth (no in-memory state)
-- Works across sessions (no registry to persist)
+Comments and tracked changes have no direct link in the Word API. Using `Comment.getRange()` and `TrackedChange.getRange()` with `Range.compareLocationWith()` to determine colocation:
+- Uses the document as the source of truth (no in-memory registry)
+- Works across sessions (no state to persist)
 - Never deletes comments it can't positively identify as orphaned
 
-## Error Handling Strategy
+---
+
+## Error Handling
 
 Errors are handled at four levels:
 
-| Level | Module | Strategy |
-|---|---|---|
-| Word API | `wordApi.ts` | `try/finally` ensures tracking mode is always restored. Each suggestion is independent. |
-| Backend | `mastraClient.ts` | Retry with exponential backoff (3 attempts). Never throws — returns empty result on failure. |
-| Orchestrator | `taskpane.ts` | `try/catch` around the full pipeline. Errors translated via `toUserMessage()`. Partial results are preserved. |
-| UI | `taskpane.ts` | `setAnalyzeLoading(false)` runs in `finally`. Progress bar resets on completion. |
+| Level | Location | Strategy |
+|-------|----------|---------|
+| **Word API** | `ApplySuggestionCommand.ts` | `try/finally` ensures `changeTrackingMode` is always restored. Each command is independent. |
+| **Backend** | `RetryAnalysisDecorator.ts` | Retry with exponential backoff (3 attempts). Never throws — returns empty result. |
+| **Pipeline** | `handlers/` | Handlers set `ctx.aborted = true` for graceful abort. `emitter.emitAbort(reason)` notifies observers. |
+| **UI** | `taskpane.ts` | `try/catch/finally` around `orchestrator.run()`. `setAnalyzeLoading(false)` always runs in `finally`. |
 
 ### Partial Success Philosophy
 
 The system is designed for partial success:
-- If 3/5 chunks succeed → suggestions from those 3 chunks are applied.
-- If 25/30 suggestions are found → those 25 are applied, 5 are reported as "not found".
-- The results panel always shows the complete picture: applied count, failed count, and chunk errors.
+- If 3/5 chunks succeed → suggestions from those 3 are applied
+- If 25/30 suggestions are found → 25 are applied, 5 reported as "not found"
+- Results panel always shows the complete picture: applied count, failed count, chunk errors

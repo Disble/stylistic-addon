@@ -5,6 +5,7 @@
  * - The Mastra backend (workflow input/output)
  * - The Word API layer (suggestions and insertion results)
  * - The UI orchestrator (progress reporting)
+ * - The pipeline (state machine, commands, events)
  *
  * No runtime code — only type declarations. No dependency on Office.js,
  * @mastra/client-js, or the DOM, keeping all consumers independently testable.
@@ -132,12 +133,7 @@ export interface WorkflowOutput {
 /**
  * Phases of the analysis pipeline, used for progress reporting in the UI.
  */
-export type AnalysisPhase =
-  | "reading"
-  | "connecting"
-  | "analyzing"
-  | "applying"
-  | "done";
+export type AnalysisPhase = "reading" | "connecting" | "analyzing" | "applying" | "done";
 
 /**
  * Callback signature for reporting progress during multi-phase analysis.
@@ -178,11 +174,11 @@ export interface ChunkResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Type of tracked change operation, used by the Strategy pattern in wordApi.
+ * Type of tracked change operation, used by the Strategy pattern in the
+ * Word adapter.
  *
  * All types are applied via OOXML markup (`<w:del>`, `<w:ins>`) with an
- * attached Word comment containing the justification. This produces a rich
- * Review pane UI showing author, description, and reason for each change.
+ * attached Word comment containing the justification.
  *
  * - `"insert"` — Text insertion only (`<w:ins>` markup).
  * - `"delete"` — Text deletion only (`<w:del>` markup).
@@ -198,9 +194,6 @@ export type ChangeType = "insert" | "delete" | "replace";
  * Result of the text-source resolution step at the start of the analysis
  * pipeline. Encapsulates whether the text came from the user's active
  * selection or from the full document body.
- *
- * Produced by `wordApi.getTextToAnalyze()` and consumed by the orchestrator
- * to adapt progress messages and results labeling transparently.
  */
 export interface TextSource {
   /** The plain text to analyze (selection or full document). */
@@ -226,4 +219,96 @@ export interface Profile {
 
   /** Human-readable label displayed in the dropdown. */
   label: string;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline State Machine
+// ---------------------------------------------------------------------------
+
+/**
+ * All possible states of the analysis pipeline.
+ * Used by `PipelineStateMachine` to enforce valid transitions.
+ *
+ * - `idle`       — No pipeline running; ready to start.
+ * - `reading`    — Reading text from the document or selection.
+ * - `connecting` — Verifying backend connectivity.
+ * - `chunking`   — Splitting text at paragraph boundaries.
+ * - `analyzing`  — Sending chunks to the Mastra workflow.
+ * - `applying`   — Applying suggestions as tracked changes.
+ * - `done`       — Pipeline completed successfully.
+ * - `error`      — Pipeline aborted due to unrecoverable error.
+ */
+export type PipelineState =
+  | "idle"
+  | "reading"
+  | "connecting"
+  | "chunking"
+  | "analyzing"
+  | "applying"
+  | "done"
+  | "error";
+
+// ---------------------------------------------------------------------------
+// Command Pattern
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of executing a `DocumentCommand`.
+ */
+export interface CommandResult {
+  /** Whether the command completed successfully. */
+  success: boolean;
+
+  /** The ID of the command that produced this result. */
+  commandId: string;
+
+  /** Error message if `success` is false. */
+  error?: string;
+}
+
+/**
+ * A reversible document operation (Command pattern).
+ *
+ * Commands encapsulate a single document mutation (e.g., applying one
+ * suggestion as a tracked change). The `execute()` method performs the
+ * operation. An `undo()` method can be added in a future iteration.
+ */
+export interface DocumentCommand {
+  /** Stable identifier matching the source suggestion's id. */
+  readonly id: string;
+
+  /** Human-readable description for logging and UI. */
+  readonly description: string;
+
+  /** Executes the command against the Word document. */
+  execute(): Promise<CommandResult>;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Result
+// ---------------------------------------------------------------------------
+
+/**
+ * The aggregate outcome of a completed analysis pipeline run.
+ * Produced by `ApplySuggestionsHandler` and consumed by `taskpane.ts`
+ * to render the results panel.
+ */
+export interface PipelineResult {
+  /** All unique suggestions produced by the analysis (after dedup + guard). */
+  suggestions: Suggestion[];
+
+  /** Insertion outcome (success count + failed suggestions). */
+  result: InsertionResult;
+
+  /** Error messages from chunks that failed analysis. */
+  chunkErrors: string[];
+
+  /** Whether the analysis was scoped to a text selection. */
+  isSelection: boolean;
+
+  /** Whether the pipeline was aborted before completion. */
+  aborted: boolean;
+
+  /** Human-readable reason for abortion (if `aborted` is true). */
+  abortReason?: string;
 }

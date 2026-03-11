@@ -43,3 +43,4 @@ Thumbs.db
 .env
 .env.*.local
 .claude/settings.local.json
+.claude/skills/mastra
