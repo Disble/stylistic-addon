@@ -62,6 +62,16 @@ export interface PipelineObserver {
 export class PipelineEventEmitter {
   private observers: PipelineObserver[] = [];
 
+  private notifyObservers(notify: (observer: PipelineObserver) => void): void {
+    for (const observer of this.observers) {
+      try {
+        notify(observer);
+      } catch {
+        // Ignore observer failures so other observers still receive the event.
+      }
+    }
+  }
+
   /**
    * Registers an observer. The observer will receive all subsequent events
    * until `unsubscribe()` is called.
@@ -83,19 +93,19 @@ export class PipelineEventEmitter {
   }
 
   emitPhaseStart(phase: PipelineState, message: string): void {
-    for (const o of this.observers) o.onPhaseStart?.(phase, message);
+    this.notifyObservers((observer) => observer.onPhaseStart?.(phase, message));
   }
 
   emitProgress(current: number, total: number, message: string): void {
-    for (const o of this.observers) o.onProgress?.(current, total, message);
+    this.notifyObservers((observer) => observer.onProgress?.(current, total, message));
   }
 
   emitPhaseComplete(phase: PipelineState): void {
-    for (const o of this.observers) o.onPhaseComplete?.(phase);
+    this.notifyObservers((observer) => observer.onPhaseComplete?.(phase));
   }
 
   emitError(phase: PipelineState, error: Error | string): void {
-    for (const o of this.observers) o.onError?.(phase, error);
+    this.notifyObservers((observer) => observer.onError?.(phase, error));
   }
 
   emitComplete(
@@ -104,10 +114,12 @@ export class PipelineEventEmitter {
     chunkErrors: string[],
     isSelection: boolean
   ): void {
-    for (const o of this.observers) o.onComplete?.(suggestions, result, chunkErrors, isSelection);
+    this.notifyObservers((observer) =>
+      observer.onComplete?.(suggestions, result, chunkErrors, isSelection)
+    );
   }
 
   emitAbort(reason: string): void {
-    for (const o of this.observers) o.onAbort?.(reason);
+    this.notifyObservers((observer) => observer.onAbort?.(reason));
   }
 }

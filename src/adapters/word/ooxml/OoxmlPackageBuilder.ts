@@ -37,6 +37,40 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
+function hashString(value: string): number {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function deriveInitials(author: string): string {
+  const parts = author
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return "NA";
+  }
+
+  if (parts.length === 1) {
+    const [part] = parts;
+    const first = part[0]?.toUpperCase() ?? "N";
+    const second = part[1]?.toLowerCase() ?? "A";
+
+    return `${first}${second}`;
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "NA";
+}
+
 export class OoxmlPackageBuilder {
   private runPropsXml: string | null = null;
   private deletionText: string | null = null;
@@ -49,6 +83,30 @@ export class OoxmlPackageBuilder {
   private commentJustification = "";
   private commentAuthor = "Stylistic";
   private commentDate = "";
+
+  private createBuildIds(): { commentId: string; deletionId: string; insertionId: string } {
+    const seed = [
+      this.runPropsXml ?? "",
+      this.deletionText ?? "",
+      this.deletionAuthor,
+      this.deletionDate,
+      this.insertionText ?? "",
+      this.insertionAuthor,
+      this.insertionDate,
+      this.commentCategory,
+      this.commentJustification,
+      this.commentAuthor,
+      this.commentDate,
+    ].join("\u001f");
+
+    const baseId = (hashString(seed) % 900000000) + 100000000;
+
+    return {
+      commentId: String(baseId),
+      deletionId: String(baseId + 1),
+      insertionId: String(baseId + 2),
+    };
+  }
 
   /**
    * Preserves original run formatting by embedding `<w:rPr>` XML inside
@@ -138,13 +196,15 @@ export class OoxmlPackageBuilder {
    */
   build(): string {
     const rPr = this.runPropsXml ? `                ${this.runPropsXml}\n` : "";
+    const ids = this.createBuildIds();
+    const commentInitials = deriveInitials(this.commentAuthor);
 
     // Build tracked change body
     let changeBody = "";
 
     if (this.deletionText !== null) {
       changeBody +=
-        `            <w:del w:id="1" w:author="${escapeXml(this.deletionAuthor)}" w:date="${this.deletionDate}">\n` +
+        `            <w:del w:id="${ids.deletionId}" w:author="${escapeXml(this.deletionAuthor)}" w:date="${escapeXml(this.deletionDate)}">\n` +
         `              <w:r>\n` +
         `${rPr}                <w:delText xml:space="preserve">${escapeXml(this.deletionText)}</w:delText>\n` +
         `              </w:r>\n` +
@@ -153,7 +213,7 @@ export class OoxmlPackageBuilder {
 
     if (this.insertionText !== null) {
       changeBody +=
-        `            <w:ins w:id="2" w:author="${escapeXml(this.insertionAuthor)}" w:date="${this.insertionDate}">\n` +
+        `            <w:ins w:id="${ids.insertionId}" w:author="${escapeXml(this.insertionAuthor)}" w:date="${escapeXml(this.insertionDate)}">\n` +
         `              <w:r>\n` +
         `${rPr}                <w:t xml:space="preserve">${escapeXml(this.insertionText)}</w:t>\n` +
         `              </w:r>\n` +
@@ -220,10 +280,10 @@ export class OoxmlPackageBuilder {
       '      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
       "        <w:body>",
       "          <w:p>",
-      '            <w:commentRangeStart w:id="0"/>',
-      changeBody + '            <w:commentRangeEnd w:id="0"/>',
+      `            <w:commentRangeStart w:id="${ids.commentId}"/>`,
+      changeBody + `            <w:commentRangeEnd w:id="${ids.commentId}"/>`,
       "            <w:r>",
-      '              <w:commentReference w:id="0"/>',
+      `              <w:commentReference w:id="${ids.commentId}"/>`,
       "            </w:r>",
       "          </w:p>",
       "        </w:body>",
@@ -236,7 +296,7 @@ export class OoxmlPackageBuilder {
       '    pkg:contentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml">',
       "    <pkg:xmlData>",
       '      <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
-      `        <w:comment w:id="0" w:author="${escapeXml(this.commentAuthor)}" w:initials="St" w:date="${this.commentDate}">`,
+      `        <w:comment w:id="${ids.commentId}" w:author="${escapeXml(this.commentAuthor)}" w:initials="${escapeXml(commentInitials)}" w:date="${escapeXml(this.commentDate)}">`,
       commentBody,
       "        </w:comment>",
       "      </w:comments>",

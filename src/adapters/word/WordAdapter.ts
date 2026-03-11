@@ -80,6 +80,8 @@ export class WordAdapter implements IDocumentPort {
    * Applies suggestions as tracked changes using `ApplySuggestionCommand`
    * (Command pattern). Each suggestion runs in its own `Word.run` context
    * (per-suggestion isolation) to avoid stale ranges after OOXML insertions.
+   * Command failures are aggregated as failed suggestions so later suggestions
+   * can still run.
    */
   async applySuggestions(
     suggestions: Suggestion[],
@@ -96,7 +98,14 @@ export class WordAdapter implements IDocumentPort {
 
     for (const suggestion of suggestions) {
       const command = new ApplySuggestionCommand(suggestion);
-      const commandResult = await command.execute();
+      let commandResult;
+
+      try {
+        commandResult = await command.execute();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        commandResult = { success: false, commandId: suggestion.id, error: message };
+      }
 
       if (commandResult.success) {
         successCount++;

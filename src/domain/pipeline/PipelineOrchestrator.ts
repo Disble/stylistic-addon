@@ -54,6 +54,15 @@ export class PipelineOrchestrator {
     if (ctx.aborted) return;
 
     const handler = this.handlers[index];
-    await handler.handle(ctx, () => this.execute(ctx, index + 1));
+    let nextCalled = false;
+
+    await handler.handle(ctx, async () => {
+      if (nextCalled) {
+        throw new Error("next() called multiple times in the same handler");
+      }
+
+      nextCalled = true;
+      await this.execute(ctx, index + 1);
+    });
   }
 }

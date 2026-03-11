@@ -73,72 +73,83 @@ export class ApplySuggestionCommand {
    * Executes the command: searches for `originalText` in the document and
    * replaces it with an OOXML tracked change package.
    *
-   * Returns `{ success: false }` if the text is not found (graceful failure).
-   * Never throws.
+   * Returns `{ success: false }` for recoverable application failures such as
+   * missing anchor text, missing search matches, or Office insertion errors.
    */
   async execute(): Promise<CommandResult> {
     console.log(
       `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.originalText.substring(0, 40)}" → "${this.suggestion.suggestedText.substring(0, 40)}"`
     );
 
-    return Word.run(async (context) => {
-      // Search for the original text
-      const results = context.document.body.search(this.suggestion.originalText, {
-        matchCase: true,
-        matchWholeWord: false,
+    const changeType = classifyChange(this.suggestion);
+
+    if (changeType === "insert") {
+      console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": inserción sin texto ancla`);
+      return {
+        success: false,
+        commandId: this.id,
+        error: "Insert-only suggestions require anchor text",
+      };
+    }
+
+    try {
+      return await Word.run(async (context) => {
+        const results = context.document.body.search(this.suggestion.originalText, {
+          matchCase: true,
+          matchWholeWord: false,
+        });
+        results.load("items");
+        await context.sync();
+
+        if (results.items.length === 0) {
+          console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`);
+          return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+        }
+
+        const range = results.items[0];
+        const rangeOoxml = range.getOoxml();
+        await context.sync();
+        // eslint-disable-next-line office-addins/load-object-before-read
+        const runProps = extractRunProperties(rangeOoxml.value);
+
+        context.document.load("changeTrackingMode");
+        await context.sync();
+        const previousMode = context.document.changeTrackingMode;
+        context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
+        await context.sync();
+
+        try {
+          const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+
+          const ooxml = new OoxmlPackageBuilder()
+            .withRunProperties(runProps)
+            .withChange(
+              this.suggestion.originalText,
+              this.suggestion.suggestedText,
+              changeType,
+              "Stylistic",
+              now
+            )
+            .withComment(this.suggestion.category, this.suggestion.justification, "Stylistic", now)
+            .build();
+
+          console.log(
+            `📄 [ApplySuggestionCommand] "${this.id}": insertando OOXML (tipo: ${changeType})`
+          );
+          range.insertOoxml(ooxml, Word.InsertLocation.replace);
+          await context.sync();
+          console.log(`✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`);
+
+          return { success: true, commandId: this.id };
+        } finally {
+          context.document.changeTrackingMode = previousMode as Word.ChangeTrackingMode;
+          await context.sync();
+        }
       });
-      results.load("items");
-      await context.sync();
-
-      if (results.items.length === 0) {
-        console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`);
-        return { success: false, commandId: this.id, error: "Texto original no encontrado" };
-      }
-
-      const range = results.items[0];
-
-      // Extract formatting from the original range (ClientResult — value available after sync)
-      const rangeOoxml = range.getOoxml();
-      await context.sync();
-      // eslint-disable-next-line office-addins/load-object-before-read
-      const runProps = extractRunProperties(rangeOoxml.value);
-
-      // Preserve-and-Restore: save tracking mode, disable, restore in finally
-      context.document.load("changeTrackingMode");
-      await context.sync();
-      const previousMode = context.document.changeTrackingMode;
-      context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
-      await context.sync();
-
-      try {
-        const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-        const changeType = classifyChange(this.suggestion);
-
-        const ooxml = new OoxmlPackageBuilder()
-          .withRunProperties(runProps)
-          .withChange(
-            this.suggestion.originalText,
-            this.suggestion.suggestedText,
-            changeType,
-            "Stylistic",
-            now
-          )
-          .withComment(this.suggestion.category, this.suggestion.justification, "Stylistic", now)
-          .build();
-
-        console.log(
-          `📄 [ApplySuggestionCommand] "${this.id}": insertando OOXML (tipo: ${changeType})`
-        );
-        range.insertOoxml(ooxml, Word.InsertLocation.replace);
-        await context.sync();
-        console.log(`✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`);
-
-        return { success: true, commandId: this.id };
-      } finally {
-        // Always restore tracking mode, even on error
-        context.document.changeTrackingMode = previousMode as Word.ChangeTrackingMode;
-        await context.sync();
-      }
-    });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": ${message}`);
+      return { success: false, commandId: this.id, error: message };
+    }
   }
 }

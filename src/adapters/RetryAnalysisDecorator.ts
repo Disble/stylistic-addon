@@ -49,7 +49,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
    * Never throws — always returns a `ChunkResult`.
    */
   async analyzeChunk(chunk: TextChunk, profile: string, language: string): Promise<ChunkResult> {
-    let lastError = "";
+    let lastError = "Unknown analysis error";
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       if (attempt > 0) {
@@ -60,16 +60,24 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
         await this.delay(delayMs);
       }
 
-      const result = await this.wrapped.analyzeChunk(chunk, profile, language);
+      try {
+        const result = await this.wrapped.analyzeChunk(chunk, profile, language);
+        const errorMessage = this.normalizeError(result.error);
 
-      if (!result.error) {
-        return result;
+        if (errorMessage === undefined) {
+          return result;
+        }
+
+        lastError = errorMessage;
+        console.warn(
+          `⚠️ [RetryDecorator] Chunk #${chunk.index} intento ${attempt} falló: ${lastError}`
+        );
+      } catch (error) {
+        lastError = this.normalizeThrownError(error);
+        console.warn(
+          `⚠️ [RetryDecorator] Chunk #${chunk.index} intento ${attempt} falló: ${lastError}`
+        );
       }
-
-      lastError = result.error;
-      console.warn(
-        `⚠️ [RetryDecorator] Chunk #${chunk.index} intento ${attempt} falló: ${lastError}`
-      );
     }
 
     console.error(
@@ -84,5 +92,28 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private normalizeError(error: string | undefined): string | undefined {
+    if (error === undefined) {
+      return undefined;
+    }
+
+    const normalized = error.trim();
+    return normalized.length > 0 ? normalized : "Unknown analysis error";
+  }
+
+  private normalizeThrownError(error: unknown): string {
+    if (error instanceof Error) {
+      const normalized = error.message.trim();
+      return normalized.length > 0 ? normalized : "Unknown analysis error";
+    }
+
+    if (typeof error === "string") {
+      const normalized = error.trim();
+      return normalized.length > 0 ? normalized : "Unknown analysis error";
+    }
+
+    return "Unknown analysis error";
   }
 }

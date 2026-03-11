@@ -27,9 +27,9 @@ const TRANSITIONS: Record<PipelineState, PipelineState[]> = {
   idle: ["reading"],
   reading: ["connecting", "idle", "error"],
   connecting: ["chunking", "idle", "error"],
-  chunking: ["analyzing", "error"],
+  chunking: ["analyzing", "idle", "error"],
   analyzing: ["applying", "idle", "error"],
-  applying: ["done", "error"],
+  applying: ["done", "idle", "error"],
   done: ["idle"],
   error: ["idle"],
 };
@@ -88,7 +88,7 @@ export class PipelineStateMachine {
 
   /**
    * Resets the state machine to `idle`.
-   * Valid from any state — safe to call in `finally` blocks.
+   * Idempotent convenience for returning to `idle` — safe to call in `finally` blocks.
    */
   reset(): void {
     console.log(`🔄 [StateMachine] reset → idle (was: ${this.current})`);

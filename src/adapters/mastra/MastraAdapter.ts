@@ -68,7 +68,16 @@ export class MastraAdapter implements IAnalysisPort {
       console.log(`🤖 [MastraAdapter] Chunk #${chunk.index} status: "${result.status}"`);
 
       if (result.status === "success") {
-        const output = result.result as WorkflowOutput;
+        const output = this.validateSuccessOutput(result.result);
+
+        if (!output) {
+          return {
+            chunkIndex: chunk.index,
+            suggestions: [],
+            error: "Invalid workflow success payload",
+          };
+        }
+
         const suggestions = this.mapSuggestions(output.suggestions, chunk.index);
         console.log(`✅ [MastraAdapter] Chunk #${chunk.index} → ${suggestions.length} sugerencias`);
         return { chunkIndex: chunk.index, suggestions };
@@ -101,5 +110,17 @@ export class MastraAdapter implements IAnalysisPort {
       category: s.category,
       severity: s.severity,
     }));
+  }
+
+  private validateSuccessOutput(result: unknown): WorkflowOutput | undefined {
+    if (!result || typeof result !== "object") {
+      return undefined;
+    }
+
+    if (!("suggestions" in result)) {
+      return undefined;
+    }
+
+    return result as WorkflowOutput;
   }
 }

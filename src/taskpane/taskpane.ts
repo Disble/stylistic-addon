@@ -40,6 +40,15 @@ import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../inf
 /** Duration (ms) before the status bar message auto-hides. */
 const STATUS_DISPLAY_MS = 4000;
 
+type OfficeLike = {
+  onReady(callback: (info: { host: string }) => void): Promise<unknown> | void;
+  HostType?: {
+    Word?: string;
+  };
+};
+
+type DocumentLike = Pick<Document, "getElementById">;
+
 // ---------------------------------------------------------------------------
 // Infrastructure — built once, reused across pipeline runs
 // ---------------------------------------------------------------------------
@@ -71,14 +80,37 @@ const stateMachine = new PipelineStateMachine();
  * Entry point — called once Office.js confirms the host is Word.
  * Hides the sideload message, shows the app body, and binds event handlers.
  */
-Office.onReady((info) => {
-  if (info.host === Office.HostType.Word) {
-    document.getElementById("sideload-msg")!.style.display = "none";
-    document.getElementById("app-body")!.style.display = "flex";
-    document.getElementById("btn-analyze")!.onclick = handleAnalyze;
-    document.getElementById("btn-cleanup")!.onclick = handleCleanup;
+export function bootstrapTaskpane(
+  office: OfficeLike | undefined = globalThis.Office as unknown as OfficeLike | undefined,
+  doc: DocumentLike | undefined = globalThis.document
+): void {
+  if (!office?.onReady || !doc?.getElementById) {
+    return;
   }
-});
+
+  office.onReady((info) => {
+    const wordHost = office.HostType?.Word ?? "Word";
+    if (info.host !== wordHost) {
+      return;
+    }
+
+    const sideloadMessage = doc.getElementById("sideload-msg");
+    const appBody = doc.getElementById("app-body");
+    const analyzeButton = doc.getElementById("btn-analyze") as HTMLButtonElement | null;
+    const cleanupButton = doc.getElementById("btn-cleanup") as HTMLButtonElement | null;
+
+    if (!(sideloadMessage && appBody && analyzeButton && cleanupButton)) {
+      return;
+    }
+
+    sideloadMessage.style.display = "none";
+    appBody.style.display = "flex";
+    analyzeButton.onclick = handleAnalyze;
+    cleanupButton.onclick = handleCleanup;
+  });
+}
+
+bootstrapTaskpane();
 
 // ---------------------------------------------------------------------------
 // UI Helpers
