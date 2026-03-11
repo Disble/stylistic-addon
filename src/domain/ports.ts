@@ -23,6 +23,7 @@ import {
   ProgressCallback,
   TextChunk,
   ChunkResult,
+  SuggestionActionResult,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,20 @@ export interface IDocumentPort {
    * Never touches comments from other authors.
    */
   cleanupResolvedComments(): Promise<{ deleted: number; kept: number }>;
+
+  /**
+   * Accepts all Stylistic tracked changes associated with a suggestion.
+   * Also deletes the associated Stylistic comment if present.
+   * Returns a result object — never throws.
+   */
+  acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>
+
+  /**
+   * Rejects all Stylistic tracked changes associated with a suggestion.
+   * Also deletes the associated Stylistic comment if present.
+   * Returns a result object — never throws.
+   */
+  rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>
 }
 
 // ---------------------------------------------------------------------------

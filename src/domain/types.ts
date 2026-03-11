@@ -312,3 +312,26 @@ export interface PipelineResult {
   /** Human-readable reason for abortion (if `aborted` is true). */
   abortReason?: string;
 }
+
+/**
+ * Visual state of a suggestion card in the taskpane after user action.
+ * - "pending": The suggestion has been applied and awaits user accept/reject.
+ * - "accepted": The user accepted the suggestion from the taskpane.
+ * - "rejected": The user rejected the suggestion from the taskpane.
+ * - "already-resolved": The suggestion was resolved via Word's native Review panel.
+ */
+export type SuggestionState = "pending" | "accepted" | "rejected" | "already-resolved"
+
+/**
+ * Result returned by `IDocumentPort.acceptSuggestion` and `IDocumentPort.rejectSuggestion`.
+ */
+export interface SuggestionActionResult {
+  /** Final resolution status of the operation. */
+  status: "accepted" | "rejected" | "already-resolved" | "not-found" | "error"
+  /** Number of tracked changes (insert + delete) that were accepted or rejected. */
+  trackedChangesAffected: number
+  /** Whether the associated Stylistic comment was successfully deleted. */
+  commentDeleted: boolean
+  /** Human-readable error message when status is "error" or "not-found". */
+  error?: string
+}
