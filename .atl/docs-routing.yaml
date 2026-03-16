@@ -1,0 +1,132 @@
+# Canonical project-local docs routing for KIN.
+# Keep entries small and actionable. Only add sources the project actually wants.
+
+version: 1
+
+defaults:
+  prefer:
+    - official-skill
+    - official-mcp
+    - llms-txt
+    - context7
+    - official-docs
+    - github
+
+project_instructions:
+  canonical: .atl/docs-routing.yaml
+  pointer_block: |
+    ## KIN Docs Routing
+
+    KIN project-local docs routing lives in `.atl/docs-routing.yaml`.
+    Read that file first when resolving external-library docs.
+    Then use `.atl/skill-registry.md`, project instruction files, and relevant skills only to discover or follow sources that routing and the current project context point to; they do not replace local routing.
+
+libraries:
+  office-js:
+    aliases:
+      - office.js
+      - word-js
+      - wordapi
+      - office-runtime
+      - "@types/office-js"
+      - "@types/office-runtime"
+    prefer:
+      - official-docs
+      - github
+    docs_domain: https://learn.microsoft.com
+    official_docs:
+      - https://learn.microsoft.com/en-us/office/dev/add-ins/reference/overview/word-add-ins-reference-overview
+      - https://learn.microsoft.com/en-us/javascript/api/word
+      - https://learn.microsoft.com/en-us/javascript/api/office
+    github:
+      repo: OfficeDev/office-js-docs-pr
+    notes:
+      - Use Microsoft Learn first. Root and Office JavaScript subpath llms.txt candidates returned 404 during discovery, so route directly to official docs pages.
+      - Use the Word API reference for document operations and the Common Office API reference for host-level features.
+
+  mastra:
+    aliases:
+      - "@mastra/client-js"
+    prefer:
+      - official-skill
+      - llms-txt
+      - official-docs
+      - github
+    skills:
+      - .claude/skills/mastra/SKILL.md
+    docs_domain: https://mastra.ai
+    llms_txt:
+      - https://mastra.ai/llms.txt
+    official_docs:
+      - https://mastra.ai/reference/client-js/mastra-client
+      - https://mastra.ai/docs/server/mastra-client
+    github:
+      repo: mastra-ai/mastra
+    notes:
+      - Use the local Mastra skill first, then confirm client behavior against the root llms.txt manifest and targeted official docs for the installed client SDK.
+      - The root llms.txt is discoverable. The /docs/llms.txt path resolved to a content page instead of a manifest, so prefer the root manifest only.
+
+  webpack:
+    aliases:
+      - webpack-cli
+      - webpack-dev-server
+    prefer:
+      - official-docs
+      - github
+    docs_domain: https://webpack.js.org
+    official_docs:
+      - https://webpack.js.org/concepts/
+      - https://webpack.js.org/configuration/
+    github:
+      repo: webpack/webpack
+    notes:
+      - Use webpack docs pages directly. llms.txt candidates on the root domain, www host, and versioned host were not discoverable.
+      - Use webpack docs for bundling concepts and core config; plugin-specific packages may need their own docs if a task is plugin-specific.
+
+  vitest:
+    prefer:
+      - llms-txt
+      - official-docs
+      - github
+    docs_domain: https://vitest.dev
+    llms_txt:
+      - https://vitest.dev/llms.txt
+    official_docs:
+      - https://vitest.dev/guide/
+      - https://vitest.dev/config/
+    github:
+      repo: vitest-dev/vitest
+    notes:
+      - The root llms.txt is discoverable and should be preferred for topic discovery.
+      - Docs pages expose markdown endpoints such as /guide.md for targeted fetches when llms.txt points you to a page.
+
+  typescript:
+    aliases:
+      - tsc
+    prefer:
+      - official-docs
+      - github
+    docs_domain: https://www.typescriptlang.org
+    official_docs:
+      - https://www.typescriptlang.org/docs/
+      - https://www.typescriptlang.org/tsconfig/
+    github:
+      repo: microsoft/TypeScript
+    notes:
+      - Use TypeScript handbook and TSConfig pages directly. llms.txt candidates on the root docs paths were not discoverable.
+
+  office-addin-scripts:
+    aliases:
+      - office-addin-cli
+      - office-addin-debugging
+      - office-addin-dev-settings
+      - office-addin-dev-certs
+      - office-addin-lint
+      - office-addin-manifest
+    prefer:
+      - github
+    github:
+      repo: OfficeDev/Office-Addin-Scripts
+    notes:
+      - These CLI and lint packages are maintained in the shared Office Addin Scripts repository.
+      - Package metadata points to GitHub and no separate official docs domain or llms manifest was discoverable, so GitHub remains the canonical fallback.
