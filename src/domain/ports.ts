@@ -22,7 +22,8 @@ import {
   InsertionResult,
   ProgressCallback,
   TextChunk,
-  ChunkResult,
+  ChunkSubmitResult,
+  ChunkPollResult,
   SuggestionActionResult,
 } from "./types";
 
@@ -103,12 +104,18 @@ export interface IAnalysisPort {
   checkConnection(): Promise<boolean>;
 
   /**
-   * Sends a text chunk to the analysis backend and returns suggestions.
-   * Never throws — returns `ChunkResult` with empty suggestions on failure.
-   *
-   * @param chunk    - The text chunk with positional metadata.
-   * @param profile  - Analysis profile (e.g., "general", "formal").
-   * @param language - ISO 639-1 language code (e.g., "es").
+   * Submits a text chunk for asynchronous workflow execution.
+   * Returns the `runId` required for later polling.
    */
-  analyzeChunk(chunk: TextChunk, profile: string, language: string): Promise<ChunkResult>;
+  submitChunkAnalysis(
+    chunk: TextChunk,
+    profile: string,
+    language: string
+  ): Promise<ChunkSubmitResult>;
+
+  /**
+   * Polls an existing workflow run created by `submitChunkAnalysis()`.
+   * Returns intermediate or terminal workflow state for the chunk.
+   */
+  pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult>;
 }

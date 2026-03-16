@@ -52,6 +52,9 @@ export const MAX_RETRIES = 3;
 /** Base delay (ms) for exponential backoff between retries: base * 2^attempt. */
 export const RETRY_BASE_DELAY_MS = 1_000;
 
+/** Delay (ms) between round-robin polling passes while chunks are still running. */
+export const POLL_INTERVAL_MS = 1_000;
+
 // ---------------------------------------------------------------------------
 // Default Profiles
 // ---------------------------------------------------------------------------

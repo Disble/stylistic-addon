@@ -1,4 +1,4 @@
-/* global console */
+/* global console, setTimeout */
 
 /**
  * AnalyzeChunksHandler — Phase 4 of the analysis pipeline.
@@ -15,8 +15,11 @@
 import { Suggestion } from "../../types";
 import { PipelineContext } from "../PipelineContext";
 import { PipelineHandler } from "./ReadTextHandler";
+import { POLL_INTERVAL_MS } from "../../../infrastructure/config";
 
 export class AnalyzeChunksHandler implements PipelineHandler {
+  constructor(private readonly pollIntervalMs: number = POLL_INTERVAL_MS) {}
+
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const scope = ctx.isSelection ? "selección" : "documento";
     const chunks = ctx.chunks!;
@@ -26,29 +29,93 @@ export class AnalyzeChunksHandler implements PipelineHandler {
 
     const allSuggestions: Suggestion[] = [];
     const chunkErrors: string[] = [];
+    const pendingRuns = new Map<number, string>();
+    const totalSteps = Math.max(chunks.length * 2, 1);
+    let submittedCount = 0;
+    let completedCount = 0;
 
     for (const chunk of chunks) {
       ctx.emitter.emitPhaseStart(
         "analyzing",
-        `Analizando fragmento ${chunk.index + 1} de ${chunks.length} (${scope})...`
+        `Encolando fragmento ${chunk.index + 1} de ${chunks.length} (${scope})...`
       );
       ctx.emitter.emitProgress(
-        chunk.index + 1,
-        chunks.length,
-        `Analizando fragmento ${chunk.index + 1} de ${chunks.length}...`
+        submittedCount,
+        totalSteps,
+        `Encolando fragmento ${chunk.index + 1} de ${chunks.length}...`
       );
 
       console.log(
-        `🤖 [AnalyzeChunksHandler] Enviando chunk ${chunk.index + 1}/${chunks.length} (${chunk.text.length} chars)`
+        `🤖 [AnalyzeChunksHandler] Encolando chunk ${chunk.index + 1}/${chunks.length} (${chunk.text.length} chars)`
       );
-      const chunkResult = await ctx.analysisPort.analyzeChunk(chunk, ctx.profile, "es");
+      const submitResult = await ctx.analysisPort.submitChunkAnalysis(chunk, ctx.profile, "es");
+      submittedCount += 1;
+
       console.log(
-        `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} → ${chunkResult.suggestions.length} sugerencia(s)${chunkResult.error ? " ⚠️ " + chunkResult.error : ""}`
+        submitResult.runId
+          ? `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} enviado con runId "${submitResult.runId}"`
+          : `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} submit falló${submitResult.error ? " ⚠️ " + submitResult.error : ""}`
       );
 
-      allSuggestions.push(...chunkResult.suggestions);
-      if (chunkResult.error) {
-        chunkErrors.push(chunkResult.error);
+      ctx.emitter.emitProgress(
+        submittedCount,
+        totalSteps,
+        submitResult.runId
+          ? `Fragmento ${chunk.index + 1} en cola. Esperando resultado...`
+          : `No se pudo encolar el fragmento ${chunk.index + 1}.`
+      );
+
+      if (submitResult.runId) {
+        pendingRuns.set(chunk.index, submitResult.runId);
+        continue;
+      }
+
+      if (submitResult.error) {
+        chunkErrors.push(submitResult.error);
+      }
+    }
+
+    while (pendingRuns.size > 0) {
+      for (const chunk of chunks) {
+        const runId = pendingRuns.get(chunk.index);
+        if (!runId) {
+          continue;
+        }
+
+        ctx.emitter.emitProgress(
+          submittedCount + completedCount,
+          totalSteps,
+          `Consultando resultado del fragmento ${chunk.index + 1} de ${chunks.length}...`
+        );
+
+        const pollResult = await ctx.analysisPort.pollChunkAnalysis(chunk.index, runId);
+        console.log(
+          `🤖 [AnalyzeChunksHandler] Poll chunk ${chunk.index + 1} → ${pollResult.status}${pollResult.error ? " ⚠️ " + pollResult.error : ""}`
+        );
+
+        if (this.isPendingStatus(pollResult.status)) {
+          continue;
+        }
+
+        pendingRuns.delete(chunk.index);
+        completedCount += 1;
+        allSuggestions.push(...pollResult.suggestions);
+
+        if (pollResult.error) {
+          chunkErrors.push(pollResult.error);
+        }
+
+        ctx.emitter.emitProgress(
+          submittedCount + completedCount,
+          totalSteps,
+          pollResult.status === "success"
+            ? `Fragmento ${chunk.index + 1} completado.`
+            : `Fragmento ${chunk.index + 1} terminó con error.`
+        );
+      }
+
+      if (pendingRuns.size > 0) {
+        await this.delay(this.pollIntervalMs);
       }
     }
 
@@ -69,5 +136,13 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     }
 
     await next();
+  }
+
+  private isPendingStatus(status: string): boolean {
+    return ["running", "pending", "waiting"].includes(status);
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

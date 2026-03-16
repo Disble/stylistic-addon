@@ -385,6 +385,13 @@ async function handleAnalyze(): Promise<void> {
   document.getElementById("cleanup-section")!.style.display = "none";
 
   const emitter = new PipelineEventEmitter();
+  const ctx: PipelineContext = {
+    documentPort,
+    analysisPort,
+    emitter,
+    profile: getSelectedProfile(),
+    maxChunkSize: DEFAULT_MAX_CHUNK_SIZE,
+  };
 
   // UI Observer — maps pipeline events to DOM updates
   const uiObserver: PipelineObserver = {
@@ -396,7 +403,7 @@ async function handleAnalyze(): Promise<void> {
     },
     onAbort(reason) {
       hideProgress();
-      showStatus(reason, chunkErrorOccurred ? "error" : "success");
+      showStatus(reason, (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success");
     },
     onComplete(suggestions, result, chunkErrors, isSelection) {
       hideProgress();
@@ -423,33 +430,13 @@ async function handleAnalyze(): Promise<void> {
     },
   };
 
-  let chunkErrorOccurred = false;
   emitter.subscribe(uiObserver);
-
-  // Also track chunk errors for the abort status type
-  emitter.subscribe({
-    onAbort() {
-      // Already handled in uiObserver; this hook sets chunkErrorOccurred
-    },
-  });
-
-  const ctx: PipelineContext = {
-    documentPort,
-    analysisPort,
-    emitter,
-    profile: getSelectedProfile(),
-    maxChunkSize: DEFAULT_MAX_CHUNK_SIZE,
-  };
 
   stateMachine.transition("reading");
 
   try {
     console.log("🚀 [Taskpane] Pipeline iniciado");
     await orchestrator.run(ctx);
-
-    if (ctx.chunkErrors && ctx.chunkErrors.length > 0) {
-      chunkErrorOccurred = true;
-    }
 
     console.log(`✅ [Taskpane] Pipeline completado. Abortado: ${ctx.aborted ?? false}`);
   } catch (error) {

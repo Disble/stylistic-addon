@@ -126,6 +126,49 @@ export interface WorkflowOutput {
   warnings?: string[];
 }
 
+/** Workflow statuses observed while polling a chunk analysis run. */
+export type ChunkAnalysisStatus =
+  | "running"
+  | "success"
+  | "failed"
+  | "tripwire"
+  | "suspended"
+  | "waiting"
+  | "pending"
+  | "canceled"
+  | "bailed"
+  | "paused";
+
+/** Result of submitting a chunk for asynchronous workflow execution. */
+export interface ChunkSubmitResult {
+  /** Zero-based index of the chunk this submission belongs to. */
+  chunkIndex: number;
+
+  /** Workflow run identifier used for later polling. */
+  runId?: string;
+
+  /** Error message when submission could not be confirmed. */
+  error?: string;
+}
+
+/** Result of polling an asynchronous workflow run for a chunk. */
+export interface ChunkPollResult {
+  /** Zero-based index of the chunk this poll belongs to. */
+  chunkIndex: number;
+
+  /** Workflow run identifier being polled. */
+  runId: string;
+
+  /** Current lifecycle status of the workflow run. */
+  status: ChunkAnalysisStatus;
+
+  /** Suggestions returned when the run completed successfully. */
+  suggestions: Suggestion[];
+
+  /** Error message for terminal failed states. */
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Progress Reporting
 // ---------------------------------------------------------------------------

@@ -4,22 +4,26 @@ import type { TextChunk, WorkflowSuggestion } from "../../domain/types";
 const mastraMocks = vi.hoisted(() => {
   const details = vi.fn();
   const createRun = vi.fn();
-  const startAsync = vi.fn();
+  const start = vi.fn();
+  const runById = vi.fn();
   const getWorkflow = vi.fn();
   const constructor = vi.fn();
 
   return {
     details,
     createRun,
-    startAsync,
+    start,
+    runById,
     getWorkflow,
     constructor,
     workflow: {
       details,
       createRun,
+      runById,
     },
     run: {
-      startAsync,
+      runId: "run-from-create-run",
+      start,
     },
   };
 });
@@ -61,10 +65,8 @@ describe("MastraAdapter", () => {
     mastraMocks.getWorkflow.mockReturnValue(mastraMocks.workflow);
     mastraMocks.details.mockResolvedValue({ id: WORKFLOW_ID });
     mastraMocks.createRun.mockResolvedValue(mastraMocks.run);
-    mastraMocks.startAsync.mockResolvedValue({
-      status: "success",
-      result: { suggestions: [] },
-    });
+    mastraMocks.start.mockResolvedValue({ message: "Workflow started" });
+    mastraMocks.runById.mockResolvedValue({ status: "running" });
 
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -124,22 +126,121 @@ describe("MastraAdapter", () => {
     });
   });
 
-  describe("analyzeChunk", () => {
-    it("forwards text, profile, and language to startAsync", async () => {
+  describe("submitChunkAnalysis", () => {
+    it("forwards text, profile, and language to start", async () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
       const chunk = makeChunk({ text: "Hola mundo", index: 4, total: 9, startOffset: 999 });
 
-      await adapter.analyzeChunk(chunk, "formal", "es");
+      await adapter.submitChunkAnalysis(chunk, "formal", "es");
 
       expect(mastraMocks.getWorkflow).toHaveBeenCalledWith(WORKFLOW_ID);
       expect(mastraMocks.createRun).toHaveBeenCalledOnce();
-      expect(mastraMocks.startAsync).toHaveBeenCalledWith({
+      expect(mastraMocks.start).toHaveBeenCalledWith({
         inputData: {
           text: "Hola mundo",
           profile: "formal",
           language: "es",
         },
+      });
+    });
+
+    it("returns the runId created by createRun when submit is acknowledged", async () => {
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 7 }), "general", "es");
+
+      expect(result).toEqual({
+        chunkIndex: 7,
+        runId: "run-from-create-run",
+      });
+    });
+
+    it("returns an error when createRun does not provide a usable runId", async () => {
+      mastraMocks.createRun.mockResolvedValueOnce({ start: mastraMocks.start });
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "es");
+
+      expect(result).toEqual({
+        chunkIndex: 2,
+        error: "Workflow createRun did not return a valid runId",
+      });
+      expect(mastraMocks.start).not.toHaveBeenCalled();
+    });
+
+    it("accepts submit acknowledgement payloads without validating message contents", async () => {
+      mastraMocks.start.mockResolvedValueOnce(undefined);
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "es");
+
+      expect(result).toEqual({
+        chunkIndex: 2,
+        runId: "run-from-create-run",
+      });
+    });
+
+    it("returns the thrown message when submit fails", async () => {
+      mastraMocks.start.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 3 }), "general", "es");
+
+      expect(result).toEqual({
+        chunkIndex: 3,
+        error: "connect ECONNREFUSED",
+      });
+    });
+  });
+
+  describe("pollChunkAnalysis", () => {
+    it("calls workflow.runById with only explicit payload fields because status is implicit", async () => {
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      await adapter.pollChunkAnalysis(2, "run-123");
+
+      expect(mastraMocks.getWorkflow).toHaveBeenCalledWith(WORKFLOW_ID);
+      expect(mastraMocks.runById).toHaveBeenCalledWith("run-123", {
+        fields: ["result", "error"],
+        withNestedWorkflows: false,
+      });
+    });
+
+    it("returns failed when workflow enters suspended state", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({ status: "suspended" });
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.pollChunkAnalysis(2, "run-2");
+
+      expect(result).toEqual({
+        chunkIndex: 2,
+        runId: "run-2",
+        status: "failed",
+        suggestions: [],
+        error: 'Workflow entered "suspended" state and requires resume(), which this frontend does not support',
+      });
+    });
+
+    it("returns failed when workflow enters paused state", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({ status: "paused" });
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.pollChunkAnalysis(2, "run-2");
+
+      expect(result).toEqual({
+        chunkIndex: 2,
+        runId: "run-2",
+        status: "failed",
+        suggestions: [],
+        error: 'Workflow entered "paused" state and requires resume(), which this frontend does not support',
       });
     });
 
@@ -160,17 +261,19 @@ describe("MastraAdapter", () => {
           severity: "low",
         },
       ];
-      mastraMocks.startAsync.mockResolvedValueOnce({
+      mastraMocks.runById.mockResolvedValueOnce({
         status: "success",
         result: { suggestions, warnings: ["ignored"] },
       });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.analyzeChunk(makeChunk({ index: 7 }), "general", "es");
+      const result = await adapter.pollChunkAnalysis(7, "run-7");
 
       expect(result).toEqual({
         chunkIndex: 7,
+        runId: "run-7",
+        status: "success",
         suggestions: [
           {
             id: "chunk7-0",
@@ -192,122 +295,120 @@ describe("MastraAdapter", () => {
       });
     });
 
-    it("returns empty suggestions on a successful response with an empty suggestions array", async () => {
-      mastraMocks.startAsync.mockResolvedValueOnce({
-        status: "success",
-        result: { suggestions: [] },
-      });
+    it("returns running without treating it as an error", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({ status: "running" });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.analyzeChunk(makeChunk(), "general", "es");
-
-      expect(result).toEqual({ chunkIndex: 2, suggestions: [] });
-    });
-
-    it("intentionally normalizes a non-array suggestions payload to an empty suggestions list", async () => {
-      mastraMocks.startAsync.mockResolvedValueOnce({
-        status: "success",
-        result: { suggestions: "bad payload" },
-      });
-      const { MastraAdapter } = await importAdapterModule();
-      const adapter = new MastraAdapter();
-
-      const result = await adapter.analyzeChunk(makeChunk(), "general", "es");
-
-      expect(result).toEqual({ chunkIndex: 2, suggestions: [] });
-    });
-
-    it("returns a normalized error when a success payload has a non-object result", async () => {
-      mastraMocks.startAsync.mockResolvedValueOnce({
-        status: "success",
-        result: "bad payload",
-      });
-      const { MastraAdapter } = await importAdapterModule();
-      const adapter = new MastraAdapter();
-
-      const result = await adapter.analyzeChunk(makeChunk(), "general", "es");
+      const result = await adapter.pollChunkAnalysis(2, "run-2");
 
       expect(result).toEqual({
         chunkIndex: 2,
+        runId: "run-2",
+        status: "running",
         suggestions: [],
-        error: "Invalid workflow success payload",
       });
     });
 
-    it("returns a normalized error when a success payload omits suggestions", async () => {
-      mastraMocks.startAsync.mockResolvedValueOnce({
-        status: "success",
-        result: { warnings: ["missing suggestions"] },
-      });
+    it("returns failed when a success payload is malformed", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({ status: "success", result: "bad payload" });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.analyzeChunk(makeChunk(), "general", "es");
+      const result = await adapter.pollChunkAnalysis(2, "run-2");
 
       expect(result).toEqual({
         chunkIndex: 2,
-        suggestions: [],
-        error: "Invalid workflow success payload",
-      });
-    });
-
-    it("returns a workflow status error for non-success results", async () => {
-      mastraMocks.startAsync.mockResolvedValueOnce({
+        runId: "run-2",
         status: "failed",
-        result: { suggestions: [] },
+        suggestions: [],
+        error: "Invalid workflow success payload: expected suggestions[]",
+      });
+    });
+
+    it("returns failed when poll payload has no status", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({ result: { suggestions: [] } });
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.pollChunkAnalysis(2, "run-2");
+
+      expect(result).toEqual({
+        chunkIndex: 2,
+        runId: "run-2",
+        status: "failed",
+        suggestions: [],
+        error: "Invalid workflow poll payload: missing status",
+      });
+    });
+
+    it("extracts serialized workflow errors for terminal failures", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({
+        status: "failed",
+        error: { message: "workflow exploded" },
       });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.analyzeChunk(makeChunk({ index: 0 }), "general", "es");
+      const result = await adapter.pollChunkAnalysis(0, "run-0");
 
       expect(result).toEqual({
         chunkIndex: 0,
+        runId: "run-0",
+        status: "failed",
         suggestions: [],
-        error: "Workflow status: failed",
+        error: "workflow exploded",
       });
     });
 
-    it("returns the thrown Error message when createRun or startAsync rejects", async () => {
-      mastraMocks.createRun.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+    it("returns failed with explicit message for unknown statuses", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({ status: "completed" });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.analyzeChunk(makeChunk({ index: 3 }), "general", "es");
+      const result = await adapter.pollChunkAnalysis(0, "run-0");
 
       expect(result).toEqual({
-        chunkIndex: 3,
+        chunkIndex: 0,
+        runId: "run-0",
+        status: "failed",
         suggestions: [],
-        error: "connect ECONNREFUSED",
+        error: "Unknown workflow status: completed",
       });
     });
 
-    it("stringifies non-Error thrown values", async () => {
-      mastraMocks.startAsync.mockRejectedValueOnce("service unavailable");
+    it("returns fallback error when terminal status has no error payload", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({ status: "canceled" });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.analyzeChunk(makeChunk({ index: 1 }), "general", "es");
+      const result = await adapter.pollChunkAnalysis(1, "run-1");
 
       expect(result).toEqual({
         chunkIndex: 1,
+        runId: "run-1",
+        status: "canceled",
         suggestions: [],
-        error: "service unavailable",
+        error: 'Workflow terminated with status "canceled" without an error payload',
       });
     });
 
-    it("returns a normalized error when a success payload omits result entirely", async () => {
-      mastraMocks.startAsync.mockResolvedValueOnce({ status: "success" });
+    it("serializes non-standard error payloads for terminal failures", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({
+        status: "failed",
+        error: { code: "E_TIMEOUT", detail: "upstream timeout" },
+      });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.analyzeChunk(makeChunk(), "general", "es");
+      const result = await adapter.pollChunkAnalysis(5, "run-5");
 
       expect(result).toEqual({
-        chunkIndex: 2,
+        chunkIndex: 5,
+        runId: "run-5",
+        status: "failed",
         suggestions: [],
-        error: "Invalid workflow success payload",
+        error: '{"code":"E_TIMEOUT","detail":"upstream timeout"}',
       });
     });
   });

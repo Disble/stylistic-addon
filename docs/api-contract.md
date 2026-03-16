@@ -21,8 +21,17 @@ The frontend calls this workflow via:
 ```typescript
 const workflow = client.getWorkflow("editorial-workflow");
 const run = await workflow.createRun();
-const result = await run.start({ inputData: { ... } });
+await run.start({ inputData: { ... } });
+const { runId } = run;
+const result = await workflow.runById(runId, {
+  fields: ["result", "error"],
+  withNestedWorkflows: false,
+});
 ```
+
+In `@mastra/client-js` v1.7.1, async submission is implemented as `createRun()` + `run.start()` + later `workflow.runById(runId)`. The frontend submits each chunk, stores `run.runId`, and polls `workflow.runById(runId)` until the run reaches a supported terminal state.
+
+Important: in this SDK version, `status` is always included in the response metadata and must NOT be requested inside `fields`. The frontend only requests explicit payload fields such as `result` and `error`; adding `status` to `fields` causes a deterministic HTTP 400.
 
 ### Mastra Server
 
@@ -64,7 +73,7 @@ interface WorkflowInput {
 
 ## Output Format
 
-On `status: "success"`, `result.result` must conform to:
+When polling returns `status: "success"`, `result.result` must conform to:
 
 ```typescript
 interface WorkflowOutput {
@@ -171,10 +180,14 @@ The `profile` field tells the workflow what analysis style to apply:
 
 ## Error Handling
 
-The frontend handles workflow failures gracefully:
+The frontend handles workflow failures gracefully during explicit submit/poll:
 
-- **`status: "failed"`** — The frontend retries the chunk up to 3 times, then skips it.
-- **Network errors** — Same retry behavior.
+- **Submit without `runId`** — The frontend retries chunk submission up to 3 times.
+- **Submit with `runId`** — The frontend assumes the run was accepted and switches to polling.
+- **Polling `status: "running" | "pending" | "waiting"`** — Not an error; the frontend keeps polling.
+- **Polling `status: "suspended" | "paused"`** — Treated as a failed chunk because the run would require `resume()` and this frontend does not implement resume flows.
+- **Polling `status: "failed" | "tripwire" | "canceled" | "bailed"`** — Treated as a failed chunk.
+- **Polling network errors / thrown errors** — The frontend retries the poll up to 3 times, then marks the chunk as failed.
 - **Empty suggestions array** — Treated as "no issues found" (valid response).
 - **Malformed output** — Treated as a failed chunk (suggestions array missing or not an array).
 

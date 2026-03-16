@@ -19,7 +19,8 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
 
   const analysisPort: IAnalysisPort = {
     checkConnection: vi.fn(),
-    analyzeChunk: vi.fn(),
+    submitChunkAnalysis: vi.fn(),
+    pollChunkAnalysis: vi.fn(),
   };
 
   return {
@@ -294,7 +295,8 @@ describe("ChunkTextHandler", () => {
       expect(ctx.documentPort.applySuggestions).not.toHaveBeenCalled();
       expect(ctx.documentPort.cleanupResolvedComments).not.toHaveBeenCalled();
       expect(ctx.analysisPort.checkConnection).not.toHaveBeenCalled();
-      expect(ctx.analysisPort.analyzeChunk).not.toHaveBeenCalled();
+      expect(ctx.analysisPort.submitChunkAnalysis).not.toHaveBeenCalled();
+      expect(ctx.analysisPort.pollChunkAnalysis).not.toHaveBeenCalled();
     });
   });
 });

@@ -32,7 +32,8 @@ function makeMockPorts(): { documentPort: IDocumentPort; analysisPort: IAnalysis
     },
     analysisPort: {
       checkConnection: vi.fn(),
-      analyzeChunk: vi.fn(),
+      submitChunkAnalysis: vi.fn(),
+      pollChunkAnalysis: vi.fn(),
     },
   };
 }
