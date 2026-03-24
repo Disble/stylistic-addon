@@ -9,23 +9,28 @@ type ApplyTestContext = {
     document: {
       body: {
         search: ReturnType<typeof vi.fn>;
+        load: ReturnType<typeof vi.fn>;
+        text: string;
       };
       load: ReturnType<typeof vi.fn>;
       changeTrackingMode: string;
     };
     sync: ReturnType<typeof vi.fn>;
   };
-  results: {
-    items: Array<{
-      getOoxml: ReturnType<typeof vi.fn>;
-      insertOoxml: ReturnType<typeof vi.fn>;
-    }>;
-    load: ReturnType<typeof vi.fn>;
-  };
   range: {
     getOoxml: ReturnType<typeof vi.fn>;
     insertOoxml: ReturnType<typeof vi.fn>;
   };
+};
+
+type SearchRange = {
+  getOoxml: ReturnType<typeof vi.fn>;
+  insertOoxml: ReturnType<typeof vi.fn>;
+};
+
+type SearchResults = {
+  items: SearchRange[];
+  load: ReturnType<typeof vi.fn>;
 };
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
@@ -75,10 +80,9 @@ function installXmlMocks(options: {
 }
 
 function installWordContext(options: {
-  resultsItems?: Array<{
-    getOoxml: ReturnType<typeof vi.fn>;
-    insertOoxml: ReturnType<typeof vi.fn>;
-  }>;
+  resultsItems?: SearchRange[];
+  searchResultsSequence?: SearchRange[][];
+  documentText?: string;
   rangeOoxml?: string;
   initialTrackingMode?: string;
   insertError?: Error;
@@ -86,6 +90,8 @@ function installWordContext(options: {
 } = {}): ApplyTestContext {
   const {
     resultsItems,
+    searchResultsSequence,
+    documentText = "",
     rangeOoxml = "<pkg:package />",
     initialTrackingMode = "trackAll",
     insertError,
@@ -105,16 +111,23 @@ function installWordContext(options: {
     }),
   };
 
-  const results = {
-    items: resultsItems ?? [range],
-    load: vi.fn(),
-  };
+  const searchCalls: SearchResults[] = [];
 
   let syncCount = 0;
   const context = {
     document: {
       body: {
-        search: vi.fn(() => results),
+        search: vi.fn(() => {
+          const nextItems = searchResultsSequence?.[searchCalls.length] ?? resultsItems ?? [range];
+          const results = {
+            items: nextItems,
+            load: vi.fn(),
+          };
+          searchCalls.push(results);
+          return results;
+        }),
+        load: vi.fn(),
+        text: documentText,
       },
       load: vi.fn(),
       changeTrackingMode: initialTrackingMode,
@@ -135,7 +148,7 @@ function installWordContext(options: {
     run: vi.fn(async (callback: (ctx: typeof context) => unknown) => callback(context)),
   });
 
-  return { context, results, range };
+  return { context, range };
 }
 
 describe("ApplySuggestionCommand", () => {
@@ -152,11 +165,13 @@ describe("ApplySuggestionCommand", () => {
   });
 
   it("returns a failed result when the original text is not found", async () => {
-    const { context, results } = installWordContext({ resultsItems: [] });
+    const { context } = installWordContext({ resultsItems: [] });
     const builderSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "build");
 
     const command = new ApplySuggestionCommand(makeSuggestion());
     const result = await command.execute();
+
+    const results = context.document.body.search.mock.results[0]?.value as SearchResults;
 
     expect(result).toEqual({
       success: false,
@@ -170,6 +185,66 @@ describe("ApplySuggestionCommand", () => {
     expect(results.load).toHaveBeenCalledWith("items");
     expect(context.document.load).not.toHaveBeenCalled();
     expect(builderSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the exact document slice when backend whitespace differs from Word text", async () => {
+    const originalText =
+      "Por eso ninguno de nosotros sabe nada en realidad.»Así que no creo que XXXX esté tratando de ocultarte información.";
+    const documentText =
+      "Por eso ninguno de nosotros sabe nada en realidad.\r»Así que no creo que XXXX esté tratando de ocultarte información.";
+
+    const { context, range } = installWordContext({
+      documentText,
+    });
+    const fallbackRange: SearchRange = {
+      getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
+      insertOoxml: range.insertOoxml,
+    };
+    context.document.body.search.mockReset();
+    context.document.body.search
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))
+      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));
+
+    const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+    const result = await command.execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(context.document.body.search).toHaveBeenNthCalledWith(1, originalText, {
+      matchCase: true,
+      matchWholeWord: false,
+    });
+    expect(context.document.body.load).toHaveBeenCalledWith("text");
+    expect(context.document.body.search).toHaveBeenNthCalledWith(2, documentText, {
+      matchCase: true,
+      matchWholeWord: false,
+    });
+  });
+
+  it("falls back when backend flattens paragraph breaks into spaces", async () => {
+    const originalText =
+      "los usuarios áuricos. —¿Eh?—Los humanos tampoco saben mucho sobre los humanos, ¿verdad? —dijo como si fuera una obviedad—.";
+    const documentText =
+      "los usuarios áuricos. \r—¿Eh?\r—Los humanos tampoco saben mucho sobre los humanos, ¿verdad? —dijo como si fuera una obviedad—.";
+
+    const { context, range } = installWordContext({ documentText });
+    const fallbackRange: SearchRange = {
+      getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
+      insertOoxml: range.insertOoxml,
+    };
+    context.document.body.search.mockReset();
+    context.document.body.search
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))
+      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));
+
+    const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+    const result = await command.execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(context.document.body.load).toHaveBeenCalledWith("text");
+    expect(context.document.body.search).toHaveBeenNthCalledWith(2, documentText, {
+      matchCase: true,
+      matchWholeWord: false,
+    });
   });
 
   it("builds OOXML for replace suggestions, inserts it, and restores tracking mode", async () => {

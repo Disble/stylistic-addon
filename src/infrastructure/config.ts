@@ -18,7 +18,7 @@ import { Profile } from "../domain/types";
 export const MASTRA_BASE_URL = "http://localhost:4111";
 
 /** Identifier of the editorial workflow registered in Mastra. */
-export const WORKFLOW_ID = "editorial-workflow";
+export const WORKFLOW_ID = "stylistic-workflow";
 
 // ---------------------------------------------------------------------------
 // Text Chunking

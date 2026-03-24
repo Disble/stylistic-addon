@@ -57,6 +57,23 @@ function installRejectingWord(error: Error) {
   return run;
 }
 
+function makeParagraph(
+  text: string,
+  overrides: Partial<{
+    styleBuiltIn: string;
+    firstLineIndent: number;
+    leftIndent: number;
+  }> = {}
+) {
+  return {
+    text,
+    styleBuiltIn: "Normal",
+    firstLineIndent: 0,
+    leftIndent: 0,
+    ...overrides,
+  };
+}
+
 describe("WordAdapter", () => {
   let adapter: WordAdapter;
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -79,8 +96,22 @@ describe("WordAdapter", () => {
 
   describe("getTextToAnalyze", () => {
     it("returns the active selection when it contains non-whitespace text", async () => {
-      const selection = { load: vi.fn(), text: "Texto seleccionado" };
-      const body = { load: vi.fn(), text: "Texto del documento" };
+      const selection = {
+        load: vi.fn(),
+        text: "Texto seleccionado",
+        paragraphs: {
+          items: [makeParagraph("Texto seleccionado")],
+          load: vi.fn(),
+        },
+      };
+      const body = {
+        load: vi.fn(),
+        text: "Texto del documento",
+        paragraphs: {
+          items: [makeParagraph("Texto del documento")],
+          load: vi.fn(),
+        },
+      };
       const context = {
         document: {
           getSelection: vi.fn(() => selection),
@@ -98,13 +129,31 @@ describe("WordAdapter", () => {
       expect(run).toHaveBeenCalledOnce();
       expect(context.document.getSelection).toHaveBeenCalledOnce();
       expect(selection.load).toHaveBeenCalledWith("text");
+      expect(selection.paragraphs.load).toHaveBeenCalledWith(
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+      );
       expect(body.load).not.toHaveBeenCalled();
+      expect(body.paragraphs.load).not.toHaveBeenCalled();
       expect(context.sync).toHaveBeenCalledTimes(1);
     });
 
     it("falls back to the full document body when selection is empty or whitespace", async () => {
-      const selection = { load: vi.fn(), text: "   \n  " };
-      const body = { load: vi.fn(), text: "Texto completo del documento" };
+      const selection = {
+        load: vi.fn(),
+        text: "   \n  ",
+        paragraphs: {
+          items: [],
+          load: vi.fn(),
+        },
+      };
+      const body = {
+        load: vi.fn(),
+        text: "Texto completo del documento",
+        paragraphs: {
+          items: [makeParagraph("Texto completo del documento")],
+          load: vi.fn(),
+        },
+      };
       const context = {
         document: {
           getSelection: vi.fn(() => selection),
@@ -121,13 +170,80 @@ describe("WordAdapter", () => {
       });
 
       expect(selection.load).toHaveBeenCalledWith("text");
-      expect(body.load).toHaveBeenCalledWith("text");
+      expect(selection.paragraphs.load).toHaveBeenCalledWith(
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+      );
+      expect(body.paragraphs.load).toHaveBeenCalledWith(
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+      );
+      expect(body.load).not.toHaveBeenCalled();
+      expect(context.sync).toHaveBeenCalledTimes(2);
+    });
+
+    it("falls back to the full document when the cursor is collapsed inside a paragraph", async () => {
+      const selection = {
+        load: vi.fn(),
+        text: "   ",
+        paragraphs: {
+          items: [makeParagraph("Párrafo actual")],
+          load: vi.fn(),
+        },
+      };
+      const body = {
+        load: vi.fn(),
+        text: "Título Párrafo actual Segundo párrafo con sangría.",
+        paragraphs: {
+          items: [
+            makeParagraph("Título", { styleBuiltIn: "Title" }),
+            makeParagraph("Párrafo actual"),
+            makeParagraph("Segundo párrafo con sangría.", { firstLineIndent: 18 }),
+          ],
+          load: vi.fn(),
+        },
+      };
+      const context = {
+        document: {
+          getSelection: vi.fn(() => selection),
+          body,
+        },
+        sync: vi.fn().mockResolvedValue(undefined),
+      };
+
+      installWordWithContext(context);
+
+      await expect(adapter.getTextToAnalyze()).resolves.toEqual({
+        text: "Título\n\nPárrafo actual\n\n\tSegundo párrafo con sangría.",
+        isSelection: false,
+      });
+
+      expect(selection.load).toHaveBeenCalledWith("text");
+      expect(selection.paragraphs.load).toHaveBeenCalledWith(
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+      );
+      expect(body.paragraphs.load).toHaveBeenCalledWith(
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+      );
+      expect(body.load).not.toHaveBeenCalled();
       expect(context.sync).toHaveBeenCalledTimes(2);
     });
 
     it("returns an empty body text unchanged when there is no selection and the document is empty", async () => {
-      const selection = { load: vi.fn(), text: "" };
-      const body = { load: vi.fn(), text: "" };
+      const selection = {
+        load: vi.fn(),
+        text: "",
+        paragraphs: {
+          items: [],
+          load: vi.fn(),
+        },
+      };
+      const body = {
+        load: vi.fn(),
+        text: "",
+        paragraphs: {
+          items: [],
+          load: vi.fn(),
+        },
+      };
       const context = {
         document: {
           getSelection: vi.fn(() => selection),
@@ -139,6 +255,78 @@ describe("WordAdapter", () => {
       installWordWithContext(context);
 
       await expect(adapter.getTextToAnalyze()).resolves.toEqual({ text: "", isSelection: false });
+    });
+
+    it("keeps a Word title paragraph separated from the first body paragraph", async () => {
+      const selection = {
+        load: vi.fn(),
+        text: "",
+        paragraphs: {
+          items: [],
+          load: vi.fn(),
+        },
+      };
+      const body = {
+        load: vi.fn(),
+        text: "Capítulo 1 Primer párrafo del capítulo.",
+        paragraphs: {
+          items: [
+            makeParagraph("Capítulo 1", { styleBuiltIn: "Title" }),
+            makeParagraph("Primer párrafo del capítulo."),
+          ],
+          load: vi.fn(),
+        },
+      };
+      const context = {
+        document: {
+          getSelection: vi.fn(() => selection),
+          body,
+        },
+        sync: vi.fn().mockResolvedValue(undefined),
+      };
+
+      installWordWithContext(context);
+
+      await expect(adapter.getTextToAnalyze()).resolves.toEqual({
+        text: "Capítulo 1\n\nPrimer párrafo del capítulo.",
+        isSelection: false,
+      });
+    });
+
+    it("reflects paragraph indentation metadata with an explicit tab prefix", async () => {
+      const selection = {
+        load: vi.fn(),
+        text: "",
+        paragraphs: {
+          items: [],
+          load: vi.fn(),
+        },
+      };
+      const body = {
+        load: vi.fn(),
+        text: "Primer párrafo. Segundo párrafo con sangría visual.",
+        paragraphs: {
+          items: [
+            makeParagraph("Primer párrafo."),
+            makeParagraph("Segundo párrafo con sangría visual.", { firstLineIndent: 18 }),
+          ],
+          load: vi.fn(),
+        },
+      };
+      const context = {
+        document: {
+          getSelection: vi.fn(() => selection),
+          body,
+        },
+        sync: vi.fn().mockResolvedValue(undefined),
+      };
+
+      installWordWithContext(context);
+
+      await expect(adapter.getTextToAnalyze()).resolves.toEqual({
+        text: "Primer párrafo.\n\n\tSegundo párrafo con sangría visual.",
+        isSelection: false,
+      });
     });
 
     it("propagates Word.run errors", async () => {

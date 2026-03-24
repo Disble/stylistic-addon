@@ -21,6 +21,45 @@ import { TextSource, Suggestion, InsertionResult, ProgressCallback, SuggestionAc
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
 import { cleanupResolvedComments, OVERLAPPING_RELATIONS } from "./cleanup/CommentCleanup";
 
+type ParagraphSnapshot = {
+  text?: string;
+  styleBuiltIn?: string;
+  firstLineIndent?: number;
+  leftIndent?: number;
+};
+
+const PARAGRAPH_LOAD_FIELDS =
+  "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent";
+
+function isHeadingStyle(styleBuiltIn?: string): boolean {
+  return styleBuiltIn === "Title" || /^Heading\d+$/.test(styleBuiltIn ?? "");
+}
+
+function shouldPrefixIndent(paragraph: ParagraphSnapshot): boolean {
+  if (isHeadingStyle(paragraph.styleBuiltIn)) {
+    return false;
+  }
+
+  return (paragraph.firstLineIndent ?? 0) > 0 || (paragraph.leftIndent ?? 0) > 0;
+}
+
+function buildStructuredParagraphText(paragraphs: ParagraphSnapshot[]): string {
+  if (paragraphs.length === 0) {
+    return "";
+  }
+
+  return paragraphs
+    .map((paragraph) => {
+      const text = paragraph.text ?? "";
+      if (!shouldPrefixIndent(paragraph) || text.length === 0 || text.startsWith("\t")) {
+        return text;
+      }
+
+      return `\t${text}`;
+    })
+    .join("\n\n");
+}
+
 export class WordAdapter implements IDocumentPort {
   /**
    * Resolves the text to analyze: returns the current selection if non-empty,
@@ -31,15 +70,29 @@ export class WordAdapter implements IDocumentPort {
     return Word.run(async (context) => {
       const selection = context.document.getSelection();
       selection.load("text");
+      selection.paragraphs.load(PARAGRAPH_LOAD_FIELDS);
       await context.sync();
 
-      const selText = selection.text;
+      const hasSelectedText = selection.text.trim().length > 0;
+      const selText = hasSelectedText
+        ? buildStructuredParagraphText(selection.paragraphs.items as ParagraphSnapshot[]) || selection.text
+        : "";
+
       if (selText && selText.trim().length > 0) {
         console.log(`📖 [WordAdapter] Selección activa — ${selText.length} chars`);
         return { text: selText, isSelection: true };
       }
 
       const body = context.document.body;
+      body.paragraphs.load(PARAGRAPH_LOAD_FIELDS);
+      await context.sync();
+
+      const bodyText = buildStructuredParagraphText(body.paragraphs.items as ParagraphSnapshot[]);
+      if (bodyText.length > 0) {
+        console.log(`📖 [WordAdapter] Documento completo — ${bodyText.length} chars`);
+        return { text: bodyText, isSelection: false };
+      }
+
       body.load("text");
       await context.sync();
       console.log(`📖 [WordAdapter] Documento completo — ${body.text.length} chars`);

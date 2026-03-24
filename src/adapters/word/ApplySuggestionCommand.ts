@@ -26,6 +26,11 @@
 import { Suggestion, CommandResult, ChangeType } from "../../domain/types";
 import { OoxmlPackageBuilder } from "./ooxml/OoxmlPackageBuilder";
 
+type IndexedText = {
+  text: string;
+  indices: number[];
+};
+
 /**
  * Determines the type of tracked change operation for a suggestion.
  * Strategy pattern: selects insert / delete / replace based on text content.
@@ -53,6 +58,40 @@ function extractRunProperties(ooxml: string): string | null {
   } catch {
     return null;
   }
+}
+
+function removeWhitespaceWithIndices(text: string): IndexedText {
+  const indices: number[] = [];
+  let normalized = "";
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (/\s/.test(char)) {
+      continue;
+    }
+
+    normalized += char;
+    indices.push(index);
+  }
+
+  return { text: normalized, indices };
+}
+
+function findWhitespaceInsensitiveSlice(searchText: string, documentText: string): string | null {
+  const normalizedSearch = removeWhitespaceWithIndices(searchText).text;
+  if (normalizedSearch.length === 0) {
+    return null;
+  }
+
+  const normalizedDocument = removeWhitespaceWithIndices(documentText);
+  const matchIndex = normalizedDocument.text.indexOf(normalizedSearch);
+  if (matchIndex === -1) {
+    return null;
+  }
+
+  const start = normalizedDocument.indices[matchIndex];
+  const end = normalizedDocument.indices[matchIndex + normalizedSearch.length - 1] + 1;
+  return documentText.slice(start, end);
 }
 
 /**
@@ -94,16 +133,39 @@ export class ApplySuggestionCommand {
 
     try {
       return await Word.run(async (context) => {
-        const results = context.document.body.search(this.suggestion.originalText, {
+        const searchOptions = {
           matchCase: true,
           matchWholeWord: false,
-        });
+        };
+
+        let searchText = this.suggestion.originalText;
+        let results = context.document.body.search(searchText, searchOptions);
         results.load("items");
         await context.sync();
 
         if (results.items.length === 0) {
-          console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`);
-          return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+          context.document.body.load("text");
+          await context.sync();
+
+          const fallbackSearchText = findWhitespaceInsensitiveSlice(
+            this.suggestion.originalText,
+            context.document.body.text
+          );
+
+          if (!fallbackSearchText) {
+            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`);
+            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+          }
+
+          searchText = fallbackSearchText;
+          results = context.document.body.search(searchText, searchOptions);
+          results.load("items");
+          await context.sync();
+
+          if (results.items.length === 0) {
+            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`);
+            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+          }
         }
 
         const range = results.items[0];
