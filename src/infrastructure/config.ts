@@ -64,7 +64,8 @@ export const POLL_INTERVAL_MS = 1_000;
  * is unavailable or does not provide its own profile list.
  */
 export const DEFAULT_PROFILES: Profile[] = [
+  { id: "narrativa-literaria", label: "Literatura de ficción" },
   { id: "general", label: "General" },
-  { id: "formal", label: "Formal" },
-  { id: "academic", label: "Académico" },
+  { id: "ensayo-academico", label: "Ensayo académico" },
+  { id: "periodismo-cultural", label: "Periodismo cultural" },
 ];

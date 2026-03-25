@@ -58,7 +58,7 @@ function makePipelineContext(
     documentPort: documentPort ?? makeMockDocumentPort(),
     analysisPort: makeMockAnalysisPort(),
     emitter: new PipelineEventEmitter(),
-    profile: "general",
+    genero: "general",
     maxChunkSize: 100_000,
     pendingSuggestions,
     chunkErrors: [],

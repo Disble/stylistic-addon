@@ -50,7 +50,7 @@ function makePipelineContext(
     documentPort: makeMockDocumentPort(appliedTexts),
     analysisPort: makeMockAnalysisPort(),
     emitter: new PipelineEventEmitter(),
-    profile: "general",
+    genero: "general",
     maxChunkSize: 100_000,
     uniqueSuggestions,
     ...overrides,

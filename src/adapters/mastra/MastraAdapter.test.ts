@@ -127,20 +127,20 @@ describe("MastraAdapter", () => {
   });
 
   describe("submitChunkAnalysis", () => {
-    it("forwards text, profile, and language to start", async () => {
+    it("forwards text, genero, and autorSlug to start", async () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
       const chunk = makeChunk({ text: "Hola mundo", index: 4, total: 9, startOffset: 999 });
 
-      await adapter.submitChunkAnalysis(chunk, "formal", "es");
+      await adapter.submitChunkAnalysis(chunk, "narrativa-literaria", "maria-garcia");
 
       expect(mastraMocks.getWorkflow).toHaveBeenCalledWith(WORKFLOW_ID);
       expect(mastraMocks.createRun).toHaveBeenCalledOnce();
       expect(mastraMocks.start).toHaveBeenCalledWith({
         inputData: {
           text: "Hola mundo",
-          profile: "formal",
-          language: "es",
+          genero: "narrativa-literaria",
+          autorSlug: "maria-garcia",
         },
       });
     });
@@ -149,7 +149,7 @@ describe("MastraAdapter", () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 7 }), "general", "es");
+      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 7 }), "general", "Disble");
 
       expect(result).toEqual({
         chunkIndex: 7,
@@ -162,7 +162,7 @@ describe("MastraAdapter", () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "es");
+      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "Disble");
 
       expect(result).toEqual({
         chunkIndex: 2,
@@ -176,7 +176,7 @@ describe("MastraAdapter", () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "es");
+      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "Disble");
 
       expect(result).toEqual({
         chunkIndex: 2,
@@ -189,7 +189,7 @@ describe("MastraAdapter", () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 3 }), "general", "es");
+      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 3 }), "general", "Disble");
 
       expect(result).toEqual({
         chunkIndex: 3,

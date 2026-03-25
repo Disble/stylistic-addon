@@ -25,7 +25,7 @@ export class ChunkTextHandler implements PipelineHandler {
 
     const chunks = splitText(ctx.text!, ctx.maxChunkSize);
     console.log(
-      `✂️ [ChunkTextHandler] ${chunks.length} chunk(s) generados — perfil: "${ctx.profile}"`
+      `✂️ [ChunkTextHandler] ${chunks.length} chunk(s) generados — genero: "${ctx.genero}"`
     );
 
     ctx.chunks = chunks;

@@ -107,7 +107,7 @@ describe("RetryAnalysisDecorator", () => {
     it("returns the first successful submission without retrying", async () => {
       mockPort.submitChunkAnalysis.mockResolvedValue(submitSuccess(0, "run-123"));
 
-      const result = await decorator.submitChunkAnalysis(makeChunk(), "general", "es");
+      const result = await decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
 
       expect(result).toEqual({ chunkIndex: 0, runId: "run-123" });
       expect(mockPort.submitChunkAnalysis).toHaveBeenCalledOnce();
@@ -119,7 +119,7 @@ describe("RetryAnalysisDecorator", () => {
         .mockResolvedValueOnce(submitFailure(0, "temporary submit failure"))
         .mockResolvedValueOnce(submitSuccess(0, "run-456"));
 
-      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "es");
+      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
 
       await expect(promise).resolves.toEqual({ chunkIndex: 0, runId: "run-456" });
@@ -129,7 +129,7 @@ describe("RetryAnalysisDecorator", () => {
     it("retries thrown submit errors and returns a normalized failure after exhaustion", async () => {
       mockPort.submitChunkAnalysis.mockRejectedValue(new Error("socket hang up"));
 
-      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "es");
+      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 2);
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 4);
@@ -146,7 +146,7 @@ describe("RetryAnalysisDecorator", () => {
       const error = Object.assign(new Error("HTTP error! status: 400"), { status: 400 });
       mockPort.submitChunkAnalysis.mockRejectedValue(error);
 
-      await expect(decorator.submitChunkAnalysis(makeChunk(), "general", "es")).resolves.toEqual({
+      await expect(decorator.submitChunkAnalysis(makeChunk(), "general", "Disble")).resolves.toEqual({
         chunkIndex: 0,
         error: "Chunk 1: HTTP error! status: 400",
       });

@@ -47,7 +47,7 @@ function makePipelineContext(
     documentPort,
     analysisPort,
     emitter: new PipelineEventEmitter(),
-    profile: "general",
+    genero: "general",
     maxChunkSize: 100_000,
     rawSuggestions,
     ...overrides,

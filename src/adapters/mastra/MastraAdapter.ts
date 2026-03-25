@@ -57,12 +57,16 @@ export class MastraAdapter implements IAnalysisPort {
    */
   async submitChunkAnalysis(
     chunk: TextChunk,
-    profile: string,
-    language: string
+    genero: string,
+    autorSlug: string
   ): Promise<ChunkSubmitResult> {
-    const inputData: WorkflowInput = { text: chunk.text, profile, language };
+    const inputData: WorkflowInput = {
+      text: chunk.text,
+      genero: genero as WorkflowInput["genero"],
+      autorSlug,
+    };
     console.log(
-      `🤖 [MastraAdapter] submitChunkAnalysis #${chunk.index} — ${chunk.text.length} chars, perfil: "${profile}"`
+      `🤖 [MastraAdapter] submitChunkAnalysis #${chunk.index} — ${chunk.text.length} chars, genero: "${genero}", autor: "${autorSlug}"`
     );
 
     try {

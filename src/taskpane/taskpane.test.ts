@@ -286,7 +286,7 @@ function createTaskpaneDocument(): FakeDocument {
   doc.getElementById("cleanup-section")!.style.display = "none";
   doc.getElementById("results-panel")!.style.display = "block";
   doc.getElementById("progress-container")!.style.display = "none";
-  doc.getElementById("profile-select")!.value = "formal";
+  doc.getElementById("profile-select")!.value = "narrativa-literaria";
   doc.getElementById("btn-analyze-label")!.textContent = "Analizar y sugerir";
   doc.getElementById("btn-cleanup-label")!.textContent = "Limpiar comentarios resueltos";
 
@@ -411,7 +411,7 @@ describe("taskpane entrypoint", () => {
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(taskpaneMocks.run.mock.calls[0][0]).toMatchObject({
-      profile: "formal",
+      genero: "narrativa-literaria",
       maxChunkSize: DEFAULT_MAX_CHUNK_SIZE,
       documentPort: expect.any(Object),
       analysisPort: expect.any(Object),

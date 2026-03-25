@@ -64,7 +64,7 @@ function makePipelineContext(overrides: Partial<PipelineContext> = {}): Pipeline
     documentPort: makeMockDocumentPort(),
     analysisPort: makeMockAnalysisPort(),
     emitter: new PipelineEventEmitter(),
-    profile: "general",
+    genero: "general",
     maxChunkSize: 100_000,
     chunks: [makeChunk()],
     isSelection: false,
@@ -111,13 +111,13 @@ describe("AnalyzeChunksHandler", () => {
         1,
         chunks[0],
         "general",
-        "es"
+        "Disble"
       );
       expect(ctx.analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(
         2,
         chunks[1],
         "general",
-        "es"
+        "Disble"
       );
       expect(ctx.analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(0, "run-0");
       expect(ctx.analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(1, "run-1");
@@ -164,15 +164,15 @@ describe("AnalyzeChunksHandler", () => {
       expect(ctx.chunkErrors).toEqual([]);
     });
 
-    it("should use the profile from ctx", async () => {
-      const ctx = makePipelineContext({ profile: "formal" });
+    it("should use the genero from ctx", async () => {
+      const ctx = makePipelineContext({ genero: "narrativa-literaria" });
 
       await handler.handle(ctx, next);
 
       expect(ctx.analysisPort.submitChunkAnalysis).toHaveBeenCalledWith(
         expect.any(Object),
-        "formal",
-        "es"
+        "narrativa-literaria",
+        "Disble"
       );
     });
   });

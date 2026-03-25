@@ -48,7 +48,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
       console.log(
         `🤖 [AnalyzeChunksHandler] Encolando chunk ${chunk.index + 1}/${chunks.length} (${chunk.text.length} chars)`
       );
-      const submitResult = await ctx.analysisPort.submitChunkAnalysis(chunk, ctx.profile, "es");
+      const submitResult = await ctx.analysisPort.submitChunkAnalysis(chunk, ctx.genero, "Disble");
       submittedCount += 1;
 
       console.log(

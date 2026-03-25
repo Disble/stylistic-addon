@@ -79,18 +79,18 @@ export interface TextChunk {
 // ---------------------------------------------------------------------------
 
 /**
- * Input data sent to the Mastra editorial workflow for each chunk.
- * Must match the workflow's `inputSchema` on the backend.
+ * Input data sent to the Mastra stylistic workflow for each chunk.
+ * Must match the workflow's `inputSchema` on the backend (`stylistic-workflow`).
  */
 export interface WorkflowInput {
   /** Text to analyze. */
   text: string;
 
-  /** Analysis profile identifier (e.g., "general", "formal", "academic"). */
-  profile: string;
+  /** Genre identifier matching the backend enum (e.g., "narrativa-literaria", "general"). */
+  genero: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
 
-  /** ISO 639-1 language code of the text (e.g., "es", "en"). */
-  language: string;
+  /** Author slug in kebab-case used to load the author profile from the workspace. */
+  autorSlug: string;
 }
 
 /**

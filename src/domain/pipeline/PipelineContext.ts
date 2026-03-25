@@ -21,7 +21,7 @@ import { PipelineEventEmitter } from "./PipelineEvents";
  * Immutable fields (set at pipeline start, never changed by handlers):
  * - `documentPort`, `analysisPort` — the injected adapters
  * - `emitter` — the event emitter for progress/lifecycle notifications
- * - `profile` — the selected analysis profile
+ * - `genero` — the selected genre for the stylistic workflow
  * - `maxChunkSize` — character limit per chunk
  *
  * Mutable fields (populated progressively by handlers):
@@ -45,8 +45,8 @@ export interface PipelineContext {
   /** Event emitter for progress notifications (Observer pattern). */
   readonly emitter: PipelineEventEmitter;
 
-  /** The analysis profile selected by the user (e.g., "general", "formal"). */
-  readonly profile: string;
+  /** The genre selected by the user, sent to the stylistic workflow (e.g., "narrativa-literaria", "general"). */
+  readonly genero: string;
 
   /** Maximum characters per chunk sent to the backend. */
   readonly maxChunkSize: number;

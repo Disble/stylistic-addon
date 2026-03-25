@@ -27,7 +27,7 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     documentPort,
     analysisPort,
     emitter: new PipelineEventEmitter(),
-    profile: "general",
+    genero: "general",
     maxChunkSize: 5000,
     ...overrides,
   };

@@ -109,8 +109,8 @@ export interface IAnalysisPort {
    */
   submitChunkAnalysis(
     chunk: TextChunk,
-    profile: string,
-    language: string
+    genero: string,
+    autorSlug: string
   ): Promise<ChunkSubmitResult>;
 
   /**

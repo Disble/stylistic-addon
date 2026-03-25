@@ -280,8 +280,8 @@ function toUserMessage(error: unknown): string {
   }
 }
 
-/** Returns the currently selected profile ID from the dropdown. */
-function getSelectedProfile(): string {
+/** Returns the currently selected genre ID from the dropdown. */
+function getSelectedGenero(): string {
   const select = document.getElementById("profile-select") as HTMLSelectElement;
   return select.value;
 }
@@ -389,7 +389,7 @@ async function handleAnalyze(): Promise<void> {
     documentPort,
     analysisPort,
     emitter,
-    profile: getSelectedProfile(),
+    genero: getSelectedGenero(),
     maxChunkSize: DEFAULT_MAX_CHUNK_SIZE,
   };
 

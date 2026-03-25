@@ -49,8 +49,8 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
    */
   async submitChunkAnalysis(
     chunk: TextChunk,
-    profile: string,
-    language: string
+    genero: string,
+    autorSlug: string
   ): Promise<ChunkSubmitResult> {
     let lastError = "Unknown analysis error";
 
@@ -64,7 +64,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
       }
 
       try {
-        const result = await this.wrapped.submitChunkAnalysis(chunk, profile, language);
+        const result = await this.wrapped.submitChunkAnalysis(chunk, genero, autorSlug);
 
         if (this.hasRunId(result.runId)) {
           return result;
