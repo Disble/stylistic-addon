@@ -55,3 +55,65 @@ describe('domain types (compile-time checks)', () => {
     // All checks are compile-time — if this file compiles, the types are correct.
   })
 })
+
+// ---------------------------------------------------------------------------
+// FeedbackPayload — compile-time shape checks
+// ---------------------------------------------------------------------------
+
+import type { FeedbackPayload } from './types'
+
+const _feedbackMinimal: FeedbackPayload = {
+  category: 'Redundancia',
+  originalText: 'completamente necesario',
+  suggestedText: 'necesario',
+  justification: 'Ya implica completitud.',
+  rating: 'positive',
+  severity: 'high',
+}
+
+const _feedbackWithComment: FeedbackPayload = {
+  category: 'Muletilla',
+  originalText: 'básicamente',
+  suggestedText: '',
+  justification: 'Filler word.',
+  rating: 'negative',
+  severity: 'medium',
+  comment: 'Estoy de acuerdo',
+}
+
+void _feedbackMinimal; void _feedbackWithComment
+
+// FeedbackPayload must have a justification field
+type _HasJustification = FeedbackPayload extends { justification: string } ? true : false
+const _checkJustification: _HasJustification = true
+void _checkJustification
+
+// rating must be exactly "positive" | "negative"
+type _RatingPositive = 'positive' extends FeedbackPayload['rating'] ? true : false
+type _RatingNegative = 'negative' extends FeedbackPayload['rating'] ? true : false
+const _r1: _RatingPositive = true
+const _r2: _RatingNegative = true
+void _r1; void _r2
+
+// comment must be optional (can construct without it — already verified by _feedbackMinimal above)
+// Just verify comment field IS optional by checking it's not in the Required<> keys contract
+type _WithComment = Required<FeedbackPayload>
+const _checkOptional: _WithComment['comment'] = 'test'
+void _checkOptional
+
+// ---------------------------------------------------------------------------
+// IFeedbackPort — compile-time checks
+// ---------------------------------------------------------------------------
+
+import type { IFeedbackPort } from './ports'
+
+// IFeedbackPort must have sendFeedback(payload: FeedbackPayload): Promise<void>
+type _HasSendFeedback = IFeedbackPort extends { sendFeedback(payload: FeedbackPayload): Promise<void> } ? true : false
+const _checkSendFeedback: _HasSendFeedback = true
+void _checkSendFeedback
+
+describe('IFeedbackPort (compile-time checks)', () => {
+  it('declares sendFeedback(payload: FeedbackPayload): Promise<void>', () => {
+    // Checked above
+  })
+})

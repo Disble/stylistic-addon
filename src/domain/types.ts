@@ -250,6 +250,39 @@ export interface TextSource {
 }
 
 // ---------------------------------------------------------------------------
+// Feedback
+// ---------------------------------------------------------------------------
+
+/**
+ * Payload sent to the Mastra feedback workflow when a user accepts or rejects
+ * a suggestion. Fire-and-forget — never awaited in the UI.
+ *
+ * No user or session identifiers are included by design.
+ */
+export interface FeedbackPayload {
+  /** Editorial category label (e.g., "Redundancia"). */
+  category: string;
+
+  /** Exact original text fragment from the suggestion. */
+  originalText: string;
+
+  /** The replacement text that was suggested. */
+  suggestedText: string;
+
+  /** Human-readable justification shown to the user. */
+  justification: string;
+
+  /** Whether the user accepted or rejected the suggestion. */
+  rating: "positive" | "negative";
+
+  /** How critical the suggestion is (from the original suggestion). */
+  severity: string;
+
+  /** Optional free-text comment from the user (textarea). Only present when non-empty. */
+  comment?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
 

@@ -10,6 +10,7 @@ const taskpaneMocks = vi.hoisted(() => ({
   rejectSuggestion: vi.fn(),
   mastraAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
+  feedbackSendFeedback: vi.fn<(payload: any) => Promise<void>>(),
 }));
 
 vi.mock("../adapters/word/WordAdapter", () => ({
@@ -60,6 +61,14 @@ vi.mock("../domain/pipeline/PipelineOrchestrator", () => ({
   },
 }));
 
+vi.mock("../adapters/mastra/MockFeedbackAdapter", () => ({
+  MockFeedbackAdapter: class {
+    sendFeedback(payload: any) {
+      return taskpaneMocks.feedbackSendFeedback(payload);
+    }
+  },
+}));
+
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   return {
     id: "s-1",
@@ -100,6 +109,16 @@ class FakeClassList {
 
   remove(...names: string[]) {
     for (const n of names) this.classes.delete(n);
+  }
+
+  toggle(name: string): boolean {
+    if (this.classes.has(name)) {
+      this.classes.delete(name);
+      return false;
+    } else {
+      this.classes.add(name);
+      return true;
+    }
   }
 
   contains(name: string): boolean {
@@ -332,6 +351,7 @@ describe("taskpane entrypoint", () => {
     taskpaneMocks.orchestratorHandlers = [];
     taskpaneMocks.run.mockResolvedValue(undefined);
     taskpaneMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
 
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -532,6 +552,7 @@ describe("Accept/Reject buttons", () => {
     taskpaneMocks.orchestratorHandlers = [];
     taskpaneMocks.run.mockResolvedValue(undefined);
     taskpaneMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "accepted",
       trackedChangesAffected: 2,
@@ -716,5 +737,231 @@ describe("Accept/Reject buttons", () => {
     expect(acceptBtn.disabled).toBe(false);
     const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
     expect(rejectBtn.disabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feedback Button + Accordion
+// ---------------------------------------------------------------------------
+
+describe("Feedback button + accordion", () => {
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    taskpaneMocks.orchestratorHandlers = [];
+    taskpaneMocks.run.mockResolvedValue(undefined);
+    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "accepted",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+    });
+    taskpaneMocks.rejectSuggestion.mockResolvedValue({
+      status: "rejected",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+    });
+
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    delete (globalThis as any).document;
+    delete (globalThis as any).Office;
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+    vi.useRealTimers();
+    delete (globalThis as any).document;
+    delete (globalThis as any).Office;
+  });
+
+  it("F.1 — renderResults() injects 💬 button for each non-failed suggestion", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    const feedbackBtn = li.querySelector('[data-action="feedback"]');
+    expect(feedbackBtn).not.toBeNull();
+    expect(feedbackBtn!.getAttribute("aria-label")).toBe("Dejar feedback");
+  });
+
+  it("F.2 — renderResults() injects .feedback-accordion with .feedback-textarea per non-failed suggestion", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    const accordion = li.querySelector(".feedback-accordion");
+    expect(accordion).not.toBeNull();
+
+    const textarea = li.querySelector(".feedback-textarea");
+    expect(textarea).not.toBeNull();
+  });
+
+  it("F.3 — failed suggestions do NOT have a 💬 button", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-fail" });
+
+    const liItems = await renderViaEmitter(doc, [s1], ["s-fail"]);
+    const li = liItems[0];
+
+    expect(li.querySelector('[data-action="feedback"]')).toBeNull();
+    expect(li.querySelector(".feedback-accordion")).toBeNull();
+  });
+
+  it("F.4 — clicking 💬 button toggles .feedback-accordion--open on accordion", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    const feedbackBtn = li.querySelector('[data-action="feedback"]') as FakeElement;
+    const accordion = li.querySelector(".feedback-accordion") as FakeElement;
+
+    expect(accordion.classList.contains("feedback-accordion--open")).toBe(false);
+
+    feedbackBtn.click();
+    expect(accordion.classList.contains("feedback-accordion--open")).toBe(true);
+
+    feedbackBtn.click();
+    expect(accordion.classList.contains("feedback-accordion--open")).toBe(false);
+  });
+
+  it("F.5 — accept sends positive feedback with correct payload", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({
+      id: "s-1",
+      category: "Redundancia",
+      originalText: "completamente necesario",
+      suggestedText: "necesario",
+      justification: "Ya implica completitud.",
+      severity: "high",
+    });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    // Flush the void sendFeedback microtask
+    await Promise.resolve();
+
+    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rating: "positive",
+        category: "Redundancia",
+        originalText: "completamente necesario",
+        suggestedText: "necesario",
+        justification: "Ya implica completitud.",
+        severity: "high",
+      })
+    );
+  });
+
+  it("F.6 — reject sends negative feedback with correct payload", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({
+      id: "s-1",
+      category: "Muletilla",
+      originalText: "básicamente",
+      suggestedText: "",
+      justification: "Frase de relleno.",
+      severity: "medium",
+    });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+    rejectBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rating: "negative",
+        category: "Muletilla",
+        originalText: "básicamente",
+        suggestedText: "",
+        justification: "Frase de relleno.",
+        severity: "medium",
+      })
+    );
+  });
+
+  it("F.7 — empty textarea => comment absent from payload", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    // textarea value is empty (default)
+    const textarea = li.querySelector(".feedback-textarea") as FakeElement;
+    textarea.value = "";
+
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const payload = taskpaneMocks.feedbackSendFeedback.mock.calls[0][0];
+    expect(payload).not.toHaveProperty("comment");
+  });
+
+  it("F.8 — textarea with text => comment present in payload", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    const textarea = li.querySelector(".feedback-textarea") as FakeElement;
+    textarea.value = "Muy buen cambio";
+
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({ comment: "Muy buen cambio" })
+    );
+  });
+
+  it("F.9 — payload includes justification field", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1", justification: "Es más claro" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({ justification: "Es más claro" })
+    );
   });
 });

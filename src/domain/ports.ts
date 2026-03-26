@@ -25,6 +25,7 @@ import {
   ChunkSubmitResult,
   ChunkPollResult,
   SuggestionActionResult,
+  FeedbackPayload,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -118,4 +119,22 @@ export interface IAnalysisPort {
    * Returns intermediate or terminal workflow state for the chunk.
    */
   pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult>;
+}
+
+// ---------------------------------------------------------------------------
+// Feedback Port
+// ---------------------------------------------------------------------------
+
+/**
+ * Contract for sending user feedback about suggestions.
+ *
+ * Implemented by `FeedbackAdapter` (production) and `MockFeedbackAdapter` (dev/test).
+ * Fire-and-forget — never awaited in the UI. Errors must be swallowed silently.
+ */
+export interface IFeedbackPort {
+  /**
+   * Sends a feedback payload to the backend.
+   * Must execute asynchronously; errors must be swallowed silently.
+   */
+  sendFeedback(payload: FeedbackPayload): Promise<void>;
 }

@@ -32,9 +32,11 @@ import { ApplySuggestionsHandler } from "../domain/pipeline/handlers/ApplySugges
 
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
+import { MockFeedbackAdapter } from "../adapters/mastra/MockFeedbackAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 
-import { Suggestion, InsertionResult } from "../domain/types";
+import { Suggestion, InsertionResult, FeedbackPayload } from "../domain/types";
+import { IFeedbackPort } from "../domain/ports";
 import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 
 /** Duration (ms) before the status bar message auto-hides. */
@@ -59,6 +61,12 @@ const analysisPort = new RetryAnalysisDecorator(
   MAX_RETRIES,
   RETRY_BASE_DELAY_MS
 );
+
+/**
+ * Feedback port — swap `MockFeedbackAdapter` → `FeedbackAdapter` when the
+ * backend feedback workflow is ready (one-line change here only).
+ */
+const feedbackPort: IFeedbackPort = new MockFeedbackAdapter();
 
 const orchestrator = new PipelineOrchestrator([
   new ReadTextHandler(),
@@ -227,9 +235,26 @@ function renderResults(
       rejectBtn.setAttribute("aria-label", "Rechazar sugerencia");
       rejectBtn.textContent = "✗";
 
+      const feedbackBtn = document.createElement("button");
+      feedbackBtn.className = "feedback-btn";
+      feedbackBtn.setAttribute("data-action", "feedback");
+      feedbackBtn.setAttribute("aria-label", "Dejar feedback");
+      feedbackBtn.textContent = "💬";
+
       actionsSpan.appendChild(acceptBtn);
       actionsSpan.appendChild(rejectBtn);
+      actionsSpan.appendChild(feedbackBtn);
       li.appendChild(actionsSpan);
+
+      // Accordion + textarea for optional comment
+      const accordion = document.createElement("div");
+      accordion.className = "feedback-accordion";
+
+      const textarea = document.createElement("textarea");
+      textarea.className = "feedback-textarea";
+      textarea.setAttribute("placeholder", "Comentario opcional...");
+      accordion.appendChild(textarea);
+      li.appendChild(accordion);
     }
 
     list.appendChild(li);
@@ -237,6 +262,14 @@ function renderResults(
     if (!isFailed) {
       const acceptBtn = li.querySelector("[data-action=\"accept\"]") as HTMLButtonElement | null;
       const rejectBtn = li.querySelector("[data-action=\"reject\"]") as HTMLButtonElement | null;
+      const feedbackBtnEl = li.querySelector("[data-action=\"feedback\"]") as HTMLButtonElement | null;
+      const accordionEl = li.querySelector(".feedback-accordion") as HTMLElement | null;
+
+      if (feedbackBtnEl && accordionEl) {
+        feedbackBtnEl.addEventListener("click", () => {
+          accordionEl.classList.toggle("feedback-accordion--open");
+        });
+      }
 
       if (acceptBtn) {
         acceptBtn.addEventListener("click", () =>
@@ -294,6 +327,7 @@ function getSelectedGenero(): string {
  * Handles the Accept button click on a suggestion card.
  * Uses the Optimistic UI pattern: disables buttons immediately, then updates
  * the card based on the result of `documentPort.acceptSuggestion`.
+ * Also sends positive feedback silently (fire-and-forget).
  */
 async function handleAcceptSuggestion(
   suggestion: Suggestion,
@@ -319,6 +353,20 @@ async function handleAcceptSuggestion(
       note.textContent = "(ya resuelto)";
       li.appendChild(note);
     }
+
+    // Send feedback silently — fire-and-forget
+    const textarea = li.querySelector(".feedback-textarea") as (HTMLTextAreaElement & { value?: string }) | null;
+    const commentText = textarea?.value?.trim();
+    const payload: FeedbackPayload = {
+      category: suggestion.category,
+      originalText: suggestion.originalText,
+      suggestedText: suggestion.suggestedText,
+      justification: suggestion.justification,
+      rating: "positive",
+      severity: suggestion.severity,
+      ...(commentText ? { comment: commentText } : {}),
+    };
+    void feedbackPort.sendFeedback(payload);
   } else {
     if (acceptBtn) acceptBtn.disabled = false;
     if (rejectBtn) rejectBtn.disabled = false;
@@ -330,6 +378,7 @@ async function handleAcceptSuggestion(
  * Handles the Reject button click on a suggestion card.
  * Uses the Optimistic UI pattern: disables buttons immediately, then updates
  * the card based on the result of `documentPort.rejectSuggestion`.
+ * Also sends negative feedback silently (fire-and-forget).
  */
 async function handleRejectSuggestion(
   suggestion: Suggestion,
@@ -355,6 +404,20 @@ async function handleRejectSuggestion(
       note.textContent = "(ya resuelto)";
       li.appendChild(note);
     }
+
+    // Send feedback silently — fire-and-forget
+    const textarea = li.querySelector(".feedback-textarea") as (HTMLTextAreaElement & { value?: string }) | null;
+    const commentText = textarea?.value?.trim();
+    const payload: FeedbackPayload = {
+      category: suggestion.category,
+      originalText: suggestion.originalText,
+      suggestedText: suggestion.suggestedText,
+      justification: suggestion.justification,
+      rating: "negative",
+      severity: suggestion.severity,
+      ...(commentText ? { comment: commentText } : {}),
+    };
+    void feedbackPort.sendFeedback(payload);
   } else {
     if (acceptBtn) acceptBtn.disabled = false;
     if (rejectBtn) rejectBtn.disabled = false;

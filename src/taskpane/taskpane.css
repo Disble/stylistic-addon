@@ -319,3 +319,43 @@ body {
   color: #666;
   margin-left: 4px;
 }
+
+/* --- Feedback Button + Accordion --- */
+
+.feedback-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: #e8f4fd;
+  color: #0078d7;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.feedback-accordion {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+
+.feedback-accordion--open {
+  max-height: 80px;
+}
+
+.feedback-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  resize: none;
+  border: 1px solid #d2d0ce;
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #323130;
+  margin-top: 6px;
+}

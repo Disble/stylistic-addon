@@ -20,6 +20,9 @@ export const MASTRA_BASE_URL = "http://localhost:4111";
 /** Identifier of the editorial workflow registered in Mastra. */
 export const WORKFLOW_ID = "stylistic-workflow";
 
+/** Identifier of the feedback workflow registered in Mastra. */
+export const FEEDBACK_WORKFLOW_ID = "feedback-workflow";
+
 // ---------------------------------------------------------------------------
 // Text Chunking
 // ---------------------------------------------------------------------------
