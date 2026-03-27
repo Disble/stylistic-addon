@@ -128,7 +128,7 @@ export interface IAnalysisPort {
 /**
  * Contract for sending user feedback about suggestions.
  *
- * Implemented by `FeedbackAdapter` (production) and `MockFeedbackAdapter` (dev/test).
+ * Implemented by `FeedbackAdapter`.
  * Fire-and-forget — never awaited in the UI. Errors must be swallowed silently.
  */
 export interface IFeedbackPort {

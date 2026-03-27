@@ -61,8 +61,8 @@ vi.mock("../domain/pipeline/PipelineOrchestrator", () => ({
   },
 }));
 
-vi.mock("../adapters/mastra/MockFeedbackAdapter", () => ({
-  MockFeedbackAdapter: class {
+vi.mock("../adapters/mastra/FeedbackAdapter", () => ({
+  FeedbackAdapter: class {
     sendFeedback(payload: any) {
       return taskpaneMocks.feedbackSendFeedback(payload);
     }

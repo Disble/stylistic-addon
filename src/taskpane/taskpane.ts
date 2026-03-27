@@ -32,7 +32,7 @@ import { ApplySuggestionsHandler } from "../domain/pipeline/handlers/ApplySugges
 
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
-import { MockFeedbackAdapter } from "../adapters/mastra/MockFeedbackAdapter";
+import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 
 import { Suggestion, InsertionResult, FeedbackPayload } from "../domain/types";
@@ -62,11 +62,7 @@ const analysisPort = new RetryAnalysisDecorator(
   RETRY_BASE_DELAY_MS
 );
 
-/**
- * Feedback port — swap `MockFeedbackAdapter` → `FeedbackAdapter` when the
- * backend feedback workflow is ready (one-line change here only).
- */
-const feedbackPort: IFeedbackPort = new MockFeedbackAdapter();
+const feedbackPort: IFeedbackPort = new FeedbackAdapter();
 
 const orchestrator = new PipelineOrchestrator([
   new ReadTextHandler(),

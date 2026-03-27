@@ -27,11 +27,18 @@ export class FeedbackAdapter implements IFeedbackPort {
    */
   async sendFeedback(payload: FeedbackPayload): Promise<void> {
     try {
+      console.log("[FeedbackAdapter] Sending feedback", { workflowId: FEEDBACK_WORKFLOW_ID, payload });
+
       const workflow = mastraClient.getWorkflow(FEEDBACK_WORKFLOW_ID);
+      console.log("[FeedbackAdapter] Workflow reference obtained");
+
       const run = await workflow.createRun();
-      await run.start({ inputData: payload });
-    } catch {
-      // Swallow all errors silently — fire-and-forget
+      console.log("[FeedbackAdapter] Run created");
+
+      const result = await run.start({ inputData: payload });
+      console.log("[FeedbackAdapter] Workflow started successfully", { result });
+    } catch (error) {
+      console.error("[FeedbackAdapter] Failed to send feedback", error);
     }
   }
 }

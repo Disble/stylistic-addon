@@ -28,8 +28,12 @@ export interface Suggestion {
   /** Exact text to locate in the document (case-sensitive search via Word API). */
   originalText: string;
 
-  /** Replacement text that will appear as a tracked change. */
-  suggestedText: string;
+  /**
+   * Replacement text that will appear as a tracked change.
+   * Undefined when `type` is `"comment-only"` — no text replacement is made,
+   * only a Word comment is inserted at the original text location.
+   */
+  suggestedText?: string;
 
   /** Human-readable reason for the suggestion, shown in the results panel. */
   justification: string;
@@ -39,6 +43,16 @@ export interface Suggestion {
 
   /** How critical the suggestion is. */
   severity: "high" | "medium" | "low";
+
+  /**
+   * Determines how the suggestion is applied to the document.
+   *
+   * - `"track-change"` — inserts OOXML tracked changes (`<w:del>` / `<w:ins>`)
+   *   alongside a justification comment. Requires `suggestedText` to be defined.
+   * - `"comment-only"` — inserts only a Word comment at the `originalText`
+   *   location with no tracked change. `suggestedText` is undefined.
+   */
+  type: "track-change" | "comment-only";
 }
 
 /**
@@ -101,8 +115,10 @@ export interface WorkflowSuggestion {
   /** Exact substring from the input text (case-sensitive). */
   originalText: string;
 
-  /** Replacement text. */
-  suggestedText: string;
+  /**
+   * Replacement text. Absent when `type` is `"comment-only"`.
+   */
+  suggestedText?: string;
 
   /** Human-readable justification. */
   justification: string;
@@ -112,6 +128,12 @@ export interface WorkflowSuggestion {
 
   /** How critical the suggestion is. */
   severity: "high" | "medium" | "low";
+
+  /**
+   * Suggestion kind as declared by the backend.
+   * Defaults to `"track-change"` if absent (backwards compatibility).
+   */
+  type?: "track-change" | "comment-only";
 }
 
 /**
@@ -266,8 +288,11 @@ export interface FeedbackPayload {
   /** Exact original text fragment from the suggestion. */
   originalText: string;
 
-  /** The replacement text that was suggested. */
-  suggestedText: string;
+  /**
+   * The replacement text that was suggested.
+   * Absent for `"comment-only"` suggestions that carry no replacement.
+   */
+  suggestedText?: string;
 
   /** Human-readable justification shown to the user. */
   justification: string;
