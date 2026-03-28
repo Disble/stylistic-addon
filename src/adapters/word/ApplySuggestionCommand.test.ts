@@ -527,6 +527,38 @@ describe("ApplySuggestionCommand", () => {
     });
   });
 
+  describe("special character search", () => {
+    it("Test C — searches for text starting with an em-dash", async () => {
+      const originalText = "—¡Ah!, je, je, je, tendré más cuidado a partir de ahora.";
+      const { context } = installWordContext();
+
+      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      const result = await command.execute();
+
+      expect(result).toEqual({ success: true, commandId: "s1" });
+      expect(context.document.body.search).toHaveBeenCalledWith(originalText, {
+        matchCase: true,
+        matchWholeWord: false,
+      });
+    });
+
+    it("Test D — searches with matchCase: true and matchWholeWord: false for em-dash and ellipsis", async () => {
+      const originalText = "—¿Tú… en qué momento…?";
+      const { context } = installWordContext();
+
+      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      await command.execute();
+
+      expect(context.document.body.search).toHaveBeenCalledWith(originalText, {
+        matchCase: true,
+        matchWholeWord: false,
+      });
+      // Verify these exact options — no other matchXxx flags that could block special chars
+      const callArgs = context.document.body.search.mock.calls[0] as [string, object];
+      expect(callArgs[1]).toStrictEqual({ matchCase: true, matchWholeWord: false });
+    });
+  });
+
   describe("comment-only suggestions", () => {
     it("inserts only a comment — no tracked change markup — when type is comment-only", async () => {
       vi.useFakeTimers();

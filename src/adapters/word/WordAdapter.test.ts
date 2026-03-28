@@ -483,23 +483,26 @@ describe("WordAdapter", () => {
       const second = makeSuggestion({ id: "s-2", originalText: "dos" });
       const onProgress = vi.fn();
 
+      // Suggestions are applied in reverse order (end-of-doc first): second → first.
+      // The first execute call (for second) succeeds; the second (for first) fails.
       commandMocks.execute
-        .mockResolvedValueOnce({ success: true, commandId: "s-1" })
+        .mockResolvedValueOnce({ success: true, commandId: "s-2" })
         .mockResolvedValueOnce({
           success: false,
-          commandId: "s-2",
+          commandId: "s-1",
           error: "Texto original no encontrado",
         });
 
       await expect(adapter.applySuggestions([first, second], onProgress)).resolves.toEqual({
         successCount: 1,
-        failedSuggestions: [second],
+        failedSuggestions: [first],
       });
 
-      expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, first);
-      expect(commandMocks.constructor).toHaveBeenNthCalledWith(2, second);
-      expect(commandMocks.execute).toHaveBeenNthCalledWith(1, first);
-      expect(commandMocks.execute).toHaveBeenNthCalledWith(2, second);
+      // Reverse order: second is constructed and executed first, then first
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, second);
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(2, first);
+      expect(commandMocks.execute).toHaveBeenNthCalledWith(1, second);
+      expect(commandMocks.execute).toHaveBeenNthCalledWith(2, first);
       expect(onProgress).toHaveBeenNthCalledWith(
         1,
         "applying",
@@ -523,10 +526,12 @@ describe("WordAdapter", () => {
       const third = makeSuggestion({ id: "s-3", originalText: "tres" });
       const onProgress = vi.fn();
 
+      // Suggestions are applied in reverse order: third → second → first.
+      // third succeeds, second rejects, first succeeds.
       commandMocks.execute
-        .mockResolvedValueOnce({ success: true, commandId: "s-1" })
+        .mockResolvedValueOnce({ success: true, commandId: "s-3" })
         .mockRejectedValueOnce(new Error("insert failed"))
-        .mockResolvedValueOnce({ success: true, commandId: "s-3" });
+        .mockResolvedValueOnce({ success: true, commandId: "s-1" });
 
       await expect(adapter.applySuggestions([first, second, third], onProgress)).resolves.toEqual({
         successCount: 2,
@@ -534,13 +539,14 @@ describe("WordAdapter", () => {
       });
 
       expect(commandMocks.constructor).toHaveBeenCalledTimes(3);
-      expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, first);
+      // Reverse order: third, second, first
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, third);
       expect(commandMocks.constructor).toHaveBeenNthCalledWith(2, second);
-      expect(commandMocks.constructor).toHaveBeenNthCalledWith(3, third);
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(3, first);
       expect(commandMocks.execute).toHaveBeenCalledTimes(3);
-      expect(commandMocks.execute).toHaveBeenNthCalledWith(1, first);
+      expect(commandMocks.execute).toHaveBeenNthCalledWith(1, third);
       expect(commandMocks.execute).toHaveBeenNthCalledWith(2, second);
-      expect(commandMocks.execute).toHaveBeenNthCalledWith(3, third);
+      expect(commandMocks.execute).toHaveBeenNthCalledWith(3, first);
       expect(onProgress).toHaveBeenNthCalledWith(
         1,
         "applying",
@@ -563,6 +569,55 @@ describe("WordAdapter", () => {
         "Aplicando sugerencia 3 de 3..."
       );
       expect(warnSpy).toHaveBeenCalledOnce();
+    });
+
+    it("Test A — applies suggestions in reverse array order to avoid CC interference", async () => {
+      // Three suggestions: A (early in doc / index 0), B (late / index 1), C (middle / index 2)
+      // Backend returns them as [A, B, C]. After reverse they should be applied: C, B, A.
+      const suggA = makeSuggestion({ id: "s-a", originalText: "texto al inicio del doc" });
+      const suggB = makeSuggestion({ id: "s-b", originalText: "texto al final del doc" });
+      const suggC = makeSuggestion({ id: "s-c", originalText: "texto en el medio del doc" });
+
+      commandMocks.execute
+        .mockResolvedValueOnce({ success: true, commandId: "s-c" })
+        .mockResolvedValueOnce({ success: true, commandId: "s-b" })
+        .mockResolvedValueOnce({ success: true, commandId: "s-a" });
+
+      await adapter.applySuggestions([suggA, suggB, suggC]);
+
+      // Reverse of [A, B, C] is [C, B, A] — C must be constructed and executed first
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, suggC);
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(2, suggB);
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(3, suggA);
+      expect(commandMocks.execute).toHaveBeenNthCalledWith(1, suggC);
+      expect(commandMocks.execute).toHaveBeenNthCalledWith(2, suggB);
+      expect(commandMocks.execute).toHaveBeenNthCalledWith(3, suggA);
+    });
+
+    it("Test B — same-paragraph interference: both suggestions succeed when applied in reverse", async () => {
+      // Simulates two suggestions in the same paragraph.
+      // Suggestion 1 (early in paragraph) is applied AFTER suggestion 2 (later in paragraph)
+      // because we reverse. Both must succeed — no CC overlap error.
+      const earlyInParagraph = makeSuggestion({
+        id: "s-early",
+        originalText: "apenas eran un par de pasos alrededor de ella",
+      });
+      const lateInParagraph = makeSuggestion({
+        id: "s-late",
+        originalText: "asumió que eso sucedía porque perdía el control",
+      });
+
+      // Both commands succeed — the key is execution order: lateInParagraph first, then earlyInParagraph
+      commandMocks.execute
+        .mockResolvedValueOnce({ success: true, commandId: "s-late" })
+        .mockResolvedValueOnce({ success: true, commandId: "s-early" });
+
+      const result = await adapter.applySuggestions([earlyInParagraph, lateInParagraph]);
+
+      expect(result).toEqual({ successCount: 2, failedSuggestions: [] });
+      // lateInParagraph must run first (it appears later in the doc, so reverse order puts it first)
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, lateInParagraph);
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(2, earlyInParagraph);
     });
   });
 

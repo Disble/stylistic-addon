@@ -151,11 +151,31 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
+   * Sorts suggestions in reverse array order as a heuristic for applying
+   * end-of-document suggestions first.
+   *
+   * The backend returns suggestions in reading order (start → end of document).
+   * Reversing ensures each applied Content Control only affects text BEFORE the
+   * next search target, preventing CC boundary interference when multiple
+   * suggestions target the same paragraph.
+   *
+   * This is a heuristic: it assumes backend output order approximates document
+   * order. A future improvement could sort by actual `Range` position using
+   * `Range.compareLocationWith()` inside a single `Word.run`.
+   */
+  private sortByDocumentPosition(suggestions: Suggestion[]): Suggestion[] {
+    if (suggestions.length <= 1) return suggestions;
+    return [...suggestions].reverse();
+  }
+
+  /**
    * Applies suggestions as tracked changes using `ApplySuggestionCommand`
    * (Command pattern). Each suggestion runs in its own `Word.run` context
    * (per-suggestion isolation) to avoid stale ranges after OOXML insertions.
-   * Command failures are aggregated as failed suggestions so later suggestions
-   * can still run.
+   * Suggestions are applied in reverse order (end-of-document first) to avoid
+   * Content Control boundary interference when multiple suggestions share the
+   * same paragraph. Command failures are aggregated as failed suggestions so
+   * later suggestions can still run.
    */
   async applySuggestions(
     suggestions: Suggestion[],
@@ -167,10 +187,14 @@ export class WordAdapter implements IDocumentPort {
       return { successCount: 0, failedSuggestions: [] };
     }
 
+    // Apply end-of-document suggestions first so earlier searches are unaffected
+    // by Content Controls created for later positions in the same paragraph.
+    const sortedSuggestions = this.sortByDocumentPosition(suggestions);
+
     const failedSuggestions: Suggestion[] = [];
     let successCount = 0;
 
-    for (const suggestion of suggestions) {
+    for (const suggestion of sortedSuggestions) {
       const command = new ApplySuggestionCommand(suggestion);
       let commandResult;
 
