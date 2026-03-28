@@ -187,14 +187,21 @@ export class MastraAdapter implements IAnalysisPort {
   /** Maps raw workflow suggestions to `Suggestion` objects with assigned IDs. */
   private mapSuggestions(raw: WorkflowSuggestion[] | undefined, chunkIndex: number): Suggestion[] {
     if (!raw || !Array.isArray(raw)) return [];
-    return raw.map((s, i) => ({
-      id: `chunk${chunkIndex}-${i}`,
-      originalText: s.originalText,
-      suggestedText: s.suggestedText,
-      justification: s.justification,
-      category: s.category,
-      severity: s.severity,
-    }));
+    return raw.map((s, i) => {
+      const type = s.type ?? "track-change";
+      const suggestion: Suggestion = {
+        id: `chunk${chunkIndex}-${i}`,
+        originalText: s.originalText,
+        justification: s.justification,
+        category: s.category,
+        severity: s.severity,
+        type,
+      };
+      if (type !== "comment-only") {
+        suggestion.suggestedText = s.suggestedText;
+      }
+      return suggestion;
+    });
   }
 
   private validateSuccessOutput(result: unknown): WorkflowOutput | undefined {
@@ -289,13 +296,32 @@ export class MastraAdapter implements IAnalysisPort {
       return false;
     }
 
-    return (
-      this.readNonEmptyString(value.originalText) !== undefined &&
-      this.readNonEmptyString(value.suggestedText) !== undefined &&
-      this.readNonEmptyString(value.justification) !== undefined &&
-      this.readNonEmptyString(value.category) !== undefined &&
-      this.isSuggestionSeverity(value.severity)
-    );
+    if (
+      this.readNonEmptyString(value.originalText) === undefined ||
+      this.readNonEmptyString(value.justification) === undefined ||
+      this.readNonEmptyString(value.category) === undefined ||
+      !this.isSuggestionSeverity(value.severity)
+    ) {
+      return false;
+    }
+
+    // `type` is optional; when present it must be a known kind
+    if (value.type !== undefined && !this.isSuggestionType(value.type)) {
+      return false;
+    }
+
+    const type = value.type ?? "track-change";
+
+    // `suggestedText` is required only for track-change suggestions
+    if (type === "track-change" && this.readNonEmptyString(value.suggestedText) === undefined) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isSuggestionType(value: unknown): value is WorkflowSuggestion["type"] {
+    return value === "track-change" || value === "comment-only";
   }
 
   private isSuggestionSeverity(value: unknown): value is WorkflowSuggestion["severity"] {

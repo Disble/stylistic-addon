@@ -16,6 +16,19 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     justification: "Mejora de estilo",
     category: "Redundancia",
     severity: "medium",
+    type: "track-change",
+    ...overrides,
+  };
+}
+
+function makeCommentOnlySuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  return {
+    id: "c1",
+    originalText: "texto original",
+    justification: "Observación de estilo",
+    category: "Registro",
+    severity: "low",
+    type: "comment-only",
     ...overrides,
   };
 }
@@ -281,6 +294,82 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(2);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // comment-only suggestions — never deduplicated by originalText
+  // -----------------------------------------------------------------------
+
+  describe("comment-only deduplication behavior", () => {
+    it("should keep all comment-only suggestions even when they share the same originalText", async () => {
+      // Two comment-only suggestions targeting the same phrase are both valid:
+      // they produce independent Word comments and never conflict with each other.
+      const suggestions = [
+        makeCommentOnlySuggestion({ id: "c1", originalText: "misma frase" }),
+        makeCommentOnlySuggestion({ id: "c2", originalText: "misma frase" }),
+      ];
+      const ctx = makePipelineContext(suggestions);
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.uniqueSuggestions).toHaveLength(2);
+      expect(ctx.uniqueSuggestions!.map((s) => s.id)).toEqual(["c1", "c2"]);
+    });
+
+    it("should keep multiple comment-only suggestions from different runs that share originalText", async () => {
+      const suggestions = [
+        makeCommentOnlySuggestion({ id: "run1-c1", originalText: "texto" }),
+        makeCommentOnlySuggestion({ id: "run2-c1", originalText: "texto" }),
+        makeCommentOnlySuggestion({ id: "run2-c2", originalText: "texto" }),
+      ];
+      const ctx = makePipelineContext(suggestions);
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.uniqueSuggestions).toHaveLength(3);
+    });
+
+    it("should deduplicate track-change while keeping all comment-only when both share the same originalText", async () => {
+      // track-change duplicates are still deduplicated; comment-only are not
+      const suggestions = [
+        makeSuggestion({ id: "tc1", originalText: "frase compartida" }),
+        makeSuggestion({ id: "tc2", originalText: "frase compartida" }), // dup — removed
+        makeCommentOnlySuggestion({ id: "co1", originalText: "frase compartida" }),
+        makeCommentOnlySuggestion({ id: "co2", originalText: "frase compartida" }),
+      ];
+      const ctx = makePipelineContext(suggestions);
+
+      await handler.handle(ctx, next);
+
+      // tc1 kept, tc2 removed; co1 and co2 both kept
+      expect(ctx.uniqueSuggestions).toHaveLength(3);
+      expect(ctx.uniqueSuggestions!.map((s) => s.id)).toEqual(["tc1", "co1", "co2"]);
+    });
+
+    it("should use suggestion id as the dedup key for comment-only, not originalText", async () => {
+      // Two comment-only with different ids but same originalText → both kept
+      const s1 = makeCommentOnlySuggestion({ id: "unique-id-1", originalText: "shared" });
+      const s2 = makeCommentOnlySuggestion({ id: "unique-id-2", originalText: "shared" });
+      const ctx = makePipelineContext([s1, s2]);
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.uniqueSuggestions).toHaveLength(2);
+    });
+
+    it("should remove a comment-only suggestion only if its id is repeated (exact duplicate object)", async () => {
+      // Same id means it truly is the exact same backend suggestion seen twice
+      const suggestions = [
+        makeCommentOnlySuggestion({ id: "same-id", originalText: "frase" }),
+        makeCommentOnlySuggestion({ id: "same-id", originalText: "frase" }), // exact dup — removed
+      ];
+      const ctx = makePipelineContext(suggestions);
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.uniqueSuggestions).toHaveLength(1);
+      expect(ctx.uniqueSuggestions![0].id).toBe("same-id");
     });
   });
 });

@@ -19,7 +19,7 @@
 import { IDocumentPort } from "../../domain/ports";
 import { TextSource, Suggestion, InsertionResult, ProgressCallback, SuggestionActionResult } from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
-import { cleanupResolvedComments, OVERLAPPING_RELATIONS } from "./cleanup/CommentCleanup";
+import { cleanupResolvedComments, OVERLAPPING_RELATIONS, COMMENT_ONLY_TAG_PREFIX } from "./cleanup/CommentCleanup";
 
 type ParagraphSnapshot = {
   text?: string;
@@ -102,29 +102,50 @@ export class WordAdapter implements IDocumentPort {
 
   /**
    * Returns the set of original texts already applied as Stylistic tracked
-   * deletions. Used as a guard to prevent duplicate tracked changes on re-run.
+   * deletions OR as active comment-only suggestions.
+   *
+   * Used as a guard to prevent duplicate tracked changes and duplicate
+   * comment-only suggestions on re-run.
+   *
+   * For track-change suggestions: reads the deleted range text from the TCs.
+   * For comment-only suggestions: reads the range text of the CC anchor itself,
+   * which spans the original text at insertion time.
    */
   async getAppliedOriginalTexts(): Promise<Set<string>> {
-    console.log("🛡️ [WordAdapter] Consultando tracked changes de Stylistic existentes...");
+    console.log("🛡️ [WordAdapter] Consultando tracked changes y CCs comment-only de Stylistic...");
     return Word.run(async (context) => {
       const tracked = context.document.body.getTrackedChanges();
+      const allCCs = context.document.contentControls;
       tracked.load({ select: "author,type" });
+      allCCs.load({ select: "tag" });
       await context.sync();
 
       const stylisticDeletions = tracked.items.filter(
         (tc) => tc.author === "Stylistic" && (tc.type as string) === "Deleted"
       );
 
-      if (stylisticDeletions.length === 0) {
+      // JS-side prefix filter — Office.js getByTag() is exact-match only
+      const commentOnlyCCs = allCCs.items.filter((cc) =>
+        cc.tag.startsWith(COMMENT_ONLY_TAG_PREFIX)
+      );
+
+      if (stylisticDeletions.length === 0 && commentOnlyCCs.length === 0) {
         return new Set<string>();
       }
 
-      const ranges = stylisticDeletions.map((tc) => tc.getRange());
-      ranges.forEach((r) => r.load("text"));
+      const tcRanges = stylisticDeletions.map((tc) => tc.getRange());
+      tcRanges.forEach((r) => r.load("text"));
+
+      const ccRanges = commentOnlyCCs.map((cc) => cc.getRange());
+      ccRanges.forEach((r) => r.load("text"));
+
       await context.sync();
 
-      const texts = new Set(ranges.map((r) => r.text));
-      console.log(`🛡️ [WordAdapter] ${texts.size} texto(s) ya rastreado(s)`);
+      const texts = new Set([
+        ...tcRanges.map((r) => r.text),
+        ...ccRanges.map((r) => r.text),
+      ]);
+      console.log(`🛡️ [WordAdapter] ${texts.size} texto(s) ya rastreado(s) (TC + comment-only)`);
       return texts;
     });
   }
@@ -193,8 +214,37 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
-   * Shared implementation for accepting or rejecting Stylistic tracked changes
-   * associated with a suggestion. Also deletes the colocated Stylistic comment.
+   * Finds the Content Control for a suggestion, supporting both the new tag
+   * format (`stylistic:{type}:{id}`) and the legacy bare-ID format.
+   *
+   * Office.js `getByTag()` is exact-match only, so we try both formats and
+   * return the first CC found. Returns `null` if not found under either format.
+   */
+  private findCCByTag(
+    context: Word.RequestContext,
+    suggestion: Suggestion
+  ): { newFormatResult: Word.ContentControlCollection; legacyResult: Word.ContentControlCollection } {
+    const newTag = `stylistic:${suggestion.type}:${suggestion.id}`;
+    const legacyTag = suggestion.id;
+    const newFormatResult = context.document.contentControls.getByTag(newTag);
+    const legacyResult = context.document.contentControls.getByTag(legacyTag);
+    newFormatResult.load("items");
+    legacyResult.load("items");
+    return { newFormatResult, legacyResult };
+  }
+
+  /**
+   * Shared implementation for accepting or rejecting a suggestion.
+   *
+   * Branches on `suggestion.type`:
+   * - `"track-change"`: finds Stylistic TCs inside the CC, accepts/rejects them,
+   *   deletes the colocated comment, then deletes the CC.
+   * - `"comment-only"`: skips TC lookup entirely. Finds and deletes the Word
+   *   comment anchored to the CC range, then deletes the CC.
+   *
+   * Also supports legacy CCs tagged with a bare suggestion ID (no `stylistic:`
+   * prefix) — those are treated as `"track-change"` for backward compatibility.
+   *
    * Never throws — catches all errors and returns a result object.
    */
   private async resolveSuggestion(
@@ -203,12 +253,19 @@ export class WordAdapter implements IDocumentPort {
   ): Promise<SuggestionActionResult> {
     try {
       return await Word.run(async (context) => {
-        // 1. Find the Content Control by the suggestion ID tag
-        const ccs = context.document.contentControls.getByTag(suggestion.id);
-        ccs.load("items");
+        // 1. Find the Content Control — try new tag format first, fall back to legacy bare ID
+        const { newFormatResult, legacyResult } = this.findCCByTag(context, suggestion);
         await context.sync();
 
-        if (ccs.items.length === 0) {
+        let cc: Word.ContentControl | null = null;
+        if (newFormatResult.items.length > 0) {
+          cc = newFormatResult.items[0];
+        } else if (legacyResult.items.length > 0) {
+          cc = legacyResult.items[0];
+          console.log(`🔁 [WordAdapter] "${suggestion.id}": usando tag legado (bare ID)`);
+        }
+
+        if (!cc) {
           return {
             status: "already-resolved" as const,
             trackedChangesAffected: 0,
@@ -216,45 +273,16 @@ export class WordAdapter implements IDocumentPort {
           };
         }
 
-        const cc = ccs.items[0];
-
-        // 2. Get all tracked changes inside the Content Control
-        const tcs = cc.getTrackedChanges();
-        tcs.load("items");
-        await context.sync();
-
-        const stylisticTCs = tcs.items.filter((tc: any) => tc.author === "Stylistic");
-
-        if (stylisticTCs.length === 0) {
-          // If the TCs are gone but the CC is left behind, clean it up
-          cc.delete(true); // true = keep content
-          await context.sync();
-          return {
-            status: "already-resolved" as const,
-            trackedChangesAffected: 0,
-            commentDeleted: false,
-          };
-        }
-
-        // 3. Accept or reject the tracked changes
-        for (const tc of stylisticTCs) {
-          if (action === "accept") {
-            tc.accept();
-          } else {
-            tc.reject();
-          }
-        }
-
-        // 4. Find and delete the colocated Stylistic comment
+        // 2. Find and delete the colocated Stylistic comment (shared by both branches)
         const comments = context.document.body.getComments();
-        comments.load("items");
+        comments.load({ select: "authorName" });
         await context.sync();
 
+        const stylisticComments = comments.items.filter((c) => c.authorName === "Stylistic");
         let commentDeleted = false;
         const ccRange = cc.getRange();
 
-        for (const comment of comments.items) {
-          if (comment.authorName !== "Stylistic") continue;
+        for (const comment of stylisticComments) {
           const commentRange = comment.getRange();
           const locationResult = commentRange.compareLocationWith(ccRange);
           await context.sync();
@@ -265,9 +293,48 @@ export class WordAdapter implements IDocumentPort {
           }
         }
 
-        // 5. Delete the Content Control anchor itself
-        cc.delete(true); // true = keep content
+        // 3a. comment-only branch: no TCs to process — just delete the CC
+        if (suggestion.type === "comment-only") {
+          cc.delete(true); // true = keep content
+          await context.sync();
+          console.log(
+            `🗨️ [WordAdapter] "${suggestion.id}": comment-only ${action}ed, comentario eliminado: ${commentDeleted}`
+          );
+          return {
+            status: action === "accept" ? ("accepted" as const) : ("rejected" as const),
+            trackedChangesAffected: 0,
+            commentDeleted,
+          };
+        }
 
+        // 3b. track-change branch: accept/reject TCs inside the CC
+        const tcs = cc.getTrackedChanges();
+        tcs.load("items");
+        await context.sync();
+
+        const stylisticTCs = tcs.items.filter((tc: any) => tc.author === "Stylistic");
+
+        if (stylisticTCs.length === 0) {
+          // TCs already resolved but CC still present — clean up the orphaned CC
+          cc.delete(true); // true = keep content
+          await context.sync();
+          return {
+            status: "already-resolved" as const,
+            trackedChangesAffected: 0,
+            commentDeleted,
+          };
+        }
+
+        for (const tc of stylisticTCs) {
+          if (action === "accept") {
+            tc.accept();
+          } else {
+            tc.reject();
+          }
+        }
+
+        // 4. Delete the Content Control anchor itself
+        cc.delete(true); // true = keep content
         await context.sync();
 
         return {

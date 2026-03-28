@@ -16,6 +16,19 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     justification: "Mejora de estilo",
     category: "Redundancia",
     severity: "medium",
+    type: "track-change",
+    ...overrides,
+  };
+}
+
+function makeCommentOnlySuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  return {
+    id: "c1",
+    originalText: "texto original",
+    justification: "Observación de estilo",
+    category: "Registro",
+    severity: "low",
+    type: "comment-only",
     ...overrides,
   };
 }
@@ -259,6 +272,61 @@ describe("GuardAppliedHandler", () => {
       expect(ctx.abortReason).toBe(
         "No se encontraron sugerencias editoriales."
       );
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // comment-only guard behavior
+  // Phase 4 extends getAppliedOriginalTexts() to return comment-only CCs'
+  // originalTexts, so the guard works for both types via the same Set.has()
+  // check — no type-specific branching is needed here.
+  // -----------------------------------------------------------------------
+
+  describe("comment-only guard behavior", () => {
+    it("should pass through a comment-only suggestion when its originalText is not in the applied set", async () => {
+      const suggestions = [
+        makeCommentOnlySuggestion({ id: "c1", originalText: "nueva frase" }),
+      ];
+      const ctx = makePipelineContext(suggestions, new Set());
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.pendingSuggestions).toHaveLength(1);
+      expect(ctx.pendingSuggestions![0].id).toBe("c1");
+      expect(next).toHaveBeenCalledOnce();
+    });
+
+    it("should filter out a comment-only suggestion whose originalText is already in the applied set", async () => {
+      // getAppliedOriginalTexts() (extended in Phase 4) includes comment-only CC texts
+      const suggestions = [
+        makeCommentOnlySuggestion({ id: "c1", originalText: "frase ya comentada" }),
+      ];
+      const appliedTexts = new Set(["frase ya comentada"]);
+      const ctx = makePipelineContext(suggestions, appliedTexts);
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.aborted).toBe(true);
+      expect(ctx.abortReason).toBe(
+        "Todas las sugerencias ya están aplicadas en el documento."
+      );
+    });
+
+    it("should handle a mix of track-change and comment-only, filtering already-applied ones of both types", async () => {
+      const suggestions = [
+        makeSuggestion({ id: "tc1", originalText: "tc applied" }),           // filtered
+        makeSuggestion({ id: "tc2", originalText: "tc pending" }),            // kept
+        makeCommentOnlySuggestion({ id: "co1", originalText: "co applied" }), // filtered
+        makeCommentOnlySuggestion({ id: "co2", originalText: "co pending" }), // kept
+      ];
+      const appliedTexts = new Set(["tc applied", "co applied"]);
+      const ctx = makePipelineContext(suggestions, appliedTexts);
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.pendingSuggestions).toHaveLength(2);
+      expect(ctx.pendingSuggestions!.map((s) => s.id)).toEqual(["tc2", "co2"]);
+      expect(next).toHaveBeenCalledOnce();
     });
   });
 });

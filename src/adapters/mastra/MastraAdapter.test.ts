@@ -244,6 +244,39 @@ describe("MastraAdapter", () => {
       });
     });
 
+    it("maps a comment-only workflow suggestion with no suggestedText", async () => {
+      const suggestions: WorkflowSuggestion[] = [
+        {
+          originalText: "texto observado",
+          justification: "Revisar tono",
+          category: "Tono",
+          severity: "low",
+          type: "comment-only",
+        },
+      ];
+      mastraMocks.runById.mockResolvedValueOnce({
+        status: "success",
+        result: { suggestions },
+      });
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.pollChunkAnalysis(3, "run-3");
+
+      expect(result.status).toBe("success");
+      expect(result.suggestions).toHaveLength(1);
+      expect(result.suggestions[0]).toEqual({
+        id: "chunk3-0",
+        originalText: "texto observado",
+        justification: "Revisar tono",
+        category: "Tono",
+        severity: "low",
+        type: "comment-only",
+      });
+      // suggestedText must NOT be present for comment-only suggestions
+      expect(result.suggestions[0]).not.toHaveProperty("suggestedText");
+    });
+
     it("maps successful workflow suggestions into domain suggestions with generated ids", async () => {
       const suggestions: WorkflowSuggestion[] = [
         {
@@ -282,6 +315,7 @@ describe("MastraAdapter", () => {
             justification: "Redundancia",
             category: "Estilo",
             severity: "medium",
+            type: "track-change",
           },
           {
             id: "chunk7-1",
@@ -290,6 +324,7 @@ describe("MastraAdapter", () => {
             justification: "Mas directo",
             category: "Claridad",
             severity: "low",
+            type: "track-change",
           },
         ],
       });

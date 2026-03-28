@@ -772,6 +772,90 @@ describe("OoxmlPackageBuilder", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // withComment — comment-only mode (originalText in body)
+  // ---------------------------------------------------------------------------
+
+  describe("withComment with originalText (comment-only path)", () => {
+    const DATE = "2025-06-15T10:30:00Z";
+
+    it("includes originalText in the document body when provided", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withComment("Estilo", "Mejora la claridad", "Stylistic", DATE, "texto original")
+        .build();
+
+      const bodyStart = xml.indexOf("<w:body>");
+      const bodyEnd = xml.indexOf("</w:body>");
+      const body = xml.slice(bodyStart, bodyEnd);
+
+      expect(body).toContain("texto original");
+    });
+
+    it("places originalText inside a w:r/w:t run between commentRangeStart and commentRangeEnd", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withComment("Cat", "Reason", "Stylistic", DATE, "the original")
+        .build();
+
+      const rangeStart = xml.indexOf("<w:commentRangeStart");
+      const textRun = xml.indexOf('<w:t xml:space="preserve">the original</w:t>');
+      const rangeEnd = xml.indexOf("<w:commentRangeEnd");
+
+      expect(rangeStart).toBeGreaterThan(-1);
+      expect(textRun).toBeGreaterThan(rangeStart);
+      expect(rangeEnd).toBeGreaterThan(textRun);
+    });
+
+    it("places commentReference run after commentRangeEnd", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withComment("Cat", "Reason", "Stylistic", DATE, "some text")
+        .build();
+
+      const rangeEnd = xml.indexOf("<w:commentRangeEnd");
+      const reference = xml.indexOf("<w:commentReference");
+
+      expect(rangeEnd).toBeGreaterThan(-1);
+      expect(reference).toBeGreaterThan(rangeEnd);
+    });
+
+    it("still produces the formatted comment (category in bold + justification) in comments.xml", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withComment("Redundancia", "Texto repetido innecesario", "Stylistic", DATE, "the original text")
+        .build();
+
+      const commentsSection = xml.slice(xml.indexOf("comments.xml"));
+      expect(commentsSection).toContain("<w:t>[Redundancia]</w:t>");
+      expect(commentsSection).toContain("<w:t>Texto repetido innecesario</w:t>");
+      expect(commentsSection).toContain("<w:rPr><w:b/></w:rPr>");
+    });
+
+    it("escapes special XML characters in originalText", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withComment("Cat", "Reason", "Stylistic", DATE, "Tom & Jerry's <test>")
+        .build();
+
+      expect(xml).toContain("Tom &amp; Jerry&apos;s &lt;test&gt;");
+    });
+
+    it("produces an empty body body run when originalText is omitted (backward compat)", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withComment("Cat", "Reason", "Stylistic", DATE)
+        .build();
+
+      const bodyStart = xml.indexOf("<w:body>");
+      const bodyEnd = xml.indexOf("</w:body>");
+      const body = xml.slice(bodyStart, bodyEnd);
+
+      // No plain text run — only commentRangeStart, commentRangeEnd, commentReference
+      expect(body).not.toMatch(/<w:t xml:space="preserve">[^<]+<\/w:t>/);
+    });
+
+    it("returns this for fluent chaining with originalText", () => {
+      const builder = new OoxmlPackageBuilder();
+      const result = builder.withComment("C", "J", "A", DATE, "text");
+      expect(result).toBe(builder);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Fluent API / Builder Pattern
   // ---------------------------------------------------------------------------
 

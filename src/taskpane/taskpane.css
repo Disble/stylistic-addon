@@ -289,6 +289,13 @@ body {
   color: #a80000;
 }
 
+.result-action-btn--text {
+  width: auto;
+  padding: 0 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .result-action-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -358,4 +365,22 @@ body {
   font-size: 11px;
   color: #323130;
   margin-top: 6px;
+}
+
+/* --- Comment-only type badge --- */
+.result-type-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 4px;
+}
+
+.result-type-badge--comment {
+  background-color: #e8e0f0;
+  color: #6b3fa0;
+  border: 1px solid #c9b3e0;
 }

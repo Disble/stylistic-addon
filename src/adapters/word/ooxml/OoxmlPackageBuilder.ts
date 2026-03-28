@@ -83,6 +83,7 @@ export class OoxmlPackageBuilder {
   private commentJustification = "";
   private commentAuthor = "Stylistic";
   private commentDate = "";
+  private commentOriginalText = "";
 
   private createBuildIds(): { commentId: string; deletionId: string; insertionId: string } {
     const seed = [
@@ -181,12 +182,16 @@ export class OoxmlPackageBuilder {
    * @param justification - Explanation text shown below the category.
    * @param author        - Comment author (e.g., "Stylistic").
    * @param date          - ISO 8601 timestamp for the comment.
+   * @param originalText  - The original text to preserve in the document body (comment-only path).
+   *                        When provided, the body includes the text wrapped in commentRange anchors
+   *                        so the original text is NOT erased by `insertOoxml` replace.
    */
-  withComment(category: string, justification: string, author: string, date: string): this {
+  withComment(category: string, justification: string, author: string, date: string, originalText = ""): this {
     this.commentCategory = category;
     this.commentJustification = justification;
     this.commentAuthor = author;
     this.commentDate = date;
+    this.commentOriginalText = originalText;
     return this;
   }
 
@@ -218,6 +223,13 @@ export class OoxmlPackageBuilder {
         `${rPr}                <w:t xml:space="preserve">${escapeXml(this.insertionText)}</w:t>\n` +
         `              </w:r>\n` +
         `            </w:ins>\n`;
+    }
+
+    // For comment-only mode: when no tracked change is present but originalText is provided,
+    // emit a plain text run so insertOoxml(replace) does NOT erase the matched text.
+    if (changeBody === "" && this.commentOriginalText !== "") {
+      changeBody =
+        `            <w:r><w:t xml:space="preserve">${escapeXml(this.commentOriginalText)}</w:t></w:r>\n`;
     }
 
     // Build comment body: bold category + each justification line as <w:p>

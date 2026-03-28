@@ -197,6 +197,7 @@ function renderResults(
   for (const s of suggestions) {
     const li = document.createElement("li");
     const isFailed = result.failedSuggestions.some((f) => f.id === s.id);
+    const isCommentOnly = s.type === "comment-only";
 
     if (isFailed) {
       li.innerHTML =
@@ -204,32 +205,53 @@ function renderResults(
         `<span class="result-failed">No encontrado: "${escapeHtml(s.originalText)}"</span>` +
         `<span class="result-justification">${escapeHtml(s.justification)}</span>`;
     } else {
+      // category + severity badge always shown
       li.innerHTML =
         `<span class="result-category">${escapeHtml(s.category)}</span>` +
-        `<span class="result-change">` +
-        `<span class="result-original">${escapeHtml(s.originalText)}</span>` +
-        `<span class="result-arrow">&rarr;</span>` +
-        `<span class="result-suggested">${escapeHtml(s.suggestedText)}</span>` +
-        `</span>` +
-        `<span class="result-justification">${escapeHtml(s.justification)}</span>`;
+        `<span class="result-severity result-severity--${escapeHtml(s.severity)}">${escapeHtml(s.severity)}</span>`;
+
+      // comment-only type badge
+      if (isCommentOnly) {
+        const typeBadge = document.createElement("span");
+        typeBadge.className = "result-type-badge result-type-badge--comment";
+        typeBadge.textContent = "comentario";
+        li.appendChild(typeBadge);
+      }
+
+      // diff block only for track-change suggestions
+      if (!isCommentOnly) {
+        const changeSpan = document.createElement("span");
+        changeSpan.innerHTML =
+          `<span class="result-original">${escapeHtml(s.originalText)}</span>` +
+          `<span class="result-arrow">&rarr;</span>` +
+          `<span class="result-suggested">${escapeHtml(s.suggestedText ?? "")}</span>`;
+        changeSpan.className = "result-change";
+        li.appendChild(changeSpan);
+      }
+
+      // justification always shown
+      const justSpan = document.createElement("span");
+      justSpan.className = "result-justification";
+      justSpan.textContent = s.justification;
+      li.appendChild(justSpan);
 
       // Build accept/reject buttons programmatically so they are testable DOM nodes
       const actionsSpan = document.createElement("span");
       actionsSpan.className = "result-actions";
 
       const acceptBtn = document.createElement("button");
-      acceptBtn.className = "result-action-btn";
+      acceptBtn.className = isCommentOnly ? "result-action-btn result-action-btn--text" : "result-action-btn";
       acceptBtn.setAttribute("data-action", "accept");
       acceptBtn.setAttribute("data-suggestion-id", s.id);
       acceptBtn.setAttribute("aria-label", "Aceptar sugerencia");
-      acceptBtn.textContent = "✓";
+      acceptBtn.textContent = isCommentOnly ? "Entendido" : "✓";
 
       const rejectBtn = document.createElement("button");
-      rejectBtn.className = "result-action-btn";
+      rejectBtn.className = isCommentOnly ? "result-action-btn result-action-btn--text" : "result-action-btn";
       rejectBtn.setAttribute("data-action", "reject");
       rejectBtn.setAttribute("data-suggestion-id", s.id);
       rejectBtn.setAttribute("aria-label", "Rechazar sugerencia");
-      rejectBtn.textContent = "✗";
+      rejectBtn.textContent = isCommentOnly ? "Ignorar" : "✗";
 
       const feedbackBtn = document.createElement("button");
       feedbackBtn.className = "feedback-btn";
@@ -356,7 +378,7 @@ async function handleAcceptSuggestion(
     const payload: FeedbackPayload = {
       category: suggestion.category,
       originalText: suggestion.originalText,
-      suggestedText: suggestion.suggestedText,
+      ...(suggestion.suggestedText !== undefined ? { suggestedText: suggestion.suggestedText } : {}),
       justification: suggestion.justification,
       rating: "positive",
       severity: suggestion.severity,
@@ -407,7 +429,7 @@ async function handleRejectSuggestion(
     const payload: FeedbackPayload = {
       category: suggestion.category,
       originalText: suggestion.originalText,
-      suggestedText: suggestion.suggestedText,
+      ...(suggestion.suggestedText !== undefined ? { suggestedText: suggestion.suggestedText } : {}),
       justification: suggestion.justification,
       rating: "negative",
       severity: suggestion.severity,

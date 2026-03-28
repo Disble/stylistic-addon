@@ -27,6 +27,7 @@ vi.mock("./ApplySuggestionCommand", () => ({
 vi.mock("./cleanup/CommentCleanup", () => ({
   cleanupResolvedComments: cleanupMocks.cleanupResolvedComments,
   OVERLAPPING_RELATIONS: ["Equal", "Contains", "ContainsStart", "ContainsEnd", "Inside", "InsideStart", "InsideEnd", "OverlapsBefore", "OverlapsAfter"],
+  COMMENT_ONLY_TAG_PREFIX: "stylistic:comment-only:",
 }));
 
 import { WordAdapter } from "./WordAdapter";
@@ -353,6 +354,7 @@ describe("WordAdapter", () => {
           body: {
             getTrackedChanges: vi.fn(() => tracked),
           },
+          contentControls: { items: [], load: vi.fn() },
         },
         sync: vi.fn().mockResolvedValue(undefined),
       };
@@ -401,6 +403,7 @@ describe("WordAdapter", () => {
           body: {
             getTrackedChanges: vi.fn(() => tracked),
           },
+          contentControls: { items: [], load: vi.fn() },
         },
         sync: vi.fn().mockResolvedValue(undefined),
       };
@@ -418,6 +421,37 @@ describe("WordAdapter", () => {
       expect(rangeA.load).toHaveBeenCalledWith("text");
       expect(rangeB.load).toHaveBeenCalledWith("text");
       expect(rangeDuplicate.load).toHaveBeenCalledWith("text");
+      expect(context.sync).toHaveBeenCalledTimes(2);
+    });
+
+    it("includes the range text of active comment-only CCs", async () => {
+      const ccRange = { load: vi.fn(), text: "texto en observación" };
+      const commentOnlyCC = {
+        tag: "stylistic:comment-only:chunk0-0",
+        getRange: vi.fn(() => ccRange),
+      };
+
+      const tracked = { items: [], load: vi.fn() };
+      const context = {
+        document: {
+          body: {
+            getTrackedChanges: vi.fn(() => tracked),
+          },
+          contentControls: {
+            items: [commentOnlyCC],
+            load: vi.fn(),
+          },
+        },
+        sync: vi.fn().mockResolvedValue(undefined),
+      };
+
+      installWordWithContext(context);
+
+      const result = await adapter.getAppliedOriginalTexts();
+
+      expect(result).toEqual(new Set(["texto en observación"]));
+      expect(commentOnlyCC.getRange).toHaveBeenCalledOnce();
+      expect(ccRange.load).toHaveBeenCalledWith("text");
       expect(context.sync).toHaveBeenCalledTimes(2);
     });
 
@@ -695,6 +729,38 @@ describe("WordAdapter", () => {
       expect(result.status).toBe("error");
       expect(result.error).toContain("Document is read-only");
     });
+
+    it("3.9 - comment-only accept: deletes comment and CC, returns accepted with 0 TCs", async () => {
+      const suggestion = makeSuggestion({
+        id: "s-co-1",
+        type: "comment-only",
+        suggestedText: undefined,
+      });
+
+      const commentDeleteSpy = vi.fn();
+      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const comment = {
+        authorName: "Stylistic",
+        getRange: vi.fn(() => commentRange),
+        delete: commentDeleteSpy,
+      };
+
+      const context = makeResolveSuggestionContext({
+        ccFound: true,
+        spanTCItems: [],
+        comments: [comment],
+      });
+
+      installWordWithContext(context);
+
+      const result = await adapter.acceptSuggestion(suggestion);
+
+      expect(result.status).toBe("accepted");
+      expect(result.trackedChangesAffected).toBe(0);
+      expect(result.commentDeleted).toBe(true);
+      expect(commentDeleteSpy).toHaveBeenCalledOnce();
+      expect(context._cc.delete).toHaveBeenCalledWith(true);
+    });
   });
 
   describe("rejectSuggestion", () => {
@@ -747,6 +813,38 @@ describe("WordAdapter", () => {
       const result = await adapter.rejectSuggestion(suggestion);
 
       expect(result.status).toBe("already-resolved");
+    });
+
+    it("3.10 - comment-only reject: deletes comment and CC, returns rejected with 0 TCs", async () => {
+      const suggestion = makeSuggestion({
+        id: "s-co-2",
+        type: "comment-only",
+        suggestedText: undefined,
+      });
+
+      const commentDeleteSpy = vi.fn();
+      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const comment = {
+        authorName: "Stylistic",
+        getRange: vi.fn(() => commentRange),
+        delete: commentDeleteSpy,
+      };
+
+      const context = makeResolveSuggestionContext({
+        ccFound: true,
+        spanTCItems: [],
+        comments: [comment],
+      });
+
+      installWordWithContext(context);
+
+      const result = await adapter.rejectSuggestion(suggestion);
+
+      expect(result.status).toBe("rejected");
+      expect(result.trackedChangesAffected).toBe(0);
+      expect(result.commentDeleted).toBe(true);
+      expect(commentDeleteSpy).toHaveBeenCalledOnce();
+      expect(context._cc.delete).toHaveBeenCalledWith(true);
     });
   });
 });

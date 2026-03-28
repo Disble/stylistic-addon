@@ -34,10 +34,14 @@ type IndexedText = {
 /**
  * Determines the type of tracked change operation for a suggestion.
  * Strategy pattern: selects insert / delete / replace based on text content.
+ *
+ * Must only be called for `"track-change"` suggestions where `suggestedText`
+ * is defined. Comment-only suggestions are handled by a separate branch in
+ * `execute()` and never reach this function.
  */
 function classifyChange(suggestion: Suggestion): ChangeType {
   const hasOriginal = suggestion.originalText.length > 0;
-  const hasSuggested = suggestion.suggestedText.length > 0;
+  const hasSuggested = (suggestion.suggestedText?.length ?? 0) > 0;
   if (hasOriginal && !hasSuggested) return "delete";
   if (!hasOriginal && hasSuggested) return "insert";
   return "replace";
@@ -105,7 +109,7 @@ export class ApplySuggestionCommand {
 
   constructor(private readonly suggestion: Suggestion) {
     this.id = suggestion.id;
-    this.description = `Apply suggestion: "${suggestion.originalText.substring(0, 40)}" → "${suggestion.suggestedText.substring(0, 40)}"`;
+    this.description = `Apply suggestion [${suggestion.type}]: "${suggestion.originalText.substring(0, 40)}" → "${(suggestion.suggestedText ?? "").substring(0, 40)}"`;
   }
 
   /**
@@ -117,8 +121,12 @@ export class ApplySuggestionCommand {
    */
   async execute(): Promise<CommandResult> {
     console.log(
-      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.originalText.substring(0, 40)}" → "${this.suggestion.suggestedText.substring(0, 40)}"`
+      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.originalText.substring(0, 40)}" → "${(this.suggestion.suggestedText ?? "").substring(0, 40)}"`
     );
+
+    if (this.suggestion.type === "comment-only") {
+      return this.executeCommentOnly();
+    }
 
     const changeType = classifyChange(this.suggestion);
 
@@ -168,7 +176,35 @@ export class ApplySuggestionCommand {
           }
         }
 
-        const range = results.items[0];
+        let range = results.items[0];
+
+        const parentCC = range.parentContentControlOrNullObject;
+        parentCC.load("tag");
+        await context.sync();
+
+        const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
+        const isAlreadyCovered =
+          existingTag.startsWith("stylistic:") || /^chunk\d+-\d+$/.test(existingTag);
+
+        if (isAlreadyCovered) {
+          console.log(
+            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — eliminando wrapper y reinsertando`
+          );
+          parentCC.delete(false);
+          await context.sync();
+
+          results = context.document.body.search(searchText, searchOptions);
+          results.load("items");
+          await context.sync();
+
+          if (results.items.length === 0) {
+            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente`);
+            return { success: false, commandId: this.id, error: "Texto no encontrado tras eliminar CC existente" };
+          }
+
+          range = results.items[0];
+        }
+
         const rangeOoxml = range.getOoxml();
         await context.sync();
         // eslint-disable-next-line office-addins/load-object-before-read
@@ -187,7 +223,7 @@ export class ApplySuggestionCommand {
             .withRunProperties(runProps)
             .withChange(
               this.suggestion.originalText,
-              this.suggestion.suggestedText,
+              this.suggestion.suggestedText ?? "",
               changeType,
               "Stylistic",
               now
@@ -200,7 +236,7 @@ export class ApplySuggestionCommand {
           );
           const insertedRange = range.insertOoxml(ooxml, Word.InsertLocation.replace);
           const cc = insertedRange.insertContentControl();
-          cc.tag = this.suggestion.id;
+          cc.tag = `stylistic:${this.suggestion.type}:${this.suggestion.id}`;
           cc.appearance = "Hidden";
           cc.cannotDelete = false;
           await context.sync();
@@ -211,6 +247,106 @@ export class ApplySuggestionCommand {
           context.document.changeTrackingMode = previousMode as Word.ChangeTrackingMode;
           await context.sync();
         }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": ${message}`);
+      return { success: false, commandId: this.id, error: message };
+    }
+  }
+
+  /**
+   * Executes the comment-only path: locates `originalText` in the document and
+   * inserts a Word comment at that range with NO tracked change markup.
+   *
+   * The search + fallback logic mirrors the track-change path so both paths
+   * share the same whitespace-insensitive anchor resolution behaviour.
+   */
+  private async executeCommentOnly(): Promise<CommandResult> {
+    try {
+      return await Word.run(async (context) => {
+        const searchOptions = {
+          matchCase: true,
+          matchWholeWord: false,
+        };
+
+        let searchText = this.suggestion.originalText;
+        let results = context.document.body.search(searchText, searchOptions);
+        results.load("items");
+        await context.sync();
+
+        if (results.items.length === 0) {
+          context.document.body.load("text");
+          await context.sync();
+
+          const fallbackSearchText = findWhitespaceInsensitiveSlice(
+            this.suggestion.originalText,
+            context.document.body.text
+          );
+
+          if (!fallbackSearchText) {
+            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`);
+            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+          }
+
+          searchText = fallbackSearchText;
+          results = context.document.body.search(searchText, searchOptions);
+          results.load("items");
+          await context.sync();
+
+          if (results.items.length === 0) {
+            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`);
+            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+          }
+        }
+
+        let range = results.items[0];
+
+        const parentCC = range.parentContentControlOrNullObject;
+        parentCC.load("tag");
+        await context.sync();
+
+        const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
+        const isAlreadyCovered =
+          existingTag.startsWith("stylistic:") || /^chunk\d+-\d+$/.test(existingTag);
+
+        if (isAlreadyCovered) {
+          console.log(
+            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado (comment-only) — eliminando wrapper y reinsertando`
+          );
+          parentCC.delete(false);
+          await context.sync();
+
+          results = context.document.body.search(searchText, searchOptions);
+          results.load("items");
+          await context.sync();
+
+          if (results.items.length === 0) {
+            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente (comment-only)`);
+            return { success: false, commandId: this.id, error: "Texto no encontrado tras eliminar CC existente" };
+          }
+
+          range = results.items[0];
+        }
+
+        const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+
+        const ooxml = new OoxmlPackageBuilder()
+          .withComment(this.suggestion.category, this.suggestion.justification, "Stylistic", now, this.suggestion.originalText)
+          .build();
+
+        console.log(
+          `📄 [ApplySuggestionCommand] "${this.id}": insertando comment-only OOXML`
+        );
+        const insertedRange = range.insertOoxml(ooxml, Word.InsertLocation.replace);
+        const cc = insertedRange.insertContentControl();
+        cc.tag = `stylistic:comment-only:${this.suggestion.id}`;
+        cc.appearance = "Hidden";
+        cc.cannotDelete = false;
+        await context.sync();
+        console.log(`✅ [ApplySuggestionCommand] "${this.id}": comment-only insertado exitosamente`);
+
+        return { success: true, commandId: this.id };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

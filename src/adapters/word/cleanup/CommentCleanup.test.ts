@@ -51,6 +51,7 @@ function makeTrackedChange(author: string, range?: CleanupRange): CleanupTracked
 function installWordCleanupContext(options: {
   comments?: CleanupComment[];
   trackedChanges?: CleanupTrackedChange[];
+  contentControlTags?: string[];
 } = {}) {
   const commentsCollection = {
     items: options.comments ?? [],
@@ -62,12 +63,21 @@ function installWordCleanupContext(options: {
     load: vi.fn(),
   };
 
+  const contentControlsCollection = {
+    items: (options.contentControlTags ?? []).map((tag) => ({
+      tag,
+      getRange: vi.fn(() => ({ compareLocationWith: vi.fn() })),
+    })),
+    load: vi.fn(),
+  };
+
   const context = {
     document: {
       body: {
         getComments: vi.fn(() => commentsCollection),
         getTrackedChanges: vi.fn(() => trackedCollection),
       },
+      contentControls: contentControlsCollection,
     },
     sync: vi.fn(async () => undefined),
   };
@@ -76,7 +86,7 @@ function installWordCleanupContext(options: {
     run: vi.fn(async (callback: (ctx: typeof context) => unknown) => callback(context)),
   };
 
-  return { context, commentsCollection, trackedCollection };
+  return { context, commentsCollection, trackedCollection, contentControlsCollection };
 }
 
 describe("cleanupResolvedComments", () => {
@@ -122,7 +132,8 @@ describe("cleanupResolvedComments", () => {
     expect(stylisticA.delete).toHaveBeenCalledOnce();
     expect(stylisticB.delete).toHaveBeenCalledOnce();
     expect(foreignComment.delete).not.toHaveBeenCalled();
-    expect(context.sync).toHaveBeenCalledTimes(2);
+    // Sync 1: load collections; Sync 2: getRange for CC-check; Sync 3: delete comments
+    expect(context.sync).toHaveBeenCalledTimes(3);
   });
 
   it("keeps comments whose ranges overlap a Stylistic tracked change", async () => {
@@ -147,14 +158,17 @@ describe("cleanupResolvedComments", () => {
     const result = await cleanupResolvedComments();
 
     expect(result).toEqual({ deleted: 1, kept: 1 });
-    expect(keptComment.getRange).toHaveBeenCalledOnce();
-    expect(deletedComment.getRange).toHaveBeenCalledOnce();
+    // getRange called twice per comment: once for CC-check (Sync 2) and once for TC colocation (Sync 4)
+    expect(keptComment.getRange).toHaveBeenCalledTimes(2);
+    expect(deletedComment.getRange).toHaveBeenCalledTimes(2);
     expect(trackedChange.getRange).toHaveBeenCalledOnce();
     expect(overlappingCommentRange.compareLocationWith).toHaveBeenCalledWith(tcRange);
     expect(distantCommentRange.compareLocationWith).toHaveBeenCalledWith(tcRange);
     expect(keptComment.delete).not.toHaveBeenCalled();
     expect(deletedComment.delete).toHaveBeenCalledOnce();
-    expect(context.sync).toHaveBeenCalledTimes(4);
+    // Sync 1: load; Sync 2: CC-check getRange (no CCs → skip comparison sync);
+    // Sync 3: TC comment ranges + TC ranges; Sync 4: spatial comparisons; Sync 5: deletes
+    expect(context.sync).toHaveBeenCalledTimes(5);
   });
 
   it("treats every relation outside the overlap allowlist as resolved", async () => {
@@ -186,6 +200,54 @@ describe("cleanupResolvedComments", () => {
     context.sync.mockRejectedValueOnce(failure);
 
     await expect(cleanupResolvedComments()).rejects.toThrow("Word sync failed");
+  });
+
+  it("does not delete comments owned by active comment-only CCs even when there are zero TCs", async () => {
+    // A Stylistic comment whose range overlaps the comment-only CC
+    const commentOnlyCommentRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Equal" } satisfies FakeClientResult)),
+    } satisfies CleanupRange;
+    const commentOnlyComment = makeComment("Stylistic", commentOnlyCommentRange);
+
+    const { context } = installWordCleanupContext({
+      comments: [commentOnlyComment],
+      trackedChanges: [], // zero TCs → would normally short-circuit and delete all
+      contentControlTags: ["stylistic:comment-only:chunk0-0"],
+    });
+
+    const result = await cleanupResolvedComments();
+
+    // The comment is protected — nothing deleted, one kept
+    expect(result).toEqual({ deleted: 0, kept: 1 });
+    expect(commentOnlyComment.delete).not.toHaveBeenCalled();
+    // Sync must not call context.sync for short-circuit TC delete (that branch is skipped)
+    expect(context.sync).toHaveBeenCalled();
+  });
+
+  it("deletes only orphaned track-change comments when all TCs are resolved but comment-only CCs remain", async () => {
+    // comment-only CC still active — its comment must be preserved
+    const commentOnlyCommentRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Equal" } satisfies FakeClientResult)),
+    } satisfies CleanupRange;
+    const commentOnlyComment = makeComment("Stylistic", commentOnlyCommentRange);
+
+    // track-change comment that has no remaining TC
+    const orphanedTcCommentRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Before" } satisfies FakeClientResult)),
+    } satisfies CleanupRange;
+    const orphanedTcComment = makeComment("Stylistic", orphanedTcCommentRange);
+
+    installWordCleanupContext({
+      comments: [commentOnlyComment, orphanedTcComment],
+      trackedChanges: [], // zero TCs → track-change comments are orphans
+      contentControlTags: ["stylistic:comment-only:chunk0-0"],
+    });
+
+    const result = await cleanupResolvedComments();
+
+    expect(result).toEqual({ deleted: 1, kept: 1 });
+    expect(commentOnlyComment.delete).not.toHaveBeenCalled();
+    expect(orphanedTcComment.delete).toHaveBeenCalledOnce();
   });
 });
 

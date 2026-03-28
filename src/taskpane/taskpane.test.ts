@@ -77,6 +77,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     justification: "Mas claro",
     category: "Claridad",
     severity: "medium",
+    type: "track-change",
     ...overrides,
   };
 }
@@ -579,6 +580,51 @@ describe("Accept/Reject buttons", () => {
     vi.useRealTimers();
     delete (globalThis as any).document;
     delete (globalThis as any).Office;
+  });
+
+  it("4.0 — comment-only suggestion: no diff block, 'Entendido'/'Ignorar' button labels, type badge shown", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-co", type: "comment-only", suggestedText: undefined });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    // No diff block (result-change span) should be present
+    expect(li.querySelector(".result-change")).toBeNull();
+
+    // Accept button should read "Entendido", not "✓"
+    const acceptBtn = li.querySelector('[data-action="accept"]');
+    expect(acceptBtn).not.toBeNull();
+    expect(acceptBtn!.textContent).toBe("Entendido");
+
+    // Reject button should read "Ignorar", not "✗"
+    const rejectBtn = li.querySelector('[data-action="reject"]');
+    expect(rejectBtn).not.toBeNull();
+    expect(rejectBtn!.textContent).toBe("Ignorar");
+
+    // Comment-only type badge must be visible
+    const typeBadge = li.querySelector(".result-type-badge--comment");
+    expect(typeBadge).not.toBeNull();
+    expect(typeBadge!.textContent).toBe("comentario");
+  });
+
+  it("4.0b — track-change suggestion: diff block present, '✓'/'✗' button labels", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-tc", type: "track-change", suggestedText: "texto sugerido" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+
+    // Diff block must be present for track-change
+    expect(li.querySelector(".result-change")).not.toBeNull();
+
+    const acceptBtn = li.querySelector('[data-action="accept"]');
+    expect(acceptBtn).not.toBeNull();
+    expect(acceptBtn!.textContent).toBe("✓");
+
+    const rejectBtn = li.querySelector('[data-action="reject"]');
+    expect(rejectBtn).not.toBeNull();
+    expect(rejectBtn!.textContent).toBe("✗");
   });
 
   it("4.1 — renders accept and reject buttons for non-failed suggestions", async () => {

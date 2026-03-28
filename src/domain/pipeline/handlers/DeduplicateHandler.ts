@@ -39,7 +39,10 @@ export class DeduplicateHandler implements PipelineHandler {
   private deduplicateByOriginalText(suggestions: Suggestion[]): Suggestion[] {
     const seen = new Set<string>();
     return suggestions.filter((s) => {
-      const key = s.originalText.toLowerCase();
+      // comment-only suggestions are never deduplicated against each other:
+      // each one is unique per backend response (keyed by id) and targeting
+      // the same originalText with a comment is valid across analysis runs.
+      const key = s.type === "comment-only" ? s.id : s.originalText.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
