@@ -147,9 +147,34 @@ export class ApplySuggestionCommand {
         };
 
         let searchText = this.suggestion.originalText;
-        let results = context.document.body.search(searchText, searchOptions);
-        results.load("items");
-        await context.sync();
+
+        // Attempt 1: exact match (skip if text exceeds 256-char Word API limit)
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        let results!: Word.RangeCollection;
+        if (searchText.length <= 256) {
+          results = context.document.body.search(searchText, searchOptions);
+          results.load("items");
+          await context.sync();
+        }
+
+        // Attempt 1.5: ignorePunct + ignoreSpace — handles em-dashes, ¡, ¿, …
+        // Triggered when text exceeds the API limit OR exact match found nothing.
+        if (searchText.length > 256 || results.items.length === 0) {
+          results = context.document.body.search(searchText, {
+            matchCase: true,
+            matchWholeWord: false,
+            ignorePunct: true,
+            ignoreSpace: true,
+          });
+          results.load("items");
+          await context.sync();
+
+          if (results.items.length > 0) {
+            console.log(
+              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace)`
+            );
+          }
+        }
 
         if (results.items.length === 0) {
           context.document.body.load("text");
@@ -271,9 +296,34 @@ export class ApplySuggestionCommand {
         };
 
         let searchText = this.suggestion.originalText;
-        let results = context.document.body.search(searchText, searchOptions);
-        results.load("items");
-        await context.sync();
+
+        // Attempt 1: exact match (skip if text exceeds 256-char Word API limit)
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        let results!: Word.RangeCollection;
+        if (searchText.length <= 256) {
+          results = context.document.body.search(searchText, searchOptions);
+          results.load("items");
+          await context.sync();
+        }
+
+        // Attempt 1.5: ignorePunct + ignoreSpace — handles em-dashes, ¡, ¿, …
+        // Triggered when text exceeds the API limit OR exact match found nothing.
+        if (searchText.length > 256 || results.items.length === 0) {
+          results = context.document.body.search(searchText, {
+            matchCase: true,
+            matchWholeWord: false,
+            ignorePunct: true,
+            ignoreSpace: true,
+          });
+          results.load("items");
+          await context.sync();
+
+          if (results.items.length > 0) {
+            console.log(
+              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace) (comment-only)`
+            );
+          }
+        }
 
         if (results.items.length === 0) {
           context.document.body.load("text");

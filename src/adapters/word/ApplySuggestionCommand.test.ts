@@ -230,8 +230,9 @@ describe("ApplySuggestionCommand", () => {
     };
     context.document.body.search.mockReset();
     context.document.body.search
-      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))
-      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1.5: ignorePunct+ignoreSpace
+      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));  // attempt 2: whitespace fallback
 
     const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
     const result = await command.execute();
@@ -242,7 +243,7 @@ describe("ApplySuggestionCommand", () => {
       matchWholeWord: false,
     });
     expect(context.document.body.load).toHaveBeenCalledWith("text");
-    expect(context.document.body.search).toHaveBeenNthCalledWith(2, documentText, {
+    expect(context.document.body.search).toHaveBeenNthCalledWith(3, documentText, {
       matchCase: true,
       matchWholeWord: false,
     });
@@ -262,15 +263,16 @@ describe("ApplySuggestionCommand", () => {
     };
     context.document.body.search.mockReset();
     context.document.body.search
-      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))
-      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1.5: ignorePunct+ignoreSpace
+      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));  // attempt 2: whitespace fallback
 
     const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
     const result = await command.execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(context.document.body.load).toHaveBeenCalledWith("text");
-    expect(context.document.body.search).toHaveBeenNthCalledWith(2, documentText, {
+    expect(context.document.body.search).toHaveBeenNthCalledWith(3, documentText, {
       matchCase: true,
       matchWholeWord: false,
     });
@@ -556,6 +558,100 @@ describe("ApplySuggestionCommand", () => {
       // Verify these exact options — no other matchXxx flags that could block special chars
       const callArgs = context.document.body.search.mock.calls[0] as [string, object];
       expect(callArgs[1]).toStrictEqual({ matchCase: true, matchWholeWord: false });
+    });
+
+    it("Test E — usa ignorePunct+ignoreSpace cuando exact match falla para em-dash (track-change)", async () => {
+      const originalText = "—¡Ah!, je, je, je, tendré más cuidado a partir de ahora.";
+      const { context, range } = installWordContext();
+
+      context.document.body.search.mockReset();
+      context.document.body.search
+        .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact — fails
+        .mockImplementationOnce(() => ({                                // attempt 1.5: ignorePunct+ignoreSpace — succeeds
+          items: [{
+            ...range,
+            parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn(), delete: vi.fn() },
+          }],
+          load: vi.fn(),
+        }));
+
+      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      const result = await command.execute();
+
+      expect(result).toEqual({ success: true, commandId: "s1" });
+      expect(context.document.body.search).toHaveBeenCalledTimes(2);
+      expect(context.document.body.search).toHaveBeenNthCalledWith(1, originalText, {
+        matchCase: true,
+        matchWholeWord: false,
+      });
+      expect(context.document.body.search).toHaveBeenNthCalledWith(2, originalText, {
+        matchCase: true,
+        matchWholeWord: false,
+        ignorePunct: true,
+        ignoreSpace: true,
+      });
+      // Whitespace fallback body.load("text") must NOT have been called since 1.5 found it
+      expect(context.document.body.load).not.toHaveBeenCalledWith("text");
+    });
+
+    it("Test F — usa ignorePunct+ignoreSpace en executeCommentOnly() también", async () => {
+      const originalText = "—¡Ah, ¿qué es esto?!";
+      const { context, range } = installWordContext();
+
+      context.document.body.search.mockReset();
+      context.document.body.search
+        .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact — fails
+        .mockImplementationOnce(() => ({                                // attempt 1.5: ignorePunct+ignoreSpace — succeeds
+          items: [{
+            ...range,
+            parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn(), delete: vi.fn() },
+          }],
+          load: vi.fn(),
+        }));
+
+      const command = new ApplySuggestionCommand(
+        makeSuggestion({ originalText, type: "comment-only", suggestedText: undefined })
+      );
+      const result = await command.execute();
+
+      expect(result).toEqual({ success: true, commandId: "s1" });
+      expect(context.document.body.search).toHaveBeenCalledTimes(2);
+      expect(context.document.body.search).toHaveBeenNthCalledWith(2, originalText, {
+        matchCase: true,
+        matchWholeWord: false,
+        ignorePunct: true,
+        ignoreSpace: true,
+      });
+      // Whitespace fallback body.load("text") must NOT have been called since 1.5 found it
+      expect(context.document.body.load).not.toHaveBeenCalledWith("text");
+    });
+
+    it("Test G — salta attempt 1 y va directo a attempt 1.5 si el texto supera 256 caracteres", async () => {
+      const originalText = "a".repeat(257);
+      const { context, range } = installWordContext();
+
+      context.document.body.search.mockReset();
+      context.document.body.search
+        .mockImplementationOnce(() => ({  // first actual call is attempt 1.5 (attempt 1 is skipped)
+          items: [{
+            ...range,
+            parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn(), delete: vi.fn() },
+          }],
+          load: vi.fn(),
+        }));
+
+      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      const result = await command.execute();
+
+      expect(result).toEqual({ success: true, commandId: "s1" });
+      // Only one search call — the 1.5 attempt with ignorePunct+ignoreSpace
+      expect(context.document.body.search).toHaveBeenCalledTimes(1);
+      expect(context.document.body.search).toHaveBeenCalledWith(originalText, {
+        matchCase: true,
+        matchWholeWord: false,
+        ignorePunct: true,
+        ignoreSpace: true,
+      });
     });
   });
 
