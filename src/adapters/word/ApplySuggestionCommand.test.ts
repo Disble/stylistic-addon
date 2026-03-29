@@ -240,6 +240,7 @@ describe("ApplySuggestionCommand", () => {
         tag: "",
         isNullObject: true,
         load: vi.fn(),
+        delete: vi.fn(),
       },
     };
     context.document.body.search.mockReset();
@@ -290,6 +291,7 @@ describe("ApplySuggestionCommand", () => {
         tag: "",
         isNullObject: true,
         load: vi.fn(),
+        delete: vi.fn(),
       },
     };
     context.document.body.search.mockReset();

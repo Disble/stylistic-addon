@@ -20,6 +20,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     justification: "Mejora de estilo",
     category: "Redundancia",
     severity: "medium",
+    type: "track-change",
     ...overrides,
   };
 }

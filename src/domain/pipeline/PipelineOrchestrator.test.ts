@@ -689,6 +689,7 @@ describe("PipelineOrchestrator", () => {
             justification: "Missing comma",
             category: "Puntuación",
             severity: "low",
+            type: "track-change",
           },
         ];
       });

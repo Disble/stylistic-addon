@@ -402,7 +402,9 @@ A `Mock` prefix is allowed in front of any suffix (e.g. `MockFeedbackAdapter.ts`
 - `pre-commit` runs two fast checks only:
   1. **`lint:staged`** — Biome checks and auto-fixes staged TypeScript/JavaScript files.
   2. **`check:filenames`** — validates structural naming conventions across managed folders.
-- Do NOT add builds, tests, or type-checking to `pre-commit`; those belong to CI.
+- `pre-push` runs one slow check:
+  1. **`typecheck`** — full `tsc --noEmit` across the project. Catches type errors before they reach CI.
+- Do NOT add builds or tests to `pre-commit`; slow checks belong in `pre-push`.
 - If Biome auto-fixes a staged file (`stage_fixed: true`), Lefthook re-stages the fix automatically.
 
 ### Available scripts

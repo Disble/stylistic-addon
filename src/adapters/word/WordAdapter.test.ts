@@ -52,6 +52,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     justification: "Mas claro",
     category: "Claridad",
     severity: "medium",
+    type: "track-change",
     ...overrides,
   };
 }

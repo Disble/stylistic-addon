@@ -13,6 +13,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     justification: "test",
     category: "Redundancia",
     severity: "medium",
+    type: "track-change",
     ...overrides,
   };
 }
