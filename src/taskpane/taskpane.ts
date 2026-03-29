@@ -35,8 +35,9 @@ import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
 import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 
-import { Suggestion, InsertionResult, FeedbackPayload } from "../domain/types";
+import { Suggestion, InsertionResult, FeedbackPayload, SuggestionState } from "../domain/types";
 import { IFeedbackPort } from "../domain/ports";
+import { SuggestionStateMachine, mapResultStatusToState } from "../domain/suggestion/SuggestionStateMachine";
 import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 
 /** Duration (ms) before the status bar message auto-hides. */
@@ -289,14 +290,18 @@ function renderResults(
         });
       }
 
+      // One state machine per card — guards double-clicks and enforces valid transitions.
+      // The SM instance is closed over by both handlers and GC'd when the list is cleared.
+      const sm = new SuggestionStateMachine();
+
       if (acceptBtn) {
         acceptBtn.addEventListener("click", () =>
-          handleAcceptSuggestion(s, li, acceptBtn, rejectBtn)
+          handleAcceptSuggestion(s, li, acceptBtn, rejectBtn, sm)
         );
       }
       if (rejectBtn) {
         rejectBtn.addEventListener("click", () =>
-          handleRejectSuggestion(s, li, acceptBtn, rejectBtn)
+          handleRejectSuggestion(s, li, acceptBtn, rejectBtn, sm)
         );
       }
     }
@@ -338,41 +343,99 @@ function getSelectedGenero(): string {
 }
 
 // ---------------------------------------------------------------------------
+// Accept / Reject — DOM helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Appends a small annotation span to a suggestion card `<li>`.
+ * Uses `textContent` (never innerHTML) — XSS-safe.
+ */
+function appendNote(li: HTMLElement, text: string, className: string): void {
+  const note = document.createElement("span");
+  note.className = className;
+  note.textContent = text;
+  li.appendChild(note);
+}
+
+/**
+ * Updates the DOM for a suggestion card based on the SM's terminal state.
+ *
+ * - `accepted` / `rejected`: removes actions div, adds state class.
+ * - `already-resolved`: same + warning note "(ya resuelto)".
+ * - `error`: re-enables buttons, shows error in the status bar.
+ * - `pending` / `resolving`: no-op (not terminal — should not be called).
+ */
+function applySuggestionCardState(
+  li: HTMLElement,
+  state: SuggestionState,
+  acceptBtn: HTMLButtonElement | null,
+  rejectBtn: HTMLButtonElement | null,
+  errorMessage?: string
+): void {
+  switch (state) {
+    case "accepted":
+    case "rejected":
+      li.querySelector(".result-actions")?.remove();
+      li.classList.add(`result-${state}`);
+      break;
+
+    case "already-resolved":
+      li.querySelector(".result-actions")?.remove();
+      li.classList.add("result-already-resolved");
+      appendNote(li, "(ya resuelto)", "result-already-resolved-note");
+      break;
+
+    case "error":
+      if (acceptBtn) acceptBtn.disabled = false;
+      if (rejectBtn) rejectBtn.disabled = false;
+      showStatus(errorMessage ?? "Error desconocido al resolver sugerencia", "error");
+      break;
+
+    default:
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Accept / Reject Suggestion Handlers
 // ---------------------------------------------------------------------------
 
 /**
  * Handles the Accept button click on a suggestion card.
- * Uses the Optimistic UI pattern: disables buttons immediately, then updates
- * the card based on the result of `documentPort.acceptSuggestion`.
- * Also sends positive feedback silently (fire-and-forget).
+ *
+ * Uses a `SuggestionStateMachine` to guard against double-clicks and enforce
+ * valid transitions. Sends positive feedback only on explicit acceptance.
  */
 async function handleAcceptSuggestion(
   suggestion: Suggestion,
   li: HTMLElement,
   acceptBtn: HTMLButtonElement | null,
-  rejectBtn: HTMLButtonElement | null
+  rejectBtn: HTMLButtonElement | null,
+  sm: SuggestionStateMachine
 ): Promise<void> {
+  if (!sm.canTransition("resolving")) return;
+
+  sm.transition("resolving");
   if (acceptBtn) acceptBtn.disabled = true;
   if (rejectBtn) rejectBtn.disabled = true;
 
   const result = await documentPort.acceptSuggestion(suggestion);
 
-  if (
-    result.status === "accepted" ||
-    result.status === "rejected" ||
-    result.status === "already-resolved"
-  ) {
+  // cc-not-found: terminal UI (remove actions, amber note), SM stays at error
+  if (result.status === "cc-not-found") {
+    sm.transition("error");
     li.querySelector(".result-actions")?.remove();
-    li.classList.add(`result-${result.status}`);
-    if (result.status === "already-resolved") {
-      const note = document.createElement("span");
-      note.className = "result-already-resolved-note";
-      note.textContent = "(ya resuelto)";
-      li.appendChild(note);
-    }
+    li.classList.add("result-cc-not-found");
+    appendNote(li, "(aplicación falló)", "result-cc-not-found-note");
+    return;
+  }
 
-    // Send feedback silently — fire-and-forget
+  const targetState = mapResultStatusToState(result.status);
+  sm.transition(targetState);
+  applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
+
+  // Positive feedback only on explicit acceptance from the taskpane
+  if (sm.state === "accepted") {
     const textarea = li.querySelector(".feedback-textarea") as (HTMLTextAreaElement & { value?: string }) | null;
     const commentText = textarea?.value?.trim();
     const payload: FeedbackPayload = {
@@ -385,45 +448,45 @@ async function handleAcceptSuggestion(
       ...(commentText ? { comment: commentText } : {}),
     };
     void feedbackPort.sendFeedback(payload);
-  } else {
-    if (acceptBtn) acceptBtn.disabled = false;
-    if (rejectBtn) rejectBtn.disabled = false;
-    showStatus(result.error ?? "Error desconocido", "error");
   }
 }
 
 /**
  * Handles the Reject button click on a suggestion card.
- * Uses the Optimistic UI pattern: disables buttons immediately, then updates
- * the card based on the result of `documentPort.rejectSuggestion`.
- * Also sends negative feedback silently (fire-and-forget).
+ *
+ * Uses a `SuggestionStateMachine` to guard against double-clicks and enforce
+ * valid transitions. Sends negative feedback only on explicit rejection.
  */
 async function handleRejectSuggestion(
   suggestion: Suggestion,
   li: HTMLElement,
   acceptBtn: HTMLButtonElement | null,
-  rejectBtn: HTMLButtonElement | null
+  rejectBtn: HTMLButtonElement | null,
+  sm: SuggestionStateMachine
 ): Promise<void> {
+  if (!sm.canTransition("resolving")) return;
+
+  sm.transition("resolving");
   if (acceptBtn) acceptBtn.disabled = true;
   if (rejectBtn) rejectBtn.disabled = true;
 
   const result = await documentPort.rejectSuggestion(suggestion);
 
-  if (
-    result.status === "accepted" ||
-    result.status === "rejected" ||
-    result.status === "already-resolved"
-  ) {
+  // cc-not-found: terminal UI (remove actions, amber note), SM stays at error
+  if (result.status === "cc-not-found") {
+    sm.transition("error");
     li.querySelector(".result-actions")?.remove();
-    li.classList.add(`result-${result.status}`);
-    if (result.status === "already-resolved") {
-      const note = document.createElement("span");
-      note.className = "result-already-resolved-note";
-      note.textContent = "(ya resuelto)";
-      li.appendChild(note);
-    }
+    li.classList.add("result-cc-not-found");
+    appendNote(li, "(aplicación falló)", "result-cc-not-found-note");
+    return;
+  }
 
-    // Send feedback silently — fire-and-forget
+  const targetState = mapResultStatusToState(result.status);
+  sm.transition(targetState);
+  applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
+
+  // Negative feedback only on explicit rejection from the taskpane
+  if (sm.state === "rejected") {
     const textarea = li.querySelector(".feedback-textarea") as (HTMLTextAreaElement & { value?: string }) | null;
     const commentText = textarea?.value?.trim();
     const payload: FeedbackPayload = {
@@ -436,10 +499,6 @@ async function handleRejectSuggestion(
       ...(commentText ? { comment: commentText } : {}),
     };
     void feedbackPort.sendFeedback(payload);
-  } else {
-    if (acceptBtn) acceptBtn.disabled = false;
-    if (rejectBtn) rejectBtn.disabled = false;
-    showStatus(result.error ?? "Error desconocido", "error");
   }
 }
 

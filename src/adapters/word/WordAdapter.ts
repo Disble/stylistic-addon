@@ -291,7 +291,7 @@ export class WordAdapter implements IDocumentPort {
 
         if (!cc) {
           return {
-            status: "already-resolved" as const,
+            status: "cc-not-found" as const,
             trackedChangesAffected: 0,
             commentDeleted: false,
           };

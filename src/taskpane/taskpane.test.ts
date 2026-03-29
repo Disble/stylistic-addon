@@ -708,7 +708,7 @@ describe("Accept/Reject buttons", () => {
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
   });
 
-  it("4.5 — already-resolved: adds class and shows '(ya resuelto)' text", async () => {
+  it("4.5 — already-resolved: adds class, shows '(ya resuelto)' note, does NOT send feedback", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "already-resolved",
       trackedChangesAffected: 0,
@@ -727,10 +727,93 @@ describe("Accept/Reject buttons", () => {
     await Promise.resolve();
 
     expect(li.classList.contains("result-already-resolved")).toBe(true);
-    // Find the note span — it should be a child with textContent "(ya resuelto)"
     const noteSpan = li.querySelector(".result-already-resolved-note");
     expect(noteSpan).not.toBeNull();
     expect(noteSpan!.textContent).toBe("(ya resuelto)");
+    // already-resolved must NOT send feedback — we don't know if user accepted or rejected
+    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+  });
+
+  it("4.8 — cc-not-found: adds amber class, shows '(aplicación falló)' note, does NOT send feedback", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "cc-not-found",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(li.classList.contains("result-cc-not-found")).toBe(true);
+    const noteSpan = li.querySelector(".result-cc-not-found-note");
+    expect(noteSpan).not.toBeNull();
+    expect(noteSpan!.textContent).toBe("(aplicación falló)");
+    // Terminal UI — actions div removed, buttons not re-enabled
+    expect(li.querySelector(".result-actions")).toBeNull();
+    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+  });
+
+  it("4.9 — double-click guard: documentPort called exactly once", async () => {
+    const { promise: firstCall, resolve: resolveFirst } = deferred<{ status: string; trackedChangesAffected: number; commentDeleted: boolean }>();
+    taskpaneMocks.acceptSuggestion.mockReturnValue(firstCall);
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+
+    // First click — SM transitions to "resolving"
+    acceptBtn.click();
+    await Promise.resolve();
+
+    // Second click while first is still in-flight — SM guard rejects it
+    acceptBtn.click();
+    await Promise.resolve();
+
+    // Resolve the first call
+    resolveFirst({ status: "accepted", trackedChangesAffected: 1, commentDeleted: false });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Adapter must have been called exactly once
+    expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledTimes(1);
+    expect(li.classList.contains("result-accepted")).toBe(true);
+  });
+
+  it("4.10 — error retry: second click succeeds after error state", async () => {
+    taskpaneMocks.acceptSuggestion
+      .mockResolvedValueOnce({ status: "error", trackedChangesAffected: 0, commentDeleted: false, error: "timeout" })
+      .mockResolvedValueOnce({ status: "accepted", trackedChangesAffected: 1, commentDeleted: true });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+
+    // First click — error
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(acceptBtn.disabled).toBe(false); // re-enabled after error
+
+    // Second click — succeeds
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(li.classList.contains("result-accepted")).toBe(true);
+    expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledTimes(2);
   });
 
   it("4.6 — error case: buttons re-enabled and showStatus called", async () => {

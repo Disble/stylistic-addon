@@ -416,19 +416,21 @@ export interface PipelineResult {
 
 /**
  * Visual state of a suggestion card in the taskpane after user action.
- * - "pending": The suggestion has been applied and awaits user accept/reject.
- * - "accepted": The user accepted the suggestion from the taskpane.
- * - "rejected": The user rejected the suggestion from the taskpane.
- * - "already-resolved": The suggestion was resolved via Word's native Review panel.
+ * - "pending": Applied and awaiting user accept/reject. Buttons enabled.
+ * - "resolving": User clicked; async Word API call in-flight. Buttons disabled.
+ * - "accepted": User accepted from the taskpane. Terminal.
+ * - "rejected": User rejected from the taskpane. Terminal.
+ * - "already-resolved": CC found but TCs already gone (resolved via Word Review pane). Terminal.
+ * - "error": Word API call failed. Non-terminal — user may retry.
  */
-export type SuggestionState = "pending" | "accepted" | "rejected" | "already-resolved"
+export type SuggestionState = "pending" | "resolving" | "accepted" | "rejected" | "already-resolved" | "error"
 
 /**
  * Result returned by `IDocumentPort.acceptSuggestion` and `IDocumentPort.rejectSuggestion`.
  */
 export interface SuggestionActionResult {
   /** Final resolution status of the operation. */
-  status: "accepted" | "rejected" | "already-resolved" | "not-found" | "error"
+  status: "accepted" | "rejected" | "already-resolved" | "cc-not-found" | "not-found" | "error"
   /** Number of tracked changes (insert + delete) that were accepted or rejected. */
   trackedChangesAffected: number
   /** Whether the associated Stylistic comment was successfully deleted. */

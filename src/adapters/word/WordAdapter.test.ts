@@ -713,7 +713,7 @@ describe("WordAdapter", () => {
       expect(context._cc.delete).toHaveBeenCalledWith(true);
     });
 
-    it("3.2 - already-resolved: Content Control not found", async () => {
+    it("3.2 - cc-not-found: Content Control not found (CC was never created)", async () => {
       const suggestion = makeSuggestion({ originalText: "texto original" });
 
       const context = makeResolveSuggestionContext({ ccFound: false });
@@ -721,7 +721,7 @@ describe("WordAdapter", () => {
 
       const result = await adapter.acceptSuggestion(suggestion);
 
-      expect(result.status).toBe("already-resolved");
+      expect(result.status).toBe("cc-not-found");
       expect(result.trackedChangesAffected).toBe(0);
       expect(result.commentDeleted).toBe(false);
     });
@@ -859,7 +859,7 @@ describe("WordAdapter", () => {
       expect(context._cc.delete).toHaveBeenCalledWith(true);
     });
 
-    it("3.8 - already-resolved: Content Control not found", async () => {
+    it("3.8 - cc-not-found: Content Control not found (CC was never created)", async () => {
       const suggestion = makeSuggestion({ originalText: "texto original" });
 
       const context = makeResolveSuggestionContext({ ccFound: false });
@@ -867,7 +867,7 @@ describe("WordAdapter", () => {
 
       const result = await adapter.rejectSuggestion(suggestion);
 
-      expect(result.status).toBe("already-resolved");
+      expect(result.status).toBe("cc-not-found");
     });
 
     it("3.10 - comment-only reject: deletes comment and CC, returns rejected with 0 TCs", async () => {
