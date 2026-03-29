@@ -529,6 +529,24 @@ describe("ApplySuggestionCommand", () => {
     });
   });
 
+  it("does not embed font specs from rPr to prevent Symbol font corruption in tracked changes", async () => {
+    installXmlMocks({
+      serializedRunProperties: '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>',
+    });
+    const { range } = installWordContext();
+
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({
+        originalText: "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien, de eso estoy segura —aseguró con una cálida sonrisa.",
+        suggestedText: "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien; de eso estoy segura —aseguró con una cálida sonrisa.",
+      })
+    );
+    await command.execute();
+
+    const [insertedOoxml] = range.insertOoxml.mock.calls[0] as [string, string];
+    expect(insertedOoxml).not.toContain("w:rFonts");
+  });
+
   describe("special character search", () => {
     it("Test C — searches for text starting with an em-dash", async () => {
       const originalText = "—¡Ah!, je, je, je, tendré más cuidado a partir de ahora.";

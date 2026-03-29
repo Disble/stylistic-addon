@@ -247,6 +247,29 @@ describe("OoxmlPackageBuilder", () => {
       const result = builder.withRunProperties('<w:rPr/>');
       expect(result).toBe(builder);
     });
+
+    it("strips <w:rFonts> from runPropsXml to prevent Symbol font corruption in tracked changes", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withRunProperties('<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/><w:b/></w:rPr>')
+        .withDeletion("texto original", "Stylistic", "2025-01-01T00:00:00Z")
+        .withInsertion("texto sugerido", "Stylistic", "2025-01-01T00:00:00Z")
+        .build();
+
+      expect(xml).not.toContain("w:rFonts");
+      expect(xml).toContain("<w:b/>");
+    });
+
+    it("strips <w:rFonts> with multiple attributes (Calibri, eastAsia, cs forms)", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withRunProperties(
+          '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:i/></w:rPr>'
+        )
+        .withDeletion("texto", "Stylistic", "2025-01-01T00:00:00Z")
+        .build();
+
+      expect(xml).not.toContain("w:rFonts");
+      expect(xml).toContain("<w:i/>");
+    });
   });
 
   // ---------------------------------------------------------------------------

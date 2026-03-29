@@ -116,7 +116,18 @@ export class OoxmlPackageBuilder {
    * @param rPrXml - Serialized `<w:rPr>` element from the original range.
    */
   withRunProperties(rPrXml: string | null): this {
-    this.runPropsXml = rPrXml;
+    if (rPrXml === null) {
+      this.runPropsXml = null;
+      return this;
+    }
+    // Strip <w:rFonts> to prevent Symbol/decorative font corruption:
+    // the first run of a matched range may use a special font for em-dashes or
+    // other typographic characters. Embedding that font in the tracked change
+    // causes ALL text in the del/ins runs to render in that font (e.g., Symbol
+    // maps Latin characters to Greek symbols). Font family is inherited from the
+    // document context; only character-level styling (bold, italic, size…) should
+    // be preserved.
+    this.runPropsXml = rPrXml.replace(/<w:rFonts\b[^>]*\/?>/g, "");
     return this;
   }
 
