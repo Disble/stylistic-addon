@@ -248,6 +248,18 @@ describe("OoxmlPackageBuilder", () => {
       expect(result).toBe(builder);
     });
 
+    it("discards rPr entirely when it only contained <w:rFonts> to prevent empty-rPr Word rejection", () => {
+      const xml = new OoxmlPackageBuilder()
+        .withRunProperties('<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>')
+        .withDeletion("texto original", "Stylistic", "2025-01-01T00:00:00Z")
+        .build();
+
+      // An rPr whose sole child was rFonts must not appear in the tracked change run
+      const delSection = xml.match(/<w:del[\s\S]*?<\/w:del>/)?.[0] ?? "";
+      expect(delSection).not.toContain("<w:rPr");
+      expect(xml).not.toContain("w:rFonts");
+    });
+
     it("strips <w:rFonts> from runPropsXml to prevent Symbol font corruption in tracked changes", () => {
       const xml = new OoxmlPackageBuilder()
         .withRunProperties('<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/><w:b/></w:rPr>')

@@ -127,7 +127,11 @@ export class OoxmlPackageBuilder {
     // maps Latin characters to Greek symbols). Font family is inherited from the
     // document context; only character-level styling (bold, italic, size…) should
     // be preserved.
-    this.runPropsXml = rPrXml.replace(/<w:rFonts\b[^>]*\/?>/g, "");
+    const stripped = rPrXml.replace(/<w:rFonts\b[^>]*\/?>/g, "");
+    // If stripping leaves the rPr with no child elements (only had rFonts),
+    // discard it entirely. An empty <w:rPr> causes Word to reject the OOXML package.
+    const childCount = (stripped.match(/<w:/g) ?? []).length;
+    this.runPropsXml = childCount > 1 ? stripped : null;
     return this;
   }
 
