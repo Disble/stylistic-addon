@@ -5,8 +5,5 @@ pre-commit:
       stage_fixed: true
     filenames:
       run: npm run check:filenames
-
-pre-push:
-  commands:
     typecheck:
       run: npm run typecheck
