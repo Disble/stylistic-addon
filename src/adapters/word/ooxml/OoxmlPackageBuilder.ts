@@ -25,7 +25,7 @@
  * @module OoxmlPackageBuilder
  */
 
-import { ChangeType } from "../../../domain/types";
+import type { ChangeType } from "../../../domain/types";
 
 /** Escapes special XML characters to prevent injection in OOXML content. */
 function escapeXml(str: string): string {
@@ -48,10 +48,7 @@ function hashString(value: string): number {
 }
 
 function deriveInitials(author: string): string {
-  const parts = author
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = author.trim().split(/\s+/).filter(Boolean);
 
   if (parts.length === 0) {
     return "NA";
@@ -65,10 +62,12 @@ function deriveInitials(author: string): string {
     return `${first}${second}`;
   }
 
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("") || "NA";
+  return (
+    parts
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "NA"
+  );
 }
 
 export class OoxmlPackageBuilder {
@@ -85,7 +84,11 @@ export class OoxmlPackageBuilder {
   private commentDate = "";
   private commentOriginalText = "";
 
-  private createBuildIds(): { commentId: string; deletionId: string; insertionId: string } {
+  private createBuildIds(): {
+    commentId: string;
+    deletionId: string;
+    insertionId: string;
+  } {
     const seed = [
       this.runPropsXml ?? "",
       this.deletionText ?? "",
@@ -178,7 +181,7 @@ export class OoxmlPackageBuilder {
     replacement: string,
     type: ChangeType,
     author: string,
-    date: string
+    date: string,
   ): this {
     if (type === "delete" || type === "replace") {
       this.withDeletion(original, author, date);
@@ -201,7 +204,13 @@ export class OoxmlPackageBuilder {
    *                        When provided, the body includes the text wrapped in commentRange anchors
    *                        so the original text is NOT erased by `insertOoxml` replace.
    */
-  withComment(category: string, justification: string, author: string, date: string, originalText = ""): this {
+  withComment(
+    category: string,
+    justification: string,
+    author: string,
+    date: string,
+    originalText = "",
+  ): this {
     this.commentCategory = category;
     this.commentJustification = justification;
     this.commentAuthor = author;
@@ -243,8 +252,7 @@ export class OoxmlPackageBuilder {
     // For comment-only mode: when no tracked change is present but originalText is provided,
     // emit a plain text run so insertOoxml(replace) does NOT erase the matched text.
     if (changeBody === "" && this.commentOriginalText !== "") {
-      changeBody =
-        `            <w:r><w:t xml:space="preserve">${escapeXml(this.commentOriginalText)}</w:t></w:r>\n`;
+      changeBody = `            <w:r><w:t xml:space="preserve">${escapeXml(this.commentOriginalText)}</w:t></w:r>\n`;
     }
 
     // Build comment body: bold category + each justification line as <w:p>
@@ -266,7 +274,7 @@ export class OoxmlPackageBuilder {
           `            <w:r>\n` +
           `              <w:t>${escapeXml(line)}</w:t>\n` +
           `            </w:r>\n` +
-          `          </w:p>`
+          `          </w:p>`,
       )
       .join("\n");
 

@@ -1,13 +1,15 @@
-import { ChunkTextHandler } from "./ChunkTextHandler";
-import { PipelineContext } from "../PipelineContext";
+import type { IAnalysisPort, IDocumentPort } from "../../ports";
+import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";
-import type { IDocumentPort, IAnalysisPort } from "../../ports";
+import { ChunkTextHandler } from "./ChunkTextHandler";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
+function makeContext(
+  overrides: Partial<PipelineContext> = {},
+): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
@@ -206,7 +208,7 @@ describe("ChunkTextHandler", () => {
 
       expect(ctx.chunks).toHaveLength(1);
       expect(ctx.chunks![0].text).toBe(
-        "One continuous paragraph without breaks."
+        "One continuous paragraph without breaks.",
       );
     });
 

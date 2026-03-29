@@ -1,13 +1,15 @@
-import { ReadTextHandler } from "./ReadTextHandler";
-import { PipelineContext } from "../PipelineContext";
+import type { IAnalysisPort, IDocumentPort } from "../../ports";
+import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";
-import type { IDocumentPort, IAnalysisPort } from "../../ports";
+import { ReadTextHandler } from "./ReadTextHandler";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
+function makeContext(
+  overrides: Partial<PipelineContext> = {},
+): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
@@ -201,7 +203,7 @@ describe("ReadTextHandler", () => {
       await handler.handle(ctx, next);
 
       expect(onAbort).toHaveBeenCalledWith(
-        "El documento está vacío. Escribe algo primero."
+        "El documento está vacío. Escribe algo primero.",
       );
     });
   });
@@ -222,7 +224,7 @@ describe("ReadTextHandler", () => {
 
       expect(ctx.aborted).toBe(true);
       expect(ctx.abortReason).toBe(
-        "El documento está vacío. Escribe algo primero."
+        "El documento está vacío. Escribe algo primero.",
       );
       expect(next).not.toHaveBeenCalled();
     });
@@ -276,11 +278,11 @@ describe("ReadTextHandler", () => {
     it("propagates errors thrown by documentPort.getTextToAnalyze", async () => {
       const ctx = makeContext();
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockRejectedValue(
-        new Error("Office.js error")
+        new Error("Office.js error"),
       );
 
       await expect(handler.handle(ctx, next)).rejects.toThrow(
-        "Office.js error"
+        "Office.js error",
       );
       expect(next).not.toHaveBeenCalled();
     });

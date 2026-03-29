@@ -56,7 +56,9 @@ export async function cleanupResolvedComments(): Promise<{
   deleted: number;
   kept: number;
 }> {
-  console.log("🧽 [CommentCleanup] Iniciando limpieza de comentarios resueltos...");
+  console.log(
+    "🧽 [CommentCleanup] Iniciando limpieza de comentarios resueltos...",
+  );
 
   return Word.run(async (context) => {
     // Sync 1: load collections with filtering properties + all Content Controls
@@ -68,18 +70,22 @@ export async function cleanupResolvedComments(): Promise<{
     allCCs.load({ select: "tag" });
     await context.sync();
 
-    const stylisticComments = comments.items.filter((c) => c.authorName === "Stylistic");
-    const stylisticTCs = tracked.items.filter((tc) => tc.author === "Stylistic");
+    const stylisticComments = comments.items.filter(
+      (c) => c.authorName === "Stylistic",
+    );
+    const stylisticTCs = tracked.items.filter(
+      (tc) => tc.author === "Stylistic",
+    );
 
     // Pre-filter: find all active comment-only Content Controls (JS-side prefix filter,
     // because Office.js getByTag() is exact-match only — no prefix query available).
     const commentOnlyCCs = allCCs.items.filter((cc) =>
-      cc.tag.startsWith(COMMENT_ONLY_TAG_PREFIX)
+      cc.tag.startsWith(COMMENT_ONLY_TAG_PREFIX),
     );
 
     console.log(
       `🧽 [CommentCleanup] ${stylisticComments.length} comentarios, ${stylisticTCs.length} TCs, ` +
-        `${commentOnlyCCs.length} CCs comment-only activos`
+        `${commentOnlyCCs.length} CCs comment-only activos`,
     );
 
     if (stylisticComments.length === 0) {
@@ -92,15 +98,16 @@ export async function cleanupResolvedComments(): Promise<{
     await context.sync();
 
     // Sync 3: build colocation matrix between comments and comment-only CC ranges
-    let commentOnlyCommentIndices = new Set<number>();
+    const commentOnlyCommentIndices = new Set<number>();
 
     if (commentOnlyCCs.length > 0) {
-      const ccComparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] = [];
+      const ccComparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
+        [];
       for (let i = 0; i < stylisticComments.length; i++) {
         ccComparisons[i] = [];
         for (let j = 0; j < commentOnlyCCRanges.length; j++) {
           ccComparisons[i][j] = commentRangesForCCCheck[i].compareLocationWith(
-            commentOnlyCCRanges[j]
+            commentOnlyCCRanges[j],
           );
         }
       }
@@ -109,7 +116,7 @@ export async function cleanupResolvedComments(): Promise<{
       // Identify which Stylistic comments are anchored to a comment-only CC
       for (let i = 0; i < stylisticComments.length; i++) {
         const isOwnedByCommentOnlyCC = commentOnlyCCRanges.some((_, j) =>
-          OVERLAPPING_RELATIONS.includes(ccComparisons[i][j].value as string)
+          OVERLAPPING_RELATIONS.includes(ccComparisons[i][j].value as string),
         );
         if (isOwnedByCommentOnlyCC) {
           commentOnlyCommentIndices.add(i);
@@ -118,7 +125,7 @@ export async function cleanupResolvedComments(): Promise<{
     }
 
     console.log(
-      `🧽 [CommentCleanup] ${commentOnlyCommentIndices.size} comentario(s) protegidos por CCs comment-only`
+      `🧽 [CommentCleanup] ${commentOnlyCommentIndices.size} comentario(s) protegidos por CCs comment-only`,
     );
 
     // Separate track-change comments (subject to TC-colocation check) from
@@ -127,10 +134,14 @@ export async function cleanupResolvedComments(): Promise<{
       .map((_, i) => i)
       .filter((i) => !commentOnlyCommentIndices.has(i));
 
-    const trackChangeComments = trackChangeCommentIndices.map((i) => stylisticComments[i]);
+    const trackChangeComments = trackChangeCommentIndices.map(
+      (i) => stylisticComments[i],
+    );
 
     if (trackChangeComments.length === 0) {
-      console.log("🧽 [CommentCleanup] Sin comentarios track-change que limpiar");
+      console.log(
+        "🧽 [CommentCleanup] Sin comentarios track-change que limpiar",
+      );
       return { deleted: 0, kept: commentOnlyCommentIndices.size };
     }
 
@@ -142,7 +153,7 @@ export async function cleanupResolvedComments(): Promise<{
       await context.sync();
       console.log(
         `🧽 [CommentCleanup] ${trackChangeComments.length} eliminados (short-circuit), ` +
-          `${commentOnlyCommentIndices.size} conservados (comment-only)`
+          `${commentOnlyCommentIndices.size} conservados (comment-only)`,
       );
       return {
         deleted: trackChangeComments.length,
@@ -156,7 +167,8 @@ export async function cleanupResolvedComments(): Promise<{
     await context.sync();
 
     // Sync 5: build spatial comparison matrix (track-change comments × TCs)
-    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] = [];
+    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
+      [];
     for (let i = 0; i < tcCommentRanges.length; i++) {
       comparisons[i] = [];
       for (let j = 0; j < tcRanges.length; j++) {
@@ -171,7 +183,7 @@ export async function cleanupResolvedComments(): Promise<{
 
     for (let i = 0; i < trackChangeComments.length; i++) {
       const hasColocatedTC = tcRanges.some((_, j) =>
-        OVERLAPPING_RELATIONS.includes(comparisons[i][j].value as string)
+        OVERLAPPING_RELATIONS.includes(comparisons[i][j].value as string),
       );
 
       if (hasColocatedTC) {
@@ -184,7 +196,9 @@ export async function cleanupResolvedComments(): Promise<{
 
     // Sync 6: execute deletes
     await context.sync();
-    console.log(`🧽 [CommentCleanup] ${deleted} eliminados, ${kept} conservados`);
+    console.log(
+      `🧽 [CommentCleanup] ${deleted} eliminados, ${kept} conservados`,
+    );
     return { deleted, kept };
   });
 }

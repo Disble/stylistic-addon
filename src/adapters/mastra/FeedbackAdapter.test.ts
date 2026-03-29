@@ -1,6 +1,6 @@
 /* global console */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FeedbackPayload } from "../../domain/types";
 
 // ---------------------------------------------------------------------------
@@ -25,10 +25,12 @@ vi.mock("@mastra/client-js", () => ({
   },
 }));
 
-import { FeedbackAdapter } from "./FeedbackAdapter";
 import { FEEDBACK_WORKFLOW_ID } from "../../infrastructure/config";
+import { FeedbackAdapter } from "./FeedbackAdapter";
 
-function makePayload(overrides: Partial<FeedbackPayload> = {}): FeedbackPayload {
+function makePayload(
+  overrides: Partial<FeedbackPayload> = {},
+): FeedbackPayload {
   return {
     category: "Redundancia",
     originalText: "completamente necesario",
@@ -57,16 +59,23 @@ describe("FeedbackAdapter", () => {
     const adapter = new FeedbackAdapter();
     await adapter.sendFeedback(makePayload());
 
-    expect(feedbackAdapterMocks.getWorkflow).toHaveBeenCalledWith(FEEDBACK_WORKFLOW_ID);
+    expect(feedbackAdapterMocks.getWorkflow).toHaveBeenCalledWith(
+      FEEDBACK_WORKFLOW_ID,
+    );
   });
 
   it("calls createRun() then run.start() with the payload as inputData", async () => {
     const adapter = new FeedbackAdapter();
-    const payload = makePayload({ rating: "negative", comment: "test comment" });
+    const payload = makePayload({
+      rating: "negative",
+      comment: "test comment",
+    });
     await adapter.sendFeedback(payload);
 
     expect(feedbackAdapterMocks.createRun).toHaveBeenCalledOnce();
-    expect(feedbackAdapterMocks.start).toHaveBeenCalledWith({ inputData: payload });
+    expect(feedbackAdapterMocks.start).toHaveBeenCalledWith({
+      inputData: payload,
+    });
   });
 
   it("includes justification in the payload sent to start()", async () => {
@@ -75,12 +84,16 @@ describe("FeedbackAdapter", () => {
     await adapter.sendFeedback(payload);
 
     expect(feedbackAdapterMocks.start).toHaveBeenCalledWith({
-      inputData: expect.objectContaining({ justification: "Frase innecesaria" }),
+      inputData: expect.objectContaining({
+        justification: "Frase innecesaria",
+      }),
     });
   });
 
   it("swallows errors silently — never throws when createRun rejects", async () => {
-    feedbackAdapterMocks.createRun.mockRejectedValue(new Error("Network error"));
+    feedbackAdapterMocks.createRun.mockRejectedValue(
+      new Error("Network error"),
+    );
 
     const adapter = new FeedbackAdapter();
     // Must not throw

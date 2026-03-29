@@ -23,7 +23,7 @@
  * @module ApplySuggestionCommand
  */
 
-import { Suggestion, CommandResult, ChangeType } from "../../domain/types";
+import type { ChangeType, CommandResult, Suggestion } from "../../domain/types";
 import { OoxmlPackageBuilder } from "./ooxml/OoxmlPackageBuilder";
 
 type IndexedText = {
@@ -81,7 +81,10 @@ function removeWhitespaceWithIndices(text: string): IndexedText {
   return { text: normalized, indices };
 }
 
-function findWhitespaceInsensitiveSlice(searchText: string, documentText: string): string | null {
+function findWhitespaceInsensitiveSlice(
+  searchText: string,
+  documentText: string,
+): string | null {
   const normalizedSearch = removeWhitespaceWithIndices(searchText).text;
   if (normalizedSearch.length === 0) {
     return null;
@@ -94,7 +97,8 @@ function findWhitespaceInsensitiveSlice(searchText: string, documentText: string
   }
 
   const start = normalizedDocument.indices[matchIndex];
-  const end = normalizedDocument.indices[matchIndex + normalizedSearch.length - 1] + 1;
+  const end =
+    normalizedDocument.indices[matchIndex + normalizedSearch.length - 1] + 1;
   return documentText.slice(start, end);
 }
 
@@ -121,7 +125,7 @@ export class ApplySuggestionCommand {
    */
   async execute(): Promise<CommandResult> {
     console.log(
-      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.originalText.substring(0, 40)}" → "${(this.suggestion.suggestedText ?? "").substring(0, 40)}"`
+      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.originalText.substring(0, 40)}" → "${(this.suggestion.suggestedText ?? "").substring(0, 40)}"`,
     );
 
     if (this.suggestion.type === "comment-only") {
@@ -131,7 +135,9 @@ export class ApplySuggestionCommand {
     const changeType = classifyChange(this.suggestion);
 
     if (changeType === "insert") {
-      console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": inserción sin texto ancla`);
+      console.warn(
+        `⚠️ [ApplySuggestionCommand] "${this.id}": inserción sin texto ancla`,
+      );
       return {
         success: false,
         commandId: this.id,
@@ -171,7 +177,7 @@ export class ApplySuggestionCommand {
 
           if (results.items.length > 0) {
             console.log(
-              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace)`
+              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace)`,
             );
           }
         }
@@ -182,12 +188,18 @@ export class ApplySuggestionCommand {
 
           const fallbackSearchText = findWhitespaceInsensitiveSlice(
             this.suggestion.originalText,
-            context.document.body.text
+            context.document.body.text,
           );
 
           if (!fallbackSearchText) {
-            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`);
-            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+            console.warn(
+              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`,
+            );
+            return {
+              success: false,
+              commandId: this.id,
+              error: "Texto original no encontrado",
+            };
           }
 
           searchText = fallbackSearchText;
@@ -196,8 +208,14 @@ export class ApplySuggestionCommand {
           await context.sync();
 
           if (results.items.length === 0) {
-            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`);
-            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+            console.warn(
+              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`,
+            );
+            return {
+              success: false,
+              commandId: this.id,
+              error: "Texto original no encontrado",
+            };
           }
         }
 
@@ -209,11 +227,12 @@ export class ApplySuggestionCommand {
 
         const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
         const isAlreadyCovered =
-          existingTag.startsWith("stylistic:") || /^chunk\d+-\d+$/.test(existingTag);
+          existingTag.startsWith("stylistic:") ||
+          /^chunk\d+-\d+$/.test(existingTag);
 
         if (isAlreadyCovered) {
           console.log(
-            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — eliminando wrapper y reinsertando`
+            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — eliminando wrapper y reinsertando`,
           );
           parentCC.delete(false);
           await context.sync();
@@ -223,8 +242,14 @@ export class ApplySuggestionCommand {
           await context.sync();
 
           if (results.items.length === 0) {
-            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente`);
-            return { success: false, commandId: this.id, error: "Texto no encontrado tras eliminar CC existente" };
+            console.warn(
+              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente`,
+            );
+            return {
+              success: false,
+              commandId: this.id,
+              error: "Texto no encontrado tras eliminar CC existente",
+            };
           }
 
           range = results.items[0];
@@ -251,25 +276,36 @@ export class ApplySuggestionCommand {
               this.suggestion.suggestedText ?? "",
               changeType,
               "Stylistic",
-              now
+              now,
             )
-            .withComment(this.suggestion.category, this.suggestion.justification, "Stylistic", now)
+            .withComment(
+              this.suggestion.category,
+              this.suggestion.justification,
+              "Stylistic",
+              now,
+            )
             .build();
 
           console.log(
-            `📄 [ApplySuggestionCommand] "${this.id}": insertando OOXML (tipo: ${changeType})`
+            `📄 [ApplySuggestionCommand] "${this.id}": insertando OOXML (tipo: ${changeType})`,
           );
-          const insertedRange = range.insertOoxml(ooxml, Word.InsertLocation.replace);
+          const insertedRange = range.insertOoxml(
+            ooxml,
+            Word.InsertLocation.replace,
+          );
           const cc = insertedRange.insertContentControl();
           cc.tag = `stylistic:${this.suggestion.type}:${this.suggestion.id}`;
           cc.appearance = "Hidden";
           cc.cannotDelete = false;
           await context.sync();
-          console.log(`✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`);
+          console.log(
+            `✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`,
+          );
 
           return { success: true, commandId: this.id };
         } finally {
-          context.document.changeTrackingMode = previousMode as Word.ChangeTrackingMode;
+          context.document.changeTrackingMode =
+            previousMode as Word.ChangeTrackingMode;
           await context.sync();
         }
       });
@@ -320,7 +356,7 @@ export class ApplySuggestionCommand {
 
           if (results.items.length > 0) {
             console.log(
-              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace) (comment-only)`
+              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace) (comment-only)`,
             );
           }
         }
@@ -331,12 +367,18 @@ export class ApplySuggestionCommand {
 
           const fallbackSearchText = findWhitespaceInsensitiveSlice(
             this.suggestion.originalText,
-            context.document.body.text
+            context.document.body.text,
           );
 
           if (!fallbackSearchText) {
-            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`);
-            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+            console.warn(
+              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`,
+            );
+            return {
+              success: false,
+              commandId: this.id,
+              error: "Texto original no encontrado",
+            };
           }
 
           searchText = fallbackSearchText;
@@ -345,8 +387,14 @@ export class ApplySuggestionCommand {
           await context.sync();
 
           if (results.items.length === 0) {
-            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`);
-            return { success: false, commandId: this.id, error: "Texto original no encontrado" };
+            console.warn(
+              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`,
+            );
+            return {
+              success: false,
+              commandId: this.id,
+              error: "Texto original no encontrado",
+            };
           }
         }
 
@@ -358,11 +406,12 @@ export class ApplySuggestionCommand {
 
         const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
         const isAlreadyCovered =
-          existingTag.startsWith("stylistic:") || /^chunk\d+-\d+$/.test(existingTag);
+          existingTag.startsWith("stylistic:") ||
+          /^chunk\d+-\d+$/.test(existingTag);
 
         if (isAlreadyCovered) {
           console.log(
-            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado (comment-only) — eliminando wrapper y reinsertando`
+            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado (comment-only) — eliminando wrapper y reinsertando`,
           );
           parentCC.delete(false);
           await context.sync();
@@ -372,8 +421,14 @@ export class ApplySuggestionCommand {
           await context.sync();
 
           if (results.items.length === 0) {
-            console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente (comment-only)`);
-            return { success: false, commandId: this.id, error: "Texto no encontrado tras eliminar CC existente" };
+            console.warn(
+              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente (comment-only)`,
+            );
+            return {
+              success: false,
+              commandId: this.id,
+              error: "Texto no encontrado tras eliminar CC existente",
+            };
           }
 
           range = results.items[0];
@@ -382,19 +437,30 @@ export class ApplySuggestionCommand {
         const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
 
         const ooxml = new OoxmlPackageBuilder()
-          .withComment(this.suggestion.category, this.suggestion.justification, "Stylistic", now, this.suggestion.originalText)
+          .withComment(
+            this.suggestion.category,
+            this.suggestion.justification,
+            "Stylistic",
+            now,
+            this.suggestion.originalText,
+          )
           .build();
 
         console.log(
-          `📄 [ApplySuggestionCommand] "${this.id}": insertando comment-only OOXML`
+          `📄 [ApplySuggestionCommand] "${this.id}": insertando comment-only OOXML`,
         );
-        const insertedRange = range.insertOoxml(ooxml, Word.InsertLocation.replace);
+        const insertedRange = range.insertOoxml(
+          ooxml,
+          Word.InsertLocation.replace,
+        );
         const cc = insertedRange.insertContentControl();
         cc.tag = `stylistic:comment-only:${this.suggestion.id}`;
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
-        console.log(`✅ [ApplySuggestionCommand] "${this.id}": comment-only insertado exitosamente`);
+        console.log(
+          `✅ [ApplySuggestionCommand] "${this.id}": comment-only insertado exitosamente`,
+        );
 
         return { success: true, commandId: this.id };
       });

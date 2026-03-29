@@ -101,7 +101,11 @@ export interface WorkflowInput {
   text: string;
 
   /** Genre identifier matching the backend enum (e.g., "narrativa-literaria", "general"). */
-  genero: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
+  genero:
+    | "narrativa-literaria"
+    | "ensayo-academico"
+    | "periodismo-cultural"
+    | "general";
 
   /** Author slug in kebab-case used to load the author profile from the workspace. */
   autorSlug: string;
@@ -198,7 +202,12 @@ export interface ChunkPollResult {
 /**
  * Phases of the analysis pipeline, used for progress reporting in the UI.
  */
-export type AnalysisPhase = "reading" | "connecting" | "analyzing" | "applying" | "done";
+export type AnalysisPhase =
+  | "reading"
+  | "connecting"
+  | "analyzing"
+  | "applying"
+  | "done";
 
 /**
  * Callback signature for reporting progress during multi-phase analysis.
@@ -212,7 +221,7 @@ export type ProgressCallback = (
   phase: AnalysisPhase,
   current: number,
   total: number,
-  message: string
+  message: string,
 ) => void;
 
 // ---------------------------------------------------------------------------
@@ -423,18 +432,30 @@ export interface PipelineResult {
  * - "already-resolved": CC found but TCs already gone (resolved via Word Review pane). Terminal.
  * - "error": Word API call failed. Non-terminal — user may retry.
  */
-export type SuggestionState = "pending" | "resolving" | "accepted" | "rejected" | "already-resolved" | "error"
+export type SuggestionState =
+  | "pending"
+  | "resolving"
+  | "accepted"
+  | "rejected"
+  | "already-resolved"
+  | "error";
 
 /**
  * Result returned by `IDocumentPort.acceptSuggestion` and `IDocumentPort.rejectSuggestion`.
  */
 export interface SuggestionActionResult {
   /** Final resolution status of the operation. */
-  status: "accepted" | "rejected" | "already-resolved" | "cc-not-found" | "not-found" | "error"
+  status:
+    | "accepted"
+    | "rejected"
+    | "already-resolved"
+    | "cc-not-found"
+    | "not-found"
+    | "error";
   /** Number of tracked changes (insert + delete) that were accepted or rejected. */
-  trackedChangesAffected: number
+  trackedChangesAffected: number;
   /** Whether the associated Stylistic comment was successfully deleted. */
-  commentDeleted: boolean
+  commentDeleted: boolean;
   /** Human-readable error message when status is "error" or "not-found". */
-  error?: string
+  error?: string;
 }

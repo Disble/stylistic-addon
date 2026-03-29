@@ -16,16 +16,16 @@
  * @module ports
  */
 
-import {
-  TextSource,
-  Suggestion,
+import type {
+  ChunkPollResult,
+  ChunkSubmitResult,
+  FeedbackPayload,
   InsertionResult,
   ProgressCallback,
-  TextChunk,
-  ChunkSubmitResult,
-  ChunkPollResult,
+  Suggestion,
   SuggestionActionResult,
-  FeedbackPayload,
+  TextChunk,
+  TextSource,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ export interface IDocumentPort {
    */
   applySuggestions(
     suggestions: Suggestion[],
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
   ): Promise<InsertionResult>;
 
   /**
@@ -76,14 +76,14 @@ export interface IDocumentPort {
    * Also deletes the associated Stylistic comment if present.
    * Returns a result object — never throws.
    */
-  acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>
+  acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
 
   /**
    * Rejects all Stylistic tracked changes associated with a suggestion.
    * Also deletes the associated Stylistic comment if present.
    * Returns a result object — never throws.
    */
-  rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>
+  rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,14 +111,17 @@ export interface IAnalysisPort {
   submitChunkAnalysis(
     chunk: TextChunk,
     genero: string,
-    autorSlug: string
+    autorSlug: string,
   ): Promise<ChunkSubmitResult>;
 
   /**
    * Polls an existing workflow run created by `submitChunkAnalysis()`.
    * Returns intermediate or terminal workflow state for the chunk.
    */
-  pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult>;
+  pollChunkAnalysis(
+    chunkIndex: number,
+    runId: string,
+  ): Promise<ChunkPollResult>;
 }
 
 // ---------------------------------------------------------------------------

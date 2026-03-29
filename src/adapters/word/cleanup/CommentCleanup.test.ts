@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { cleanupResolvedComments, OVERLAPPING_RELATIONS } from "./CommentCleanup";
+import {
+  cleanupResolvedComments,
+  OVERLAPPING_RELATIONS,
+} from "./CommentCleanup";
 
 type FakeClientResult = { value: string };
 
@@ -34,7 +37,10 @@ function makeComment(authorName: string, range?: CleanupRange): CleanupComment {
   };
 }
 
-function makeTrackedChange(author: string, range?: CleanupRange): CleanupTrackedChange {
+function makeTrackedChange(
+  author: string,
+  range?: CleanupRange,
+): CleanupTrackedChange {
   const actualRange =
     range ??
     ({
@@ -48,11 +54,13 @@ function makeTrackedChange(author: string, range?: CleanupRange): CleanupTracked
   };
 }
 
-function installWordCleanupContext(options: {
-  comments?: CleanupComment[];
-  trackedChanges?: CleanupTrackedChange[];
-  contentControlTags?: string[];
-} = {}) {
+function installWordCleanupContext(
+  options: {
+    comments?: CleanupComment[];
+    trackedChanges?: CleanupTrackedChange[];
+    contentControlTags?: string[];
+  } = {},
+) {
   const commentsCollection = {
     items: options.comments ?? [],
     load: vi.fn(),
@@ -83,10 +91,17 @@ function installWordCleanupContext(options: {
   };
 
   (globalThis as any).Word = {
-    run: vi.fn(async (callback: (ctx: typeof context) => unknown) => callback(context)),
+    run: vi.fn(async (callback: (ctx: typeof context) => unknown) =>
+      callback(context),
+    ),
   };
 
-  return { context, commentsCollection, trackedCollection, contentControlsCollection };
+  return {
+    context,
+    commentsCollection,
+    trackedCollection,
+    contentControlsCollection,
+  };
 }
 
 describe("cleanupResolvedComments", () => {
@@ -102,16 +117,21 @@ describe("cleanupResolvedComments", () => {
   it("returns zero counts when there are no Stylistic comments", async () => {
     const otherComment = makeComment("Someone Else");
     const otherTc = makeTrackedChange("Stylistic");
-    const { context, commentsCollection, trackedCollection } = installWordCleanupContext({
-      comments: [otherComment],
-      trackedChanges: [otherTc],
-    });
+    const { context, commentsCollection, trackedCollection } =
+      installWordCleanupContext({
+        comments: [otherComment],
+        trackedChanges: [otherTc],
+      });
 
     const result = await cleanupResolvedComments();
 
     expect(result).toEqual({ deleted: 0, kept: 0 });
-    expect(trackedCollection.load).toHaveBeenCalledWith({ select: "author,type" });
-    expect(commentsCollection.load).toHaveBeenCalledWith({ select: "authorName" });
+    expect(trackedCollection.load).toHaveBeenCalledWith({
+      select: "author,type",
+    });
+    expect(commentsCollection.load).toHaveBeenCalledWith({
+      select: "authorName",
+    });
     expect(otherComment.delete).not.toHaveBeenCalled();
     expect(context.sync).toHaveBeenCalledTimes(1);
   });
@@ -141,10 +161,14 @@ describe("cleanupResolvedComments", () => {
       compareLocationWith: vi.fn(),
     } satisfies CleanupRange;
     const overlappingCommentRange = {
-      compareLocationWith: vi.fn(() => ({ value: "Contains" } satisfies FakeClientResult)),
+      compareLocationWith: vi.fn(
+        () => ({ value: "Contains" }) satisfies FakeClientResult,
+      ),
     } satisfies CleanupRange;
     const distantCommentRange = {
-      compareLocationWith: vi.fn(() => ({ value: "Before" } satisfies FakeClientResult)),
+      compareLocationWith: vi.fn(
+        () => ({ value: "Before" }) satisfies FakeClientResult,
+      ),
     } satisfies CleanupRange;
 
     const keptComment = makeComment("Stylistic", overlappingCommentRange);
@@ -162,8 +186,12 @@ describe("cleanupResolvedComments", () => {
     expect(keptComment.getRange).toHaveBeenCalledTimes(2);
     expect(deletedComment.getRange).toHaveBeenCalledTimes(2);
     expect(trackedChange.getRange).toHaveBeenCalledOnce();
-    expect(overlappingCommentRange.compareLocationWith).toHaveBeenCalledWith(tcRange);
-    expect(distantCommentRange.compareLocationWith).toHaveBeenCalledWith(tcRange);
+    expect(overlappingCommentRange.compareLocationWith).toHaveBeenCalledWith(
+      tcRange,
+    );
+    expect(distantCommentRange.compareLocationWith).toHaveBeenCalledWith(
+      tcRange,
+    );
     expect(keptComment.delete).not.toHaveBeenCalled();
     expect(deletedComment.delete).toHaveBeenCalledOnce();
     // Sync 1: load; Sync 2: CC-check getRange (no CCs → skip comparison sync);
@@ -176,7 +204,9 @@ describe("cleanupResolvedComments", () => {
       compareLocationWith: vi.fn(),
     } satisfies CleanupRange;
     const edgeComment = makeComment("Stylistic", {
-      compareLocationWith: vi.fn(() => ({ value: "AdjacentBefore" } satisfies FakeClientResult)),
+      compareLocationWith: vi.fn(
+        () => ({ value: "AdjacentBefore" }) satisfies FakeClientResult,
+      ),
     });
     installWordCleanupContext({
       comments: [edgeComment],
@@ -205,9 +235,14 @@ describe("cleanupResolvedComments", () => {
   it("does not delete comments owned by active comment-only CCs even when there are zero TCs", async () => {
     // A Stylistic comment whose range overlaps the comment-only CC
     const commentOnlyCommentRange = {
-      compareLocationWith: vi.fn(() => ({ value: "Equal" } satisfies FakeClientResult)),
+      compareLocationWith: vi.fn(
+        () => ({ value: "Equal" }) satisfies FakeClientResult,
+      ),
     } satisfies CleanupRange;
-    const commentOnlyComment = makeComment("Stylistic", commentOnlyCommentRange);
+    const commentOnlyComment = makeComment(
+      "Stylistic",
+      commentOnlyCommentRange,
+    );
 
     const { context } = installWordCleanupContext({
       comments: [commentOnlyComment],
@@ -227,13 +262,20 @@ describe("cleanupResolvedComments", () => {
   it("deletes only orphaned track-change comments when all TCs are resolved but comment-only CCs remain", async () => {
     // comment-only CC still active — its comment must be preserved
     const commentOnlyCommentRange = {
-      compareLocationWith: vi.fn(() => ({ value: "Equal" } satisfies FakeClientResult)),
+      compareLocationWith: vi.fn(
+        () => ({ value: "Equal" }) satisfies FakeClientResult,
+      ),
     } satisfies CleanupRange;
-    const commentOnlyComment = makeComment("Stylistic", commentOnlyCommentRange);
+    const commentOnlyComment = makeComment(
+      "Stylistic",
+      commentOnlyCommentRange,
+    );
 
     // track-change comment that has no remaining TC
     const orphanedTcCommentRange = {
-      compareLocationWith: vi.fn(() => ({ value: "Before" } satisfies FakeClientResult)),
+      compareLocationWith: vi.fn(
+        () => ({ value: "Before" }) satisfies FakeClientResult,
+      ),
     } satisfies CleanupRange;
     const orphanedTcComment = makeComment("Stylistic", orphanedTcCommentRange);
 
@@ -251,14 +293,14 @@ describe("cleanupResolvedComments", () => {
   });
 });
 
-describe('OVERLAPPING_RELATIONS', () => {
-  it('should be exported and contain expected relation types', () => {
-    expect(OVERLAPPING_RELATIONS).toBeDefined()
-    expect(Array.isArray(OVERLAPPING_RELATIONS)).toBe(true)
-    expect(OVERLAPPING_RELATIONS).toContain('Equal')
-    expect(OVERLAPPING_RELATIONS).toContain('Contains')
-    expect(OVERLAPPING_RELATIONS).toContain('Inside')
-    expect(OVERLAPPING_RELATIONS).toContain('OverlapsBefore')
-    expect(OVERLAPPING_RELATIONS).toContain('OverlapsAfter')
-  })
-})
+describe("OVERLAPPING_RELATIONS", () => {
+  it("should be exported and contain expected relation types", () => {
+    expect(OVERLAPPING_RELATIONS).toBeDefined();
+    expect(Array.isArray(OVERLAPPING_RELATIONS)).toBe(true);
+    expect(OVERLAPPING_RELATIONS).toContain("Equal");
+    expect(OVERLAPPING_RELATIONS).toContain("Contains");
+    expect(OVERLAPPING_RELATIONS).toContain("Inside");
+    expect(OVERLAPPING_RELATIONS).toContain("OverlapsBefore");
+    expect(OVERLAPPING_RELATIONS).toContain("OverlapsAfter");
+  });
+});

@@ -1,13 +1,19 @@
-import { RetryAnalysisDecorator } from "./RetryAnalysisDecorator";
 import type { IAnalysisPort } from "../domain/ports";
-import type { TextChunk, ChunkSubmitResult, ChunkPollResult } from "../domain/types";
+import type {
+  ChunkPollResult,
+  ChunkSubmitResult,
+  TextChunk,
+} from "../domain/types";
+import { RetryAnalysisDecorator } from "./RetryAnalysisDecorator";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /** Creates a mock IAnalysisPort with vi.fn() stubs. */
-function createMockPort(): { [K in keyof IAnalysisPort]: ReturnType<typeof vi.fn> } {
+function createMockPort(): {
+  [K in keyof IAnalysisPort]: ReturnType<typeof vi.fn>;
+} {
   return {
     checkConnection: vi.fn(),
     submitChunkAnalysis: vi.fn(),
@@ -26,19 +32,31 @@ function makeChunk(overrides: Partial<TextChunk> = {}): TextChunk {
   };
 }
 
-function submitSuccess(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkSubmitResult {
+function submitSuccess(
+  chunkIndex = 0,
+  runId = `run-${chunkIndex}`,
+): ChunkSubmitResult {
   return { chunkIndex, runId };
 }
 
-function submitFailure(chunkIndex = 0, error = "Backend timeout"): ChunkSubmitResult {
+function submitFailure(
+  chunkIndex = 0,
+  error = "Backend timeout",
+): ChunkSubmitResult {
   return { chunkIndex, error };
 }
 
-function pollRunning(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResult {
+function pollRunning(
+  chunkIndex = 0,
+  runId = `run-${chunkIndex}`,
+): ChunkPollResult {
   return { chunkIndex, runId, status: "running", suggestions: [] };
 }
 
-function pollSuccess(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResult {
+function pollSuccess(
+  chunkIndex = 0,
+  runId = `run-${chunkIndex}`,
+): ChunkPollResult {
   return { chunkIndex, runId, status: "success", suggestions: [] };
 }
 
@@ -105,9 +123,15 @@ describe("RetryAnalysisDecorator", () => {
 
   describe("submitChunkAnalysis", () => {
     it("returns the first successful submission without retrying", async () => {
-      mockPort.submitChunkAnalysis.mockResolvedValue(submitSuccess(0, "run-123"));
+      mockPort.submitChunkAnalysis.mockResolvedValue(
+        submitSuccess(0, "run-123"),
+      );
 
-      const result = await decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const result = await decorator.submitChunkAnalysis(
+        makeChunk(),
+        "general",
+        "Disble",
+      );
 
       expect(result).toEqual({ chunkIndex: 0, runId: "run-123" });
       expect(mockPort.submitChunkAnalysis).toHaveBeenCalledOnce();
@@ -119,17 +143,30 @@ describe("RetryAnalysisDecorator", () => {
         .mockResolvedValueOnce(submitFailure(0, "temporary submit failure"))
         .mockResolvedValueOnce(submitSuccess(0, "run-456"));
 
-      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const promise = decorator.submitChunkAnalysis(
+        makeChunk(),
+        "general",
+        "Disble",
+      );
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
 
-      await expect(promise).resolves.toEqual({ chunkIndex: 0, runId: "run-456" });
+      await expect(promise).resolves.toEqual({
+        chunkIndex: 0,
+        runId: "run-456",
+      });
       expect(mockPort.submitChunkAnalysis).toHaveBeenCalledTimes(2);
     });
 
     it("retries thrown submit errors and returns a normalized failure after exhaustion", async () => {
-      mockPort.submitChunkAnalysis.mockRejectedValue(new Error("socket hang up"));
+      mockPort.submitChunkAnalysis.mockRejectedValue(
+        new Error("socket hang up"),
+      );
 
-      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const promise = decorator.submitChunkAnalysis(
+        makeChunk(),
+        "general",
+        "Disble",
+      );
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 2);
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 4);
@@ -138,15 +175,21 @@ describe("RetryAnalysisDecorator", () => {
         chunkIndex: 0,
         error: "Chunk 1: socket hang up",
       });
-      expect(mockPort.submitChunkAnalysis).toHaveBeenCalledTimes(MAX_RETRIES + 1);
+      expect(mockPort.submitChunkAnalysis).toHaveBeenCalledTimes(
+        MAX_RETRIES + 1,
+      );
       expect(errorSpy).toHaveBeenCalled();
     });
 
     it("does not retry deterministic 4xx submit errors", async () => {
-      const error = Object.assign(new Error("HTTP error! status: 400"), { status: 400 });
+      const error = Object.assign(new Error("HTTP error! status: 400"), {
+        status: 400,
+      });
       mockPort.submitChunkAnalysis.mockRejectedValue(error);
 
-      await expect(decorator.submitChunkAnalysis(makeChunk(), "general", "Disble")).resolves.toEqual({
+      await expect(
+        decorator.submitChunkAnalysis(makeChunk(), "general", "Disble"),
+      ).resolves.toEqual({
         chunkIndex: 0,
         error: "Chunk 1: HTTP error! status: 400",
       });
@@ -206,7 +249,9 @@ describe("RetryAnalysisDecorator", () => {
     });
 
     it("does not retry deterministic 4xx poll errors", async () => {
-      const error = Object.assign(new Error("HTTP error! status: 400"), { status: 400 });
+      const error = Object.assign(new Error("HTTP error! status: 400"), {
+        status: 400,
+      });
       mockPort.pollChunkAnalysis.mockRejectedValue(error);
 
       await expect(decorator.pollChunkAnalysis(4, "run-789")).resolves.toEqual({
@@ -221,7 +266,9 @@ describe("RetryAnalysisDecorator", () => {
     });
 
     it("still retries 429 poll errors because they can be transient", async () => {
-      const error = Object.assign(new Error("HTTP error! status: 429"), { status: 429 });
+      const error = Object.assign(new Error("HTTP error! status: 429"), {
+        status: 429,
+      });
       mockPort.pollChunkAnalysis.mockRejectedValue(error);
 
       const promise = decorator.pollChunkAnalysis(4, "run-789");

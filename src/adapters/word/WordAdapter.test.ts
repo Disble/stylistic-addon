@@ -1,4 +1,4 @@
-import type { Suggestion, CommandResult } from "../../domain/types";
+import type { CommandResult, Suggestion } from "../../domain/types";
 
 const commandMocks = vi.hoisted(() => ({
   constructor: vi.fn<(suggestion: Suggestion) => void>(),
@@ -26,7 +26,17 @@ vi.mock("./ApplySuggestionCommand", () => ({
 
 vi.mock("./cleanup/CommentCleanup", () => ({
   cleanupResolvedComments: cleanupMocks.cleanupResolvedComments,
-  OVERLAPPING_RELATIONS: ["Equal", "Contains", "ContainsStart", "ContainsEnd", "Inside", "InsideStart", "InsideEnd", "OverlapsBefore", "OverlapsAfter"],
+  OVERLAPPING_RELATIONS: [
+    "Equal",
+    "Contains",
+    "ContainsStart",
+    "ContainsEnd",
+    "Inside",
+    "InsideStart",
+    "InsideEnd",
+    "OverlapsBefore",
+    "OverlapsAfter",
+  ],
   COMMENT_ONLY_TAG_PREFIX: "stylistic:comment-only:",
 }));
 
@@ -47,7 +57,9 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 }
 
 function installWordWithContext(context: any) {
-  const run = vi.fn(async <T>(callback: WordRunCallback<T>) => callback(context));
+  const run = vi.fn(async <T>(callback: WordRunCallback<T>) =>
+    callback(context),
+  );
   (globalThis as any).Word = { run };
   return run;
 }
@@ -64,7 +76,7 @@ function makeParagraph(
     styleBuiltIn: string;
     firstLineIndent: number;
     leftIndent: number;
-  }> = {}
+  }> = {},
 ) {
   return {
     text,
@@ -83,7 +95,10 @@ describe("WordAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     adapter = new WordAdapter();
-    cleanupMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    cleanupMocks.cleanupResolvedComments.mockResolvedValue({
+      deleted: 0,
+      kept: 0,
+    });
 
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -131,7 +146,7 @@ describe("WordAdapter", () => {
       expect(context.document.getSelection).toHaveBeenCalledOnce();
       expect(selection.load).toHaveBeenCalledWith("text");
       expect(selection.paragraphs.load).toHaveBeenCalledWith(
-        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent",
       );
       expect(body.load).not.toHaveBeenCalled();
       expect(body.paragraphs.load).not.toHaveBeenCalled();
@@ -172,10 +187,10 @@ describe("WordAdapter", () => {
 
       expect(selection.load).toHaveBeenCalledWith("text");
       expect(selection.paragraphs.load).toHaveBeenCalledWith(
-        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent",
       );
       expect(body.paragraphs.load).toHaveBeenCalledWith(
-        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent",
       );
       expect(body.load).not.toHaveBeenCalled();
       expect(context.sync).toHaveBeenCalledTimes(2);
@@ -197,7 +212,9 @@ describe("WordAdapter", () => {
           items: [
             makeParagraph("Título", { styleBuiltIn: "Title" }),
             makeParagraph("Párrafo actual"),
-            makeParagraph("Segundo párrafo con sangría.", { firstLineIndent: 18 }),
+            makeParagraph("Segundo párrafo con sangría.", {
+              firstLineIndent: 18,
+            }),
           ],
           load: vi.fn(),
         },
@@ -219,10 +236,10 @@ describe("WordAdapter", () => {
 
       expect(selection.load).toHaveBeenCalledWith("text");
       expect(selection.paragraphs.load).toHaveBeenCalledWith(
-        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent",
       );
       expect(body.paragraphs.load).toHaveBeenCalledWith(
-        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
+        "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent",
       );
       expect(body.load).not.toHaveBeenCalled();
       expect(context.sync).toHaveBeenCalledTimes(2);
@@ -255,7 +272,10 @@ describe("WordAdapter", () => {
 
       installWordWithContext(context);
 
-      await expect(adapter.getTextToAnalyze()).resolves.toEqual({ text: "", isSelection: false });
+      await expect(adapter.getTextToAnalyze()).resolves.toEqual({
+        text: "",
+        isSelection: false,
+      });
     });
 
     it("keeps a Word title paragraph separated from the first body paragraph", async () => {
@@ -309,7 +329,9 @@ describe("WordAdapter", () => {
         paragraphs: {
           items: [
             makeParagraph("Primer párrafo."),
-            makeParagraph("Segundo párrafo con sangría visual.", { firstLineIndent: 18 }),
+            makeParagraph("Segundo párrafo con sangría visual.", {
+              firstLineIndent: 18,
+            }),
           ],
           load: vi.fn(),
         },
@@ -334,7 +356,9 @@ describe("WordAdapter", () => {
       const error = new Error("Office host unavailable");
       const run = installRejectingWord(error);
 
-      await expect(adapter.getTextToAnalyze()).rejects.toThrow("Office host unavailable");
+      await expect(adapter.getTextToAnalyze()).rejects.toThrow(
+        "Office host unavailable",
+      );
 
       expect(run).toHaveBeenCalledOnce();
     });
@@ -377,8 +401,16 @@ describe("WordAdapter", () => {
       const ignoredInsertedRange = { load: vi.fn(), text: "ignorado" };
       const ignoredAuthorRange = { load: vi.fn(), text: "ignorado" };
 
-      const deletedA = { author: "Stylistic", type: "Deleted", getRange: vi.fn(() => rangeA) };
-      const deletedB = { author: "Stylistic", type: "Deleted", getRange: vi.fn(() => rangeB) };
+      const deletedA = {
+        author: "Stylistic",
+        type: "Deleted",
+        getRange: vi.fn(() => rangeA),
+      };
+      const deletedB = {
+        author: "Stylistic",
+        type: "Deleted",
+        getRange: vi.fn(() => rangeB),
+      };
       const deletedDuplicate = {
         author: "Stylistic",
         type: "Deleted",
@@ -459,7 +491,7 @@ describe("WordAdapter", () => {
       installRejectingWord(new Error("Tracked changes unavailable"));
 
       await expect(adapter.getAppliedOriginalTexts()).rejects.toThrow(
-        "Tracked changes unavailable"
+        "Tracked changes unavailable",
       );
     });
   });
@@ -493,7 +525,9 @@ describe("WordAdapter", () => {
           error: "Texto original no encontrado",
         });
 
-      await expect(adapter.applySuggestions([first, second], onProgress)).resolves.toEqual({
+      await expect(
+        adapter.applySuggestions([first, second], onProgress),
+      ).resolves.toEqual({
         successCount: 1,
         failedSuggestions: [first],
       });
@@ -508,14 +542,14 @@ describe("WordAdapter", () => {
         "applying",
         1,
         2,
-        "Aplicando sugerencia 1 de 2..."
+        "Aplicando sugerencia 1 de 2...",
       );
       expect(onProgress).toHaveBeenNthCalledWith(
         2,
         "applying",
         2,
         2,
-        "Aplicando sugerencia 2 de 2..."
+        "Aplicando sugerencia 2 de 2...",
       );
       expect(warnSpy).toHaveBeenCalledOnce();
     });
@@ -533,7 +567,9 @@ describe("WordAdapter", () => {
         .mockRejectedValueOnce(new Error("insert failed"))
         .mockResolvedValueOnce({ success: true, commandId: "s-1" });
 
-      await expect(adapter.applySuggestions([first, second, third], onProgress)).resolves.toEqual({
+      await expect(
+        adapter.applySuggestions([first, second, third], onProgress),
+      ).resolves.toEqual({
         successCount: 2,
         failedSuggestions: [second],
       });
@@ -552,21 +588,21 @@ describe("WordAdapter", () => {
         "applying",
         1,
         3,
-        "Aplicando sugerencia 1 de 3..."
+        "Aplicando sugerencia 1 de 3...",
       );
       expect(onProgress).toHaveBeenNthCalledWith(
         2,
         "applying",
         2,
         3,
-        "Aplicando sugerencia 2 de 3..."
+        "Aplicando sugerencia 2 de 3...",
       );
       expect(onProgress).toHaveBeenNthCalledWith(
         3,
         "applying",
         3,
         3,
-        "Aplicando sugerencia 3 de 3..."
+        "Aplicando sugerencia 3 de 3...",
       );
       expect(warnSpy).toHaveBeenCalledOnce();
     });
@@ -574,9 +610,18 @@ describe("WordAdapter", () => {
     it("Test A — applies suggestions in reverse array order to avoid CC interference", async () => {
       // Three suggestions: A (early in doc / index 0), B (late / index 1), C (middle / index 2)
       // Backend returns them as [A, B, C]. After reverse they should be applied: C, B, A.
-      const suggA = makeSuggestion({ id: "s-a", originalText: "texto al inicio del doc" });
-      const suggB = makeSuggestion({ id: "s-b", originalText: "texto al final del doc" });
-      const suggC = makeSuggestion({ id: "s-c", originalText: "texto en el medio del doc" });
+      const suggA = makeSuggestion({
+        id: "s-a",
+        originalText: "texto al inicio del doc",
+      });
+      const suggB = makeSuggestion({
+        id: "s-b",
+        originalText: "texto al final del doc",
+      });
+      const suggC = makeSuggestion({
+        id: "s-c",
+        originalText: "texto en el medio del doc",
+      });
 
       commandMocks.execute
         .mockResolvedValueOnce({ success: true, commandId: "s-c" })
@@ -612,28 +657,47 @@ describe("WordAdapter", () => {
         .mockResolvedValueOnce({ success: true, commandId: "s-late" })
         .mockResolvedValueOnce({ success: true, commandId: "s-early" });
 
-      const result = await adapter.applySuggestions([earlyInParagraph, lateInParagraph]);
+      const result = await adapter.applySuggestions([
+        earlyInParagraph,
+        lateInParagraph,
+      ]);
 
       expect(result).toEqual({ successCount: 2, failedSuggestions: [] });
       // lateInParagraph must run first (it appears later in the doc, so reverse order puts it first)
-      expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, lateInParagraph);
-      expect(commandMocks.constructor).toHaveBeenNthCalledWith(2, earlyInParagraph);
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(
+        1,
+        lateInParagraph,
+      );
+      expect(commandMocks.constructor).toHaveBeenNthCalledWith(
+        2,
+        earlyInParagraph,
+      );
     });
   });
 
   describe("cleanupResolvedComments", () => {
     it("delegates to CommentCleanup and returns its counts", async () => {
-      cleanupMocks.cleanupResolvedComments.mockResolvedValueOnce({ deleted: 3, kept: 1 });
+      cleanupMocks.cleanupResolvedComments.mockResolvedValueOnce({
+        deleted: 3,
+        kept: 1,
+      });
 
-      await expect(adapter.cleanupResolvedComments()).resolves.toEqual({ deleted: 3, kept: 1 });
+      await expect(adapter.cleanupResolvedComments()).resolves.toEqual({
+        deleted: 3,
+        kept: 1,
+      });
 
       expect(cleanupMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
     });
 
     it("propagates cleanup errors", async () => {
-      cleanupMocks.cleanupResolvedComments.mockRejectedValueOnce(new Error("cleanup failed"));
+      cleanupMocks.cleanupResolvedComments.mockRejectedValueOnce(
+        new Error("cleanup failed"),
+      );
 
-      await expect(adapter.cleanupResolvedComments()).rejects.toThrow("cleanup failed");
+      await expect(adapter.cleanupResolvedComments()).rejects.toThrow(
+        "cleanup failed",
+      );
     });
   });
 
@@ -644,7 +708,7 @@ describe("WordAdapter", () => {
     comments = [] as any[],
   }) {
     const spanTCCollection = { items: spanTCItems, load: vi.fn() };
-    
+
     const cc = {
       getTrackedChanges: vi.fn(() => spanTCCollection),
       getRange: vi.fn(() => ({ compareLocationWith: vi.fn() })),
@@ -676,18 +740,33 @@ describe("WordAdapter", () => {
 
   describe("acceptSuggestion", () => {
     it("3.1 - happy path: accepts 2 Stylistic TCs (Deleted+Added) and deletes colocated comment", async () => {
-      const suggestion = makeSuggestion({ id: "s-1", originalText: "texto original" });
+      const suggestion = makeSuggestion({
+        id: "s-1",
+        originalText: "texto original",
+      });
 
       const tcAccept1 = vi.fn();
       const tcAccept2 = vi.fn();
       const commentDeleteSpy = vi.fn();
 
       const spanTCItems = [
-        { author: "Stylistic", type: "Deleted", accept: tcAccept1, reject: vi.fn() },
-        { author: "Stylistic", type: "Added", accept: tcAccept2, reject: vi.fn() },
+        {
+          author: "Stylistic",
+          type: "Deleted",
+          accept: tcAccept1,
+          reject: vi.fn(),
+        },
+        {
+          author: "Stylistic",
+          type: "Added",
+          accept: tcAccept2,
+          reject: vi.fn(),
+        },
       ];
 
-      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const commentRange = {
+        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+      };
       const comment = {
         authorName: "Stylistic",
         getRange: vi.fn(() => commentRange),
@@ -738,7 +817,7 @@ describe("WordAdapter", () => {
 
       const context = makeResolveSuggestionContext({
         ccFound: true,
-        spanTCItems: [otherTC]
+        spanTCItems: [otherTC],
       });
       installWordWithContext(context);
 
@@ -754,7 +833,12 @@ describe("WordAdapter", () => {
       const tcAcceptSpy = vi.fn();
 
       const spanTCItems = [
-        { author: "Stylistic", type: "Deleted", accept: tcAcceptSpy, reject: vi.fn() },
+        {
+          author: "Stylistic",
+          type: "Deleted",
+          accept: tcAcceptSpy,
+          reject: vi.fn(),
+        },
       ];
 
       const context = makeResolveSuggestionContext({
@@ -793,7 +877,9 @@ describe("WordAdapter", () => {
       });
 
       const commentDeleteSpy = vi.fn();
-      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const commentRange = {
+        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+      };
       const comment = {
         authorName: "Stylistic",
         getRange: vi.fn(() => commentRange),
@@ -820,7 +906,10 @@ describe("WordAdapter", () => {
 
   describe("rejectSuggestion", () => {
     it("3.7 - happy path: rejects 2 Stylistic TCs and deletes colocated comment", async () => {
-      const suggestion = makeSuggestion({ id: "s-1", originalText: "texto original" });
+      const suggestion = makeSuggestion({
+        id: "s-1",
+        originalText: "texto original",
+      });
 
       const tcReject1 = vi.fn();
       const tcReject2 = vi.fn();
@@ -829,11 +918,23 @@ describe("WordAdapter", () => {
       const commentDeleteSpy = vi.fn();
 
       const spanTCItems = [
-        { author: "Stylistic", type: "Deleted", accept: tcAccept1, reject: tcReject1 },
-        { author: "Stylistic", type: "Added", accept: tcAccept2, reject: tcReject2 },
+        {
+          author: "Stylistic",
+          type: "Deleted",
+          accept: tcAccept1,
+          reject: tcReject1,
+        },
+        {
+          author: "Stylistic",
+          type: "Added",
+          accept: tcAccept2,
+          reject: tcReject2,
+        },
       ];
 
-      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const commentRange = {
+        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+      };
       const comment = {
         authorName: "Stylistic",
         getRange: vi.fn(() => commentRange),
@@ -878,7 +979,9 @@ describe("WordAdapter", () => {
       });
 
       const commentDeleteSpy = vi.fn();
-      const commentRange = { compareLocationWith: vi.fn(() => ({ value: "Equal" })) };
+      const commentRange = {
+        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+      };
       const comment = {
         authorName: "Stylistic",
         getRange: vi.fn(() => commentRange),

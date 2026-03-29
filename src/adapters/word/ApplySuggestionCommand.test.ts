@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
+import type { Suggestion } from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
 import { OoxmlPackageBuilder } from "./ooxml/OoxmlPackageBuilder";
-import type { Suggestion } from "../../domain/types";
 
 type ParentCC = {
   tag: string;
@@ -60,14 +59,16 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function installXmlMocks(options: {
-  hasRunProperties?: boolean;
-  serializedRunProperties?: string;
-  throwOnParse?: boolean;
-} = {}): void {
+function installXmlMocks(
+  options: {
+    hasRunProperties?: boolean;
+    serializedRunProperties?: string;
+    throwOnParse?: boolean;
+  } = {},
+): void {
   const {
     hasRunProperties = true,
-    serializedRunProperties = '<w:rPr><w:b/></w:rPr>',
+    serializedRunProperties = "<w:rPr><w:b/></w:rPr>",
     throwOnParse = false,
   } = options;
 
@@ -83,27 +84,29 @@ function installXmlMocks(options: {
           getElementsByTagNameNS: vi.fn(() => (hasRunProperties ? [{}] : [])),
         };
       }),
-    }))
+    })),
   );
 
   vi.stubGlobal(
     "XMLSerializer",
     vi.fn().mockImplementation(() => ({
       serializeToString: vi.fn(() => serializedRunProperties),
-    }))
+    })),
   );
 }
 
-function installWordContext(options: {
-  resultsItems?: SearchRange[];
-  searchResultsSequence?: SearchRange[][];
-  documentText?: string;
-  rangeOoxml?: string;
-  initialTrackingMode?: string;
-  insertError?: Error;
-  onSync?: (count: number) => void | Promise<void>;
-  parentCC?: Partial<ParentCC>;
-} = {}): ApplyTestContext {
+function installWordContext(
+  options: {
+    resultsItems?: SearchRange[];
+    searchResultsSequence?: SearchRange[][];
+    documentText?: string;
+    rangeOoxml?: string;
+    initialTrackingMode?: string;
+    insertError?: Error;
+    onSync?: (count: number) => void | Promise<void>;
+    parentCC?: Partial<ParentCC>;
+  } = {},
+): ApplyTestContext {
   const {
     resultsItems,
     searchResultsSequence,
@@ -145,7 +148,8 @@ function installWordContext(options: {
     document: {
       body: {
         search: vi.fn(() => {
-          const nextItems = searchResultsSequence?.[searchCalls.length] ?? resultsItems ?? [range];
+          const nextItems = searchResultsSequence?.[searchCalls.length] ??
+            resultsItems ?? [range];
           const results = {
             items: nextItems,
             load: vi.fn(),
@@ -172,7 +176,9 @@ function installWordContext(options: {
     InsertLocation: {
       replace: "Replace",
     },
-    run: vi.fn(async (callback: (ctx: typeof context) => unknown) => callback(context)),
+    run: vi.fn(async (callback: (ctx: typeof context) => unknown) =>
+      callback(context),
+    ),
   });
 
   return { context, range, cc };
@@ -198,17 +204,21 @@ describe("ApplySuggestionCommand", () => {
     const command = new ApplySuggestionCommand(makeSuggestion());
     const result = await command.execute();
 
-    const results = context.document.body.search.mock.results[0]?.value as SearchResults;
+    const results = context.document.body.search.mock.results[0]
+      ?.value as SearchResults;
 
     expect(result).toEqual({
       success: false,
       commandId: "s1",
       error: "Texto original no encontrado",
     });
-    expect(context.document.body.search).toHaveBeenCalledWith("texto original", {
-      matchCase: true,
-      matchWholeWord: false,
-    });
+    expect(context.document.body.search).toHaveBeenCalledWith(
+      "texto original",
+      {
+        matchCase: true,
+        matchWholeWord: false,
+      },
+    );
     expect(results.load).toHaveBeenCalledWith("items");
     expect(context.document.load).not.toHaveBeenCalled();
     expect(builderSpy).not.toHaveBeenCalled();
@@ -226,27 +236,44 @@ describe("ApplySuggestionCommand", () => {
     const fallbackRange: SearchRange = {
       getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
       insertOoxml: range.insertOoxml,
-      parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn() },
+      parentContentControlOrNullObject: {
+        tag: "",
+        isNullObject: true,
+        load: vi.fn(),
+      },
     };
     context.document.body.search.mockReset();
     context.document.body.search
-      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact
-      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1.5: ignorePunct+ignoreSpace
-      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));  // attempt 2: whitespace fallback
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() })) // attempt 1: exact
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() })) // attempt 1.5: ignorePunct+ignoreSpace
+      .mockImplementationOnce(() => ({
+        items: [fallbackRange],
+        load: vi.fn(),
+      })); // attempt 2: whitespace fallback
 
-    const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ originalText }),
+    );
     const result = await command.execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
-    expect(context.document.body.search).toHaveBeenNthCalledWith(1, originalText, {
-      matchCase: true,
-      matchWholeWord: false,
-    });
+    expect(context.document.body.search).toHaveBeenNthCalledWith(
+      1,
+      originalText,
+      {
+        matchCase: true,
+        matchWholeWord: false,
+      },
+    );
     expect(context.document.body.load).toHaveBeenCalledWith("text");
-    expect(context.document.body.search).toHaveBeenNthCalledWith(3, documentText, {
-      matchCase: true,
-      matchWholeWord: false,
-    });
+    expect(context.document.body.search).toHaveBeenNthCalledWith(
+      3,
+      documentText,
+      {
+        matchCase: true,
+        matchWholeWord: false,
+      },
+    );
   });
 
   it("falls back when backend flattens paragraph breaks into spaces", async () => {
@@ -259,23 +286,36 @@ describe("ApplySuggestionCommand", () => {
     const fallbackRange: SearchRange = {
       getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
       insertOoxml: range.insertOoxml,
-      parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn() },
+      parentContentControlOrNullObject: {
+        tag: "",
+        isNullObject: true,
+        load: vi.fn(),
+      },
     };
     context.document.body.search.mockReset();
     context.document.body.search
-      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact
-      .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1.5: ignorePunct+ignoreSpace
-      .mockImplementationOnce(() => ({ items: [fallbackRange], load: vi.fn() }));  // attempt 2: whitespace fallback
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() })) // attempt 1: exact
+      .mockImplementationOnce(() => ({ items: [], load: vi.fn() })) // attempt 1.5: ignorePunct+ignoreSpace
+      .mockImplementationOnce(() => ({
+        items: [fallbackRange],
+        load: vi.fn(),
+      })); // attempt 2: whitespace fallback
 
-    const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ originalText }),
+    );
     const result = await command.execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(context.document.body.load).toHaveBeenCalledWith("text");
-    expect(context.document.body.search).toHaveBeenNthCalledWith(3, documentText, {
-      matchCase: true,
-      matchWholeWord: false,
-    });
+    expect(context.document.body.search).toHaveBeenNthCalledWith(
+      3,
+      documentText,
+      {
+        matchCase: true,
+        matchWholeWord: false,
+      },
+    );
   });
 
   it("builds OOXML for replace suggestions, inserts it, and restores tracking mode", async () => {
@@ -286,9 +326,15 @@ describe("ApplySuggestionCommand", () => {
       rangeOoxml:
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:rPr><w:i/></w:rPr></w:document>',
     });
-    const withRunPropertiesSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withRunProperties");
+    const withRunPropertiesSpy = vi.spyOn(
+      OoxmlPackageBuilder.prototype,
+      "withRunProperties",
+    );
     const withChangeSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withChange");
-    const withCommentSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withComment");
+    const withCommentSpy = vi.spyOn(
+      OoxmlPackageBuilder.prototype,
+      "withComment",
+    );
 
     const command = new ApplySuggestionCommand(makeSuggestion());
     const result = await command.execute();
@@ -303,17 +349,19 @@ describe("ApplySuggestionCommand", () => {
       "texto sugerido",
       "replace",
       "Stylistic",
-      "2025-04-05T06:07:08Z"
+      "2025-04-05T06:07:08Z",
     );
     expect(withCommentSpy).toHaveBeenCalledWith(
       "Estilo",
       "Mejora la claridad",
       "Stylistic",
-      "2025-04-05T06:07:08Z"
+      "2025-04-05T06:07:08Z",
     );
     expect(range.insertOoxml).toHaveBeenCalledWith(
-      expect.stringContaining('<w:delText xml:space="preserve">texto original</w:delText>'),
-      "Replace"
+      expect.stringContaining(
+        '<w:delText xml:space="preserve">texto original</w:delText>',
+      ),
+      "Replace",
     );
     expect(context.document.changeTrackingMode).toBe("trackAll");
     expect(context.sync).toHaveBeenCalledTimes(7);
@@ -332,31 +380,36 @@ describe("ApplySuggestionCommand", () => {
       expectedType: "delete",
       expectedSearchText: "texto original",
     },
-  ])(
-    "classifies $expectedType suggestions through the public execute() path",
-    async ({ originalText, suggestedText, expectedType, expectedSearchText }) => {
-      const { context } = installWordContext();
-      const withChangeSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withChange");
+  ])("classifies $expectedType suggestions through the public execute() path", async ({
+    originalText,
+    suggestedText,
+    expectedType,
+    expectedSearchText,
+  }) => {
+    const { context } = installWordContext();
+    const withChangeSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withChange");
 
-      const command = new ApplySuggestionCommand(
-        makeSuggestion({ originalText, suggestedText })
-      );
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ originalText, suggestedText }),
+    );
 
-      await command.execute();
+    await command.execute();
 
-      expect(context.document.body.search).toHaveBeenCalledWith(expectedSearchText, {
+    expect(context.document.body.search).toHaveBeenCalledWith(
+      expectedSearchText,
+      {
         matchCase: true,
         matchWholeWord: false,
-      });
-      expect(withChangeSpy).toHaveBeenCalledWith(
-        originalText,
-        suggestedText,
-        expectedType,
-        "Stylistic",
-        expect.any(String)
-      );
-    }
-  );
+      },
+    );
+    expect(withChangeSpy).toHaveBeenCalledWith(
+      originalText,
+      suggestedText,
+      expectedType,
+      "Stylistic",
+      expect.any(String),
+    );
+  });
 
   it("returns a failed result for insert-only suggestions without searching for empty text", async () => {
     const { context, range } = installWordContext();
@@ -364,7 +417,7 @@ describe("ApplySuggestionCommand", () => {
     const buildSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "build");
 
     const command = new ApplySuggestionCommand(
-      makeSuggestion({ originalText: "", suggestedText: "texto sugerido" })
+      makeSuggestion({ originalText: "", suggestedText: "texto sugerido" }),
     );
 
     const result = await command.execute();
@@ -385,7 +438,10 @@ describe("ApplySuggestionCommand", () => {
   it("falls back to null run properties when OOXML parsing fails", async () => {
     installXmlMocks({ throwOnParse: true });
     installWordContext();
-    const withRunPropertiesSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withRunProperties");
+    const withRunPropertiesSpy = vi.spyOn(
+      OoxmlPackageBuilder.prototype,
+      "withRunProperties",
+    );
 
     const command = new ApplySuggestionCommand(makeSuggestion());
     const result = await command.execute();
@@ -411,7 +467,9 @@ describe("ApplySuggestionCommand", () => {
   it("assigns a namespaced CC tag with the suggestion type for track-change suggestions", async () => {
     const { cc } = installWordContext();
 
-    const command = new ApplySuggestionCommand(makeSuggestion({ id: "chunk0-3" }));
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ id: "chunk0-3" }),
+    );
     await command.execute();
 
     expect(cc.tag).toBe("stylistic:track-change:chunk0-3");
@@ -421,13 +479,29 @@ describe("ApplySuggestionCommand", () => {
     function makeCleanRange(): SearchRange {
       return {
         getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-        insertOoxml: vi.fn(() => ({ insertContentControl: vi.fn(() => ({ tag: "", appearance: "", cannotDelete: true })) })),
-        parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn(), delete: vi.fn() },
+        insertOoxml: vi.fn(() => ({
+          insertContentControl: vi.fn(() => ({
+            tag: "",
+            appearance: "",
+            cannotDelete: true,
+          })),
+        })),
+        parentContentControlOrNullObject: {
+          tag: "",
+          isNullObject: true,
+          load: vi.fn(),
+          delete: vi.fn(),
+        },
       };
     }
 
     it("deletes the existing Stylistic CC, re-searches, and inserts OOXML for track-change", async () => {
-      const coveredCC: ParentCC = { tag: "stylistic:track-change:chunk0-0", isNullObject: false, load: vi.fn(), delete: vi.fn() };
+      const coveredCC: ParentCC = {
+        tag: "stylistic:track-change:chunk0-0",
+        isNullObject: false,
+        load: vi.fn(),
+        delete: vi.fn(),
+      };
       const coveredRange: SearchRange = {
         getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
         insertOoxml: vi.fn(),
@@ -449,7 +523,12 @@ describe("ApplySuggestionCommand", () => {
     });
 
     it("deletes the existing legacy chunk CC, re-searches, and inserts OOXML", async () => {
-      const coveredCC: ParentCC = { tag: "chunk0-0", isNullObject: false, load: vi.fn(), delete: vi.fn() };
+      const coveredCC: ParentCC = {
+        tag: "chunk0-0",
+        isNullObject: false,
+        load: vi.fn(),
+        delete: vi.fn(),
+      };
       const coveredRange: SearchRange = {
         getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
         insertOoxml: vi.fn(),
@@ -479,12 +558,19 @@ describe("ApplySuggestionCommand", () => {
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
-      expect(range.parentContentControlOrNullObject.delete).not.toHaveBeenCalled();
+      expect(
+        range.parentContentControlOrNullObject.delete,
+      ).not.toHaveBeenCalled();
       expect(range.insertOoxml).toHaveBeenCalled();
     });
 
     it("returns { success: false } when re-search after CC deletion finds nothing", async () => {
-      const coveredCC: ParentCC = { tag: "stylistic:track-change:chunk0-0", isNullObject: false, load: vi.fn(), delete: vi.fn() };
+      const coveredCC: ParentCC = {
+        tag: "stylistic:track-change:chunk0-0",
+        isNullObject: false,
+        load: vi.fn(),
+        delete: vi.fn(),
+      };
       const coveredRange: SearchRange = {
         getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
         insertOoxml: vi.fn(),
@@ -505,7 +591,12 @@ describe("ApplySuggestionCommand", () => {
     });
 
     it("deletes the existing Stylistic CC, re-searches, and inserts OOXML for comment-only", async () => {
-      const coveredCC: ParentCC = { tag: "stylistic:comment-only:chunk1-5", isNullObject: false, load: vi.fn(), delete: vi.fn() };
+      const coveredCC: ParentCC = {
+        tag: "stylistic:comment-only:chunk1-5",
+        isNullObject: false,
+        load: vi.fn(),
+        delete: vi.fn(),
+      };
       const coveredRange: SearchRange = {
         getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
         insertOoxml: vi.fn(),
@@ -517,7 +608,7 @@ describe("ApplySuggestionCommand", () => {
       });
 
       const command = new ApplySuggestionCommand(
-        makeSuggestion({ type: "comment-only", suggestedText: undefined })
+        makeSuggestion({ type: "comment-only", suggestedText: undefined }),
       );
       const result = await command.execute();
 
@@ -531,15 +622,18 @@ describe("ApplySuggestionCommand", () => {
 
   it("does not embed font specs from rPr to prevent Symbol font corruption in tracked changes", async () => {
     installXmlMocks({
-      serializedRunProperties: '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>',
+      serializedRunProperties:
+        '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>',
     });
     const { range } = installWordContext();
 
     const command = new ApplySuggestionCommand(
       makeSuggestion({
-        originalText: "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien, de eso estoy segura —aseguró con una cálida sonrisa.",
-        suggestedText: "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien; de eso estoy segura —aseguró con una cálida sonrisa.",
-      })
+        originalText:
+          "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien, de eso estoy segura —aseguró con una cálida sonrisa.",
+        suggestedText:
+          "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien; de eso estoy segura —aseguró con una cálida sonrisa.",
+      }),
     );
     await command.execute();
 
@@ -549,10 +643,13 @@ describe("ApplySuggestionCommand", () => {
 
   describe("special character search", () => {
     it("Test C — searches for text starting with an em-dash", async () => {
-      const originalText = "—¡Ah!, je, je, je, tendré más cuidado a partir de ahora.";
+      const originalText =
+        "—¡Ah!, je, je, je, tendré más cuidado a partir de ahora.";
       const { context } = installWordContext();
 
-      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      const command = new ApplySuggestionCommand(
+        makeSuggestion({ originalText }),
+      );
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
@@ -566,7 +663,9 @@ describe("ApplySuggestionCommand", () => {
       const originalText = "—¿Tú… en qué momento…?";
       const { context } = installWordContext();
 
-      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      const command = new ApplySuggestionCommand(
+        makeSuggestion({ originalText }),
+      );
       await command.execute();
 
       expect(context.document.body.search).toHaveBeenCalledWith(originalText, {
@@ -574,40 +673,65 @@ describe("ApplySuggestionCommand", () => {
         matchWholeWord: false,
       });
       // Verify these exact options — no other matchXxx flags that could block special chars
-      const callArgs = context.document.body.search.mock.calls[0] as [string, object];
-      expect(callArgs[1]).toStrictEqual({ matchCase: true, matchWholeWord: false });
+      const callArgs = context.document.body.search.mock.calls[0] as [
+        string,
+        object,
+      ];
+      expect(callArgs[1]).toStrictEqual({
+        matchCase: true,
+        matchWholeWord: false,
+      });
     });
 
     it("Test E — usa ignorePunct+ignoreSpace cuando exact match falla para em-dash (track-change)", async () => {
-      const originalText = "—¡Ah!, je, je, je, tendré más cuidado a partir de ahora.";
+      const originalText =
+        "—¡Ah!, je, je, je, tendré más cuidado a partir de ahora.";
       const { context, range } = installWordContext();
 
       context.document.body.search.mockReset();
       context.document.body.search
-        .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact — fails
-        .mockImplementationOnce(() => ({                                // attempt 1.5: ignorePunct+ignoreSpace — succeeds
-          items: [{
-            ...range,
-            parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn(), delete: vi.fn() },
-          }],
+        .mockImplementationOnce(() => ({ items: [], load: vi.fn() })) // attempt 1: exact — fails
+        .mockImplementationOnce(() => ({
+          // attempt 1.5: ignorePunct+ignoreSpace — succeeds
+          items: [
+            {
+              ...range,
+              parentContentControlOrNullObject: {
+                tag: "",
+                isNullObject: true,
+                load: vi.fn(),
+                delete: vi.fn(),
+              },
+            },
+          ],
           load: vi.fn(),
         }));
 
-      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      const command = new ApplySuggestionCommand(
+        makeSuggestion({ originalText }),
+      );
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
-      expect(context.document.body.search).toHaveBeenNthCalledWith(1, originalText, {
-        matchCase: true,
-        matchWholeWord: false,
-      });
-      expect(context.document.body.search).toHaveBeenNthCalledWith(2, originalText, {
-        matchCase: true,
-        matchWholeWord: false,
-        ignorePunct: true,
-        ignoreSpace: true,
-      });
+      expect(context.document.body.search).toHaveBeenNthCalledWith(
+        1,
+        originalText,
+        {
+          matchCase: true,
+          matchWholeWord: false,
+        },
+      );
+      expect(context.document.body.search).toHaveBeenNthCalledWith(
+        2,
+        originalText,
+        {
+          matchCase: true,
+          matchWholeWord: false,
+          ignorePunct: true,
+          ignoreSpace: true,
+        },
+      );
       // Whitespace fallback body.load("text") must NOT have been called since 1.5 found it
       expect(context.document.body.load).not.toHaveBeenCalledWith("text");
     });
@@ -618,28 +742,44 @@ describe("ApplySuggestionCommand", () => {
 
       context.document.body.search.mockReset();
       context.document.body.search
-        .mockImplementationOnce(() => ({ items: [], load: vi.fn() }))  // attempt 1: exact — fails
-        .mockImplementationOnce(() => ({                                // attempt 1.5: ignorePunct+ignoreSpace — succeeds
-          items: [{
-            ...range,
-            parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn(), delete: vi.fn() },
-          }],
+        .mockImplementationOnce(() => ({ items: [], load: vi.fn() })) // attempt 1: exact — fails
+        .mockImplementationOnce(() => ({
+          // attempt 1.5: ignorePunct+ignoreSpace — succeeds
+          items: [
+            {
+              ...range,
+              parentContentControlOrNullObject: {
+                tag: "",
+                isNullObject: true,
+                load: vi.fn(),
+                delete: vi.fn(),
+              },
+            },
+          ],
           load: vi.fn(),
         }));
 
       const command = new ApplySuggestionCommand(
-        makeSuggestion({ originalText, type: "comment-only", suggestedText: undefined })
+        makeSuggestion({
+          originalText,
+          type: "comment-only",
+          suggestedText: undefined,
+        }),
       );
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
-      expect(context.document.body.search).toHaveBeenNthCalledWith(2, originalText, {
-        matchCase: true,
-        matchWholeWord: false,
-        ignorePunct: true,
-        ignoreSpace: true,
-      });
+      expect(context.document.body.search).toHaveBeenNthCalledWith(
+        2,
+        originalText,
+        {
+          matchCase: true,
+          matchWholeWord: false,
+          ignorePunct: true,
+          ignoreSpace: true,
+        },
+      );
       // Whitespace fallback body.load("text") must NOT have been called since 1.5 found it
       expect(context.document.body.load).not.toHaveBeenCalledWith("text");
     });
@@ -649,16 +789,25 @@ describe("ApplySuggestionCommand", () => {
       const { context, range } = installWordContext();
 
       context.document.body.search.mockReset();
-      context.document.body.search
-        .mockImplementationOnce(() => ({  // first actual call is attempt 1.5 (attempt 1 is skipped)
-          items: [{
+      context.document.body.search.mockImplementationOnce(() => ({
+        // first actual call is attempt 1.5 (attempt 1 is skipped)
+        items: [
+          {
             ...range,
-            parentContentControlOrNullObject: { tag: "", isNullObject: true, load: vi.fn(), delete: vi.fn() },
-          }],
-          load: vi.fn(),
-        }));
+            parentContentControlOrNullObject: {
+              tag: "",
+              isNullObject: true,
+              load: vi.fn(),
+              delete: vi.fn(),
+            },
+          },
+        ],
+        load: vi.fn(),
+      }));
 
-      const command = new ApplySuggestionCommand(makeSuggestion({ originalText }));
+      const command = new ApplySuggestionCommand(
+        makeSuggestion({ originalText }),
+      );
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
@@ -679,11 +828,26 @@ describe("ApplySuggestionCommand", () => {
       vi.setSystemTime(new Date("2025-04-05T06:07:08.999Z"));
 
       const { cc } = installWordContext();
-      const withChangeSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withChange");
-      const withDeletionSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withDeletion");
-      const withInsertionSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withInsertion");
-      const withRunPropertiesSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withRunProperties");
-      const withCommentSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withComment");
+      const withChangeSpy = vi.spyOn(
+        OoxmlPackageBuilder.prototype,
+        "withChange",
+      );
+      const withDeletionSpy = vi.spyOn(
+        OoxmlPackageBuilder.prototype,
+        "withDeletion",
+      );
+      const withInsertionSpy = vi.spyOn(
+        OoxmlPackageBuilder.prototype,
+        "withInsertion",
+      );
+      const withRunPropertiesSpy = vi.spyOn(
+        OoxmlPackageBuilder.prototype,
+        "withRunProperties",
+      );
+      const withCommentSpy = vi.spyOn(
+        OoxmlPackageBuilder.prototype,
+        "withComment",
+      );
 
       const command = new ApplySuggestionCommand(
         makeSuggestion({
@@ -693,7 +857,7 @@ describe("ApplySuggestionCommand", () => {
           originalText: "texto original",
           category: "Estilo",
           justification: "Mejora la claridad",
-        })
+        }),
       );
       const result = await command.execute();
 
@@ -707,7 +871,7 @@ describe("ApplySuggestionCommand", () => {
         "Mejora la claridad",
         "Stylistic",
         "2025-04-05T06:07:08Z",
-        "texto original"
+        "texto original",
       );
       expect(cc.tag).toBe("stylistic:comment-only:chunk1-5");
     });
@@ -717,7 +881,7 @@ describe("ApplySuggestionCommand", () => {
       const buildSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "build");
 
       const command = new ApplySuggestionCommand(
-        makeSuggestion({ type: "comment-only", suggestedText: undefined })
+        makeSuggestion({ type: "comment-only", suggestedText: undefined }),
       );
       const result = await command.execute();
 
@@ -726,18 +890,23 @@ describe("ApplySuggestionCommand", () => {
         commandId: "s1",
         error: "Texto original no encontrado",
       });
-      expect(context.document.body.search).toHaveBeenCalledWith("texto original", {
-        matchCase: true,
-        matchWholeWord: false,
-      });
+      expect(context.document.body.search).toHaveBeenCalledWith(
+        "texto original",
+        {
+          matchCase: true,
+          matchWholeWord: false,
+        },
+      );
       expect(buildSpy).not.toHaveBeenCalled();
     });
 
     it("does not mutate changeTrackingMode for comment-only suggestions", async () => {
-      const { context } = installWordContext({ initialTrackingMode: "trackAll" });
+      const { context } = installWordContext({
+        initialTrackingMode: "trackAll",
+      });
 
       const command = new ApplySuggestionCommand(
-        makeSuggestion({ type: "comment-only", suggestedText: undefined })
+        makeSuggestion({ type: "comment-only", suggestedText: undefined }),
       );
       await command.execute();
 
@@ -750,7 +919,10 @@ describe("ApplySuggestionCommand", () => {
       vi.setSystemTime(new Date("2025-04-05T06:07:08.999Z"));
 
       const { range } = installWordContext();
-      const withCommentSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withComment");
+      const withCommentSpy = vi.spyOn(
+        OoxmlPackageBuilder.prototype,
+        "withComment",
+      );
 
       const command = new ApplySuggestionCommand(
         makeSuggestion({
@@ -760,7 +932,7 @@ describe("ApplySuggestionCommand", () => {
           originalText: "texto original",
           category: "Estilo",
           justification: "Mejora la claridad",
-        })
+        }),
       );
       await command.execute();
 
@@ -769,11 +941,14 @@ describe("ApplySuggestionCommand", () => {
         "Mejora la claridad",
         "Stylistic",
         "2025-04-05T06:07:08Z",
-        "texto original"
+        "texto original",
       );
 
       // The OOXML actually passed to insertOoxml must contain the originalText in the body
-      const [insertedOoxml] = range.insertOoxml.mock.calls[0] as [string, string];
+      const [insertedOoxml] = range.insertOoxml.mock.calls[0] as [
+        string,
+        string,
+      ];
       const bodyStart = insertedOoxml.indexOf("<w:body>");
       const bodyEnd = insertedOoxml.indexOf("</w:body>");
       const body = insertedOoxml.slice(bodyStart, bodyEnd);

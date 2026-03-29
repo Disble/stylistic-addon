@@ -50,8 +50,12 @@ describe("OoxmlPackageBuilder", () => {
   describe("minimal package (no configuration)", () => {
     it("produces valid XML declaration and root element", () => {
       const xml = new OoxmlPackageBuilder().build();
-      expect(xml).toMatch(/^<\?xml version="1\.0" encoding="UTF-8" standalone="yes"\?>/);
-      expect(xml).toContain('<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">');
+      expect(xml).toMatch(
+        /^<\?xml version="1\.0" encoding="UTF-8" standalone="yes"\?>/,
+      );
+      expect(xml).toContain(
+        '<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">',
+      );
       expect(xml).toMatch(/<\/pkg:package>$/);
     });
 
@@ -116,7 +120,7 @@ describe("OoxmlPackageBuilder", () => {
         .build();
 
       expect(xml).toMatch(
-        /<w:del w:id="\d+" w:author="Author1" w:date="2025-01-15T10:00:00Z">/
+        /<w:del w:id="\d+" w:author="Author1" w:date="2025-01-15T10:00:00Z">/,
       );
     });
 
@@ -125,7 +129,9 @@ describe("OoxmlPackageBuilder", () => {
         .withDeletion("remove me", "A", "2025-01-01T00:00:00Z")
         .build();
 
-      expect(xml).toContain('<w:delText xml:space="preserve">remove me</w:delText>');
+      expect(xml).toContain(
+        '<w:delText xml:space="preserve">remove me</w:delText>',
+      );
     });
 
     it("assigns a deterministic numeric deletion id", () => {
@@ -155,7 +161,7 @@ describe("OoxmlPackageBuilder", () => {
         .build();
 
       expect(xml).toMatch(
-        /<w:ins w:id="\d+" w:author="Author2" w:date="2025-06-01T12:00:00Z">/
+        /<w:ins w:id="\d+" w:author="Author2" w:date="2025-06-01T12:00:00Z">/,
       );
     });
 
@@ -188,13 +194,13 @@ describe("OoxmlPackageBuilder", () => {
 
   describe("withRunProperties", () => {
     it("embeds rPr XML inside deletion run when provided", () => {
-      const rPr = '<w:rPr><w:b/><w:i/></w:rPr>';
+      const rPr = "<w:rPr><w:b/><w:i/></w:rPr>";
       const xml = new OoxmlPackageBuilder()
         .withRunProperties(rPr)
         .withDeletion("text", "A", "2025-01-01T00:00:00Z")
         .build();
 
-      expect(xml).toContain('<w:rPr><w:b/><w:i/></w:rPr>');
+      expect(xml).toContain("<w:rPr><w:b/><w:i/></w:rPr>");
       // rPr appears before delText
       const rPrIdx = xml.indexOf("<w:rPr><w:b/>");
       const delTextIdx = xml.indexOf("<w:delText");
@@ -209,13 +215,13 @@ describe("OoxmlPackageBuilder", () => {
         .build();
 
       expect(xml).toContain('<w:rPr><w:sz w:val="24"/></w:rPr>');
-      const rPrIdx = xml.indexOf('<w:rPr><w:sz');
+      const rPrIdx = xml.indexOf("<w:rPr><w:sz");
       const tIdx = xml.indexOf('<w:t xml:space="preserve">text</w:t>');
       expect(rPrIdx).toBeLessThan(tIdx);
     });
 
     it("embeds rPr in BOTH runs when deletion and insertion are present", () => {
-      const rPr = '<w:rPr><w:b/></w:rPr>';
+      const rPr = "<w:rPr><w:b/></w:rPr>";
       const xml = new OoxmlPackageBuilder()
         .withRunProperties(rPr)
         .withDeletion("old", "A", "2025-01-01T00:00:00Z")
@@ -236,7 +242,7 @@ describe("OoxmlPackageBuilder", () => {
       // The only rPr in the output should be inside the comment (bold category),
       // not inside the tracked change
       const docPartMatch = xml.match(
-        /document\.xml[\s\S]*?<w:del[\s\S]*?<\/w:del>/
+        /document\.xml[\s\S]*?<w:del[\s\S]*?<\/w:del>/,
       );
       expect(docPartMatch).toBeTruthy();
       expect(docPartMatch![0]).not.toContain("<w:rPr>");
@@ -244,13 +250,15 @@ describe("OoxmlPackageBuilder", () => {
 
     it("returns this for fluent chaining", () => {
       const builder = new OoxmlPackageBuilder();
-      const result = builder.withRunProperties('<w:rPr/>');
+      const result = builder.withRunProperties("<w:rPr/>");
       expect(result).toBe(builder);
     });
 
     it("discards rPr entirely when it only contained <w:rFonts> to prevent empty-rPr Word rejection", () => {
       const xml = new OoxmlPackageBuilder()
-        .withRunProperties('<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>')
+        .withRunProperties(
+          '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>',
+        )
         .withDeletion("texto original", "Stylistic", "2025-01-01T00:00:00Z")
         .build();
 
@@ -262,7 +270,9 @@ describe("OoxmlPackageBuilder", () => {
 
     it("strips <w:rFonts> from runPropsXml to prevent Symbol font corruption in tracked changes", () => {
       const xml = new OoxmlPackageBuilder()
-        .withRunProperties('<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/><w:b/></w:rPr>')
+        .withRunProperties(
+          '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/><w:b/></w:rPr>',
+        )
         .withDeletion("texto original", "Stylistic", "2025-01-01T00:00:00Z")
         .withInsertion("texto sugerido", "Stylistic", "2025-01-01T00:00:00Z")
         .build();
@@ -274,7 +284,7 @@ describe("OoxmlPackageBuilder", () => {
     it("strips <w:rFonts> with multiple attributes (Calibri, eastAsia, cs forms)", () => {
       const xml = new OoxmlPackageBuilder()
         .withRunProperties(
-          '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:i/></w:rPr>'
+          '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:i/></w:rPr>',
         )
         .withDeletion("texto", "Stylistic", "2025-01-01T00:00:00Z")
         .build();
@@ -291,7 +301,13 @@ describe("OoxmlPackageBuilder", () => {
   describe("withChange", () => {
     it('configures only deletion for type "delete"', () => {
       const xml = new OoxmlPackageBuilder()
-        .withChange("original", "replacement", "delete", "A", "2025-01-01T00:00:00Z")
+        .withChange(
+          "original",
+          "replacement",
+          "delete",
+          "A",
+          "2025-01-01T00:00:00Z",
+        )
         .build();
 
       expect(xml).toContain("<w:del");
@@ -303,7 +319,13 @@ describe("OoxmlPackageBuilder", () => {
 
     it('configures only insertion for type "insert"', () => {
       const xml = new OoxmlPackageBuilder()
-        .withChange("original", "replacement", "insert", "A", "2025-01-01T00:00:00Z")
+        .withChange(
+          "original",
+          "replacement",
+          "insert",
+          "A",
+          "2025-01-01T00:00:00Z",
+        )
         .build();
 
       expect(xml).not.toContain("<w:del");
@@ -313,7 +335,13 @@ describe("OoxmlPackageBuilder", () => {
 
     it('configures both deletion and insertion for type "replace"', () => {
       const xml = new OoxmlPackageBuilder()
-        .withChange("old text", "new text", "replace", "A", "2025-01-01T00:00:00Z")
+        .withChange(
+          "old text",
+          "new text",
+          "replace",
+          "A",
+          "2025-01-01T00:00:00Z",
+        )
         .build();
 
       expect(xml).toContain("<w:del");
@@ -324,10 +352,18 @@ describe("OoxmlPackageBuilder", () => {
 
     it("sets the same author and date on both deletion and insertion for replace", () => {
       const xml = new OoxmlPackageBuilder()
-        .withChange("old", "new", "replace", "TestAuthor", "2025-06-15T08:30:00Z")
+        .withChange(
+          "old",
+          "new",
+          "replace",
+          "TestAuthor",
+          "2025-06-15T08:30:00Z",
+        )
         .build();
 
-      expect(xml).toContain('w:author="TestAuthor" w:date="2025-06-15T08:30:00Z">');
+      expect(xml).toContain(
+        'w:author="TestAuthor" w:date="2025-06-15T08:30:00Z">',
+      );
       // Both del and ins should have the same author
       const authorMatches = xml.match(/w:author="TestAuthor"/g);
       // At least 2: one for del, one for ins (comment author is separate)
@@ -336,7 +372,13 @@ describe("OoxmlPackageBuilder", () => {
 
     it("returns this for fluent chaining", () => {
       const builder = new OoxmlPackageBuilder();
-      const result = builder.withChange("a", "b", "replace", "A", "2025-01-01T00:00:00Z");
+      const result = builder.withChange(
+        "a",
+        "b",
+        "replace",
+        "A",
+        "2025-01-01T00:00:00Z",
+      );
       expect(result).toBe(builder);
     });
   });
@@ -348,7 +390,12 @@ describe("OoxmlPackageBuilder", () => {
   describe("withComment", () => {
     it("renders category in bold inside brackets", () => {
       const xml = new OoxmlPackageBuilder()
-        .withComment("Redundancia", "Texto repetido", "Stylistic", "2025-01-01T00:00:00Z")
+        .withComment(
+          "Redundancia",
+          "Texto repetido",
+          "Stylistic",
+          "2025-01-01T00:00:00Z",
+        )
         .build();
 
       expect(xml).toContain("<w:rPr><w:b/></w:rPr>");
@@ -357,7 +404,12 @@ describe("OoxmlPackageBuilder", () => {
 
     it("renders justification text in a separate paragraph", () => {
       const xml = new OoxmlPackageBuilder()
-        .withComment("Cat", "This is the reason.", "Stylistic", "2025-01-01T00:00:00Z")
+        .withComment(
+          "Cat",
+          "This is the reason.",
+          "Stylistic",
+          "2025-01-01T00:00:00Z",
+        )
         .build();
 
       expect(xml).toContain("<w:t>This is the reason.</w:t>");
@@ -486,7 +538,7 @@ describe("OoxmlPackageBuilder", () => {
         .build();
 
       expect(xml).toContain(
-        "Tom &amp; Jerry&apos;s &lt;&quot;adventure&quot;&gt;"
+        "Tom &amp; Jerry&apos;s &lt;&quot;adventure&quot;&gt;",
       );
     });
 
@@ -495,7 +547,7 @@ describe("OoxmlPackageBuilder", () => {
         .withDeletion("text", "O'Brien & Co", "2025-01-01T00:00:00Z")
         .build();
 
-      expect(xml).toContain("w:author=\"O&apos;Brien &amp; Co\"");
+      expect(xml).toContain('w:author="O&apos;Brien &amp; Co"');
     });
 
     it("escapes author names in insertion markup", () => {
@@ -503,7 +555,7 @@ describe("OoxmlPackageBuilder", () => {
         .withInsertion("text", "A<B>C", "2025-01-01T00:00:00Z")
         .build();
 
-      expect(xml).toContain("w:author=\"A&lt;B&gt;C\"");
+      expect(xml).toContain('w:author="A&lt;B&gt;C"');
     });
 
     it("escapes comment author", () => {
@@ -524,7 +576,12 @@ describe("OoxmlPackageBuilder", () => {
 
     it("escapes justification text in comment", () => {
       const xml = new OoxmlPackageBuilder()
-        .withComment("Cat", "Use < instead of >", "Stylistic", "2025-01-01T00:00:00Z")
+        .withComment(
+          "Cat",
+          "Use < instead of >",
+          "Stylistic",
+          "2025-01-01T00:00:00Z",
+        )
         .build();
 
       expect(xml).toContain("<w:t>Use &lt; instead of &gt;</w:t>");
@@ -540,7 +597,7 @@ describe("OoxmlPackageBuilder", () => {
 
     it("escapes date values in comment metadata", () => {
       const xml = new OoxmlPackageBuilder()
-        .withComment("Cat", "Reason", "A", 'bad&date')
+        .withComment("Cat", "Reason", "A", "bad&date")
         .build();
 
       expect(xml).toContain('w:date="bad&amp;date"');
@@ -644,7 +701,7 @@ describe("OoxmlPackageBuilder", () => {
 
     it("snapshot: full replace build output", () => {
       const xml = new OoxmlPackageBuilder()
-        .withRunProperties('<w:rPr><w:b/></w:rPr>')
+        .withRunProperties("<w:rPr><w:b/></w:rPr>")
         .withChange("incorrecto", "correcto", "replace", "Stylistic", DATE)
         .withComment("Ortografía", "Corrección ortográfica.", "Stylistic", DATE)
         .build();
@@ -661,7 +718,7 @@ describe("OoxmlPackageBuilder", () => {
     it("declares wordprocessingml namespace on w:document", () => {
       const xml = new OoxmlPackageBuilder().build();
       expect(xml).toContain(
-        'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
       );
     });
 
@@ -671,14 +728,14 @@ describe("OoxmlPackageBuilder", () => {
       const commentsTag = xml.match(/<w:comments[^>]*>/);
       expect(commentsTag).toBeTruthy();
       expect(commentsTag![0]).toContain(
-        'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+        'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
       );
     });
 
     it("declares relationships namespace on both Relationships elements", () => {
       const xml = new OoxmlPackageBuilder().build();
       const relMatches = xml.match(
-        /xmlns="http:\/\/schemas\.openxmlformats\.org\/package\/2006\/relationships"/g
+        /xmlns="http:\/\/schemas\.openxmlformats\.org\/package\/2006\/relationships"/g,
       );
       expect(relMatches).toHaveLength(2);
     });
@@ -754,7 +811,9 @@ describe("OoxmlPackageBuilder", () => {
       const commentSection = xml.slice(xml.indexOf("<w:comment"));
       expect(commentSection).toContain("[Cat]");
       // No plain <w:t> without bold (justification paragraphs)
-      const justMatches = commentSection.match(/<w:p>\s*\n\s*<w:r>\s*\n\s*<w:t>/g);
+      const justMatches = commentSection.match(
+        /<w:p>\s*\n\s*<w:r>\s*\n\s*<w:t>/g,
+      );
       expect(justMatches).toBeNull();
     });
 
@@ -776,10 +835,7 @@ describe("OoxmlPackageBuilder", () => {
 
       // QUIRK: Empty string is falsy, so rPr is NOT emitted
       // (builder checks `this.runPropsXml ? ...` which is falsy for "")
-      const docPart = xml.slice(
-        xml.indexOf("<w:del"),
-        xml.indexOf("</w:del>")
-      );
+      const docPart = xml.slice(xml.indexOf("<w:del"), xml.indexOf("</w:del>"));
       // The rPr line won't appear because "" is falsy
       expect(docPart).not.toContain("                \n");
     });
@@ -815,7 +871,13 @@ describe("OoxmlPackageBuilder", () => {
 
     it("includes originalText in the document body when provided", () => {
       const xml = new OoxmlPackageBuilder()
-        .withComment("Estilo", "Mejora la claridad", "Stylistic", DATE, "texto original")
+        .withComment(
+          "Estilo",
+          "Mejora la claridad",
+          "Stylistic",
+          DATE,
+          "texto original",
+        )
         .build();
 
       const bodyStart = xml.indexOf("<w:body>");
@@ -831,7 +893,9 @@ describe("OoxmlPackageBuilder", () => {
         .build();
 
       const rangeStart = xml.indexOf("<w:commentRangeStart");
-      const textRun = xml.indexOf('<w:t xml:space="preserve">the original</w:t>');
+      const textRun = xml.indexOf(
+        '<w:t xml:space="preserve">the original</w:t>',
+      );
       const rangeEnd = xml.indexOf("<w:commentRangeEnd");
 
       expect(rangeStart).toBeGreaterThan(-1);
@@ -853,12 +917,20 @@ describe("OoxmlPackageBuilder", () => {
 
     it("still produces the formatted comment (category in bold + justification) in comments.xml", () => {
       const xml = new OoxmlPackageBuilder()
-        .withComment("Redundancia", "Texto repetido innecesario", "Stylistic", DATE, "the original text")
+        .withComment(
+          "Redundancia",
+          "Texto repetido innecesario",
+          "Stylistic",
+          DATE,
+          "the original text",
+        )
         .build();
 
       const commentsSection = xml.slice(xml.indexOf("comments.xml"));
       expect(commentsSection).toContain("<w:t>[Redundancia]</w:t>");
-      expect(commentsSection).toContain("<w:t>Texto repetido innecesario</w:t>");
+      expect(commentsSection).toContain(
+        "<w:t>Texto repetido innecesario</w:t>",
+      );
       expect(commentsSection).toContain("<w:rPr><w:b/></w:rPr>");
     });
 
@@ -897,10 +969,15 @@ describe("OoxmlPackageBuilder", () => {
   describe("fluent API", () => {
     it("supports full chain in a single expression", () => {
       const xml = new OoxmlPackageBuilder()
-        .withRunProperties('<w:rPr><w:i/></w:rPr>')
+        .withRunProperties("<w:rPr><w:i/></w:rPr>")
         .withDeletion("bad", "Stylistic", "2025-01-01T00:00:00Z")
         .withInsertion("good", "Stylistic", "2025-01-01T00:00:00Z")
-        .withComment("Style", "Improved clarity.", "Stylistic", "2025-01-01T00:00:00Z")
+        .withComment(
+          "Style",
+          "Improved clarity.",
+          "Stylistic",
+          "2025-01-01T00:00:00Z",
+        )
         .build();
 
       expect(xml).toContain("bad");
@@ -912,11 +989,24 @@ describe("OoxmlPackageBuilder", () => {
 
     it("withChange + withComment is the typical usage pattern", () => {
       const xml = new OoxmlPackageBuilder()
-        .withChange("entonces", "por lo tanto", "replace", "Stylistic", "2025-06-01T00:00:00Z")
-        .withComment("Muletilla", "Evitar uso excesivo de 'entonces'.", "Stylistic", "2025-06-01T00:00:00Z")
+        .withChange(
+          "entonces",
+          "por lo tanto",
+          "replace",
+          "Stylistic",
+          "2025-06-01T00:00:00Z",
+        )
+        .withComment(
+          "Muletilla",
+          "Evitar uso excesivo de 'entonces'.",
+          "Stylistic",
+          "2025-06-01T00:00:00Z",
+        )
         .build();
 
-      expect(xml).toContain('<w:delText xml:space="preserve">entonces</w:delText>');
+      expect(xml).toContain(
+        '<w:delText xml:space="preserve">entonces</w:delText>',
+      );
       expect(xml).toContain('<w:t xml:space="preserve">por lo tanto</w:t>');
       expect(xml).toContain("[Muletilla]");
       expect(xml).toContain("Evitar uso excesivo de &apos;entonces&apos;.");

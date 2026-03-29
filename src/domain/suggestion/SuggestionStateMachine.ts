@@ -30,10 +30,14 @@ const TRANSITIONS: Record<SuggestionState, SuggestionState[]> = {
 };
 
 export class InvalidSuggestionTransitionError extends Error {
-  constructor(from: SuggestionState, to: SuggestionState, allowed: SuggestionState[]) {
+  constructor(
+    from: SuggestionState,
+    to: SuggestionState,
+    allowed: SuggestionState[],
+  ) {
     super(
       `[SuggestionStateMachine] Invalid transition: "${from}" → "${to}". ` +
-      `Allowed: [${allowed.join(", ")}]`
+        `Allowed: [${allowed.join(", ")}]`,
     );
     this.name = "InvalidSuggestionTransitionError";
   }
@@ -71,7 +75,7 @@ export class SuggestionStateMachine {
       throw new InvalidSuggestionTransitionError(
         this.current,
         to,
-        TRANSITIONS[this.current]
+        TRANSITIONS[this.current],
       );
     }
     console.log(`🔄 [SuggestionStateMachine] ${this.current} → ${to}`);
@@ -83,7 +87,9 @@ export class SuggestionStateMachine {
    * Idempotent — safe to call from any state.
    */
   reset(): void {
-    console.log(`🔄 [SuggestionStateMachine] reset → pending (was: ${this.current})`);
+    console.log(
+      `🔄 [SuggestionStateMachine] reset → pending (was: ${this.current})`,
+    );
     this.current = "pending";
   }
 }
@@ -95,14 +101,20 @@ export class SuggestionStateMachine {
  *   The taskpane distinguishes `"cc-not-found"` visually before calling this function.
  */
 export function mapResultStatusToState(
-  status: SuggestionActionResult["status"]
+  status: SuggestionActionResult["status"],
 ): SuggestionState {
   switch (status) {
-    case "accepted": return "accepted";
-    case "rejected": return "rejected";
-    case "already-resolved": return "already-resolved";
-    case "cc-not-found": return "error";
-    case "not-found": return "error";
-    case "error": return "error";
+    case "accepted":
+      return "accepted";
+    case "rejected":
+      return "rejected";
+    case "already-resolved":
+      return "already-resolved";
+    case "cc-not-found":
+      return "error";
+    case "not-found":
+      return "error";
+    case "error":
+      return "error";
   }
 }

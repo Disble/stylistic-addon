@@ -13,9 +13,12 @@
  */
 
 import { MastraClient } from "@mastra/client-js";
-import { IFeedbackPort } from "../../domain/ports";
-import { FeedbackPayload } from "../../domain/types";
-import { MASTRA_BASE_URL, FEEDBACK_WORKFLOW_ID } from "../../infrastructure/config";
+import type { IFeedbackPort } from "../../domain/ports";
+import type { FeedbackPayload } from "../../domain/types";
+import {
+  FEEDBACK_WORKFLOW_ID,
+  MASTRA_BASE_URL,
+} from "../../infrastructure/config";
 
 /** Singleton Mastra client instance, reused across all feedback calls. */
 const mastraClient = new MastraClient({ baseUrl: MASTRA_BASE_URL });
@@ -27,7 +30,10 @@ export class FeedbackAdapter implements IFeedbackPort {
    */
   async sendFeedback(payload: FeedbackPayload): Promise<void> {
     try {
-      console.log("[FeedbackAdapter] Sending feedback", { workflowId: FEEDBACK_WORKFLOW_ID, payload });
+      console.log("[FeedbackAdapter] Sending feedback", {
+        workflowId: FEEDBACK_WORKFLOW_ID,
+        payload,
+      });
 
       const workflow = mastraClient.getWorkflow(FEEDBACK_WORKFLOW_ID);
       console.log("[FeedbackAdapter] Workflow reference obtained");
@@ -36,7 +42,9 @@ export class FeedbackAdapter implements IFeedbackPort {
       console.log("[FeedbackAdapter] Run created");
 
       const result = await run.start({ inputData: payload });
-      console.log("[FeedbackAdapter] Workflow started successfully", { result });
+      console.log("[FeedbackAdapter] Workflow started successfully", {
+        result,
+      });
     } catch (error) {
       console.error("[FeedbackAdapter] Failed to send feedback", error);
     }

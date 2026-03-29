@@ -15,20 +15,22 @@
  * @module DeduplicateHandler
  */
 
-import { Suggestion } from "../../types";
-import { PipelineContext } from "../PipelineContext";
-import { PipelineHandler } from "./ReadTextHandler";
+import type { Suggestion } from "../../types";
+import type { PipelineContext } from "../PipelineContext";
+import type { PipelineHandler } from "./ReadTextHandler";
 
 export class DeduplicateHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const raw = ctx.rawSuggestions!;
-    console.log(`🧹 [DeduplicateHandler] Fase 5: Deduplicando ${raw.length} sugerencias...`);
+    console.log(
+      `🧹 [DeduplicateHandler] Fase 5: Deduplicando ${raw.length} sugerencias...`,
+    );
 
     const unique = this.deduplicateByOriginalText(raw);
     const removed = raw.length - unique.length;
     if (removed > 0) {
       console.log(
-        `🧹 [DeduplicateHandler] ${removed} duplicado(s) removidos → ${unique.length} únicas`
+        `🧹 [DeduplicateHandler] ${removed} duplicado(s) removidos → ${unique.length} únicas`,
       );
     }
 
@@ -42,7 +44,8 @@ export class DeduplicateHandler implements PipelineHandler {
       // comment-only suggestions are never deduplicated against each other:
       // each one is unique per backend response (keyed by id) and targeting
       // the same originalText with a comment is valid across analysis runs.
-      const key = s.type === "comment-only" ? s.id : s.originalText.toLowerCase();
+      const key =
+        s.type === "comment-only" ? s.id : s.originalText.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

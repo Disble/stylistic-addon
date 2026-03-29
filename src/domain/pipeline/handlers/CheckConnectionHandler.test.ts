@@ -1,13 +1,15 @@
-import { CheckConnectionHandler } from "./CheckConnectionHandler";
-import { PipelineContext } from "../PipelineContext";
+import type { IAnalysisPort, IDocumentPort } from "../../ports";
+import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";
-import type { IDocumentPort, IAnalysisPort } from "../../ports";
+import { CheckConnectionHandler } from "./CheckConnectionHandler";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
+function makeContext(
+  overrides: Partial<PipelineContext> = {},
+): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
@@ -101,7 +103,7 @@ describe("CheckConnectionHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.abortReason).toBe(
-        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose."
+        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.",
       );
     });
 
@@ -132,7 +134,7 @@ describe("CheckConnectionHandler", () => {
 
       expect(onPhaseStart).toHaveBeenCalledWith(
         "connecting",
-        "Conectando con el servidor..."
+        "Conectando con el servidor...",
       );
     });
 
@@ -175,7 +177,7 @@ describe("CheckConnectionHandler", () => {
       await handler.handle(ctx, next);
 
       expect(onAbort).toHaveBeenCalledWith(
-        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose."
+        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.",
       );
     });
 
@@ -220,12 +222,10 @@ describe("CheckConnectionHandler", () => {
     it("propagates errors thrown by analysisPort.checkConnection", async () => {
       const ctx = makeContext();
       vi.mocked(ctx.analysisPort.checkConnection).mockRejectedValue(
-        new Error("Network error")
+        new Error("Network error"),
       );
 
-      await expect(handler.handle(ctx, next)).rejects.toThrow(
-        "Network error"
-      );
+      await expect(handler.handle(ctx, next)).rejects.toThrow("Network error");
       expect(next).not.toHaveBeenCalled();
     });
   });

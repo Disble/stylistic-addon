@@ -1,5 +1,5 @@
-import { PipelineStateMachine } from "./PipelineStateMachine";
 import type { PipelineState } from "../types";
+import { PipelineStateMachine } from "./PipelineStateMachine";
 
 // All states for exhaustive iteration
 const ALL_STATES: PipelineState[] = [
@@ -26,7 +26,14 @@ function machineAt(target: PipelineState): PipelineStateMachine {
     chunking: ["reading", "connecting", "chunking"],
     analyzing: ["reading", "connecting", "chunking", "analyzing"],
     applying: ["reading", "connecting", "chunking", "analyzing", "applying"],
-    done: ["reading", "connecting", "chunking", "analyzing", "applying", "done"],
+    done: [
+      "reading",
+      "connecting",
+      "chunking",
+      "analyzing",
+      "applying",
+      "done",
+    ],
     error: ["reading", "error"],
   };
   for (const step of path[target]) {
@@ -425,7 +432,9 @@ describe("PipelineStateMachine", () => {
     });
 
     it("matches the transition model by allowing idle from every non-idle state", () => {
-      for (const state of ALL_STATES.filter((candidate) => candidate !== "idle")) {
+      for (const state of ALL_STATES.filter(
+        (candidate) => candidate !== "idle",
+      )) {
         const sm = machineAt(state);
         expect(sm.canTransition("idle")).toBe(true);
       }
@@ -440,7 +449,7 @@ describe("PipelineStateMachine", () => {
       const sm = new PipelineStateMachine();
       sm.transition("reading");
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("idle → reading")
+        expect.stringContaining("idle → reading"),
       );
     });
 
@@ -448,7 +457,7 @@ describe("PipelineStateMachine", () => {
       const sm = new PipelineStateMachine();
       sm.transition("reading");
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[StateMachine]")
+        expect.stringContaining("[StateMachine]"),
       );
     });
 
@@ -468,7 +477,7 @@ describe("PipelineStateMachine", () => {
       consoleSpy.mockClear();
       sm.reset();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("reset → idle (was: analyzing)")
+        expect.stringContaining("reset → idle (was: analyzing)"),
       );
     });
 
@@ -477,7 +486,7 @@ describe("PipelineStateMachine", () => {
       consoleSpy.mockClear();
       sm.reset();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("reset → idle (was: idle)")
+        expect.stringContaining("reset → idle (was: idle)"),
       );
     });
   });

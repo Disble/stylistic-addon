@@ -17,28 +17,40 @@
  * @module taskpane
  */
 
-import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
-import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
-import { PipelineEventEmitter, PipelineObserver } from "../domain/pipeline/PipelineEvents";
-import { PipelineContext } from "../domain/pipeline/PipelineContext";
-
-import { ReadTextHandler } from "../domain/pipeline/handlers/ReadTextHandler";
+import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
+import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
+import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
+import { WordAdapter } from "../adapters/word/WordAdapter";
+import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
+import { ApplySuggestionsHandler } from "../domain/pipeline/handlers/ApplySuggestionsHandler";
 import { CheckConnectionHandler } from "../domain/pipeline/handlers/CheckConnectionHandler";
 import { ChunkTextHandler } from "../domain/pipeline/handlers/ChunkTextHandler";
-import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
 import { DeduplicateHandler } from "../domain/pipeline/handlers/DeduplicateHandler";
 import { GuardAppliedHandler } from "../domain/pipeline/handlers/GuardAppliedHandler";
-import { ApplySuggestionsHandler } from "../domain/pipeline/handlers/ApplySuggestionsHandler";
-
-import { WordAdapter } from "../adapters/word/WordAdapter";
-import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
-import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
-import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
-
-import { Suggestion, InsertionResult, FeedbackPayload, SuggestionState } from "../domain/types";
-import { IFeedbackPort } from "../domain/ports";
-import { SuggestionStateMachine, mapResultStatusToState } from "../domain/suggestion/SuggestionStateMachine";
-import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
+import { ReadTextHandler } from "../domain/pipeline/handlers/ReadTextHandler";
+import type { PipelineContext } from "../domain/pipeline/PipelineContext";
+import {
+  PipelineEventEmitter,
+  type PipelineObserver,
+} from "../domain/pipeline/PipelineEvents";
+import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
+import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
+import type { IFeedbackPort } from "../domain/ports";
+import {
+  mapResultStatusToState,
+  SuggestionStateMachine,
+} from "../domain/suggestion/SuggestionStateMachine";
+import type {
+  FeedbackPayload,
+  InsertionResult,
+  Suggestion,
+  SuggestionState,
+} from "../domain/types";
+import {
+  DEFAULT_MAX_CHUNK_SIZE,
+  MAX_RETRIES,
+  RETRY_BASE_DELAY_MS,
+} from "../infrastructure/config";
 
 /** Duration (ms) before the status bar message auto-hides. */
 const STATUS_DISPLAY_MS = 4000;
@@ -60,7 +72,7 @@ const documentPort = new WordAdapter();
 const analysisPort = new RetryAnalysisDecorator(
   new MastraAdapter(),
   MAX_RETRIES,
-  RETRY_BASE_DELAY_MS
+  RETRY_BASE_DELAY_MS,
 );
 
 const feedbackPort: IFeedbackPort = new FeedbackAdapter();
@@ -86,8 +98,10 @@ const stateMachine = new PipelineStateMachine();
  * Hides the sideload message, shows the app body, and binds event handlers.
  */
 export function bootstrapTaskpane(
-  office: OfficeLike | undefined = globalThis.Office as unknown as OfficeLike | undefined,
-  doc: DocumentLike | undefined = globalThis.document
+  office: OfficeLike | undefined = globalThis.Office as unknown as
+    | OfficeLike
+    | undefined,
+  doc: DocumentLike | undefined = globalThis.document,
 ): void {
   if (!office?.onReady || !doc?.getElementById) {
     return;
@@ -101,8 +115,12 @@ export function bootstrapTaskpane(
 
     const sideloadMessage = doc.getElementById("sideload-msg");
     const appBody = doc.getElementById("app-body");
-    const analyzeButton = doc.getElementById("btn-analyze") as HTMLButtonElement | null;
-    const cleanupButton = doc.getElementById("btn-cleanup") as HTMLButtonElement | null;
+    const analyzeButton = doc.getElementById(
+      "btn-analyze",
+    ) as HTMLButtonElement | null;
+    const cleanupButton = doc.getElementById(
+      "btn-cleanup",
+    ) as HTMLButtonElement | null;
 
     if (!(sideloadMessage && appBody && analyzeButton && cleanupButton)) {
       return;
@@ -178,7 +196,7 @@ function renderResults(
   suggestions: Suggestion[],
   result: InsertionResult,
   chunkErrors: string[],
-  isSelection: boolean
+  isSelection: boolean,
 ): void {
   const panel = document.getElementById("results-panel")!;
   const summary = document.getElementById("results-summary")!;
@@ -191,7 +209,8 @@ function renderResults(
   const scopePrefix = isSelection ? "Sobre selección — " : "";
   let summaryText = `${scopePrefix}${applied} de ${total} sugerencias aplicadas como Track Changes.`;
   if (failed > 0) summaryText += ` ${failed} no encontrada(s) en el texto.`;
-  if (chunkErrors.length > 0) summaryText += ` ${chunkErrors.length} fragmento(s) con error.`;
+  if (chunkErrors.length > 0)
+    summaryText += ` ${chunkErrors.length} fragmento(s) con error.`;
   summary.textContent = summaryText;
 
   list.innerHTML = "";
@@ -241,14 +260,18 @@ function renderResults(
       actionsSpan.className = "result-actions";
 
       const acceptBtn = document.createElement("button");
-      acceptBtn.className = isCommentOnly ? "result-action-btn result-action-btn--text" : "result-action-btn";
+      acceptBtn.className = isCommentOnly
+        ? "result-action-btn result-action-btn--text"
+        : "result-action-btn";
       acceptBtn.setAttribute("data-action", "accept");
       acceptBtn.setAttribute("data-suggestion-id", s.id);
       acceptBtn.setAttribute("aria-label", "Aceptar sugerencia");
       acceptBtn.textContent = isCommentOnly ? "Entendido" : "✓";
 
       const rejectBtn = document.createElement("button");
-      rejectBtn.className = isCommentOnly ? "result-action-btn result-action-btn--text" : "result-action-btn";
+      rejectBtn.className = isCommentOnly
+        ? "result-action-btn result-action-btn--text"
+        : "result-action-btn";
       rejectBtn.setAttribute("data-action", "reject");
       rejectBtn.setAttribute("data-suggestion-id", s.id);
       rejectBtn.setAttribute("aria-label", "Rechazar sugerencia");
@@ -279,10 +302,18 @@ function renderResults(
     list.appendChild(li);
 
     if (!isFailed) {
-      const acceptBtn = li.querySelector("[data-action=\"accept\"]") as HTMLButtonElement | null;
-      const rejectBtn = li.querySelector("[data-action=\"reject\"]") as HTMLButtonElement | null;
-      const feedbackBtnEl = li.querySelector("[data-action=\"feedback\"]") as HTMLButtonElement | null;
-      const accordionEl = li.querySelector(".feedback-accordion") as HTMLElement | null;
+      const acceptBtn = li.querySelector(
+        '[data-action="accept"]',
+      ) as HTMLButtonElement | null;
+      const rejectBtn = li.querySelector(
+        '[data-action="reject"]',
+      ) as HTMLButtonElement | null;
+      const feedbackBtnEl = li.querySelector(
+        '[data-action="feedback"]',
+      ) as HTMLButtonElement | null;
+      const accordionEl = li.querySelector(
+        ".feedback-accordion",
+      ) as HTMLElement | null;
 
       if (feedbackBtnEl && accordionEl) {
         feedbackBtnEl.addEventListener("click", () => {
@@ -296,12 +327,12 @@ function renderResults(
 
       if (acceptBtn) {
         acceptBtn.addEventListener("click", () =>
-          handleAcceptSuggestion(s, li, acceptBtn, rejectBtn, sm)
+          handleAcceptSuggestion(s, li, acceptBtn, rejectBtn, sm),
         );
       }
       if (rejectBtn) {
         rejectBtn.addEventListener("click", () =>
-          handleRejectSuggestion(s, li, acceptBtn, rejectBtn, sm)
+          handleRejectSuggestion(s, li, acceptBtn, rejectBtn, sm),
         );
       }
     }
@@ -370,7 +401,7 @@ function applySuggestionCardState(
   state: SuggestionState,
   acceptBtn: HTMLButtonElement | null,
   rejectBtn: HTMLButtonElement | null,
-  errorMessage?: string
+  errorMessage?: string,
 ): void {
   switch (state) {
     case "accepted":
@@ -388,7 +419,10 @@ function applySuggestionCardState(
     case "error":
       if (acceptBtn) acceptBtn.disabled = false;
       if (rejectBtn) rejectBtn.disabled = false;
-      showStatus(errorMessage ?? "Error desconocido al resolver sugerencia", "error");
+      showStatus(
+        errorMessage ?? "Error desconocido al resolver sugerencia",
+        "error",
+      );
       break;
 
     default:
@@ -411,7 +445,7 @@ async function handleAcceptSuggestion(
   li: HTMLElement,
   acceptBtn: HTMLButtonElement | null,
   rejectBtn: HTMLButtonElement | null,
-  sm: SuggestionStateMachine
+  sm: SuggestionStateMachine,
 ): Promise<void> {
   if (!sm.canTransition("resolving")) return;
 
@@ -436,12 +470,16 @@ async function handleAcceptSuggestion(
 
   // Positive feedback only on explicit acceptance from the taskpane
   if (sm.state === "accepted") {
-    const textarea = li.querySelector(".feedback-textarea") as (HTMLTextAreaElement & { value?: string }) | null;
+    const textarea = li.querySelector(".feedback-textarea") as
+      | (HTMLTextAreaElement & { value?: string })
+      | null;
     const commentText = textarea?.value?.trim();
     const payload: FeedbackPayload = {
       category: suggestion.category,
       originalText: suggestion.originalText,
-      ...(suggestion.suggestedText !== undefined ? { suggestedText: suggestion.suggestedText } : {}),
+      ...(suggestion.suggestedText !== undefined
+        ? { suggestedText: suggestion.suggestedText }
+        : {}),
       justification: suggestion.justification,
       rating: "positive",
       severity: suggestion.severity,
@@ -462,7 +500,7 @@ async function handleRejectSuggestion(
   li: HTMLElement,
   acceptBtn: HTMLButtonElement | null,
   rejectBtn: HTMLButtonElement | null,
-  sm: SuggestionStateMachine
+  sm: SuggestionStateMachine,
 ): Promise<void> {
   if (!sm.canTransition("resolving")) return;
 
@@ -487,12 +525,16 @@ async function handleRejectSuggestion(
 
   // Negative feedback only on explicit rejection from the taskpane
   if (sm.state === "rejected") {
-    const textarea = li.querySelector(".feedback-textarea") as (HTMLTextAreaElement & { value?: string }) | null;
+    const textarea = li.querySelector(".feedback-textarea") as
+      | (HTMLTextAreaElement & { value?: string })
+      | null;
     const commentText = textarea?.value?.trim();
     const payload: FeedbackPayload = {
       category: suggestion.category,
       originalText: suggestion.originalText,
-      ...(suggestion.suggestedText !== undefined ? { suggestedText: suggestion.suggestedText } : {}),
+      ...(suggestion.suggestedText !== undefined
+        ? { suggestedText: suggestion.suggestedText }
+        : {}),
       justification: suggestion.justification,
       rating: "negative",
       severity: suggestion.severity,
@@ -543,7 +585,10 @@ async function handleAnalyze(): Promise<void> {
     },
     onAbort(reason) {
       hideProgress();
-      showStatus(reason, (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success");
+      showStatus(
+        reason,
+        (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success",
+      );
     },
     onComplete(suggestions, result, chunkErrors, isSelection) {
       hideProgress();
@@ -557,15 +602,18 @@ async function handleAnalyze(): Promise<void> {
       if (result.failedSuggestions.length > 0 && result.successCount > 0) {
         showStatus(
           `${result.successCount} aplicada(s), ${result.failedSuggestions.length} no encontrada(s)${scopeSuffix}.`,
-          "success"
+          "success",
         );
       } else if (result.successCount > 0) {
         showStatus(
           `${result.successCount} sugerencia(s) insertada(s) como Track Changes${scopeSuffix}.`,
-          "success"
+          "success",
         );
       } else {
-        showStatus("Ninguna sugerencia pudo aplicarse al documento actual.", "error");
+        showStatus(
+          "Ninguna sugerencia pudo aplicarse al documento actual.",
+          "error",
+        );
       }
     },
   };
@@ -578,7 +626,9 @@ async function handleAnalyze(): Promise<void> {
     console.log("🚀 [Taskpane] Pipeline iniciado");
     await orchestrator.run(ctx);
 
-    console.log(`✅ [Taskpane] Pipeline completado. Abortado: ${ctx.aborted ?? false}`);
+    console.log(
+      `✅ [Taskpane] Pipeline completado. Abortado: ${ctx.aborted ?? false}`,
+    );
   } catch (error) {
     console.error("💥 [Taskpane] Error no capturado en pipeline:", error);
     hideProgress();
@@ -608,8 +658,13 @@ async function handleCleanup(): Promise<void> {
 
   try {
     const { deleted, kept } = await documentPort.cleanupResolvedComments();
-    console.log(`🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`);
-    showStatus(`${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`, "success");
+    console.log(
+      `🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`,
+    );
+    showStatus(
+      `${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`,
+      "success",
+    );
 
     if (kept === 0) {
       document.getElementById("cleanup-section")!.style.display = "none";

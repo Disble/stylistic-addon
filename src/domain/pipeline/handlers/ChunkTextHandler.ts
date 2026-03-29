@@ -15,17 +15,19 @@
  */
 
 import { splitText } from "../../../infrastructure/chunker";
-import { PipelineContext } from "../PipelineContext";
-import { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineContext } from "../PipelineContext";
+import type { PipelineHandler } from "./ReadTextHandler";
 
 export class ChunkTextHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const scope = ctx.isSelection ? "selección" : "documento";
-    console.log(`✂️ [ChunkTextHandler] Fase 3: Dividiendo ${scope} en chunks...`);
+    console.log(
+      `✂️ [ChunkTextHandler] Fase 3: Dividiendo ${scope} en chunks...`,
+    );
 
     const chunks = splitText(ctx.text!, ctx.maxChunkSize);
     console.log(
-      `✂️ [ChunkTextHandler] ${chunks.length} chunk(s) generados — genero: "${ctx.genero}"`
+      `✂️ [ChunkTextHandler] ${chunks.length} chunk(s) generados — genero: "${ctx.genero}"`,
     );
 
     ctx.chunks = chunks;

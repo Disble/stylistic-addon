@@ -1,5 +1,5 @@
-import { MASTRA_BASE_URL, WORKFLOW_ID } from "../../infrastructure/config";
 import type { TextChunk, WorkflowSuggestion } from "../../domain/types";
+import { MASTRA_BASE_URL, WORKFLOW_ID } from "../../infrastructure/config";
 
 const mastraMocks = vi.hoisted(() => {
   const details = vi.fn();
@@ -7,7 +7,7 @@ const mastraMocks = vi.hoisted(() => {
   const start = vi.fn();
   const runById = vi.fn();
   const getWorkflow = vi.fn();
-  const constructor = vi.fn();
+  const mockConstructor = vi.fn();
 
   return {
     details,
@@ -15,7 +15,7 @@ const mastraMocks = vi.hoisted(() => {
     start,
     runById,
     getWorkflow,
-    constructor,
+    constructor: mockConstructor,
     workflow: {
       details,
       createRun,
@@ -130,9 +130,18 @@ describe("MastraAdapter", () => {
     it("forwards text, genero, and autorSlug to start", async () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
-      const chunk = makeChunk({ text: "Hola mundo", index: 4, total: 9, startOffset: 999 });
+      const chunk = makeChunk({
+        text: "Hola mundo",
+        index: 4,
+        total: 9,
+        startOffset: 999,
+      });
 
-      await adapter.submitChunkAnalysis(chunk, "narrativa-literaria", "maria-garcia");
+      await adapter.submitChunkAnalysis(
+        chunk,
+        "narrativa-literaria",
+        "maria-garcia",
+      );
 
       expect(mastraMocks.getWorkflow).toHaveBeenCalledWith(WORKFLOW_ID);
       expect(mastraMocks.createRun).toHaveBeenCalledOnce();
@@ -149,7 +158,11 @@ describe("MastraAdapter", () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 7 }), "general", "Disble");
+      const result = await adapter.submitChunkAnalysis(
+        makeChunk({ index: 7 }),
+        "general",
+        "Disble",
+      );
 
       expect(result).toEqual({
         chunkIndex: 7,
@@ -162,7 +175,11 @@ describe("MastraAdapter", () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const result = await adapter.submitChunkAnalysis(
+        makeChunk(),
+        "general",
+        "Disble",
+      );
 
       expect(result).toEqual({
         chunkIndex: 2,
@@ -176,7 +193,11 @@ describe("MastraAdapter", () => {
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const result = await adapter.submitChunkAnalysis(
+        makeChunk(),
+        "general",
+        "Disble",
+      );
 
       expect(result).toEqual({
         chunkIndex: 2,
@@ -185,11 +206,17 @@ describe("MastraAdapter", () => {
     });
 
     it("returns the thrown message when submit fails", async () => {
-      mastraMocks.start.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+      mastraMocks.start.mockRejectedValueOnce(
+        new Error("connect ECONNREFUSED"),
+      );
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
-      const result = await adapter.submitChunkAnalysis(makeChunk({ index: 3 }), "general", "Disble");
+      const result = await adapter.submitChunkAnalysis(
+        makeChunk({ index: 3 }),
+        "general",
+        "Disble",
+      );
 
       expect(result).toEqual({
         chunkIndex: 3,
@@ -224,7 +251,8 @@ describe("MastraAdapter", () => {
         runId: "run-2",
         status: "failed",
         suggestions: [],
-        error: 'Workflow entered "suspended" state and requires resume(), which this frontend does not support',
+        error:
+          'Workflow entered "suspended" state and requires resume(), which this frontend does not support',
       });
     });
 
@@ -240,7 +268,8 @@ describe("MastraAdapter", () => {
         runId: "run-2",
         status: "failed",
         suggestions: [],
-        error: 'Workflow entered "paused" state and requires resume(), which this frontend does not support',
+        error:
+          'Workflow entered "paused" state and requires resume(), which this frontend does not support',
       });
     });
 
@@ -346,7 +375,10 @@ describe("MastraAdapter", () => {
     });
 
     it("returns failed when a success payload is malformed", async () => {
-      mastraMocks.runById.mockResolvedValueOnce({ status: "success", result: "bad payload" });
+      mastraMocks.runById.mockResolvedValueOnce({
+        status: "success",
+        result: "bad payload",
+      });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
@@ -362,7 +394,9 @@ describe("MastraAdapter", () => {
     });
 
     it("returns failed when poll payload has no status", async () => {
-      mastraMocks.runById.mockResolvedValueOnce({ result: { suggestions: [] } });
+      mastraMocks.runById.mockResolvedValueOnce({
+        result: { suggestions: [] },
+      });
       const { MastraAdapter } = await importAdapterModule();
       const adapter = new MastraAdapter();
 
@@ -424,7 +458,8 @@ describe("MastraAdapter", () => {
         runId: "run-1",
         status: "canceled",
         suggestions: [],
-        error: 'Workflow terminated with status "canceled" without an error payload',
+        error:
+          'Workflow terminated with status "canceled" without an error payload',
       });
     });
 

@@ -9,7 +9,11 @@ const urlProd = "https://www.contoso.com/"; // CHANGE THIS TO YOUR PRODUCTION DE
 
 async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
-  return { ca: httpsOptions.ca, key: httpsOptions.key, cert: httpsOptions.cert };
+  return {
+    ca: httpsOptions.ca,
+    key: httpsOptions.key,
+    cert: httpsOptions.cert,
+  };
 }
 
 module.exports = async (env, options) => {
@@ -33,7 +37,7 @@ module.exports = async (env, options) => {
           test: /\.ts$/,
           exclude: /node_modules/,
           use: {
-            loader: "babel-loader"
+            loader: "babel-loader",
           },
         },
         {
@@ -69,7 +73,9 @@ module.exports = async (env, options) => {
               if (dev) {
                 return content;
               } else {
-                return content.toString().replace(new RegExp(urlDev, "g"), urlProd);
+                return content
+                  .toString()
+                  .replace(new RegExp(urlDev, "g"), urlProd);
               }
             },
           },
@@ -87,7 +93,10 @@ module.exports = async (env, options) => {
       },
       server: {
         type: "https",
-        options: env.WEBPACK_BUILD || options.https !== undefined ? options.https : await getHttpsOptions(),
+        options:
+          env.WEBPACK_BUILD || options.https !== undefined
+            ? options.https
+            : await getHttpsOptions(),
       },
       port: process.env.npm_package_config_dev_server_port || 3000,
     },

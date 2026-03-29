@@ -1,8 +1,8 @@
-import { PipelineOrchestrator } from "./PipelineOrchestrator";
-import { PipelineContext } from "./PipelineContext";
-import { PipelineEventEmitter } from "./PipelineEvents";
+import type { IAnalysisPort, IDocumentPort } from "../ports";
 import type { PipelineHandler } from "./handlers/ReadTextHandler";
-import type { IDocumentPort, IAnalysisPort } from "../ports";
+import type { PipelineContext } from "./PipelineContext";
+import { PipelineEventEmitter } from "./PipelineEvents";
+import { PipelineOrchestrator } from "./PipelineOrchestrator";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -12,7 +12,9 @@ import type { IDocumentPort, IAnalysisPort } from "../ports";
  * Creates a minimal PipelineContext with mocked ports and a real emitter.
  * Override any field via the `overrides` parameter.
  */
-function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
+function makeContext(
+  overrides: Partial<PipelineContext> = {},
+): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
@@ -45,7 +47,7 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
 function makeHandler(
   name: string,
   calls: string[],
-  sideEffect?: (ctx: PipelineContext) => void | Promise<void>
+  sideEffect?: (ctx: PipelineContext) => void | Promise<void>,
 ): PipelineHandler {
   return {
     handle: vi.fn(async (ctx: PipelineContext, next: () => Promise<void>) => {
@@ -62,7 +64,7 @@ function makeHandler(
 function makeTerminalHandler(
   name: string,
   calls: string[],
-  sideEffect?: (ctx: PipelineContext) => void | Promise<void>
+  sideEffect?: (ctx: PipelineContext) => void | Promise<void>,
 ): PipelineHandler {
   return {
     handle: vi.fn(async (ctx: PipelineContext, _next: () => Promise<void>) => {
@@ -100,10 +102,7 @@ describe("PipelineOrchestrator", () => {
 
     it("calls each handler's handle method exactly once", async () => {
       const calls: string[] = [];
-      const handlers = [
-        makeHandler("A", calls),
-        makeHandler("B", calls),
-      ];
+      const handlers = [makeHandler("A", calls), makeHandler("B", calls)];
       const orchestrator = new PipelineOrchestrator(handlers);
 
       await orchestrator.run(makeContext());
@@ -222,7 +221,10 @@ describe("PipelineOrchestrator", () => {
         }),
       };
 
-      const orchestrator = new PipelineOrchestrator([writerHandler, readerHandler]);
+      const orchestrator = new PipelineOrchestrator([
+        writerHandler,
+        readerHandler,
+      ]);
       await orchestrator.run(makeContext());
 
       expect(calls).toEqual(["writer", "reader"]);
@@ -318,7 +320,10 @@ describe("PipelineOrchestrator", () => {
         ctx.aborted = true;
         ctx.abortReason = "Backend unreachable";
       });
-      const orchestrator = new PipelineOrchestrator([aborter, makeHandler("skipped", calls)]);
+      const orchestrator = new PipelineOrchestrator([
+        aborter,
+        makeHandler("skipped", calls),
+      ]);
       const ctx = makeContext();
 
       await orchestrator.run(ctx);
@@ -372,7 +377,9 @@ describe("PipelineOrchestrator", () => {
       };
       const orchestrator = new PipelineOrchestrator([failing]);
 
-      await expect(orchestrator.run(makeContext())).rejects.toThrow("handler exploded");
+      await expect(orchestrator.run(makeContext())).rejects.toThrow(
+        "handler exploded",
+      );
     });
 
     it("does not execute handlers after the one that threw", async () => {
@@ -494,7 +501,7 @@ describe("PipelineOrchestrator", () => {
       const orchestrator = new PipelineOrchestrator([doubleNext, counter]);
 
       await expect(orchestrator.run(makeContext())).rejects.toThrow(
-        "next() called multiple times in the same handler"
+        "next() called multiple times in the same handler",
       );
       expect(calls).toEqual(["double", "counted"]);
       expect(counter.handle).toHaveBeenCalledOnce();
@@ -591,13 +598,17 @@ describe("PipelineOrchestrator", () => {
     it("handles rejected promises from async handlers", async () => {
       const asyncFail: PipelineHandler = {
         handle: vi.fn(async () => {
-          await new Promise((_, reject) => setTimeout(() => reject(new Error("async boom")), 1));
+          await new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("async boom")), 1),
+          );
         }),
       };
 
       const orchestrator = new PipelineOrchestrator([asyncFail]);
 
-      await expect(orchestrator.run(makeContext())).rejects.toThrow("async boom");
+      await expect(orchestrator.run(makeContext())).rejects.toThrow(
+        "async boom",
+      );
     });
   });
 
@@ -666,9 +677,7 @@ describe("PipelineOrchestrator", () => {
       });
 
       const chunkHandler = makeHandler("chunk", calls, (ctx) => {
-        ctx.chunks = [
-          { text: ctx.text!, index: 0, total: 1, startOffset: 0 },
-        ];
+        ctx.chunks = [{ text: ctx.text!, index: 0, total: 1, startOffset: 0 }];
       });
 
       const analyzeHandler = makeHandler("analyze", calls, (ctx) => {
@@ -736,8 +745,12 @@ describe("PipelineOrchestrator", () => {
 
       expect(calls).toEqual(["read"]);
       expect(ctx.aborted).toBe(true);
-      expect(ctx.abortReason).toBe("El documento está vacío. Escribe algo primero.");
-      expect(onAbort).toHaveBeenCalledWith("El documento está vacío. Escribe algo primero.");
+      expect(ctx.abortReason).toBe(
+        "El documento está vacío. Escribe algo primero.",
+      );
+      expect(onAbort).toHaveBeenCalledWith(
+        "El documento está vacío. Escribe algo primero.",
+      );
     });
 
     it("simulates error at analyze phase", async () => {

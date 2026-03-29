@@ -1,11 +1,16 @@
-import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 import type { InsertionResult, Suggestion } from "../domain/types";
+import {
+  DEFAULT_MAX_CHUNK_SIZE,
+  MAX_RETRIES,
+  RETRY_BASE_DELAY_MS,
+} from "../infrastructure/config";
 
 const taskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],
   run: vi.fn<(ctx: any) => Promise<void>>(),
   wordAdapterConstructor: vi.fn(),
-  cleanupResolvedComments: vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
+  cleanupResolvedComments:
+    vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
   acceptSuggestion: vi.fn(),
   rejectSuggestion: vi.fn(),
   mastraAdapterConstructor: vi.fn(),
@@ -97,7 +102,7 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
@@ -254,7 +259,10 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
   const attrMatch = selector.match(/^\[([^\]="]+)\]$/);
   if (attrMatch) {
     const [, attr] = attrMatch;
-    return (el as any)[attr] !== undefined || (el as any)[`_attr_${attr}`] !== undefined;
+    return (
+      (el as any)[attr] !== undefined ||
+      (el as any)[`_attr_${attr}`] !== undefined
+    );
   }
   // .className
   const classMatch = selector.match(/^\.(.+)$/);
@@ -308,7 +316,8 @@ function createTaskpaneDocument(): FakeDocument {
   doc.getElementById("progress-container")!.style.display = "none";
   doc.getElementById("profile-select")!.value = "narrativa-literaria";
   doc.getElementById("btn-analyze-label")!.textContent = "Analizar y sugerir";
-  doc.getElementById("btn-cleanup-label")!.textContent = "Limpiar comentarios resueltos";
+  doc.getElementById("btn-cleanup-label")!.textContent =
+    "Limpiar comentarios resueltos";
 
   return doc;
 }
@@ -351,7 +360,10 @@ describe("taskpane entrypoint", () => {
     vi.useFakeTimers();
     taskpaneMocks.orchestratorHandlers = [];
     taskpaneMocks.run.mockResolvedValue(undefined);
-    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({
+      deleted: 0,
+      kept: 0,
+    });
     taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
 
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -394,7 +406,7 @@ describe("taskpane entrypoint", () => {
     expect(taskpaneMocks.retryDecoratorConstructor).toHaveBeenCalledWith(
       expect.any(Object),
       MAX_RETRIES,
-      RETRY_BASE_DELAY_MS
+      RETRY_BASE_DELAY_MS,
     );
 
     officeHarness.triggerReady({ host: "Excel" });
@@ -404,8 +416,12 @@ describe("taskpane entrypoint", () => {
     officeHarness.triggerReady({ host: "Word" });
     expect(doc.getElementById("sideload-msg")!.style.display).toBe("none");
     expect(doc.getElementById("app-body")!.style.display).toBe("flex");
-    expect(doc.getElementById("btn-analyze")!.onclick).toEqual(expect.any(Function));
-    expect(doc.getElementById("btn-cleanup")!.onclick).toEqual(expect.any(Function));
+    expect(doc.getElementById("btn-analyze")!.onclick).toEqual(
+      expect.any(Function),
+    );
+    expect(doc.getElementById("btn-cleanup")!.onclick).toEqual(
+      expect.any(Function),
+    );
   });
 
   it("runs the pipeline with the selected profile and updates the UI from emitted events", async () => {
@@ -421,7 +437,7 @@ describe("taskpane entrypoint", () => {
         [makeSuggestion()],
         { successCount: 1, failedSuggestions: [] },
         [],
-        true
+        true,
       );
     });
 
@@ -438,26 +454,36 @@ describe("taskpane entrypoint", () => {
       analysisPort: expect.any(Object),
       emitter: expect.any(Object),
     });
-    expect(doc.getElementById("progress-container")!.style.display).toBe("block");
+    expect(doc.getElementById("progress-container")!.style.display).toBe(
+      "block",
+    );
     expect(doc.getElementById("progress-bar")!.style.display).toBe("");
     expect(doc.getElementById("progress-bar")!.style.width).toBe("25%");
-    expect(doc.getElementById("progress-text")!.textContent).toBe("Analizando fragmentos...");
+    expect(doc.getElementById("progress-text")!.textContent).toBe(
+      "Analizando fragmentos...",
+    );
     expect(doc.getElementById("results-panel")!.style.display).toBe("block");
     expect(doc.getElementById("results-summary")!.textContent).toBe(
-      "Sobre selección — 1 de 1 sugerencias aplicadas como Track Changes."
+      "Sobre selección — 1 de 1 sugerencias aplicadas como Track Changes.",
     );
     expect(doc.getElementById("results-list")!.children).toHaveLength(1);
     expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
     expect(doc.getElementById("status-bar")!.textContent).toBe(
-      "1 sugerencia(s) insertada(s) como Track Changes (selección)."
+      "1 sugerencia(s) insertada(s) como Track Changes (selección).",
     );
-    expect(doc.getElementById("status-bar")!.className).toBe("stylistic-status success");
+    expect(doc.getElementById("status-bar")!.className).toBe(
+      "stylistic-status success",
+    );
     expect(doc.getElementById("btn-analyze")!.disabled).toBe(false);
     expect(doc.getElementById("profile-select")!.disabled).toBe(false);
-    expect(doc.getElementById("btn-analyze-label")!.textContent).toBe("Analizar y sugerir");
+    expect(doc.getElementById("btn-analyze-label")!.textContent).toBe(
+      "Analizar y sugerir",
+    );
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(doc.getElementById("progress-container")!.style.display).toBe("none");
+    expect(doc.getElementById("progress-container")!.style.display).toBe(
+      "none",
+    );
 
     await vi.advanceTimersByTimeAsync(4000);
     expect(doc.getElementById("status-bar")!.style.display).toBe("none");
@@ -475,12 +501,16 @@ describe("taskpane entrypoint", () => {
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
 
-    const firstRun = doc.getElementById("btn-analyze")!.onclick?.({} as MouseEvent);
+    const firstRun = doc
+      .getElementById("btn-analyze")!
+      .onclick?.({} as MouseEvent);
     await Promise.resolve();
     await doc.getElementById("btn-analyze")!.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
-    expect(warnSpy).toHaveBeenCalledWith("⚠️ [Taskpane] Pipeline ya en ejecución — ignorando click");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "⚠️ [Taskpane] Pipeline ya en ejecución — ignorando click",
+    );
 
     runDeferred.resolve();
     await firstRun;
@@ -493,7 +523,10 @@ describe("taskpane entrypoint", () => {
     (globalThis as any).Office = officeHarness.office;
     doc.getElementById("cleanup-section")!.style.display = "block";
 
-    taskpaneMocks.cleanupResolvedComments.mockResolvedValueOnce({ deleted: 2, kept: 0 });
+    taskpaneMocks.cleanupResolvedComments.mockResolvedValueOnce({
+      deleted: 2,
+      kept: 0,
+    });
 
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
@@ -503,11 +536,11 @@ describe("taskpane entrypoint", () => {
     expect(taskpaneMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
     expect(doc.getElementById("cleanup-section")!.style.display).toBe("none");
     expect(doc.getElementById("status-bar")!.textContent).toBe(
-      "2 comentario(s) eliminado(s), 0 conservado(s)."
+      "2 comentario(s) eliminado(s), 0 conservado(s).",
     );
     expect(doc.getElementById("btn-cleanup")!.disabled).toBe(false);
     expect(doc.getElementById("btn-cleanup-label")!.textContent).toBe(
-      "Limpiar comentarios resueltos"
+      "Limpiar comentarios resueltos",
     );
   });
 });
@@ -519,7 +552,7 @@ describe("taskpane entrypoint", () => {
 async function renderViaEmitter(
   doc: FakeDocument,
   suggestions: Suggestion[],
-  failedIds: string[] = []
+  failedIds: string[] = [],
 ): Promise<FakeElement[]> {
   const officeHarness = createOffice();
   (globalThis as any).document = doc;
@@ -552,7 +585,10 @@ describe("Accept/Reject buttons", () => {
     vi.useFakeTimers();
     taskpaneMocks.orchestratorHandlers = [];
     taskpaneMocks.run.mockResolvedValue(undefined);
-    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({
+      deleted: 0,
+      kept: 0,
+    });
     taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "accepted",
@@ -584,7 +620,11 @@ describe("Accept/Reject buttons", () => {
 
   it("4.0 — comment-only suggestion: no diff block, 'Entendido'/'Ignorar' button labels, type badge shown", async () => {
     const doc = createTaskpaneDocument();
-    const s1 = makeSuggestion({ id: "s-co", type: "comment-only", suggestedText: undefined });
+    const s1 = makeSuggestion({
+      id: "s-co",
+      type: "comment-only",
+      suggestedText: undefined,
+    });
 
     const liItems = await renderViaEmitter(doc, [s1]);
     const li = liItems[0];
@@ -610,7 +650,11 @@ describe("Accept/Reject buttons", () => {
 
   it("4.0b — track-change suggestion: diff block present, '✓'/'✗' button labels", async () => {
     const doc = createTaskpaneDocument();
-    const s1 = makeSuggestion({ id: "s-tc", type: "track-change", suggestedText: "texto sugerido" });
+    const s1 = makeSuggestion({
+      id: "s-tc",
+      type: "track-change",
+      suggestedText: "texto sugerido",
+    });
 
     const liItems = await renderViaEmitter(doc, [s1]);
     const li = liItems[0];
@@ -762,7 +806,11 @@ describe("Accept/Reject buttons", () => {
   });
 
   it("4.9 — double-click guard: documentPort called exactly once", async () => {
-    const { promise: firstCall, resolve: resolveFirst } = deferred<{ status: string; trackedChangesAffected: number; commentDeleted: boolean }>();
+    const { promise: firstCall, resolve: resolveFirst } = deferred<{
+      status: string;
+      trackedChangesAffected: number;
+      commentDeleted: boolean;
+    }>();
     taskpaneMocks.acceptSuggestion.mockReturnValue(firstCall);
 
     const doc = createTaskpaneDocument();
@@ -781,7 +829,11 @@ describe("Accept/Reject buttons", () => {
     await Promise.resolve();
 
     // Resolve the first call
-    resolveFirst({ status: "accepted", trackedChangesAffected: 1, commentDeleted: false });
+    resolveFirst({
+      status: "accepted",
+      trackedChangesAffected: 1,
+      commentDeleted: false,
+    });
     await Promise.resolve();
     await Promise.resolve();
 
@@ -792,8 +844,17 @@ describe("Accept/Reject buttons", () => {
 
   it("4.10 — error retry: second click succeeds after error state", async () => {
     taskpaneMocks.acceptSuggestion
-      .mockResolvedValueOnce({ status: "error", trackedChangesAffected: 0, commentDeleted: false, error: "timeout" })
-      .mockResolvedValueOnce({ status: "accepted", trackedChangesAffected: 1, commentDeleted: true });
+      .mockResolvedValueOnce({
+        status: "error",
+        trackedChangesAffected: 0,
+        commentDeleted: false,
+        error: "timeout",
+      })
+      .mockResolvedValueOnce({
+        status: "accepted",
+        trackedChangesAffected: 1,
+        commentDeleted: true,
+      });
 
     const doc = createTaskpaneDocument();
     const s1 = makeSuggestion({ id: "s-1" });
@@ -840,8 +901,12 @@ describe("Accept/Reject buttons", () => {
     const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
     expect(rejectBtn.disabled).toBe(false);
     // Status bar should show error message
-    expect(doc.getElementById("status-bar")!.textContent).toBe("El documento está protegido");
-    expect(doc.getElementById("status-bar")!.className).toBe("stylistic-status error");
+    expect(doc.getElementById("status-bar")!.textContent).toBe(
+      "El documento está protegido",
+    );
+    expect(doc.getElementById("status-bar")!.className).toBe(
+      "stylistic-status error",
+    );
   });
 
   it("4.7 — not-found case: buttons re-enabled", async () => {
@@ -883,7 +948,10 @@ describe("Feedback button + accordion", () => {
     vi.useFakeTimers();
     taskpaneMocks.orchestratorHandlers = [];
     taskpaneMocks.run.mockResolvedValue(undefined);
-    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({ deleted: 0, kept: 0 });
+    taskpaneMocks.cleanupResolvedComments.mockResolvedValue({
+      deleted: 0,
+      kept: 0,
+    });
     taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "accepted",
@@ -957,16 +1025,22 @@ describe("Feedback button + accordion", () => {
     const liItems = await renderViaEmitter(doc, [s1]);
     const li = liItems[0];
 
-    const feedbackBtn = li.querySelector('[data-action="feedback"]') as FakeElement;
+    const feedbackBtn = li.querySelector(
+      '[data-action="feedback"]',
+    ) as FakeElement;
     const accordion = li.querySelector(".feedback-accordion") as FakeElement;
 
-    expect(accordion.classList.contains("feedback-accordion--open")).toBe(false);
+    expect(accordion.classList.contains("feedback-accordion--open")).toBe(
+      false,
+    );
 
     feedbackBtn.click();
     expect(accordion.classList.contains("feedback-accordion--open")).toBe(true);
 
     feedbackBtn.click();
-    expect(accordion.classList.contains("feedback-accordion--open")).toBe(false);
+    expect(accordion.classList.contains("feedback-accordion--open")).toBe(
+      false,
+    );
   });
 
   it("F.5 — accept sends positive feedback with correct payload", async () => {
@@ -998,7 +1072,7 @@ describe("Feedback button + accordion", () => {
         suggestedText: "necesario",
         justification: "Ya implica completitud.",
         severity: "high",
-      })
+      }),
     );
   });
 
@@ -1030,7 +1104,7 @@ describe("Feedback button + accordion", () => {
         suggestedText: "",
         justification: "Frase de relleno.",
         severity: "medium",
-      })
+      }),
     );
   });
 
@@ -1072,7 +1146,7 @@ describe("Feedback button + accordion", () => {
     await Promise.resolve();
 
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({ comment: "Muy buen cambio" })
+      expect.objectContaining({ comment: "Muy buen cambio" }),
     );
   });
 
@@ -1090,7 +1164,7 @@ describe("Feedback button + accordion", () => {
     await Promise.resolve();
 
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({ justification: "Es más claro" })
+      expect.objectContaining({ justification: "Es más claro" }),
     );
   });
 });

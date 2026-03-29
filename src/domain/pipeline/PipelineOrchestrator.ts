@@ -13,8 +13,8 @@
  * @module PipelineOrchestrator
  */
 
-import { PipelineHandler } from "./handlers/ReadTextHandler";
-import { PipelineContext } from "./PipelineContext";
+import type { PipelineHandler } from "./handlers/ReadTextHandler";
+import type { PipelineContext } from "./PipelineContext";
 
 /**
  * Executes a list of pipeline handlers in order, passing a shared context.

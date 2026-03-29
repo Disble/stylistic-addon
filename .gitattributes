@@ -1,0 +1,10 @@
+# Enforce LF line endings in the repository regardless of OS.
+# This ensures Biome's lineEnding: "lf" config never conflicts with Git's autocrlf.
+* text=auto eol=lf
+
+# Binary files — never convert
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

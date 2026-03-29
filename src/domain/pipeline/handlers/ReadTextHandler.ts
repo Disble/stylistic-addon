@@ -10,7 +10,7 @@
  * @module ReadTextHandler
  */
 
-import { PipelineContext } from "../PipelineContext";
+import type { PipelineContext } from "../PipelineContext";
 
 export interface PipelineHandler {
   handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void>;
@@ -24,7 +24,7 @@ export class ReadTextHandler implements PipelineHandler {
     const { text, isSelection } = await ctx.documentPort.getTextToAnalyze();
     const scope = isSelection ? "selección" : "documento";
     console.log(
-      `📖 [ReadTextHandler] ${isSelection ? "Selección" : "Documento"} — ${text.length} chars`
+      `📖 [ReadTextHandler] ${isSelection ? "Selección" : "Documento"} — ${text.length} chars`,
     );
 
     if (!text || text.trim().length === 0) {

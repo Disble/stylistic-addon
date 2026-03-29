@@ -1,8 +1,12 @@
-import { ApplySuggestionsHandler } from "./ApplySuggestionsHandler";
-import { PipelineContext } from "../PipelineContext";
+import type { IAnalysisPort, IDocumentPort } from "../../ports";
+import type {
+  InsertionResult,
+  ProgressCallback,
+  Suggestion,
+} from "../../types";
+import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";
-import type { IDocumentPort, IAnalysisPort } from "../../ports";
-import type { Suggestion, InsertionResult, ProgressCallback } from "../../types";
+import { ApplySuggestionsHandler } from "./ApplySuggestionsHandler";
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -20,7 +24,9 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function makeInsertionResult(overrides: Partial<InsertionResult> = {}): InsertionResult {
+function makeInsertionResult(
+  overrides: Partial<InsertionResult> = {},
+): InsertionResult {
   return {
     successCount: 1,
     failedSuggestions: [],
@@ -29,7 +35,7 @@ function makeInsertionResult(overrides: Partial<InsertionResult> = {}): Insertio
 }
 
 function makeMockDocumentPort(
-  result: InsertionResult = makeInsertionResult()
+  result: InsertionResult = makeInsertionResult(),
 ): IDocumentPort {
   return {
     getTextToAnalyze: vi.fn(),
@@ -52,7 +58,7 @@ function makeMockAnalysisPort(): IAnalysisPort {
 function makePipelineContext(
   pendingSuggestions: Suggestion[],
   documentPort?: IDocumentPort,
-  overrides: Partial<PipelineContext> = {}
+  overrides: Partial<PipelineContext> = {},
 ): PipelineContext {
   return {
     documentPort: documentPort ?? makeMockDocumentPort(),
@@ -91,7 +97,7 @@ describe("ApplySuggestionsHandler", () => {
         makeSuggestion({ id: "s2" }),
       ];
       const docPort = makeMockDocumentPort(
-        makeInsertionResult({ successCount: 2 })
+        makeInsertionResult({ successCount: 2 }),
       );
       const ctx = makePipelineContext(suggestions, docPort);
 
@@ -99,12 +105,15 @@ describe("ApplySuggestionsHandler", () => {
 
       expect(docPort.applySuggestions).toHaveBeenCalledWith(
         suggestions,
-        expect.any(Function)
+        expect.any(Function),
       );
     });
 
     it("should store the InsertionResult in ctx.result", async () => {
-      const result = makeInsertionResult({ successCount: 3, failedSuggestions: [] });
+      const result = makeInsertionResult({
+        successCount: 3,
+        failedSuggestions: [],
+      });
       const docPort = makeMockDocumentPort(result);
       const suggestions = [makeSuggestion()];
       const ctx = makePipelineContext(suggestions, docPort);
@@ -131,7 +140,9 @@ describe("ApplySuggestionsHandler", () => {
     it("should emit phaseComplete with 'applying'", async () => {
       const emitter = new PipelineEventEmitter();
       const emitPhaseComplete = vi.spyOn(emitter, "emitPhaseComplete");
-      const ctx = makePipelineContext([makeSuggestion()], undefined, { emitter });
+      const ctx = makePipelineContext([makeSuggestion()], undefined, {
+        emitter,
+      });
 
       await handler.handle(ctx, next);
 
@@ -155,7 +166,12 @@ describe("ApplySuggestionsHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(emitComplete).toHaveBeenCalledWith(suggestions, result, chunkErrors, true);
+      expect(emitComplete).toHaveBeenCalledWith(
+        suggestions,
+        result,
+        chunkErrors,
+        true,
+      );
     });
 
     it("should pass isSelection=false when analyzing full document", async () => {
@@ -173,7 +189,7 @@ describe("ApplySuggestionsHandler", () => {
         expect.any(Array),
         expect.any(Object),
         expect.any(Array),
-        false
+        false,
       );
     });
 
@@ -193,7 +209,7 @@ describe("ApplySuggestionsHandler", () => {
         expect.any(Array),
         expect.any(Object),
         [],
-        expect.any(Boolean)
+        expect.any(Boolean),
       );
     });
   });
@@ -210,21 +226,22 @@ describe("ApplySuggestionsHandler", () => {
       const docPort = makeMockDocumentPort();
       // Capture the onProgress callback and invoke it
       (docPort.applySuggestions as ReturnType<typeof vi.fn>).mockImplementation(
-        async (
-          _suggestions: Suggestion[],
-          onProgress?: ProgressCallback
-        ) => {
+        async (_suggestions: Suggestion[], onProgress?: ProgressCallback) => {
           onProgress?.("applying", 1, 3, "Aplicando sugerencia 1 de 3...");
           onProgress?.("applying", 2, 3, "Aplicando sugerencia 2 de 3...");
           onProgress?.("applying", 3, 3, "Aplicando sugerencia 3 de 3...");
           return makeInsertionResult({ successCount: 3 });
-        }
+        },
       );
 
       const ctx = makePipelineContext(
-        [makeSuggestion(), makeSuggestion({ id: "s2" }), makeSuggestion({ id: "s3" })],
+        [
+          makeSuggestion(),
+          makeSuggestion({ id: "s2" }),
+          makeSuggestion({ id: "s3" }),
+        ],
         docPort,
-        { emitter }
+        { emitter },
       );
 
       await handler.handle(ctx, next);
@@ -234,19 +251,19 @@ describe("ApplySuggestionsHandler", () => {
         1,
         1,
         3,
-        "Aplicando sugerencia 1 de 3..."
+        "Aplicando sugerencia 1 de 3...",
       );
       expect(emitProgress).toHaveBeenNthCalledWith(
         2,
         2,
         3,
-        "Aplicando sugerencia 2 de 3..."
+        "Aplicando sugerencia 2 de 3...",
       );
       expect(emitProgress).toHaveBeenNthCalledWith(
         3,
         3,
         3,
-        "Aplicando sugerencia 3 de 3..."
+        "Aplicando sugerencia 3 de 3...",
       );
     });
   });
@@ -356,7 +373,7 @@ describe("ApplySuggestionsHandler", () => {
 
       expect(docPort.applySuggestions).toHaveBeenCalledWith(
         [suggestion],
-        expect.any(Function)
+        expect.any(Function),
       );
       expect(ctx.result).toEqual(result);
     });
@@ -383,7 +400,7 @@ describe("ApplySuggestionsHandler", () => {
         expect.any(Array),
         expect.any(Object),
         chunkErrors,
-        expect.any(Boolean)
+        expect.any(Boolean),
       );
     });
   });

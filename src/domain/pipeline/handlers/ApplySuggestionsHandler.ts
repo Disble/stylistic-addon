@@ -14,15 +14,15 @@
  * @module ApplySuggestionsHandler
  */
 
-import { AnalysisPhase, ProgressCallback } from "../../types";
-import { PipelineContext } from "../PipelineContext";
-import { PipelineHandler } from "./ReadTextHandler";
+import type { AnalysisPhase, ProgressCallback } from "../../types";
+import type { PipelineContext } from "../PipelineContext";
+import type { PipelineHandler } from "./ReadTextHandler";
 
 export class ApplySuggestionsHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const pending = ctx.pendingSuggestions!;
     console.log(
-      `📝 [ApplySuggestionsHandler] Fase 6: Aplicando ${pending.length} sugerencias como Track Changes...`
+      `📝 [ApplySuggestionsHandler] Fase 6: Aplicando ${pending.length} sugerencias como Track Changes...`,
     );
 
     // Bridge: ProgressCallback → PipelineEventEmitter
@@ -30,19 +30,24 @@ export class ApplySuggestionsHandler implements PipelineHandler {
       _phase: AnalysisPhase,
       current: number,
       total: number,
-      message: string
+      message: string,
     ) => {
       ctx.emitter.emitProgress(current, total, message);
     };
 
     const result = await ctx.documentPort.applySuggestions(pending, onProgress);
     console.log(
-      `📝 [ApplySuggestionsHandler] Resultado: ${result.successCount} aplicadas, ${result.failedSuggestions.length} fallidas`
+      `📝 [ApplySuggestionsHandler] Resultado: ${result.successCount} aplicadas, ${result.failedSuggestions.length} fallidas`,
     );
 
     ctx.result = result;
     ctx.emitter.emitPhaseComplete("applying");
-    ctx.emitter.emitComplete(pending, result, ctx.chunkErrors ?? [], ctx.isSelection ?? false);
+    ctx.emitter.emitComplete(
+      pending,
+      result,
+      ctx.chunkErrors ?? [],
+      ctx.isSelection ?? false,
+    );
 
     await next();
   }

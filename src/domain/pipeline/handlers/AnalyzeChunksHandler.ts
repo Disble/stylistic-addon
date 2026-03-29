@@ -12,10 +12,10 @@
  * @module AnalyzeChunksHandler
  */
 
-import { Suggestion } from "../../types";
-import { PipelineContext } from "../PipelineContext";
-import { PipelineHandler } from "./ReadTextHandler";
 import { POLL_INTERVAL_MS } from "../../../infrastructure/config";
+import type { Suggestion } from "../../types";
+import type { PipelineContext } from "../PipelineContext";
+import type { PipelineHandler } from "./ReadTextHandler";
 
 export class AnalyzeChunksHandler implements PipelineHandler {
   constructor(private readonly pollIntervalMs: number = POLL_INTERVAL_MS) {}
@@ -24,7 +24,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     const scope = ctx.isSelection ? "selección" : "documento";
     const chunks = ctx.chunks!;
     console.log(
-      `🤖 [AnalyzeChunksHandler] Fase 4: Analizando ${chunks.length} chunk(s) con Mastra...`
+      `🤖 [AnalyzeChunksHandler] Fase 4: Analizando ${chunks.length} chunk(s) con Mastra...`,
     );
 
     const allSuggestions: Suggestion[] = [];
@@ -37,24 +37,28 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     for (const chunk of chunks) {
       ctx.emitter.emitPhaseStart(
         "analyzing",
-        `Encolando fragmento ${chunk.index + 1} de ${chunks.length} (${scope})...`
+        `Encolando fragmento ${chunk.index + 1} de ${chunks.length} (${scope})...`,
       );
       ctx.emitter.emitProgress(
         submittedCount,
         totalSteps,
-        `Encolando fragmento ${chunk.index + 1} de ${chunks.length}...`
+        `Encolando fragmento ${chunk.index + 1} de ${chunks.length}...`,
       );
 
       console.log(
-        `🤖 [AnalyzeChunksHandler] Encolando chunk ${chunk.index + 1}/${chunks.length} (${chunk.text.length} chars)`
+        `🤖 [AnalyzeChunksHandler] Encolando chunk ${chunk.index + 1}/${chunks.length} (${chunk.text.length} chars)`,
       );
-      const submitResult = await ctx.analysisPort.submitChunkAnalysis(chunk, ctx.genero, "Disble");
+      const submitResult = await ctx.analysisPort.submitChunkAnalysis(
+        chunk,
+        ctx.genero,
+        "Disble",
+      );
       submittedCount += 1;
 
       console.log(
         submitResult.runId
           ? `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} enviado con runId "${submitResult.runId}"`
-          : `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} submit falló${submitResult.error ? " ⚠️ " + submitResult.error : ""}`
+          : `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} submit falló${submitResult.error ? " ⚠️ " + submitResult.error : ""}`,
       );
 
       ctx.emitter.emitProgress(
@@ -62,7 +66,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
         totalSteps,
         submitResult.runId
           ? `Fragmento ${chunk.index + 1} en cola. Esperando resultado...`
-          : `No se pudo encolar el fragmento ${chunk.index + 1}.`
+          : `No se pudo encolar el fragmento ${chunk.index + 1}.`,
       );
 
       if (submitResult.runId) {
@@ -85,12 +89,15 @@ export class AnalyzeChunksHandler implements PipelineHandler {
         ctx.emitter.emitProgress(
           submittedCount + completedCount,
           totalSteps,
-          `Consultando resultado del fragmento ${chunk.index + 1} de ${chunks.length}...`
+          `Consultando resultado del fragmento ${chunk.index + 1} de ${chunks.length}...`,
         );
 
-        const pollResult = await ctx.analysisPort.pollChunkAnalysis(chunk.index, runId);
+        const pollResult = await ctx.analysisPort.pollChunkAnalysis(
+          chunk.index,
+          runId,
+        );
         console.log(
-          `🤖 [AnalyzeChunksHandler] Poll chunk ${chunk.index + 1} → ${pollResult.status}${pollResult.error ? " ⚠️ " + pollResult.error : ""}`
+          `🤖 [AnalyzeChunksHandler] Poll chunk ${chunk.index + 1} → ${pollResult.status}${pollResult.error ? " ⚠️ " + pollResult.error : ""}`,
         );
 
         if (this.isPendingStatus(pollResult.status)) {
@@ -110,7 +117,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
           totalSteps,
           pollResult.status === "success"
             ? `Fragmento ${chunk.index + 1} completado.`
-            : `Fragmento ${chunk.index + 1} terminó con error.`
+            : `Fragmento ${chunk.index + 1} terminó con error.`,
         );
       }
 
@@ -124,7 +131,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
 
     if (allSuggestions.length === 0) {
       console.warn(
-        `⚠️ [AnalyzeChunksHandler] Sin sugerencias. Errores de chunks: ${chunkErrors.length}`
+        `⚠️ [AnalyzeChunksHandler] Sin sugerencias. Errores de chunks: ${chunkErrors.length}`,
       );
       ctx.aborted = true;
       ctx.abortReason =

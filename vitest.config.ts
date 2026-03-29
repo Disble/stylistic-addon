@@ -5,18 +5,11 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.test.ts"],
-    exclude: [
-      "node_modules",
-      "dist",
-      "src/commands/**",
-    ],
+    exclude: ["node_modules", "dist", "src/commands/**"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      exclude: [
-        "src/commands/**",
-        "src/**/*.test.ts",
-      ],
+      exclude: ["src/commands/**", "src/**/*.test.ts"],
     },
   },
 });

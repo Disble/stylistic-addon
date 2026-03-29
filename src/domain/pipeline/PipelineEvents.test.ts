@@ -1,5 +1,5 @@
-import { PipelineEventEmitter, PipelineObserver } from "./PipelineEvents";
 import type { InsertionResult, PipelineState, Suggestion } from "../types";
+import { PipelineEventEmitter, type PipelineObserver } from "./PipelineEvents";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -17,7 +17,9 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function makeInsertionResult(overrides: Partial<InsertionResult> = {}): InsertionResult {
+function makeInsertionResult(
+  overrides: Partial<InsertionResult> = {},
+): InsertionResult {
   return { successCount: 1, failedSuggestions: [], ...overrides };
 }
 
@@ -43,7 +45,10 @@ describe("PipelineEventEmitter", () => {
 
       emitter.emitPhaseStart("reading", "Starting…");
 
-      expect(observer.onPhaseStart).toHaveBeenCalledWith("reading", "Starting…");
+      expect(observer.onPhaseStart).toHaveBeenCalledWith(
+        "reading",
+        "Starting…",
+      );
     });
 
     it("should stop calling observer methods after unsubscribing", () => {
@@ -187,7 +192,7 @@ describe("PipelineEventEmitter", () => {
 
     it("should not throw when emitting complete with no observers", () => {
       expect(() =>
-        emitter.emitComplete([], makeInsertionResult(), [], false)
+        emitter.emitComplete([], makeInsertionResult(), [], false),
       ).not.toThrow();
     });
 
@@ -210,7 +215,7 @@ describe("PipelineEventEmitter", () => {
       expect(() => emitter.emitPhaseComplete("done")).not.toThrow();
       expect(() => emitter.emitError("error", "oops")).not.toThrow();
       expect(() =>
-        emitter.emitComplete([], makeInsertionResult(), [], false)
+        emitter.emitComplete([], makeInsertionResult(), [], false),
       ).not.toThrow();
       expect(() => emitter.emitAbort("cancelled")).not.toThrow();
     });
@@ -239,10 +244,19 @@ describe("PipelineEventEmitter", () => {
       emitter.subscribe({ onPhaseStart: fn });
 
       const phases: PipelineState[] = [
-        "idle", "reading", "connecting", "chunking", "analyzing", "applying", "done", "error",
+        "idle",
+        "reading",
+        "connecting",
+        "chunking",
+        "analyzing",
+        "applying",
+        "done",
+        "error",
       ];
 
-      phases.forEach((phase) => emitter.emitPhaseStart(phase, `msg-${phase}`));
+      phases.forEach((phase) => {
+        emitter.emitPhaseStart(phase, `msg-${phase}`);
+      });
 
       expect(fn).toHaveBeenCalledTimes(phases.length);
       phases.forEach((phase, i) => {
@@ -299,7 +313,10 @@ describe("PipelineEventEmitter", () => {
       const fn = vi.fn();
       emitter.subscribe({ onComplete: fn });
 
-      const suggestions = [makeSuggestion({ id: "s1" }), makeSuggestion({ id: "s2" })];
+      const suggestions = [
+        makeSuggestion({ id: "s1" }),
+        makeSuggestion({ id: "s2" }),
+      ];
       const result = makeInsertionResult({ successCount: 2 });
       const chunkErrors = ["chunk 3 failed"];
 

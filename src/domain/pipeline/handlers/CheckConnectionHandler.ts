@@ -10,8 +10,8 @@
  * @module CheckConnectionHandler
  */
 
-import { PipelineContext } from "../PipelineContext";
-import { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineContext } from "../PipelineContext";
+import type { PipelineHandler } from "./ReadTextHandler";
 
 export class CheckConnectionHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
@@ -19,11 +19,14 @@ export class CheckConnectionHandler implements PipelineHandler {
     ctx.emitter.emitPhaseStart("connecting", "Conectando con el servidor...");
 
     const connected = await ctx.analysisPort.checkConnection();
-    console.log(`🔌 [CheckConnectionHandler] Conexión: ${connected ? "✅ OK" : "❌ FALLO"}`);
+    console.log(
+      `🔌 [CheckConnectionHandler] Conexión: ${connected ? "✅ OK" : "❌ FALLO"}`,
+    );
 
     if (!connected) {
       ctx.aborted = true;
-      ctx.abortReason = "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.";
+      ctx.abortReason =
+        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.";
       ctx.emitter.emitAbort(ctx.abortReason);
       return;
     }

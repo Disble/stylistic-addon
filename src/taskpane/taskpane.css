@@ -281,7 +281,7 @@ body {
 
 .result-action-btn[data-action="accept"] {
   background: #d1fad1;
-  color: #107C10;
+  color: #107c10;
 }
 
 .result-action-btn[data-action="reject"] {
@@ -304,7 +304,7 @@ body {
 /* --- Batch Accept/Reject: Card Visual States --- */
 .result-accepted {
   opacity: 0.6;
-  border-left: 3px solid #107C10;
+  border-left: 3px solid #107c10;
 }
 
 .result-rejected {

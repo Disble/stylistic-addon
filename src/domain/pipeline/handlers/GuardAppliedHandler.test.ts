@@ -1,8 +1,8 @@
-import { GuardAppliedHandler } from "./GuardAppliedHandler";
-import { PipelineContext } from "../PipelineContext";
-import { PipelineEventEmitter } from "../PipelineEvents";
-import type { IDocumentPort, IAnalysisPort } from "../../ports";
+import type { IAnalysisPort, IDocumentPort } from "../../ports";
 import type { Suggestion } from "../../types";
+import type { PipelineContext } from "../PipelineContext";
+import { PipelineEventEmitter } from "../PipelineEvents";
+import { GuardAppliedHandler } from "./GuardAppliedHandler";
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -21,7 +21,9 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function makeCommentOnlySuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+function makeCommentOnlySuggestion(
+  overrides: Partial<Suggestion> = {},
+): Suggestion {
   return {
     id: "c1",
     originalText: "texto original",
@@ -34,7 +36,7 @@ function makeCommentOnlySuggestion(overrides: Partial<Suggestion> = {}): Suggest
 }
 
 function makeMockDocumentPort(
-  appliedTexts: Set<string> = new Set()
+  appliedTexts: Set<string> = new Set(),
 ): IDocumentPort {
   return {
     getTextToAnalyze: vi.fn(),
@@ -57,7 +59,7 @@ function makeMockAnalysisPort(): IAnalysisPort {
 function makePipelineContext(
   uniqueSuggestions: Suggestion[],
   appliedTexts: Set<string> = new Set(),
-  overrides: Partial<PipelineContext> = {}
+  overrides: Partial<PipelineContext> = {},
 ): PipelineContext {
   return {
     documentPort: makeMockDocumentPort(appliedTexts),
@@ -167,7 +169,7 @@ describe("GuardAppliedHandler", () => {
 
       expect(ctx.aborted).toBe(true);
       expect(ctx.abortReason).toBe(
-        "Todas las sugerencias ya están aplicadas en el documento."
+        "Todas las sugerencias ya están aplicadas en el documento.",
       );
     });
 
@@ -176,12 +178,14 @@ describe("GuardAppliedHandler", () => {
       const emitAbort = vi.spyOn(emitter, "emitAbort");
 
       const suggestions = [makeSuggestion({ originalText: "applied" })];
-      const ctx = makePipelineContext(suggestions, new Set(["applied"]), { emitter });
+      const ctx = makePipelineContext(suggestions, new Set(["applied"]), {
+        emitter,
+      });
 
       await handler.handle(ctx, next);
 
       expect(emitAbort).toHaveBeenCalledWith(
-        "Todas las sugerencias ya están aplicadas en el documento."
+        "Todas las sugerencias ya están aplicadas en el documento.",
       );
     });
 
@@ -207,7 +211,7 @@ describe("GuardAppliedHandler", () => {
 
       expect(ctx.aborted).toBe(true);
       expect(ctx.abortReason).toBe(
-        "No se encontraron sugerencias editoriales."
+        "No se encontraron sugerencias editoriales.",
       );
     });
 
@@ -260,7 +264,7 @@ describe("GuardAppliedHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.abortReason).toBe(
-        "Todas las sugerencias ya están aplicadas en el documento."
+        "Todas las sugerencias ya están aplicadas en el documento.",
       );
     });
 
@@ -270,7 +274,7 @@ describe("GuardAppliedHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.abortReason).toBe(
-        "No se encontraron sugerencias editoriales."
+        "No se encontraron sugerencias editoriales.",
       );
     });
   });
@@ -299,7 +303,10 @@ describe("GuardAppliedHandler", () => {
     it("should filter out a comment-only suggestion whose originalText is already in the applied set", async () => {
       // getAppliedOriginalTexts() (extended in Phase 4) includes comment-only CC texts
       const suggestions = [
-        makeCommentOnlySuggestion({ id: "c1", originalText: "frase ya comentada" }),
+        makeCommentOnlySuggestion({
+          id: "c1",
+          originalText: "frase ya comentada",
+        }),
       ];
       const appliedTexts = new Set(["frase ya comentada"]);
       const ctx = makePipelineContext(suggestions, appliedTexts);
@@ -308,14 +315,14 @@ describe("GuardAppliedHandler", () => {
 
       expect(ctx.aborted).toBe(true);
       expect(ctx.abortReason).toBe(
-        "Todas las sugerencias ya están aplicadas en el documento."
+        "Todas las sugerencias ya están aplicadas en el documento.",
       );
     });
 
     it("should handle a mix of track-change and comment-only, filtering already-applied ones of both types", async () => {
       const suggestions = [
-        makeSuggestion({ id: "tc1", originalText: "tc applied" }),           // filtered
-        makeSuggestion({ id: "tc2", originalText: "tc pending" }),            // kept
+        makeSuggestion({ id: "tc1", originalText: "tc applied" }), // filtered
+        makeSuggestion({ id: "tc2", originalText: "tc pending" }), // kept
         makeCommentOnlySuggestion({ id: "co1", originalText: "co applied" }), // filtered
         makeCommentOnlySuggestion({ id: "co2", originalText: "co pending" }), // kept
       ];

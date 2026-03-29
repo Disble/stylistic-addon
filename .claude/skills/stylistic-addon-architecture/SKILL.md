@@ -358,6 +358,67 @@ interface WorkflowInput {
 
 ---
 
+## 16. Linting and Naming Enforcement
+
+- Use **Biome** as the single formatter and linter for this add-in. It replaces `office-addin-lint`, `eslint-plugin-office-addins`, and Prettier in one tool.
+- Enable Biome filename enforcement via `useFilenamingConvention`. Allowed cases: `PascalCase` (class files) and `camelCase` (module/utility files).
+- Biome handles general filename case, but the project architecture enforces additional structural rules via `scripts/check-file-naming.mjs`:
+
+### Structural naming rules (enforced in `src/domain/`, `src/adapters/`, `src/infrastructure/`)
+
+| Rule | Description | Example violation |
+|---|---|---|
+| **No `utils.ts`/`Utils.ts`** | Generic utils name is an architecture smell; use a descriptive module name | `src/domain/utils.ts` |
+| **Handler suffix** | All files in any `handlers/` directory must end with `Handler.ts` | `TextProcessor.ts` inside `handlers/` |
+| **Adapter OOP suffix** | All non-test files in `src/adapters/` must end with a known suffix (after stripping `Mock` prefix) | `BackendClient.ts` in `adapters/` |
+| **No triple-compound names** | At most one dot separator after the base name | `foo.helpers.types.ts` |
+
+### Known adapter suffixes
+
+```text
+Adapter · Decorator · Command · Builder · Cleanup · Machine · Events · Context · Orchestrator
+```
+
+A `Mock` prefix is allowed in front of any suffix (e.g. `MockFeedbackAdapter.ts`).
+
+### What each naming pattern signals
+
+| Pattern | Meaning | Example |
+|---|---|---|
+| `*Adapter.ts` | Implements a port interface; hides framework/IO details | `WordAdapter.ts`, `MastraAdapter.ts` |
+| `*Decorator.ts` | Wraps a port to add cross-cutting behavior transparently | `RetryAnalysisDecorator.ts` |
+| `*Command.ts` | Encapsulates one document mutation; enables future undo | `ApplySuggestionCommand.ts` |
+| `*Builder.ts` | Fluent construction API for a complex object | `OoxmlPackageBuilder.ts` |
+| `*Cleanup.ts` | Range-colocation or document-cleanup operation | `CommentCleanup.ts` |
+| `*Handler.ts` | One phase in the Chain of Responsibility pipeline | `ReadTextHandler.ts` |
+| `Mock*.ts` | Test double; same interface, no side effects | `MockFeedbackAdapter.ts` |
+
+---
+
+## 17. Git Hook Workflow
+
+- Use **Lefthook** for repository hooks; wiring is in `lefthook.yml`.
+- Hooks are installed automatically on `npm install` via the `prepare` lifecycle script.
+- `pre-commit` runs two fast checks only:
+  1. **`lint:staged`** — Biome checks and auto-fixes staged TypeScript/JavaScript files.
+  2. **`check:filenames`** — validates structural naming conventions across managed folders.
+- Do NOT add builds, tests, or type-checking to `pre-commit`; those belong to CI.
+- If Biome auto-fixes a staged file (`stage_fixed: true`), Lefthook re-stages the fix automatically.
+
+### Available scripts
+
+```bash
+npm run lint              # biome check . (full project)
+npm run lint:write        # biome check --write . (full project, auto-fix)
+npm run lint:staged       # biome check --staged --write (pre-commit safe)
+npm run check:filenames   # structural naming validation only
+npm run validate          # lint + check:filenames (full pre-push gate)
+npm run hooks:install     # re-install lefthook hooks manually
+npm run hooks:pre-commit  # run pre-commit hook locally without committing
+```
+
+---
+
 ## 15. Error Handling Layers
 
 | Level | Location | Strategy |

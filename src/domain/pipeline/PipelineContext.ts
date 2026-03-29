@@ -11,9 +11,9 @@
  * @module PipelineContext
  */
 
-import { Suggestion, TextChunk, InsertionResult } from "../types";
-import { IDocumentPort, IAnalysisPort } from "../ports";
-import { PipelineEventEmitter } from "./PipelineEvents";
+import type { IAnalysisPort, IDocumentPort } from "../ports";
+import type { InsertionResult, Suggestion, TextChunk } from "../types";
+import type { PipelineEventEmitter } from "./PipelineEvents";
 
 /**
  * The full context object passed between pipeline handlers.

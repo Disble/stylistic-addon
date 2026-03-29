@@ -16,10 +16,21 @@
  * @module WordAdapter
  */
 
-import { IDocumentPort } from "../../domain/ports";
-import { TextSource, Suggestion, InsertionResult, ProgressCallback, SuggestionActionResult } from "../../domain/types";
+import type { IDocumentPort } from "../../domain/ports";
+import type {
+  CommandResult,
+  InsertionResult,
+  ProgressCallback,
+  Suggestion,
+  SuggestionActionResult,
+  TextSource,
+} from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
-import { cleanupResolvedComments, OVERLAPPING_RELATIONS, COMMENT_ONLY_TAG_PREFIX } from "./cleanup/CommentCleanup";
+import {
+  COMMENT_ONLY_TAG_PREFIX,
+  cleanupResolvedComments,
+  OVERLAPPING_RELATIONS,
+} from "./cleanup/CommentCleanup";
 
 type ParagraphSnapshot = {
   text?: string;
@@ -40,7 +51,9 @@ function shouldPrefixIndent(paragraph: ParagraphSnapshot): boolean {
     return false;
   }
 
-  return (paragraph.firstLineIndent ?? 0) > 0 || (paragraph.leftIndent ?? 0) > 0;
+  return (
+    (paragraph.firstLineIndent ?? 0) > 0 || (paragraph.leftIndent ?? 0) > 0
+  );
 }
 
 function buildStructuredParagraphText(paragraphs: ParagraphSnapshot[]): string {
@@ -51,7 +64,11 @@ function buildStructuredParagraphText(paragraphs: ParagraphSnapshot[]): string {
   return paragraphs
     .map((paragraph) => {
       const text = paragraph.text ?? "";
-      if (!shouldPrefixIndent(paragraph) || text.length === 0 || text.startsWith("\t")) {
+      if (
+        !shouldPrefixIndent(paragraph) ||
+        text.length === 0 ||
+        text.startsWith("\t")
+      ) {
         return text;
       }
 
@@ -75,11 +92,15 @@ export class WordAdapter implements IDocumentPort {
 
       const hasSelectedText = selection.text.trim().length > 0;
       const selText = hasSelectedText
-        ? buildStructuredParagraphText(selection.paragraphs.items as ParagraphSnapshot[]) || selection.text
+        ? buildStructuredParagraphText(
+            selection.paragraphs.items as ParagraphSnapshot[],
+          ) || selection.text
         : "";
 
       if (selText && selText.trim().length > 0) {
-        console.log(`📖 [WordAdapter] Selección activa — ${selText.length} chars`);
+        console.log(
+          `📖 [WordAdapter] Selección activa — ${selText.length} chars`,
+        );
         return { text: selText, isSelection: true };
       }
 
@@ -87,15 +108,21 @@ export class WordAdapter implements IDocumentPort {
       body.paragraphs.load(PARAGRAPH_LOAD_FIELDS);
       await context.sync();
 
-      const bodyText = buildStructuredParagraphText(body.paragraphs.items as ParagraphSnapshot[]);
+      const bodyText = buildStructuredParagraphText(
+        body.paragraphs.items as ParagraphSnapshot[],
+      );
       if (bodyText.length > 0) {
-        console.log(`📖 [WordAdapter] Documento completo — ${bodyText.length} chars`);
+        console.log(
+          `📖 [WordAdapter] Documento completo — ${bodyText.length} chars`,
+        );
         return { text: bodyText, isSelection: false };
       }
 
       body.load("text");
       await context.sync();
-      console.log(`📖 [WordAdapter] Documento completo — ${body.text.length} chars`);
+      console.log(
+        `📖 [WordAdapter] Documento completo — ${body.text.length} chars`,
+      );
       return { text: body.text, isSelection: false };
     });
   }
@@ -112,7 +139,9 @@ export class WordAdapter implements IDocumentPort {
    * which spans the original text at insertion time.
    */
   async getAppliedOriginalTexts(): Promise<Set<string>> {
-    console.log("🛡️ [WordAdapter] Consultando tracked changes y CCs comment-only de Stylistic...");
+    console.log(
+      "🛡️ [WordAdapter] Consultando tracked changes y CCs comment-only de Stylistic...",
+    );
     return Word.run(async (context) => {
       const tracked = context.document.body.getTrackedChanges();
       const allCCs = context.document.contentControls;
@@ -121,12 +150,12 @@ export class WordAdapter implements IDocumentPort {
       await context.sync();
 
       const stylisticDeletions = tracked.items.filter(
-        (tc) => tc.author === "Stylistic" && (tc.type as string) === "Deleted"
+        (tc) => tc.author === "Stylistic" && (tc.type as string) === "Deleted",
       );
 
       // JS-side prefix filter — Office.js getByTag() is exact-match only
       const commentOnlyCCs = allCCs.items.filter((cc) =>
-        cc.tag.startsWith(COMMENT_ONLY_TAG_PREFIX)
+        cc.tag.startsWith(COMMENT_ONLY_TAG_PREFIX),
       );
 
       if (stylisticDeletions.length === 0 && commentOnlyCCs.length === 0) {
@@ -134,10 +163,14 @@ export class WordAdapter implements IDocumentPort {
       }
 
       const tcRanges = stylisticDeletions.map((tc) => tc.getRange());
-      tcRanges.forEach((r) => r.load("text"));
+      tcRanges.forEach((r) => {
+        r.load("text");
+      });
 
       const ccRanges = commentOnlyCCs.map((cc) => cc.getRange());
-      ccRanges.forEach((r) => r.load("text"));
+      ccRanges.forEach((r) => {
+        r.load("text");
+      });
 
       await context.sync();
 
@@ -145,7 +178,9 @@ export class WordAdapter implements IDocumentPort {
         ...tcRanges.map((r) => r.text),
         ...ccRanges.map((r) => r.text),
       ]);
-      console.log(`🛡️ [WordAdapter] ${texts.size} texto(s) ya rastreado(s) (TC + comment-only)`);
+      console.log(
+        `🛡️ [WordAdapter] ${texts.size} texto(s) ya rastreado(s) (TC + comment-only)`,
+      );
       return texts;
     });
   }
@@ -179,9 +214,11 @@ export class WordAdapter implements IDocumentPort {
    */
   async applySuggestions(
     suggestions: Suggestion[],
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
   ): Promise<InsertionResult> {
-    console.log(`📝 [WordAdapter] applySuggestions: ${suggestions.length} sugerencias`);
+    console.log(
+      `📝 [WordAdapter] applySuggestions: ${suggestions.length} sugerencias`,
+    );
 
     if (suggestions.length === 0) {
       return { successCount: 0, failedSuggestions: [] };
@@ -196,13 +233,17 @@ export class WordAdapter implements IDocumentPort {
 
     for (const suggestion of sortedSuggestions) {
       const command = new ApplySuggestionCommand(suggestion);
-      let commandResult;
+      let commandResult: CommandResult;
 
       try {
         commandResult = await command.execute();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        commandResult = { success: false, commandId: suggestion.id, error: message };
+        commandResult = {
+          success: false,
+          commandId: suggestion.id,
+          error: message,
+        };
       }
 
       if (commandResult.success) {
@@ -210,7 +251,9 @@ export class WordAdapter implements IDocumentPort {
         console.log(`✅ [WordAdapter] "${suggestion.id}" aplicada`);
       } else {
         failedSuggestions.push(suggestion);
-        console.warn(`⚠️ [WordAdapter] "${suggestion.id}" falló: ${commandResult.error}`);
+        console.warn(
+          `⚠️ [WordAdapter] "${suggestion.id}" falló: ${commandResult.error}`,
+        );
       }
 
       if (onProgress) {
@@ -218,13 +261,13 @@ export class WordAdapter implements IDocumentPort {
           "applying",
           successCount + failedSuggestions.length,
           suggestions.length,
-          `Aplicando sugerencia ${successCount + failedSuggestions.length} de ${suggestions.length}...`
+          `Aplicando sugerencia ${successCount + failedSuggestions.length} de ${suggestions.length}...`,
         );
       }
     }
 
     console.log(
-      `📝 [WordAdapter] Completado: ${successCount} éxitos, ${failedSuggestions.length} fallos`
+      `📝 [WordAdapter] Completado: ${successCount} éxitos, ${failedSuggestions.length} fallos`,
     );
     return { successCount, failedSuggestions };
   }
@@ -246,8 +289,11 @@ export class WordAdapter implements IDocumentPort {
    */
   private findCCByTag(
     context: Word.RequestContext,
-    suggestion: Suggestion
-  ): { newFormatResult: Word.ContentControlCollection; legacyResult: Word.ContentControlCollection } {
+    suggestion: Suggestion,
+  ): {
+    newFormatResult: Word.ContentControlCollection;
+    legacyResult: Word.ContentControlCollection;
+  } {
     const newTag = `stylistic:${suggestion.type}:${suggestion.id}`;
     const legacyTag = suggestion.id;
     const newFormatResult = context.document.contentControls.getByTag(newTag);
@@ -273,12 +319,15 @@ export class WordAdapter implements IDocumentPort {
    */
   private async resolveSuggestion(
     suggestion: Suggestion,
-    action: "accept" | "reject"
+    action: "accept" | "reject",
   ): Promise<SuggestionActionResult> {
     try {
       return await Word.run(async (context) => {
         // 1. Find the Content Control — try new tag format first, fall back to legacy bare ID
-        const { newFormatResult, legacyResult } = this.findCCByTag(context, suggestion);
+        const { newFormatResult, legacyResult } = this.findCCByTag(
+          context,
+          suggestion,
+        );
         await context.sync();
 
         let cc: Word.ContentControl | null = null;
@@ -286,7 +335,9 @@ export class WordAdapter implements IDocumentPort {
           cc = newFormatResult.items[0];
         } else if (legacyResult.items.length > 0) {
           cc = legacyResult.items[0];
-          console.log(`🔁 [WordAdapter] "${suggestion.id}": usando tag legado (bare ID)`);
+          console.log(
+            `🔁 [WordAdapter] "${suggestion.id}": usando tag legado (bare ID)`,
+          );
         }
 
         if (!cc) {
@@ -302,7 +353,9 @@ export class WordAdapter implements IDocumentPort {
         comments.load({ select: "authorName" });
         await context.sync();
 
-        const stylisticComments = comments.items.filter((c) => c.authorName === "Stylistic");
+        const stylisticComments = comments.items.filter(
+          (c) => c.authorName === "Stylistic",
+        );
         let commentDeleted = false;
         const ccRange = cc.getRange();
 
@@ -322,10 +375,13 @@ export class WordAdapter implements IDocumentPort {
           cc.delete(true); // true = keep content
           await context.sync();
           console.log(
-            `🗨️ [WordAdapter] "${suggestion.id}": comment-only ${action}ed, comentario eliminado: ${commentDeleted}`
+            `🗨️ [WordAdapter] "${suggestion.id}": comment-only ${action}ed, comentario eliminado: ${commentDeleted}`,
           );
           return {
-            status: action === "accept" ? ("accepted" as const) : ("rejected" as const),
+            status:
+              action === "accept"
+                ? ("accepted" as const)
+                : ("rejected" as const),
             trackedChangesAffected: 0,
             commentDeleted,
           };
@@ -336,7 +392,9 @@ export class WordAdapter implements IDocumentPort {
         tcs.load("items");
         await context.sync();
 
-        const stylisticTCs = tcs.items.filter((tc: any) => tc.author === "Stylistic");
+        const stylisticTCs = tcs.items.filter(
+          (tc: any) => tc.author === "Stylistic",
+        );
 
         if (stylisticTCs.length === 0) {
           // TCs already resolved but CC still present — clean up the orphaned CC
@@ -362,7 +420,8 @@ export class WordAdapter implements IDocumentPort {
         await context.sync();
 
         return {
-          status: action === "accept" ? ("accepted" as const) : ("rejected" as const),
+          status:
+            action === "accept" ? ("accepted" as const) : ("rejected" as const),
           trackedChangesAffected: stylisticTCs.length,
           commentDeleted,
         };
@@ -383,7 +442,9 @@ export class WordAdapter implements IDocumentPort {
    * Also deletes the associated Stylistic comment if present.
    * Never throws — returns a `SuggestionActionResult`.
    */
-  async acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult> {
+  async acceptSuggestion(
+    suggestion: Suggestion,
+  ): Promise<SuggestionActionResult> {
     return this.resolveSuggestion(suggestion, "accept");
   }
 
@@ -392,7 +453,9 @@ export class WordAdapter implements IDocumentPort {
    * Also deletes the associated Stylistic comment if present.
    * Never throws — returns a `SuggestionActionResult`.
    */
-  async rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult> {
+  async rejectSuggestion(
+    suggestion: Suggestion,
+  ): Promise<SuggestionActionResult> {
     return this.resolveSuggestion(suggestion, "reject");
   }
 }
