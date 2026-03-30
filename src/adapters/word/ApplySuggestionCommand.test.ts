@@ -622,6 +622,62 @@ describe("ApplySuggestionCommand", () => {
       expect(coveredRange.insertOoxml).not.toHaveBeenCalled();
       expect(freshRange.insertOoxml).toHaveBeenCalled();
     });
+
+    it("stateful mock: text survives CC removal — self-enforcing without keepContent assertion", async () => {
+      // Behavioral mock: search() closes over textDeleted.
+      // delete(false) → textDeleted=true → 2nd search returns [] → success:false → test FAILS
+      // delete(true)  → textDeleted=false → 2nd search returns freshRange → OOXML applied → PASSES
+      // This catches the delete(false) regression WITHOUT any toHaveBeenCalledWith check.
+      let textDeleted = false;
+      let searchCalls = 0;
+
+      const coveredCC: ParentCC = {
+        tag: "stylistic:track-change:chunk0-0",
+        isNullObject: false,
+        load: vi.fn(),
+        delete: vi.fn((keepContent: boolean) => {
+          textDeleted = !keepContent;
+        }),
+      };
+      const coveredRange: SearchRange = {
+        getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
+        insertOoxml: vi.fn(),
+        parentContentControlOrNullObject: coveredCC,
+      };
+      const freshRange = makeCleanRange();
+
+      const context = {
+        document: {
+          body: {
+            search: vi.fn(() => {
+              const call = searchCalls++;
+              const items =
+                call === 0 ? [coveredRange] : textDeleted ? [] : [freshRange];
+              return { items, load: vi.fn() };
+            }),
+            load: vi.fn(),
+            text: "",
+          },
+          load: vi.fn(),
+          changeTrackingMode: "trackAll",
+        },
+        sync: vi.fn(async () => {}),
+      };
+
+      vi.stubGlobal("Word", {
+        ChangeTrackingMode: { off: "off" },
+        InsertLocation: { replace: "Replace" },
+        run: vi.fn(async (cb: (ctx: typeof context) => unknown) => cb(context)),
+      });
+
+      const result = await new ApplySuggestionCommand(
+        makeSuggestion(),
+      ).execute();
+
+      // No keepContent argument assertion — behavior proves it:
+      expect(result).toEqual({ success: true, commandId: "s1" });
+      expect(freshRange.insertOoxml).toHaveBeenCalled();
+    });
   });
 
   it("does not embed font specs from rPr to prevent Symbol font corruption in tracked changes", async () => {

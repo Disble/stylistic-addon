@@ -234,6 +234,8 @@ export class ApplySuggestionCommand {
           console.log(
             `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — eliminando wrapper y reinsertando`,
           );
+          // keepContent: true = remove CC wrapper only, text stays in document
+          // keepContent: false = remove CC wrapper AND DELETE its content ← DANGER
           parentCC.delete(true);
           await context.sync();
 
