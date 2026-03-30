@@ -1,4 +1,4 @@
-# stylistic-addon — Agent Instructions
+# stylistic-addon — Claude Instructions
 
 ## Skills (Auto-load based on context)
 
