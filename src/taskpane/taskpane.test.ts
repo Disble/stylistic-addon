@@ -13,6 +13,7 @@ const taskpaneMocks = vi.hoisted(() => ({
     vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
   acceptSuggestion: vi.fn(),
   rejectSuggestion: vi.fn(),
+  navigateToText: vi.fn<(text: string) => Promise<void>>(),
   mastraAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
   feedbackSendFeedback: vi.fn<(payload: any) => Promise<void>>(),
@@ -34,6 +35,10 @@ vi.mock("../adapters/word/WordAdapter", () => ({
 
     rejectSuggestion() {
       return taskpaneMocks.rejectSuggestion();
+    }
+
+    navigateToText(text: string) {
+      return taskpaneMocks.navigateToText(text);
     }
   },
 }));
@@ -630,7 +635,7 @@ describe("Accept/Reject buttons", () => {
     const li = liItems[0];
 
     // No diff block (result-change span) should be present
-    expect(li.querySelector(".result-change")).toBeNull();
+    expect(li.querySelector(".card-diff")).toBeNull();
 
     // Accept button should read "Entendido", not "✓"
     const acceptBtn = li.querySelector('[data-action="accept"]');
@@ -660,7 +665,7 @@ describe("Accept/Reject buttons", () => {
     const li = liItems[0];
 
     // Diff block must be present for track-change
-    expect(li.querySelector(".result-change")).not.toBeNull();
+    expect(li.querySelector(".card-diff")).not.toBeNull();
 
     const acceptBtn = li.querySelector('[data-action="accept"]');
     expect(acceptBtn).not.toBeNull();

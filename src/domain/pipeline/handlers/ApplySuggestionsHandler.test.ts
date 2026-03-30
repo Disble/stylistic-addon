@@ -45,6 +45,7 @@ function makeMockDocumentPort(
     cleanupResolvedComments: vi.fn(),
     acceptSuggestion: vi.fn(),
     rejectSuggestion: vi.fn(),
+    navigateToText: vi.fn(),
   };
 }
 

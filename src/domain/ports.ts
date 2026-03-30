@@ -84,6 +84,13 @@ export interface IDocumentPort {
    * Returns a result object — never throws.
    */
   rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
+
+  /**
+   * Navigates the document view to the first occurrence of the given text.
+   * Selects the matching range so Word scrolls to it automatically.
+   * Never throws — silently no-ops if the text is not found.
+   */
+  navigateToText(text: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

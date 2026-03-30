@@ -47,6 +47,7 @@ function makeMockPorts(): {
       cleanupResolvedComments: vi.fn(),
       acceptSuggestion: vi.fn(),
       rejectSuggestion: vi.fn(),
+      navigateToText: vi.fn(),
     },
     analysisPort: {
       checkConnection: vi.fn(),

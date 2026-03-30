@@ -10,9 +10,9 @@ body {
 #app-body {
   display: flex;
   flex-direction: column;
-  padding: 0 16px 16px;
+  padding: 0 16px;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* Header */
@@ -20,6 +20,7 @@ body {
   padding: 20px 0 12px;
   border-bottom: 2px solid #0078d7;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .stylistic-header h1 {
@@ -35,6 +36,7 @@ body {
 /* Sections */
 .stylistic-section {
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 /* Labels */
@@ -126,6 +128,7 @@ body {
 /* Progress bar */
 .progress-container {
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .progress-bar-track {
@@ -152,13 +155,12 @@ body {
 
 /* Status bar */
 .stylistic-status {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   padding: 8px 12px;
   border-radius: 4px;
   text-align: center;
-  margin-top: auto;
   font-size: 12px;
+  margin-bottom: 8px;
 }
 
 .stylistic-status.success {
@@ -171,13 +173,14 @@ body {
   color: #a80000;
 }
 
-/* Results panel */
+/* ─── Results Panel ─────────────────────────────────────────────────────── */
+
 .results-panel {
-  margin-top: 12px;
-  padding: 12px;
-  background: #fff;
-  border: 1px solid #d2d0ce;
-  border-radius: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 0;
+  padding-bottom: 8px;
 }
 
 .results-title {
@@ -187,30 +190,147 @@ body {
 }
 
 .results-summary {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   color: #605e5c;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .results-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 400px;
-  overflow-y: auto;
 }
 
-.results-list li {
-  padding: 6px 0;
-  border-bottom: 1px solid #f3f2f1;
+/* ─── Suggestion Cards ──────────────────────────────────────────────────── */
+
+.suggestion-card {
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-left: 3px solid #c8c6c4;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: box-shadow 0.15s ease;
 }
 
-.results-list li:last-child {
-  border-bottom: none;
+.suggestion-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.result-change {
-  color: #323130;
+/* Left-border color by severity */
+.suggestion-card[data-severity="high"] {
+  border-left-color: #c50f1f;
 }
+
+.suggestion-card[data-severity="medium"] {
+  border-left-color: #ca5010;
+}
+
+.suggestion-card[data-severity="low"] {
+  border-left-color: #0078d7;
+}
+
+/* Terminal state overrides — declared after severity selectors so they win */
+.suggestion-card.result-accepted {
+  border-left-color: #107c10;
+  opacity: 0.6;
+}
+
+.suggestion-card.result-rejected {
+  border-left-color: #a80000;
+  opacity: 0.6;
+}
+
+.suggestion-card.result-cc-not-found {
+  border-left-color: #ca5010;
+  opacity: 0.5;
+}
+
+.suggestion-card.result-already-resolved {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* Card layout */
+.card-meta {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+/* Clickable content area (meta is in li directly, diff + justification are here).
+   This div is a SIBLING of card-footer, so button clicks never bubble into it. */
+.card-clickable-area {
+  cursor: pointer;
+}
+
+.card-diff {
+  margin: 6px 0;
+  line-height: 1.5;
+}
+
+.card-footer {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* ─── Badges ────────────────────────────────────────────────────────────── */
+
+.result-category {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: #0078d7;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: lowercase;
+}
+
+.result-severity {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: lowercase;
+}
+
+.result-severity--high {
+  background: #fde7e9;
+  color: #c50f1f;
+}
+
+.result-severity--medium {
+  background: #fff4e5;
+  color: #ca5010;
+}
+
+.result-severity--low {
+  background: #dce9ff;
+  color: #004ea8;
+}
+
+.result-type-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.result-type-badge--comment {
+  background-color: #e8e0f0;
+  color: #6b3fa0;
+  border: 1px solid #c9b3e0;
+}
+
+/* ─── Diff ──────────────────────────────────────────────────────────────── */
 
 .result-original {
   text-decoration: line-through;
@@ -227,66 +347,79 @@ body {
   font-weight: 600;
 }
 
+.suggestion-card.result-rejected .result-suggested {
+  text-decoration: line-through;
+}
+
+/* ─── Text content ──────────────────────────────────────────────────────── */
+
 .result-justification {
   display: block;
   color: #605e5c;
   font-size: 11px;
-  margin-top: 2px;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .result-failed {
+  display: block;
   color: #a80000;
   font-style: italic;
+  margin: 4px 0;
 }
 
-.result-category {
-  display: inline-block;
-  font-size: 10px;
-  color: #fff;
-  background: #0078d7;
-  padding: 1px 6px;
-  border-radius: 3px;
-  margin-right: 6px;
+.result-already-resolved-note {
+  font-size: 11px;
+  color: #666;
+  margin-left: 4px;
 }
 
-/* Sideload message */
-.sideload-msg {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  height: 100%;
+.result-cc-not-found-note {
+  display: block;
+  font-size: 11px;
+  color: #ca5010;
+  margin-top: 4px;
 }
 
-/* --- Batch Accept/Reject: Action Buttons --- */
+/* ─── Action Buttons ────────────────────────────────────────────────────── */
+
 .result-actions {
   display: flex;
   gap: 4px;
-  margin-left: auto;
 }
 
 .result-action-btn {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
+  transition: background 0.1s;
 }
 
 .result-action-btn[data-action="accept"] {
   background: #d1fad1;
   color: #107c10;
+  border-color: #a3dba3;
+}
+
+.result-action-btn[data-action="accept"]:hover {
+  background: #a3dba3;
 }
 
 .result-action-btn[data-action="reject"] {
   background: #fad1d1;
   color: #a80000;
+  border-color: #dba3a3;
+}
+
+.result-action-btn[data-action="reject"]:hover {
+  background: #dba3a3;
 }
 
 .result-action-btn--text {
@@ -301,39 +434,13 @@ body {
   cursor: not-allowed;
 }
 
-/* --- Batch Accept/Reject: Card Visual States --- */
-.result-accepted {
-  opacity: 0.6;
-  border-left: 3px solid #107c10;
-}
-
-.result-rejected {
-  opacity: 0.6;
-  border-left: 3px solid #a80000;
-}
-
-.result-rejected .result-suggested {
-  text-decoration: line-through;
-}
-
-.result-already-resolved {
-  opacity: 0.5;
-  font-style: italic;
-}
-
-.result-already-resolved-note {
-  font-size: 11px;
-  color: #666;
-  margin-left: 4px;
-}
-
-/* --- Feedback Button + Accordion --- */
+/* ─── Feedback Button + Accordion ──────────────────────────────────────── */
 
 .feedback-btn {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 4px;
   background: #e8f4fd;
   color: #0078d7;
   cursor: pointer;
@@ -342,6 +449,11 @@ body {
   align-items: center;
   justify-content: center;
   line-height: 1;
+  transition: background 0.1s;
+}
+
+.feedback-btn:hover {
+  background: #c7e0f4;
 }
 
 .feedback-accordion {
@@ -367,33 +479,22 @@ body {
   margin-top: 6px;
 }
 
-/* --- Comment-only type badge --- */
-.result-type-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-left: 4px;
+/* ─── Cleanup Section — sticky bottom ──────────────────────────────────── */
+
+#cleanup-section {
+  flex-shrink: 0;
+  border-top: 1px solid #edebe9;
+  padding: 8px 0 12px;
+  background: #fafafa;
 }
 
-.result-type-badge--comment {
-  background-color: #e8e0f0;
-  color: #6b3fa0;
-  border: 1px solid #c9b3e0;
-}
+/* ─── Sideload message ──────────────────────────────────────────────────── */
 
-/* --- cc-not-found card state --- */
-.result-cc-not-found {
-  opacity: 0.5;
-  border-left: 3px solid #ca5010;
-}
-
-.result-cc-not-found-note {
-  display: block;
-  font-size: 11px;
-  color: #ca5010;
-  margin-top: 4px;
+.sideload-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  height: 100%;
 }

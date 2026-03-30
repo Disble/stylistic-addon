@@ -215,47 +215,89 @@ function renderResults(
 
   list.innerHTML = "";
   for (const s of suggestions) {
-    const li = document.createElement("li");
     const isFailed = result.failedSuggestions.some((f) => f.id === s.id);
     const isCommentOnly = s.type === "comment-only";
 
-    if (isFailed) {
-      li.innerHTML =
-        `<span class="result-category">${escapeHtml(s.category)}</span>` +
-        `<span class="result-failed">No encontrado: "${escapeHtml(s.originalText)}"</span>` +
-        `<span class="result-justification">${escapeHtml(s.justification)}</span>`;
-    } else {
-      // category + severity badge always shown
-      li.innerHTML =
-        `<span class="result-category">${escapeHtml(s.category)}</span>` +
-        `<span class="result-severity result-severity--${escapeHtml(s.severity)}">${escapeHtml(s.severity)}</span>`;
+    const li = document.createElement("li");
+    li.className = "suggestion-card";
+    li.setAttribute("data-severity", s.severity);
 
-      // comment-only type badge
+    // --- Meta row: category + severity badges ---
+    const meta = document.createElement("div");
+    meta.className = "card-meta";
+
+    const catBadge = document.createElement("span");
+    catBadge.className = "result-category";
+    catBadge.textContent = s.category;
+    meta.appendChild(catBadge);
+
+    if (!isFailed) {
+      const sevBadge = document.createElement("span");
+      sevBadge.className = `result-severity result-severity--${s.severity}`;
+      sevBadge.textContent = s.severity;
+      meta.appendChild(sevBadge);
+
       if (isCommentOnly) {
         const typeBadge = document.createElement("span");
         typeBadge.className = "result-type-badge result-type-badge--comment";
         typeBadge.textContent = "comentario";
-        li.appendChild(typeBadge);
+        meta.appendChild(typeBadge);
       }
+    }
+    li.appendChild(meta);
 
-      // diff block only for track-change suggestions
-      if (!isCommentOnly) {
-        const changeSpan = document.createElement("span");
-        changeSpan.innerHTML =
-          `<span class="result-original">${escapeHtml(s.originalText)}</span>` +
-          `<span class="result-arrow">&rarr;</span>` +
-          `<span class="result-suggested">${escapeHtml(s.suggestedText ?? "")}</span>`;
-        changeSpan.className = "result-change";
-        li.appendChild(changeSpan);
-      }
+    if (isFailed) {
+      const failedSpan = document.createElement("span");
+      failedSpan.className = "result-failed";
+      failedSpan.textContent = `No encontrado: "${s.originalText}"`;
+      li.appendChild(failedSpan);
 
-      // justification always shown
       const justSpan = document.createElement("span");
       justSpan.className = "result-justification";
       justSpan.textContent = s.justification;
       li.appendChild(justSpan);
+    } else {
+      // Clickable area: meta + diff + justification trigger navigation on click.
+      // This div is a SIBLING of card-footer, so clicks on action buttons never
+      // bubble into this element and cannot accidentally trigger navigation.
+      const clickable = document.createElement("div");
+      clickable.className = "card-clickable-area";
 
-      // Build accept/reject buttons programmatically so they are testable DOM nodes
+      // Diff block (track-change only)
+      if (!isCommentOnly) {
+        const diff = document.createElement("div");
+        diff.className = "card-diff";
+
+        const origSpan = document.createElement("span");
+        origSpan.className = "result-original";
+        origSpan.textContent = s.originalText;
+        diff.appendChild(origSpan);
+
+        const arrowSpan = document.createElement("span");
+        arrowSpan.className = "result-arrow";
+        arrowSpan.textContent = " \u2192 ";
+        diff.appendChild(arrowSpan);
+
+        const sugSpan = document.createElement("span");
+        sugSpan.className = "result-suggested";
+        sugSpan.textContent = s.suggestedText ?? "";
+        diff.appendChild(sugSpan);
+
+        clickable.appendChild(diff);
+      }
+
+      // Justification
+      const justSpan = document.createElement("span");
+      justSpan.className = "result-justification";
+      justSpan.textContent = s.justification;
+      clickable.appendChild(justSpan);
+
+      li.appendChild(clickable);
+
+      // Footer: action buttons — NOT inside clickable area
+      const footer = document.createElement("div");
+      footer.className = "card-footer";
+
       const actionsSpan = document.createElement("span");
       actionsSpan.className = "result-actions";
 
@@ -286,12 +328,12 @@ function renderResults(
       actionsSpan.appendChild(acceptBtn);
       actionsSpan.appendChild(rejectBtn);
       actionsSpan.appendChild(feedbackBtn);
-      li.appendChild(actionsSpan);
+      footer.appendChild(actionsSpan);
+      li.appendChild(footer);
 
-      // Accordion + textarea for optional comment
+      // Feedback accordion
       const accordion = document.createElement("div");
       accordion.className = "feedback-accordion";
-
       const textarea = document.createElement("textarea");
       textarea.className = "feedback-textarea";
       textarea.setAttribute("placeholder", "Comentario opcional...");
@@ -302,10 +344,23 @@ function renderResults(
     list.appendChild(li);
 
     if (!isFailed) {
-      const acceptBtn = li.querySelector(
+      // Navigation: click on the card content area (not on buttons) → scroll Word to text.
+      // Using a dedicated sibling div (card-clickable-area) instead of the li itself ensures
+      // that button clicks in card-footer NEVER reach this handler — no event.stopPropagation
+      // or closest() checks needed.
+      const clickableEl = li.querySelector(
+        ".card-clickable-area",
+      ) as HTMLElement | null;
+      if (clickableEl) {
+        clickableEl.addEventListener("click", () => {
+          void documentPort.navigateToText(s.originalText);
+        });
+      }
+
+      const acceptBtnEl = li.querySelector(
         '[data-action="accept"]',
       ) as HTMLButtonElement | null;
-      const rejectBtn = li.querySelector(
+      const rejectBtnEl = li.querySelector(
         '[data-action="reject"]',
       ) as HTMLButtonElement | null;
       const feedbackBtnEl = li.querySelector(
@@ -325,27 +380,20 @@ function renderResults(
       // The SM instance is closed over by both handlers and GC'd when the list is cleared.
       const sm = new SuggestionStateMachine();
 
-      if (acceptBtn) {
-        acceptBtn.addEventListener("click", () =>
-          handleAcceptSuggestion(s, li, acceptBtn, rejectBtn, sm),
+      if (acceptBtnEl) {
+        acceptBtnEl.addEventListener("click", () =>
+          handleAcceptSuggestion(s, li, acceptBtnEl, rejectBtnEl, sm),
         );
       }
-      if (rejectBtn) {
-        rejectBtn.addEventListener("click", () =>
-          handleRejectSuggestion(s, li, acceptBtn, rejectBtn, sm),
+      if (rejectBtnEl) {
+        rejectBtnEl.addEventListener("click", () =>
+          handleRejectSuggestion(s, li, acceptBtnEl, rejectBtnEl, sm),
         );
       }
     }
   }
 
   panel.style.display = "block";
-}
-
-/** Escapes a string for safe insertion into innerHTML (XSS prevention). */
-function escapeHtml(str: string): string {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 /**

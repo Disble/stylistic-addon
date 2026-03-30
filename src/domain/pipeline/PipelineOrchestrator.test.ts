@@ -22,6 +22,7 @@ function makeContext(
     cleanupResolvedComments: vi.fn(),
     acceptSuggestion: vi.fn(),
     rejectSuggestion: vi.fn(),
+    navigateToText: vi.fn(),
   };
 
   const analysisPort: IAnalysisPort = {

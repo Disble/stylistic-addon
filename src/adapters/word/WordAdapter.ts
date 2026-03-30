@@ -458,4 +458,28 @@ export class WordAdapter implements IDocumentPort {
   ): Promise<SuggestionActionResult> {
     return this.resolveSuggestion(suggestion, "reject");
   }
+
+  /**
+   * Navigates the Word document to the first occurrence of `text` by selecting
+   * the matching range (Word scrolls to the selection automatically).
+   * Never throws — silently no-ops when text is not found or on any error.
+   */
+  async navigateToText(text: string): Promise<void> {
+    try {
+      await Word.run(async (context) => {
+        const results = context.document.body.search(text, {
+          matchCase: true,
+          matchWholeWord: false,
+        });
+        results.load("items");
+        await context.sync();
+        if (results.items.length > 0) {
+          results.items[0].select();
+          await context.sync();
+        }
+      });
+    } catch {
+      // Navigation is best-effort — silently ignore all failures
+    }
+  }
 }
