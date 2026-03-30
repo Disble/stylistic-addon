@@ -518,7 +518,7 @@ describe("ApplySuggestionCommand", () => {
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
-      expect(coveredCC.delete).toHaveBeenCalledWith(false);
+      expect(coveredCC.delete).toHaveBeenCalledWith(true);
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
       expect(coveredRange.insertOoxml).not.toHaveBeenCalled();
       expect(freshRange.insertOoxml).toHaveBeenCalled();
@@ -545,7 +545,7 @@ describe("ApplySuggestionCommand", () => {
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
-      expect(coveredCC.delete).toHaveBeenCalledWith(false);
+      expect(coveredCC.delete).toHaveBeenCalledWith(true);
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
       expect(coveredRange.insertOoxml).not.toHaveBeenCalled();
       expect(freshRange.insertOoxml).toHaveBeenCalled();
@@ -590,6 +590,8 @@ describe("ApplySuggestionCommand", () => {
         commandId: "s1",
         error: "Texto no encontrado tras eliminar CC existente",
       });
+      // Must use keepContent: true — never delete document content on failure
+      expect(coveredCC.delete).toHaveBeenCalledWith(true);
     });
 
     it("deletes the existing Stylistic CC, re-searches, and inserts OOXML for comment-only", async () => {
@@ -615,7 +617,7 @@ describe("ApplySuggestionCommand", () => {
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "s1" });
-      expect(coveredCC.delete).toHaveBeenCalledWith(false);
+      expect(coveredCC.delete).toHaveBeenCalledWith(true);
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
       expect(coveredRange.insertOoxml).not.toHaveBeenCalled();
       expect(freshRange.insertOoxml).toHaveBeenCalled();

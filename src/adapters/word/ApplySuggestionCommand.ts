@@ -234,7 +234,7 @@ export class ApplySuggestionCommand {
           console.log(
             `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — eliminando wrapper y reinsertando`,
           );
-          parentCC.delete(false);
+          parentCC.delete(true);
           await context.sync();
 
           results = context.document.body.search(searchText, searchOptions);
@@ -413,7 +413,7 @@ export class ApplySuggestionCommand {
           console.log(
             `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado (comment-only) — eliminando wrapper y reinsertando`,
           );
-          parentCC.delete(false);
+          parentCC.delete(true);
           await context.sync();
 
           results = context.document.body.search(searchText, searchOptions);
