@@ -388,15 +388,13 @@ export class WordAdapter implements IDocumentPort {
         }
 
         // 3b. track-change branch: accept/reject TCs inside the CC
+        // The CC tag already uniquely identifies this suggestion — all TCs
+        // inside it belong to it. No author filter needed or reliable.
         const tcs = cc.getTrackedChanges();
         tcs.load("items");
         await context.sync();
 
-        const stylisticTCs = tcs.items.filter(
-          (tc: any) => tc.author === "Stylistic",
-        );
-
-        if (stylisticTCs.length === 0) {
+        if (tcs.items.length === 0) {
           // TCs already resolved but CC still present — clean up the orphaned CC
           cc.delete(true); // true = keep content
           await context.sync();
@@ -407,7 +405,7 @@ export class WordAdapter implements IDocumentPort {
           };
         }
 
-        for (const tc of stylisticTCs) {
+        for (const tc of tcs.items) {
           if (action === "accept") {
             tc.accept();
           } else {
@@ -422,7 +420,7 @@ export class WordAdapter implements IDocumentPort {
         return {
           status:
             action === "accept" ? ("accepted" as const) : ("rejected" as const),
-          trackedChangesAffected: stylisticTCs.length,
+          trackedChangesAffected: tcs.items.length,
           commentDeleted,
         };
       });

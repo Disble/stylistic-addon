@@ -516,8 +516,9 @@ async function handleAcceptSuggestion(
   sm.transition(targetState);
   applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
 
-  // Positive feedback only on explicit acceptance from the taskpane
-  if (sm.state === "accepted") {
+  // Feedback on explicit acceptance — also for "already-resolved" since the button
+  // click itself is the feedback signal, regardless of the document's prior state.
+  if (sm.state === "accepted" || sm.state === "already-resolved") {
     const textarea = li.querySelector(".feedback-textarea") as
       | (HTMLTextAreaElement & { value?: string })
       | null;
@@ -571,8 +572,9 @@ async function handleRejectSuggestion(
   sm.transition(targetState);
   applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
 
-  // Negative feedback only on explicit rejection from the taskpane
-  if (sm.state === "rejected") {
+  // Feedback on explicit rejection — also for "already-resolved" since the button
+  // click itself is the feedback signal, regardless of the document's prior state.
+  if (sm.state === "rejected" || sm.state === "already-resolved") {
     const textarea = li.querySelector(".feedback-textarea") as
       | (HTMLTextAreaElement & { value?: string })
       | null;

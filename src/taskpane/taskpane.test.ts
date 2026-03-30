@@ -759,7 +759,7 @@ describe("Accept/Reject buttons", () => {
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
   });
 
-  it("4.5 — already-resolved: adds class, shows '(ya resuelto)' note, does NOT send feedback", async () => {
+  it("4.5 — already-resolved on accept: adds class, shows '(ya resuelto)' note, sends positive feedback", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "already-resolved",
       trackedChangesAffected: 0,
@@ -776,13 +776,44 @@ describe("Accept/Reject buttons", () => {
     acceptBtn.click();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(li.classList.contains("result-already-resolved")).toBe(true);
     const noteSpan = li.querySelector(".result-already-resolved-note");
     expect(noteSpan).not.toBeNull();
     expect(noteSpan!.textContent).toBe("(ya resuelto)");
-    // already-resolved must NOT send feedback — we don't know if user accepted or rejected
-    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+    // The user's button click IS the feedback signal — already-resolved must send feedback
+    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({ rating: "positive" }),
+    );
+  });
+
+  it("4.5b — already-resolved on reject: adds class, shows '(ya resuelto)' note, sends negative feedback", async () => {
+    taskpaneMocks.rejectSuggestion.mockResolvedValue({
+      status: "already-resolved",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+
+    rejectBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(li.classList.contains("result-already-resolved")).toBe(true);
+    const noteSpan = li.querySelector(".result-already-resolved-note");
+    expect(noteSpan).not.toBeNull();
+    expect(noteSpan!.textContent).toBe("(ya resuelto)");
+    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({ rating: "negative" }),
+    );
   });
 
   it("4.8 — cc-not-found: adds amber class, shows '(aplicación falló)' note, does NOT send feedback", async () => {

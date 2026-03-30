@@ -806,19 +806,12 @@ describe("WordAdapter", () => {
       expect(result.commentDeleted).toBe(false);
     });
 
-    it("3.4 - already-resolved: Content Control found but has NO Stylistic TCs", async () => {
+    it("3.4 - already-resolved: Content Control found but has NO TCs", async () => {
       const suggestion = makeSuggestion({ originalText: "texto original" });
-
-      const otherTC = {
-        author: "OtherUser",
-        type: "Deleted",
-        accept: vi.fn(),
-        reject: vi.fn(),
-      } as any;
 
       const context = makeResolveSuggestionContext({
         ccFound: true,
-        spanTCItems: [otherTC],
+        spanTCItems: [],
       });
       installWordWithContext(context);
 
