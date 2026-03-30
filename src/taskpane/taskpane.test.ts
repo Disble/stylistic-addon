@@ -29,12 +29,12 @@ vi.mock("../adapters/word/WordAdapter", () => ({
       return taskpaneMocks.cleanupResolvedComments();
     }
 
-    acceptSuggestion() {
-      return taskpaneMocks.acceptSuggestion();
+    acceptSuggestion(suggestion: any) {
+      return taskpaneMocks.acceptSuggestion(suggestion);
     }
 
-    rejectSuggestion() {
-      return taskpaneMocks.rejectSuggestion();
+    rejectSuggestion(suggestion: any) {
+      return taskpaneMocks.rejectSuggestion(suggestion);
     }
 
     navigateToText(text: string) {
@@ -729,6 +729,7 @@ describe("Accept/Reject buttons", () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledWith(s1);
     expect(li.classList.contains("result-accepted")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
@@ -752,6 +753,7 @@ describe("Accept/Reject buttons", () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    expect(taskpaneMocks.rejectSuggestion).toHaveBeenCalledWith(s1);
     expect(li.classList.contains("result-rejected")).toBe(true);
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
