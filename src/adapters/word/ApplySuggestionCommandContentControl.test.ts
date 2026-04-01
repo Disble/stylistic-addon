@@ -1,0 +1,99 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
+import {
+  createRange,
+  installWordContext,
+  makeSuggestion,
+  type ParentCC,
+} from "./ApplySuggestionCommandTestHelper";
+
+describe("ApplySuggestionCommand content-control recovery", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("supports comment-only suggestions through the shared anchor resolver", async () => {
+    const env = installWordContext();
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({ type: "comment-only", suggestedText: undefined }),
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(env.anchorRange.insertComment).toHaveBeenCalledWith(
+      "[Estilo]\nMejora la claridad",
+    );
+    expect(env.anchorRange.insertContentControl).toHaveBeenCalledOnce();
+  });
+
+  it("re-resolves the anchor after removing an existing stylistic content control", async () => {
+    const coveredParentCC: ParentCC = {
+      tag: "stylistic:track-change:s1",
+      isNullObject: false,
+      load: vi.fn(),
+      delete: vi.fn(),
+    };
+    const coveredAnchor = createRange({
+      text: "texto original",
+      parentCC: coveredParentCC,
+    });
+    const coveredContext = createRange({
+      text: "Contexto con texto original.",
+      searchSequence: [[coveredAnchor]],
+    });
+    const freshAnchor = createRange({ text: "texto original" });
+    const freshContext = createRange({
+      text: "Contexto con texto original.",
+      searchSequence: [[freshAnchor]],
+    });
+
+    const env = installWordContext({
+      contextSearchSequence: [[coveredContext], [freshContext]],
+    });
+
+    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
+    expect(env.context.document.body.search).toHaveBeenCalledTimes(2);
+    expect(freshAnchor.insertText).toHaveBeenCalled();
+  });
+
+  it("re-resolves the anchor after removing a chunk wrapper that still covers the text", async () => {
+    const coveredParentCC: ParentCC = {
+      tag: "chunk0-0",
+      isNullObject: false,
+      load: vi.fn(),
+      delete: vi.fn(),
+    };
+    const coveredAnchor = createRange({
+      text: "texto original",
+      parentCC: coveredParentCC,
+    });
+    const coveredContext = createRange({
+      text: "Contexto con texto original.",
+      searchSequence: [[coveredAnchor]],
+    });
+    const freshAnchor = createRange({ text: "texto original" });
+    const freshContext = createRange({
+      text: "Contexto con texto original.",
+      searchSequence: [[freshAnchor]],
+    });
+
+    installWordContext({
+      contextSearchSequence: [[coveredContext], [freshContext]],
+    });
+
+    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
+    expect(freshAnchor.insertText).toHaveBeenCalledOnce();
+  });
+});

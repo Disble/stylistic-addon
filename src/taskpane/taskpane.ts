@@ -251,7 +251,7 @@ function renderResults(
     if (isFailed) {
       const failedSpan = document.createElement("span");
       failedSpan.className = "result-failed";
-      failedSpan.textContent = `No encontrado: "${s.originalText}"`;
+      failedSpan.textContent = `No encontrado: "${s.anchor}"`;
       li.appendChild(failedSpan);
 
       const justSpan = document.createElement("span");
@@ -272,7 +272,7 @@ function renderResults(
 
         const origSpan = document.createElement("span");
         origSpan.className = "result-original";
-        origSpan.textContent = s.originalText;
+        origSpan.textContent = s.anchor;
         diff.appendChild(origSpan);
 
         const arrowSpan = document.createElement("span");
@@ -355,7 +355,7 @@ function renderResults(
       ) as HTMLElement | null;
       if (clickableEl) {
         clickableEl.addEventListener("click", () => {
-          void documentPort.navigateToText(s.originalText);
+          void documentPort.navigateToText(s.anchor);
         });
       }
 
@@ -527,7 +527,7 @@ async function handleAcceptSuggestion(
     const commentText = textarea?.value?.trim();
     const payload: FeedbackPayload = {
       category: suggestion.category,
-      originalText: suggestion.originalText,
+      originalText: suggestion.anchor,
       ...(suggestion.suggestedText !== undefined
         ? { suggestedText: suggestion.suggestedText }
         : {}),
@@ -583,7 +583,7 @@ async function handleRejectSuggestion(
     const commentText = textarea?.value?.trim();
     const payload: FeedbackPayload = {
       category: suggestion.category,
-      originalText: suggestion.originalText,
+      originalText: suggestion.anchor,
       ...(suggestion.suggestedText !== undefined
         ? { suggestedText: suggestion.suggestedText }
         : {}),

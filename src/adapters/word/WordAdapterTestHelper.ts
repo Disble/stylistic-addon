@@ -1,0 +1,117 @@
+import type { CommandResult, Suggestion } from "../../domain/types";
+
+const hoistedCommandMocks = vi.hoisted(() => ({
+  constructor: vi.fn<(suggestion: Suggestion) => void>(),
+  execute: vi.fn<(suggestion: Suggestion) => Promise<CommandResult>>(),
+}));
+
+const hoistedCleanupMocks = vi.hoisted(() => ({
+  cleanupResolvedComments: vi.fn(),
+}));
+
+/**
+ * Returns the shared command mock registry used by WordAdapter tests.
+ */
+export function getCommandMocks() {
+  return hoistedCommandMocks;
+}
+
+/**
+ * Returns the shared cleanup mock registry used by WordAdapter tests.
+ */
+export function getCleanupMocks() {
+  return hoistedCleanupMocks;
+}
+
+vi.mock("./ApplySuggestionCommand", () => ({
+  ApplySuggestionCommand: class {
+    private readonly suggestion: Suggestion;
+
+    constructor(suggestion: Suggestion) {
+      this.suggestion = suggestion;
+      hoistedCommandMocks.constructor(suggestion);
+    }
+
+    execute() {
+      return hoistedCommandMocks.execute(this.suggestion);
+    }
+  },
+}));
+
+vi.mock("./cleanup/CommentCleanup", () => ({
+  cleanupResolvedComments: hoistedCleanupMocks.cleanupResolvedComments,
+  OVERLAPPING_RELATIONS: [
+    "Equal",
+    "Contains",
+    "ContainsStart",
+    "ContainsEnd",
+    "Inside",
+    "InsideStart",
+    "InsideEnd",
+    "OverlapsBefore",
+    "OverlapsAfter",
+  ],
+  COMMENT_ONLY_TAG_PREFIX: "stylistic:comment-only:",
+}));
+
+type WordRunCallback<T> = (context: any) => Promise<T> | T;
+
+/**
+ * Builds a canonical suggestion fixture for `WordAdapter` tests.
+ */
+export function makeSuggestion(
+  overrides: Partial<Suggestion> = {},
+): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
+  return {
+    id: "s-1",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
+    suggestedText: "texto sugerido",
+    justification: "Mas claro",
+    category: "Claridad",
+    severity: "medium",
+    type: "track-change",
+    ...overrides,
+  };
+}
+
+/**
+ * Installs a `Word.run` mock that resolves against the provided context.
+ */
+export function installWordWithContext(context: any) {
+  const run = vi.fn(async <T>(callback: WordRunCallback<T>) =>
+    callback(context),
+  );
+  vi.stubGlobal("Word", { run });
+  return run;
+}
+
+/**
+ * Installs a rejecting `Word.run` mock for adapter sad paths.
+ */
+export function installRejectingWord(error: Error) {
+  const run = vi.fn().mockRejectedValue(error);
+  vi.stubGlobal("Word", { run });
+  return run;
+}
+
+/**
+ * Builds a paragraph snapshot compatible with `getTextToAnalyze()` tests.
+ */
+export function makeParagraph(
+  text: string,
+  overrides: Partial<{
+    styleBuiltIn: string;
+    firstLineIndent: number;
+    leftIndent: number;
+  }> = {},
+) {
+  return {
+    text,
+    styleBuiltIn: "Normal",
+    firstLineIndent: 0,
+    leftIndent: 0,
+    ...overrides,
+  };
+}

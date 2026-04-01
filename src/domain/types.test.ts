@@ -3,6 +3,7 @@ import type {
   Suggestion,
   SuggestionActionResult,
   SuggestionState,
+  WorkflowSuggestion,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -37,8 +38,45 @@ const _resultWithError: SuggestionActionResult = {
   error: "something went wrong",
 };
 
+const _suggestion: Suggestion = {
+  id: "s1",
+  context: "El texto original aparece dentro de este contexto.",
+  anchor: "texto original",
+  suggestedText: "texto mejorado",
+  justification: "Mejora la claridad",
+  category: "Claridad",
+  severity: "medium",
+  type: "track-change",
+};
+
+const _workflowSuggestion: WorkflowSuggestion = {
+  context: "El texto original aparece dentro de este contexto.",
+  anchor: "texto original",
+  suggestedText: "texto mejorado",
+  justification: "Mejora la claridad",
+  category: "Claridad",
+  severity: "medium",
+};
+
 void _result;
 void _resultWithError;
+void _suggestion;
+void _workflowSuggestion;
+
+type _SuggestionHasOriginalText = Suggestion extends { originalText: string }
+  ? true
+  : false;
+type _WorkflowSuggestionHasOriginalText = WorkflowSuggestion extends {
+  originalText: string;
+}
+  ? true
+  : false;
+const _checkSuggestionOriginalTextRemoved: _SuggestionHasOriginalText = false;
+const _checkWorkflowOriginalTextRemoved: _WorkflowSuggestionHasOriginalText =
+  false;
+
+void _checkSuggestionOriginalTextRemoved;
+void _checkWorkflowOriginalTextRemoved;
 
 // ---------------------------------------------------------------------------
 // IDocumentPort — acceptSuggestion and rejectSuggestion method presence

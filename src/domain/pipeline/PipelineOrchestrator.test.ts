@@ -685,7 +685,8 @@ describe("PipelineOrchestrator", () => {
         ctx.rawSuggestions = [
           {
             id: "s1",
-            originalText: "Hello world",
+            context: "Hello world. This is a test.",
+            anchor: "Hello world",
             suggestedText: "Hello, world",
             justification: "Missing comma",
             category: "Puntuación",

@@ -6,9 +6,11 @@ import { PipelineEventEmitter, type PipelineObserver } from "./PipelineEvents";
 // ---------------------------------------------------------------------------
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  const anchor = overrides.anchor ?? "foo";
   return {
     id: "s1",
-    originalText: "foo",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     suggestedText: "bar",
     justification: "test",
     category: "Redundancia",

@@ -13,9 +13,11 @@ import { ApplySuggestionsHandler } from "./ApplySuggestionsHandler";
 // ---------------------------------------------------------------------------
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     suggestedText: "texto mejorado",
     justification: "Mejora de estilo",
     category: "Redundancia",
@@ -278,7 +280,8 @@ describe("ApplySuggestionsHandler", () => {
     it("should store result with failed suggestions", async () => {
       const failedSuggestion = makeSuggestion({
         id: "failed-1",
-        originalText: "no encontrado",
+        anchor: "no encontrado",
+        context: "Contexto con no encontrado.",
       });
       const result = makeInsertionResult({
         successCount: 2,

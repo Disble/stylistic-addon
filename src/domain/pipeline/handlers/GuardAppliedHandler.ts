@@ -3,7 +3,7 @@
 /**
  * GuardAppliedHandler — Phase 5b of the analysis pipeline.
  *
- * Guard pattern: filters out suggestions whose `originalText` is already
+ * Guard pattern: filters out suggestions whose anchor is already
  * present as a Stylistic tracked deletion in the document. Prevents
  * duplicate tracked changes when the user re-runs analysis on a document
  * that still has pending Stylistic changes.
@@ -27,7 +27,7 @@ export class GuardAppliedHandler implements PipelineHandler {
 
     const unique = ctx.uniqueSuggestions!;
     const appliedTexts = await ctx.documentPort.getAppliedOriginalTexts();
-    const pending = unique.filter((s) => !appliedTexts.has(s.originalText));
+    const pending = unique.filter((s) => !appliedTexts.has(s.anchor));
     const skipped = unique.length - pending.length;
 
     if (skipped > 0) {

@@ -9,9 +9,11 @@ import { GuardAppliedHandler } from "./GuardAppliedHandler";
 // ---------------------------------------------------------------------------
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     suggestedText: "texto mejorado",
     justification: "Mejora de estilo",
     category: "Redundancia",
@@ -24,9 +26,11 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 function makeCommentOnlySuggestion(
   overrides: Partial<Suggestion> = {},
 ): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "c1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     justification: "Observación de estilo",
     category: "Registro",
     severity: "low",
@@ -93,8 +97,8 @@ describe("GuardAppliedHandler", () => {
   describe("no previously applied suggestions", () => {
     it("should pass all suggestions through as pendingSuggestions", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "alfa" }),
-        makeSuggestion({ id: "s2", originalText: "beta" }),
+        makeSuggestion({ id: "s1", anchor: "alfa", context: "Contexto alfa" }),
+        makeSuggestion({ id: "s2", anchor: "beta", context: "Contexto beta" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -125,11 +129,11 @@ describe("GuardAppliedHandler", () => {
   // -----------------------------------------------------------------------
 
   describe("some suggestions already applied", () => {
-    it("should filter out suggestions whose originalText is in the applied set", async () => {
+    it("should filter out suggestions whose anchor is in the applied set", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "already applied" }),
-        makeSuggestion({ id: "s2", originalText: "new suggestion" }),
-        makeSuggestion({ id: "s3", originalText: "also applied" }),
+        makeSuggestion({ id: "s1", anchor: "already applied", context: "Contexto already applied" }),
+        makeSuggestion({ id: "s2", anchor: "new suggestion", context: "Contexto new suggestion" }),
+        makeSuggestion({ id: "s3", anchor: "also applied", context: "Contexto also applied" }),
       ];
       const appliedTexts = new Set(["already applied", "also applied"]);
       const ctx = makePipelineContext(suggestions, appliedTexts);
@@ -141,9 +145,9 @@ describe("GuardAppliedHandler", () => {
     });
 
     it("should call next() when at least one suggestion remains", async () => {
-      const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "applied" }),
-        makeSuggestion({ id: "s2", originalText: "pending" }),
+        const suggestions = [
+        makeSuggestion({ id: "s1", anchor: "applied", context: "Contexto applied" }),
+        makeSuggestion({ id: "s2", anchor: "pending", context: "Contexto pending" }),
       ];
       const ctx = makePipelineContext(suggestions, new Set(["applied"]));
 
@@ -159,9 +163,9 @@ describe("GuardAppliedHandler", () => {
 
   describe("all suggestions already applied", () => {
     it("should abort with 'already applied' message when all are filtered", async () => {
-      const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "applied one" }),
-        makeSuggestion({ id: "s2", originalText: "applied two" }),
+        const suggestions = [
+        makeSuggestion({ id: "s1", anchor: "applied one", context: "Contexto applied one" }),
+        makeSuggestion({ id: "s2", anchor: "applied two", context: "Contexto applied two" }),
       ];
       const appliedTexts = new Set(["applied one", "applied two"]);
       const ctx = makePipelineContext(suggestions, appliedTexts);
@@ -178,7 +182,7 @@ describe("GuardAppliedHandler", () => {
       const emitter = new PipelineEventEmitter();
       const emitAbort = vi.spyOn(emitter, "emitAbort");
 
-      const suggestions = [makeSuggestion({ originalText: "applied" })];
+      const suggestions = [makeSuggestion({ anchor: "applied", context: "Contexto applied" })];
       const ctx = makePipelineContext(suggestions, new Set(["applied"]), {
         emitter,
       });
@@ -191,7 +195,7 @@ describe("GuardAppliedHandler", () => {
     });
 
     it("should NOT call next() when aborting", async () => {
-      const suggestions = [makeSuggestion({ originalText: "applied" })];
+      const suggestions = [makeSuggestion({ anchor: "applied", context: "Contexto applied" })];
       const ctx = makePipelineContext(suggestions, new Set(["applied"]));
 
       await handler.handle(ctx, next);
@@ -226,12 +230,12 @@ describe("GuardAppliedHandler", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Case-sensitive matching (guard uses exact match via Set.has)
+  // Case-sensitive matching (guard uses exact anchor match via Set.has)
   // -----------------------------------------------------------------------
 
   describe("case-sensitive guard matching", () => {
     it("should NOT filter a suggestion when applied text differs in case", async () => {
-      const suggestions = [makeSuggestion({ originalText: "Texto Original" })];
+      const suggestions = [makeSuggestion({ anchor: "Texto Original", context: "Contexto Texto Original" })];
       const appliedTexts = new Set(["texto original"]); // different case
       const ctx = makePipelineContext(suggestions, appliedTexts);
 
@@ -243,7 +247,7 @@ describe("GuardAppliedHandler", () => {
     });
 
     it("should filter when casing matches exactly", async () => {
-      const suggestions = [makeSuggestion({ originalText: "Texto Original" })];
+      const suggestions = [makeSuggestion({ anchor: "Texto Original", context: "Contexto Texto Original" })];
       const appliedTexts = new Set(["Texto Original"]); // exact match
       const ctx = makePipelineContext(suggestions, appliedTexts);
 
@@ -259,7 +263,7 @@ describe("GuardAppliedHandler", () => {
 
   describe("abort reason differentiation", () => {
     it("should say 'already applied' when skipped > 0 and pending === 0", async () => {
-      const suggestions = [makeSuggestion({ originalText: "ya aplicado" })];
+      const suggestions = [makeSuggestion({ anchor: "ya aplicado", context: "Contexto ya aplicado" })];
       const ctx = makePipelineContext(suggestions, new Set(["ya aplicado"]));
 
       await handler.handle(ctx, next);
@@ -283,14 +287,14 @@ describe("GuardAppliedHandler", () => {
   // -----------------------------------------------------------------------
   // comment-only guard behavior
   // Phase 4 extends getAppliedOriginalTexts() to return comment-only CCs'
-  // originalTexts, so the guard works for both types via the same Set.has()
+  // anchor texts, so the guard works for both types via the same Set.has()
   // check — no type-specific branching is needed here.
   // -----------------------------------------------------------------------
 
   describe("comment-only guard behavior", () => {
-    it("should pass through a comment-only suggestion when its originalText is not in the applied set", async () => {
+    it("should pass through a comment-only suggestion when its anchor is not in the applied set", async () => {
       const suggestions = [
-        makeCommentOnlySuggestion({ id: "c1", originalText: "nueva frase" }),
+        makeCommentOnlySuggestion({ id: "c1", anchor: "nueva frase", context: "Contexto nueva frase" }),
       ];
       const ctx = makePipelineContext(suggestions, new Set());
 
@@ -301,12 +305,13 @@ describe("GuardAppliedHandler", () => {
       expect(next).toHaveBeenCalledOnce();
     });
 
-    it("should filter out a comment-only suggestion whose originalText is already in the applied set", async () => {
+    it("should filter out a comment-only suggestion whose anchor is already in the applied set", async () => {
       // getAppliedOriginalTexts() (extended in Phase 4) includes comment-only CC texts
       const suggestions = [
         makeCommentOnlySuggestion({
           id: "c1",
-          originalText: "frase ya comentada",
+          anchor: "frase ya comentada",
+          context: "Contexto frase ya comentada",
         }),
       ];
       const appliedTexts = new Set(["frase ya comentada"]);
@@ -322,10 +327,10 @@ describe("GuardAppliedHandler", () => {
 
     it("should handle a mix of track-change and comment-only, filtering already-applied ones of both types", async () => {
       const suggestions = [
-        makeSuggestion({ id: "tc1", originalText: "tc applied" }), // filtered
-        makeSuggestion({ id: "tc2", originalText: "tc pending" }), // kept
-        makeCommentOnlySuggestion({ id: "co1", originalText: "co applied" }), // filtered
-        makeCommentOnlySuggestion({ id: "co2", originalText: "co pending" }), // kept
+        makeSuggestion({ id: "tc1", anchor: "tc applied", context: "Contexto tc applied" }), // filtered
+        makeSuggestion({ id: "tc2", anchor: "tc pending", context: "Contexto tc pending" }), // kept
+        makeCommentOnlySuggestion({ id: "co1", anchor: "co applied", context: "Contexto co applied" }), // filtered
+        makeCommentOnlySuggestion({ id: "co2", anchor: "co pending", context: "Contexto co pending" }), // kept
       ];
       const appliedTexts = new Set(["tc applied", "co applied"]);
       const ctx = makePipelineContext(suggestions, appliedTexts);

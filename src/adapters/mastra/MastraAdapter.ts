@@ -211,7 +211,8 @@ export class MastraAdapter implements IAnalysisPort {
       const type = s.type ?? "track-change";
       const suggestion: Suggestion = {
         id: `chunk${chunkIndex}-${i}`,
-        originalText: s.originalText,
+        context: s.context,
+        anchor: s.anchor,
         justification: s.justification,
         category: s.category,
         severity: s.severity,
@@ -329,12 +330,20 @@ export class MastraAdapter implements IAnalysisPort {
       return false;
     }
 
+    const context = this.readNonEmptyString(value.context);
+    const anchor = this.readNonEmptyString(value.anchor);
+
     if (
-      this.readNonEmptyString(value.originalText) === undefined ||
+      context === undefined ||
+      anchor === undefined ||
       this.readNonEmptyString(value.justification) === undefined ||
       this.readNonEmptyString(value.category) === undefined ||
       !this.isSuggestionSeverity(value.severity)
     ) {
+      return false;
+    }
+
+    if (!context.includes(anchor)) {
       return false;
     }
 

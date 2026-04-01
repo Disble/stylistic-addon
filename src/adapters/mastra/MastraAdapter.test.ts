@@ -273,10 +273,70 @@ describe("MastraAdapter", () => {
       });
     });
 
+    it("rejects a workflow suggestion missing anchor", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({
+        status: "success",
+        result: {
+          suggestions: [
+            {
+              context: "Texto observado dentro del párrafo.",
+              justification: "Revisar tono",
+              category: "Tono",
+              severity: "low",
+              type: "comment-only",
+            },
+          ],
+        },
+      });
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.pollChunkAnalysis(3, "run-3");
+
+      expect(result).toEqual({
+        chunkIndex: 3,
+        runId: "run-3",
+        status: "failed",
+        suggestions: [],
+        error: "Invalid workflow success payload: expected suggestions[]",
+      });
+    });
+
+    it("rejects a workflow suggestion whose anchor is not part of context", async () => {
+      mastraMocks.runById.mockResolvedValueOnce({
+        status: "success",
+        result: {
+          suggestions: [
+            {
+              context: "Texto observado dentro del párrafo.",
+              anchor: "otro fragmento",
+              justification: "Revisar tono",
+              category: "Tono",
+              severity: "low",
+              type: "comment-only",
+            },
+          ],
+        },
+      });
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.pollChunkAnalysis(4, "run-4");
+
+      expect(result).toEqual({
+        chunkIndex: 4,
+        runId: "run-4",
+        status: "failed",
+        suggestions: [],
+        error: "Invalid workflow success payload: expected suggestions[]",
+      });
+    });
+
     it("maps a comment-only workflow suggestion with no suggestedText", async () => {
       const suggestions: WorkflowSuggestion[] = [
         {
-          originalText: "texto observado",
+          context: "Se encontró el texto observado dentro del párrafo.",
+          anchor: "texto observado",
           justification: "Revisar tono",
           category: "Tono",
           severity: "low",
@@ -296,7 +356,8 @@ describe("MastraAdapter", () => {
       expect(result.suggestions).toHaveLength(1);
       expect(result.suggestions[0]).toEqual({
         id: "chunk3-0",
-        originalText: "texto observado",
+        context: "Se encontró el texto observado dentro del párrafo.",
+        anchor: "texto observado",
         justification: "Revisar tono",
         category: "Tono",
         severity: "low",
@@ -309,14 +370,16 @@ describe("MastraAdapter", () => {
     it("maps successful workflow suggestions into domain suggestions with generated ids", async () => {
       const suggestions: WorkflowSuggestion[] = [
         {
-          originalText: "muy muy",
+          context: "La frase muy muy aparece duplicada en este contexto.",
+          anchor: "muy muy",
           suggestedText: "muy",
           justification: "Redundancia",
           category: "Estilo",
           severity: "medium",
         },
         {
-          originalText: "en este momento",
+          context: "Podés reemplazar en este momento por algo más directo.",
+          anchor: "en este momento",
           suggestedText: "ahora",
           justification: "Mas directo",
           category: "Claridad",
@@ -339,7 +402,8 @@ describe("MastraAdapter", () => {
         suggestions: [
           {
             id: "chunk7-0",
-            originalText: "muy muy",
+            context: "La frase muy muy aparece duplicada en este contexto.",
+            anchor: "muy muy",
             suggestedText: "muy",
             justification: "Redundancia",
             category: "Estilo",
@@ -348,7 +412,8 @@ describe("MastraAdapter", () => {
           },
           {
             id: "chunk7-1",
-            originalText: "en este momento",
+            context: "Podés reemplazar en este momento por algo más directo.",
+            anchor: "en este momento",
             suggestedText: "ahora",
             justification: "Mas directo",
             category: "Claridad",

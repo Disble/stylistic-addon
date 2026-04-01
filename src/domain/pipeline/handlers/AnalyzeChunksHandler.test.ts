@@ -9,9 +9,11 @@ import { AnalyzeChunksHandler } from "./AnalyzeChunksHandler";
 // ---------------------------------------------------------------------------
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     suggestedText: "texto mejorado",
     justification: "Mejora de estilo",
     category: "Redundancia",
@@ -150,8 +152,8 @@ describe("AnalyzeChunksHandler", () => {
     });
 
     it("should collect all suggestions into ctx.rawSuggestions", async () => {
-      const s1 = makeSuggestion({ id: "c0-1", originalText: "foo" });
-      const s2 = makeSuggestion({ id: "c1-1", originalText: "bar" });
+      const s1 = makeSuggestion({ id: "c0-1", anchor: "foo", context: "Contexto foo" });
+      const s2 = makeSuggestion({ id: "c1-1", anchor: "bar", context: "Contexto bar" });
 
       const analysisPort = makeMockAnalysisPort();
       (analysisPort.submitChunkAnalysis as ReturnType<typeof vi.fn>)
@@ -503,9 +505,9 @@ describe("AnalyzeChunksHandler", () => {
   describe("multiple suggestions per chunk", () => {
     it("should accumulate all suggestions from a single chunk", async () => {
       const suggestions = [
-        makeSuggestion({ id: "c0-0", originalText: "uno" }),
-        makeSuggestion({ id: "c0-1", originalText: "dos" }),
-        makeSuggestion({ id: "c0-2", originalText: "tres" }),
+        makeSuggestion({ id: "c0-0", anchor: "uno", context: "Contexto uno" }),
+        makeSuggestion({ id: "c0-1", anchor: "dos", context: "Contexto dos" }),
+        makeSuggestion({ id: "c0-2", anchor: "tres", context: "Contexto tres" }),
       ];
 
       const analysisPort = makeMockAnalysisPort();

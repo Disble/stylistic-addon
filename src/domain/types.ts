@@ -25,13 +25,16 @@ export interface Suggestion {
   /** Unique identifier assigned by the frontend (e.g., "chunk0-3"). */
   id: string;
 
-  /** Exact text to locate in the document (case-sensitive search via Word API). */
-  originalText: string;
+  /** Paragraph-level context used to locate the suggestion in the document. */
+  context: string;
+
+  /** Exact substring within `context` targeted by the suggestion. */
+  anchor: string;
 
   /**
    * Replacement text that will appear as a tracked change.
    * Undefined when `type` is `"comment-only"` — no text replacement is made,
-   * only a Word comment is inserted at the original text location.
+   * only a Word comment is inserted at the anchor location.
    */
   suggestedText?: string;
 
@@ -49,7 +52,7 @@ export interface Suggestion {
    *
    * - `"track-change"` — inserts OOXML tracked changes (`<w:del>` / `<w:ins>`)
    *   alongside a justification comment. Requires `suggestedText` to be defined.
-   * - `"comment-only"` — inserts only a Word comment at the `originalText`
+   * - `"comment-only"` — inserts only a Word comment at the `anchor`
    *   location with no tracked change. `suggestedText` is undefined.
    */
   type: "track-change" | "comment-only";
@@ -62,7 +65,7 @@ export interface InsertionResult {
   /** Number of suggestions successfully applied as tracked changes. */
   successCount: number;
 
-  /** Suggestions whose `originalText` was not found in the document. */
+  /** Suggestions whose anchor was not found in the document. */
   failedSuggestions: Suggestion[];
 }
 
@@ -116,8 +119,11 @@ export interface WorkflowInput {
  * Does not include `id` — the frontend assigns IDs after receiving the response.
  */
 export interface WorkflowSuggestion {
-  /** Exact substring from the input text (case-sensitive). */
-  originalText: string;
+  /** Paragraph-level context fragment used to locate the suggestion. */
+  context: string;
+
+  /** Exact substring of `context` targeted by the suggestion. */
+  anchor: string;
 
   /**
    * Replacement text. Absent when `type` is `"comment-only"`.

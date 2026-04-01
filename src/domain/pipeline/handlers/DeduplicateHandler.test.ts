@@ -9,9 +9,11 @@ import { DeduplicateHandler } from "./DeduplicateHandler";
 // ---------------------------------------------------------------------------
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     suggestedText: "texto mejorado",
     justification: "Mejora de estilo",
     category: "Redundancia",
@@ -24,9 +26,11 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 function makeCommentOnlySuggestion(
   overrides: Partial<Suggestion> = {},
 ): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "c1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     justification: "Observación de estilo",
     category: "Registro",
     severity: "low",
@@ -93,9 +97,9 @@ describe("DeduplicateHandler", () => {
   describe("no duplicates", () => {
     it("should pass through all suggestions when none are duplicated", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "alfa" }),
-        makeSuggestion({ id: "s2", originalText: "beta" }),
-        makeSuggestion({ id: "s3", originalText: "gamma" }),
+        makeSuggestion({ id: "s1", anchor: "alfa", context: "Contexto alfa" }),
+        makeSuggestion({ id: "s2", anchor: "beta", context: "Contexto beta" }),
+        makeSuggestion({ id: "s3", anchor: "gamma", context: "Contexto gamma" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -119,10 +123,10 @@ describe("DeduplicateHandler", () => {
   // -----------------------------------------------------------------------
 
   describe("duplicate detection", () => {
-    it("should remove exact duplicate originalText", async () => {
+    it("should remove exact duplicate context+anchor pairs", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "repetido" }),
-        makeSuggestion({ id: "s2", originalText: "repetido" }),
+        makeSuggestion({ id: "s1", anchor: "repetido", context: "Contexto repetido" }),
+        makeSuggestion({ id: "s2", anchor: "repetido", context: "Contexto repetido" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -136,17 +140,20 @@ describe("DeduplicateHandler", () => {
       const suggestions = [
         makeSuggestion({
           id: "first",
-          originalText: "duplicado",
+          anchor: "duplicado",
+          context: "Contexto duplicado",
           suggestedText: "versión 1",
         }),
         makeSuggestion({
           id: "second",
-          originalText: "duplicado",
+          anchor: "duplicado",
+          context: "Contexto duplicado",
           suggestedText: "versión 2",
         }),
         makeSuggestion({
           id: "third",
-          originalText: "duplicado",
+          anchor: "duplicado",
+          context: "Contexto duplicado",
           suggestedText: "versión 3",
         }),
       ];
@@ -161,11 +168,11 @@ describe("DeduplicateHandler", () => {
 
     it("should handle a mix of unique and duplicate suggestions", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "alfa" }),
-        makeSuggestion({ id: "s2", originalText: "beta" }),
-        makeSuggestion({ id: "s3", originalText: "alfa" }), // dup of s1
-        makeSuggestion({ id: "s4", originalText: "gamma" }),
-        makeSuggestion({ id: "s5", originalText: "beta" }), // dup of s2
+        makeSuggestion({ id: "s1", anchor: "alfa", context: "Contexto alfa" }),
+        makeSuggestion({ id: "s2", anchor: "beta", context: "Contexto beta" }),
+        makeSuggestion({ id: "s3", anchor: "alfa", context: "Contexto alfa" }), // dup of s1
+        makeSuggestion({ id: "s4", anchor: "gamma", context: "Contexto gamma" }),
+        makeSuggestion({ id: "s5", anchor: "beta", context: "Contexto beta" }), // dup of s2
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -187,9 +194,9 @@ describe("DeduplicateHandler", () => {
   describe("case-insensitive deduplication", () => {
     it("should treat different cases as duplicates", async () => {
       const suggestions = [
-        makeSuggestion({ id: "lower", originalText: "texto" }),
-        makeSuggestion({ id: "upper", originalText: "TEXTO" }),
-        makeSuggestion({ id: "mixed", originalText: "Texto" }),
+        makeSuggestion({ id: "lower", anchor: "texto", context: "Contexto texto" }),
+        makeSuggestion({ id: "upper", anchor: "TEXTO", context: "Contexto TEXTO" }),
+        makeSuggestion({ id: "mixed", anchor: "Texto", context: "Contexto Texto" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -201,15 +208,28 @@ describe("DeduplicateHandler", () => {
 
     it("should preserve the original casing of the kept suggestion", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "MiTexto" }),
-        makeSuggestion({ id: "s2", originalText: "mitexto" }),
+        makeSuggestion({ id: "s1", anchor: "MiTexto", context: "Contexto MiTexto" }),
+        makeSuggestion({ id: "s2", anchor: "mitexto", context: "Contexto mitexto" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
       await handler.handle(ctx, next);
 
-      expect(ctx.uniqueSuggestions?.[0].originalText).toBe("MiTexto");
+      expect(ctx.uniqueSuggestions?.[0].anchor).toBe("MiTexto");
     });
+  });
+
+  it("keeps same anchor when context differs", async () => {
+    const suggestions = [
+      makeSuggestion({ id: "s1", anchor: "texto", context: "Primer contexto con texto" }),
+      makeSuggestion({ id: "s2", anchor: "texto", context: "Segundo contexto con texto" }),
+    ];
+    const ctx = makePipelineContext(suggestions);
+
+    await handler.handle(ctx, next);
+
+    expect(ctx.uniqueSuggestions).toHaveLength(2);
+    expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual(["s1", "s2"]);
   });
 
   // -----------------------------------------------------------------------
@@ -219,10 +239,10 @@ describe("DeduplicateHandler", () => {
   describe("all duplicates", () => {
     it("should keep exactly one when all suggestions are duplicates", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "mismo" }),
-        makeSuggestion({ id: "s2", originalText: "mismo" }),
-        makeSuggestion({ id: "s3", originalText: "mismo" }),
-        makeSuggestion({ id: "s4", originalText: "mismo" }),
+        makeSuggestion({ id: "s1", anchor: "mismo", context: "Contexto mismo" }),
+        makeSuggestion({ id: "s2", anchor: "mismo", context: "Contexto mismo" }),
+        makeSuggestion({ id: "s3", anchor: "mismo", context: "Contexto mismo" }),
+        makeSuggestion({ id: "s4", anchor: "mismo", context: "Contexto mismo" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -234,8 +254,8 @@ describe("DeduplicateHandler", () => {
 
     it("should still call next() even when many duplicates are removed", async () => {
       const suggestions = [
-        makeSuggestion({ id: "s1", originalText: "dup" }),
-        makeSuggestion({ id: "s2", originalText: "dup" }),
+        makeSuggestion({ id: "s1", anchor: "dup", context: "Contexto dup" }),
+        makeSuggestion({ id: "s2", anchor: "dup", context: "Contexto dup" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -290,20 +310,22 @@ describe("DeduplicateHandler", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Deduplication only by originalText, not by other fields
+  // Deduplication only by context+anchor, not by other fields
   // -----------------------------------------------------------------------
 
   describe("deduplication key", () => {
-    it("should not deduplicate suggestions with same suggestedText but different originalText", async () => {
+    it("should not deduplicate suggestions with same suggestedText but different anchors", async () => {
       const suggestions = [
         makeSuggestion({
           id: "s1",
-          originalText: "error uno",
+          anchor: "error uno",
+          context: "Contexto error uno",
           suggestedText: "corrección",
         }),
         makeSuggestion({
           id: "s2",
-          originalText: "error dos",
+          anchor: "error dos",
+          context: "Contexto error dos",
           suggestedText: "corrección",
         }),
       ];
@@ -314,16 +336,18 @@ describe("DeduplicateHandler", () => {
       expect(ctx.uniqueSuggestions).toHaveLength(2);
     });
 
-    it("should not deduplicate suggestions with same category but different originalText", async () => {
+    it("should not deduplicate suggestions with same category but different anchors", async () => {
       const suggestions = [
         makeSuggestion({
           id: "s1",
-          originalText: "alfa",
+          anchor: "alfa",
+          context: "Contexto alfa",
           category: "Redundancia",
         }),
         makeSuggestion({
           id: "s2",
-          originalText: "beta",
+          anchor: "beta",
+          context: "Contexto beta",
           category: "Redundancia",
         }),
       ];
@@ -336,16 +360,16 @@ describe("DeduplicateHandler", () => {
   });
 
   // -----------------------------------------------------------------------
-  // comment-only suggestions — never deduplicated by originalText
+  // comment-only suggestions — never deduplicated by anchor
   // -----------------------------------------------------------------------
 
   describe("comment-only deduplication behavior", () => {
-    it("should keep all comment-only suggestions even when they share the same originalText", async () => {
+    it("should keep all comment-only suggestions even when they share the same anchor", async () => {
       // Two comment-only suggestions targeting the same phrase are both valid:
       // they produce independent Word comments and never conflict with each other.
       const suggestions = [
-        makeCommentOnlySuggestion({ id: "c1", originalText: "misma frase" }),
-        makeCommentOnlySuggestion({ id: "c2", originalText: "misma frase" }),
+        makeCommentOnlySuggestion({ id: "c1", anchor: "misma frase", context: "Contexto misma frase" }),
+        makeCommentOnlySuggestion({ id: "c2", anchor: "misma frase", context: "Otro contexto misma frase" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -355,11 +379,11 @@ describe("DeduplicateHandler", () => {
       expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual(["c1", "c2"]);
     });
 
-    it("should keep multiple comment-only suggestions from different runs that share originalText", async () => {
+    it("should keep multiple comment-only suggestions from different runs that share anchor", async () => {
       const suggestions = [
-        makeCommentOnlySuggestion({ id: "run1-c1", originalText: "texto" }),
-        makeCommentOnlySuggestion({ id: "run2-c1", originalText: "texto" }),
-        makeCommentOnlySuggestion({ id: "run2-c2", originalText: "texto" }),
+        makeCommentOnlySuggestion({ id: "run1-c1", anchor: "texto", context: "Contexto run1" }),
+        makeCommentOnlySuggestion({ id: "run2-c1", anchor: "texto", context: "Contexto run2 uno" }),
+        makeCommentOnlySuggestion({ id: "run2-c2", anchor: "texto", context: "Contexto run2 dos" }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -368,18 +392,20 @@ describe("DeduplicateHandler", () => {
       expect(ctx.uniqueSuggestions).toHaveLength(3);
     });
 
-    it("should deduplicate track-change while keeping all comment-only when both share the same originalText", async () => {
+    it("should deduplicate track-change while keeping all comment-only when both share the same anchor", async () => {
       // track-change duplicates are still deduplicated; comment-only are not
       const suggestions = [
-        makeSuggestion({ id: "tc1", originalText: "frase compartida" }),
-        makeSuggestion({ id: "tc2", originalText: "frase compartida" }), // dup — removed
+        makeSuggestion({ id: "tc1", anchor: "frase compartida", context: "Contexto compartido" }),
+        makeSuggestion({ id: "tc2", anchor: "frase compartida", context: "Contexto compartido" }), // dup — removed
         makeCommentOnlySuggestion({
           id: "co1",
-          originalText: "frase compartida",
+          anchor: "frase compartida",
+          context: "Contexto comentario uno",
         }),
         makeCommentOnlySuggestion({
           id: "co2",
-          originalText: "frase compartida",
+          anchor: "frase compartida",
+          context: "Contexto comentario dos",
         }),
       ];
       const ctx = makePipelineContext(suggestions);
@@ -395,15 +421,17 @@ describe("DeduplicateHandler", () => {
       ]);
     });
 
-    it("should use suggestion id as the dedup key for comment-only, not originalText", async () => {
-      // Two comment-only with different ids but same originalText → both kept
+    it("should use suggestion id as the dedup key for comment-only, not anchor", async () => {
+      // Two comment-only with different ids but same anchor → both kept
       const s1 = makeCommentOnlySuggestion({
         id: "unique-id-1",
-        originalText: "shared",
+        anchor: "shared",
+        context: "Contexto shared uno",
       });
       const s2 = makeCommentOnlySuggestion({
         id: "unique-id-2",
-        originalText: "shared",
+        anchor: "shared",
+        context: "Contexto shared dos",
       });
       const ctx = makePipelineContext([s1, s2]);
 
@@ -413,10 +441,10 @@ describe("DeduplicateHandler", () => {
     });
 
     it("should remove a comment-only suggestion only if its id is repeated (exact duplicate object)", async () => {
-      // Same id means it truly is the exact same backend suggestion seen twice
+        // Same id means it truly is the exact same backend suggestion seen twice
       const suggestions = [
-        makeCommentOnlySuggestion({ id: "same-id", originalText: "frase" }),
-        makeCommentOnlySuggestion({ id: "same-id", originalText: "frase" }), // exact dup — removed
+        makeCommentOnlySuggestion({ id: "same-id", anchor: "frase", context: "Contexto frase uno" }),
+        makeCommentOnlySuggestion({ id: "same-id", anchor: "frase", context: "Contexto frase dos" }), // exact dup — removed
       ];
       const ctx = makePipelineContext(suggestions);
 
