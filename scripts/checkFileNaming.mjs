@@ -89,6 +89,10 @@ function isTestFile(stem) {
   return stem.endsWith(".test") || stem.endsWith(".spec");
 }
 
+function isTestHelperFile(stem) {
+  return stem.endsWith("TestHelper");
+}
+
 async function pathExists(filePath) {
   try {
     await stat(filePath);
@@ -137,8 +141,8 @@ async function main() {
       continue;
     }
 
-    // Test / spec files pass all structural rules.
-    if (isTestFile(stem)) {
+    // Test / spec files and dedicated test helpers pass all structural rules.
+    if (isTestFile(stem) || isTestHelperFile(stem)) {
       continue;
     }
 

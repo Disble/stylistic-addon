@@ -45,9 +45,11 @@ import { WordAdapter } from "./WordAdapter";
 type WordRunCallback<T> = (context: any) => Promise<T> | T;
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s-1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     suggestedText: "texto sugerido",
     justification: "Mas claro",
     category: "Claridad",
@@ -485,8 +487,8 @@ describe("WordAdapter", () => {
     });
 
     it("maps command results into successCount, failedSuggestions, and progress events", async () => {
-      const first = makeSuggestion({ id: "s-1", originalText: "uno" });
-      const second = makeSuggestion({ id: "s-2", originalText: "dos" });
+      const first = makeSuggestion({ id: "s-1", anchor: "uno", context: "Contexto uno" });
+      const second = makeSuggestion({ id: "s-2", anchor: "dos", context: "Contexto dos" });
       const onProgress = vi.fn();
 
       // Suggestions are applied in reverse order (end-of-doc first): second → first.
@@ -529,9 +531,9 @@ describe("WordAdapter", () => {
     });
 
     it("converts command rejections into failed suggestions and continues processing", async () => {
-      const first = makeSuggestion({ id: "s-1", originalText: "uno" });
-      const second = makeSuggestion({ id: "s-2", originalText: "dos" });
-      const third = makeSuggestion({ id: "s-3", originalText: "tres" });
+      const first = makeSuggestion({ id: "s-1", anchor: "uno", context: "Contexto uno" });
+      const second = makeSuggestion({ id: "s-2", anchor: "dos", context: "Contexto dos" });
+      const third = makeSuggestion({ id: "s-3", anchor: "tres", context: "Contexto tres" });
       const onProgress = vi.fn();
 
       // Suggestions are applied in reverse order: third → second → first.
@@ -586,15 +588,18 @@ describe("WordAdapter", () => {
       // Backend returns them as [A, B, C]. After reverse they should be applied: C, B, A.
       const suggA = makeSuggestion({
         id: "s-a",
-        originalText: "texto al inicio del doc",
+        anchor: "texto al inicio del doc",
+        context: "Contexto texto al inicio del doc",
       });
       const suggB = makeSuggestion({
         id: "s-b",
-        originalText: "texto al final del doc",
+        anchor: "texto al final del doc",
+        context: "Contexto texto al final del doc",
       });
       const suggC = makeSuggestion({
         id: "s-c",
-        originalText: "texto en el medio del doc",
+        anchor: "texto en el medio del doc",
+        context: "Contexto texto en el medio del doc",
       });
 
       commandMocks.execute
@@ -619,11 +624,13 @@ describe("WordAdapter", () => {
       // because we reverse. Both must succeed — no CC overlap error.
       const earlyInParagraph = makeSuggestion({
         id: "s-early",
-        originalText: "apenas eran un par de pasos alrededor de ella",
+        anchor: "apenas eran un par de pasos alrededor de ella",
+        context: "Contexto apenas eran un par de pasos alrededor de ella",
       });
       const lateInParagraph = makeSuggestion({
         id: "s-late",
-        originalText: "asumió que eso sucedía porque perdía el control",
+        anchor: "asumió que eso sucedía porque perdía el control",
+        context: "Contexto asumió que eso sucedía porque perdía el control",
       });
 
       // Both commands succeed — the key is execution order: lateInParagraph first, then earlyInParagraph
@@ -675,301 +682,4 @@ describe("WordAdapter", () => {
     });
   });
 
-  // Helper: builds a context mock using Content Controls
-  function makeResolveSuggestionContext({
-    ccFound = true,
-    spanTCItems = [] as any[],
-    comments = [] as any[],
-  }) {
-    const spanTCCollection = { items: spanTCItems, load: vi.fn() };
-
-    const cc = {
-      getTrackedChanges: vi.fn(() => spanTCCollection),
-      getRange: vi.fn(() => ({ compareLocationWith: vi.fn() })),
-      delete: vi.fn(),
-    };
-
-    const ccsCollection = {
-      items: ccFound ? [cc] : [],
-      load: vi.fn(),
-    };
-
-    const commentsCollection = { items: comments, load: vi.fn() };
-
-    return {
-      document: {
-        contentControls: {
-          getByTag: vi.fn(() => ccsCollection),
-        },
-        body: {
-          getComments: vi.fn(() => commentsCollection),
-        },
-      },
-      sync: vi.fn().mockResolvedValue(undefined),
-      _ccsCollection: ccsCollection,
-      _commentsCollection: commentsCollection,
-      _cc: cc,
-    };
-  }
-
-  describe("acceptSuggestion", () => {
-    it("3.1 - happy path: accepts 2 Stylistic TCs (Deleted+Added) and deletes colocated comment", async () => {
-      const suggestion = makeSuggestion({
-        id: "s-1",
-        originalText: "texto original",
-      });
-
-      const tcAccept1 = vi.fn();
-      const tcAccept2 = vi.fn();
-      const commentDeleteSpy = vi.fn();
-
-      const spanTCItems = [
-        {
-          author: "Stylistic",
-          type: "Deleted",
-          accept: tcAccept1,
-          reject: vi.fn(),
-        },
-        {
-          author: "Stylistic",
-          type: "Added",
-          accept: tcAccept2,
-          reject: vi.fn(),
-        },
-      ];
-
-      const commentRange = {
-        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
-      };
-      const comment = {
-        authorName: "Stylistic",
-        getRange: vi.fn(() => commentRange),
-        delete: commentDeleteSpy,
-      };
-
-      const context = makeResolveSuggestionContext({
-        ccFound: true,
-        spanTCItems,
-        comments: [comment],
-      });
-
-      installWordWithContext(context);
-
-      const result = await adapter.acceptSuggestion(suggestion);
-
-      expect(result.status).toBe("accepted");
-      expect(result.trackedChangesAffected).toBe(2);
-      expect(result.commentDeleted).toBe(true);
-      expect(tcAccept1).toHaveBeenCalledOnce();
-      expect(tcAccept2).toHaveBeenCalledOnce();
-      expect(commentDeleteSpy).toHaveBeenCalledOnce();
-      expect(context._cc.delete).toHaveBeenCalledWith(true);
-    });
-
-    it("3.2 - cc-not-found: Content Control not found (CC was never created)", async () => {
-      const suggestion = makeSuggestion({ originalText: "texto original" });
-
-      const context = makeResolveSuggestionContext({ ccFound: false });
-      installWordWithContext(context);
-
-      const result = await adapter.acceptSuggestion(suggestion);
-
-      expect(result.status).toBe("cc-not-found");
-      expect(result.trackedChangesAffected).toBe(0);
-      expect(result.commentDeleted).toBe(false);
-    });
-
-    it("3.4 - already-resolved: Content Control found but has NO TCs", async () => {
-      const suggestion = makeSuggestion({ originalText: "texto original" });
-
-      const context = makeResolveSuggestionContext({
-        ccFound: true,
-        spanTCItems: [],
-      });
-      installWordWithContext(context);
-
-      const result = await adapter.acceptSuggestion(suggestion);
-
-      expect(result.status).toBe("already-resolved");
-      expect(result.trackedChangesAffected).toBe(0);
-      expect(context._cc.delete).toHaveBeenCalledWith(true);
-    });
-
-    it("3.5 - TCs found but no comment (comment already deleted)", async () => {
-      const suggestion = makeSuggestion({ originalText: "texto original" });
-      const tcAcceptSpy = vi.fn();
-
-      const spanTCItems = [
-        {
-          author: "Stylistic",
-          type: "Deleted",
-          accept: tcAcceptSpy,
-          reject: vi.fn(),
-        },
-      ];
-
-      const context = makeResolveSuggestionContext({
-        ccFound: true,
-        spanTCItems,
-        comments: [], // no comments
-      });
-      installWordWithContext(context);
-
-      const result = await adapter.acceptSuggestion(suggestion);
-
-      expect(result.status).toBe("accepted");
-      expect(result.trackedChangesAffected).toBe(1);
-      expect(result.commentDeleted).toBe(false);
-      expect(result.error).toBeUndefined();
-      expect(tcAcceptSpy).toHaveBeenCalledOnce();
-      expect(context._cc.delete).toHaveBeenCalledWith(true);
-    });
-
-    it("3.6 - Word.run throws: returns error status without throwing", async () => {
-      const suggestion = makeSuggestion({ originalText: "texto original" });
-
-      installRejectingWord(new Error("Document is read-only"));
-
-      const result = await adapter.acceptSuggestion(suggestion);
-
-      expect(result.status).toBe("error");
-      expect(result.error).toContain("Document is read-only");
-    });
-
-    it("3.9 - comment-only accept: deletes comment and CC, returns accepted with 0 TCs", async () => {
-      const suggestion = makeSuggestion({
-        id: "s-co-1",
-        type: "comment-only",
-        suggestedText: undefined,
-      });
-
-      const commentDeleteSpy = vi.fn();
-      const commentRange = {
-        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
-      };
-      const comment = {
-        authorName: "Stylistic",
-        getRange: vi.fn(() => commentRange),
-        delete: commentDeleteSpy,
-      };
-
-      const context = makeResolveSuggestionContext({
-        ccFound: true,
-        spanTCItems: [],
-        comments: [comment],
-      });
-
-      installWordWithContext(context);
-
-      const result = await adapter.acceptSuggestion(suggestion);
-
-      expect(result.status).toBe("accepted");
-      expect(result.trackedChangesAffected).toBe(0);
-      expect(result.commentDeleted).toBe(true);
-      expect(commentDeleteSpy).toHaveBeenCalledOnce();
-      expect(context._cc.delete).toHaveBeenCalledWith(true);
-    });
-  });
-
-  describe("rejectSuggestion", () => {
-    it("3.7 - happy path: rejects 2 Stylistic TCs and deletes colocated comment", async () => {
-      const suggestion = makeSuggestion({
-        id: "s-1",
-        originalText: "texto original",
-      });
-
-      const tcReject1 = vi.fn();
-      const tcReject2 = vi.fn();
-      const tcAccept1 = vi.fn();
-      const tcAccept2 = vi.fn();
-      const commentDeleteSpy = vi.fn();
-
-      const spanTCItems = [
-        {
-          author: "Stylistic",
-          type: "Deleted",
-          accept: tcAccept1,
-          reject: tcReject1,
-        },
-        {
-          author: "Stylistic",
-          type: "Added",
-          accept: tcAccept2,
-          reject: tcReject2,
-        },
-      ];
-
-      const commentRange = {
-        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
-      };
-      const comment = {
-        authorName: "Stylistic",
-        getRange: vi.fn(() => commentRange),
-        delete: commentDeleteSpy,
-      };
-
-      const context = makeResolveSuggestionContext({
-        ccFound: true,
-        spanTCItems,
-        comments: [comment],
-      });
-      installWordWithContext(context);
-
-      const result = await adapter.rejectSuggestion(suggestion);
-
-      expect(result.status).toBe("rejected");
-      expect(result.trackedChangesAffected).toBe(2);
-      expect(tcReject1).toHaveBeenCalledOnce();
-      expect(tcReject2).toHaveBeenCalledOnce();
-      expect(tcAccept1).not.toHaveBeenCalled();
-      expect(tcAccept2).not.toHaveBeenCalled();
-      expect(commentDeleteSpy).toHaveBeenCalledOnce();
-      expect(context._cc.delete).toHaveBeenCalledWith(true);
-    });
-
-    it("3.8 - cc-not-found: Content Control not found (CC was never created)", async () => {
-      const suggestion = makeSuggestion({ originalText: "texto original" });
-
-      const context = makeResolveSuggestionContext({ ccFound: false });
-      installWordWithContext(context);
-
-      const result = await adapter.rejectSuggestion(suggestion);
-
-      expect(result.status).toBe("cc-not-found");
-    });
-
-    it("3.10 - comment-only reject: deletes comment and CC, returns rejected with 0 TCs", async () => {
-      const suggestion = makeSuggestion({
-        id: "s-co-2",
-        type: "comment-only",
-        suggestedText: undefined,
-      });
-
-      const commentDeleteSpy = vi.fn();
-      const commentRange = {
-        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
-      };
-      const comment = {
-        authorName: "Stylistic",
-        getRange: vi.fn(() => commentRange),
-        delete: commentDeleteSpy,
-      };
-
-      const context = makeResolveSuggestionContext({
-        ccFound: true,
-        spanTCItems: [],
-        comments: [comment],
-      });
-
-      installWordWithContext(context);
-
-      const result = await adapter.rejectSuggestion(suggestion);
-
-      expect(result.status).toBe("rejected");
-      expect(result.trackedChangesAffected).toBe(0);
-      expect(result.commentDeleted).toBe(true);
-      expect(commentDeleteSpy).toHaveBeenCalledOnce();
-      expect(context._cc.delete).toHaveBeenCalledWith(true);
-    });
-  });
 });

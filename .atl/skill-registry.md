@@ -6,6 +6,7 @@ Generated for project: `stylistic-addon`
 
 | Name | Scope | Path | Trigger / Use When |
 |---|---|---|---|
+| `stylistic-addon-testing` | project | `.claude/skills/stylistic-addon-testing/SKILL.md` | Use for addon tests, Office.js mocks, tracked-change regressions, and confidence audits. |
 | `mastra` | project | `.claude/skills/mastra/SKILL.md` | Use for any Mastra development; verify current APIs/docs before touching `@mastra/*`. |
 | `kin` | user | `C:/Users/User/.config/opencode/skills/kin/SKILL.md` | Use when code touches external libraries, library stack traces appear, or API signatures are uncertain. |
 | `kin-init` | user | `C:/Users/User/.config/opencode/skills/kin-init/SKILL.md` | Use to register or repair KIN integration and docs routing. |
@@ -16,7 +17,10 @@ Generated for project: `stylistic-addon`
 
 ## Project Instruction Files
 
-No supported project instruction index files were found at the root (`AGENTS.md`, `agents.md`, `CLAUDE.md`, `.cursorrules`, `GEMINI.md`, `copilot-instructions.md`).
+| File | Purpose |
+|---|---|
+| `AGENTS.md` | Project routing and mandatory skill-loading rules |
+| `CLAUDE.md` | Claude-facing project entrypoint and testing-skill reminder |
 
 ## Notes
 

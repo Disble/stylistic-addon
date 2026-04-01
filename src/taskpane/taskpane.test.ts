@@ -80,9 +80,11 @@ vi.mock("../adapters/mastra/FeedbackAdapter", () => ({
 }));
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
+  const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s-1",
-    originalText: "texto original",
+    context: overrides.context ?? `Contexto con ${anchor}.`,
+    anchor,
     suggestedText: "texto sugerido",
     justification: "Mas claro",
     category: "Claridad",
@@ -708,6 +710,27 @@ describe("Accept/Reject buttons", () => {
     expect(liItems).toHaveLength(1);
     expect(liItems[0].querySelector('[data-action="accept"]')).toBeNull();
     expect(liItems[0].querySelector('[data-action="reject"]')).toBeNull();
+    const failedLabel = liItems[0].querySelector(".result-failed") as FakeElement;
+    expect(failedLabel.textContent).toBe(`No encontrado: "${s1.anchor}"`);
+  });
+
+  it("4.2b — clickable diff uses anchor for display and navigation", async () => {
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({
+      id: "s-nav",
+      anchor: "fragmento exacto",
+      context: "Un contexto con fragmento exacto adentro.",
+    });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const clickable = li.querySelector(".card-clickable-area") as FakeElement;
+
+    const originalSpan = li.querySelector(".result-original") as FakeElement;
+    expect(originalSpan.textContent).toBe("fragmento exacto");
+    clickable.click();
+
+    expect(taskpaneMocks.navigateToText).toHaveBeenCalledWith("fragmento exacto");
   });
 
   it("4.3 — clicking Accept: adds result-accepted class and removes buttons", async () => {
@@ -759,6 +782,30 @@ describe("Accept/Reject buttons", () => {
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
   });
 
+  it("4.4b — clicking Reject keeps terminal rejected UI even when adapter had to ignore late CC cleanup failure", async () => {
+    taskpaneMocks.rejectSuggestion.mockResolvedValue({
+      status: "rejected",
+      trackedChangesAffected: 2,
+      commentDeleted: false,
+    });
+
+    const doc = createTaskpaneDocument();
+    const s1 = makeSuggestion({ id: "s-1", anchor: "con la Jing", suggestedText: "con Jing" });
+
+    const liItems = await renderViaEmitter(doc, [s1]);
+    const li = liItems[0];
+    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+
+    rejectBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(taskpaneMocks.rejectSuggestion).toHaveBeenCalledWith(s1);
+    expect(li.classList.contains("result-rejected")).toBe(true);
+    expect(li.querySelector(".result-actions")).toBeNull();
+    expect(li.textContent).not.toContain("(aplicación falló)");
+  });
+
   it("4.5 — already-resolved on accept: adds class, shows '(ya resuelto)' note, sends positive feedback", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "already-resolved",
@@ -784,7 +831,10 @@ describe("Accept/Reject buttons", () => {
     expect(noteSpan?.textContent).toBe("(ya resuelto)");
     // The user's button click IS the feedback signal — already-resolved must send feedback
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({ rating: "positive" }),
+      expect.objectContaining({
+        rating: "positive",
+        originalText: s1.anchor,
+      }),
     );
   });
 
@@ -812,7 +862,10 @@ describe("Accept/Reject buttons", () => {
     expect(noteSpan).not.toBeNull();
     expect(noteSpan?.textContent).toBe("(ya resuelto)");
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({ rating: "negative" }),
+      expect.objectContaining({
+        rating: "negative",
+        originalText: s1.anchor,
+      }),
     );
   });
 
@@ -1086,7 +1139,8 @@ describe("Feedback button + accordion", () => {
     const s1 = makeSuggestion({
       id: "s-1",
       category: "Redundancia",
-      originalText: "completamente necesario",
+      anchor: "completamente necesario",
+      context: "Frase con completamente necesario.",
       suggestedText: "necesario",
       justification: "Ya implica completitud.",
       severity: "high",
@@ -1119,7 +1173,8 @@ describe("Feedback button + accordion", () => {
     const s1 = makeSuggestion({
       id: "s-1",
       category: "Muletilla",
-      originalText: "básicamente",
+      anchor: "básicamente",
+      context: "Frase con básicamente.",
       suggestedText: "",
       justification: "Frase de relleno.",
       severity: "medium",

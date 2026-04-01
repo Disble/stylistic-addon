@@ -41,6 +41,12 @@ type ParagraphSnapshot = {
 const PARAGRAPH_LOAD_FIELDS =
   "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent";
 
+const RESOLUTION_RELATED_RELATIONS = [
+  ...OVERLAPPING_RELATIONS,
+  "AdjacentBefore",
+  "AdjacentAfter",
+];
+
 function isHeadingStyle(styleBuiltIn?: string): boolean {
   return styleBuiltIn === "Title" || /^Heading\d+$/.test(styleBuiltIn ?? "");
 }
@@ -77,6 +83,83 @@ function buildStructuredParagraphText(paragraphs: ParagraphSnapshot[]): string {
 }
 
 export class WordAdapter implements IDocumentPort {
+  /**
+   * Resolves all tracked changes semantically tied to a suggestion CC.
+   *
+   * `cc.getTrackedChanges()` can miss one side of a replace operation in real
+   * Word documents. To avoid false-success accept/reject flows, this method
+   * unions the CC-scoped tracked changes with body-level tracked changes whose
+   * ranges overlap the CC range.
+   */
+  private async collectTrackedChangesForContentControl(
+    context: Word.RequestContext,
+    cc: Word.ContentControl,
+  ): Promise<Word.TrackedChange[]> {
+    const ccRange = cc.getRange();
+
+    const ccTrackedChanges = cc.getTrackedChanges();
+    ccTrackedChanges.load({ select: "type,id" });
+
+    const bodyTrackedChanges = context.document.body.getTrackedChanges();
+    bodyTrackedChanges.load({ select: "type,id" });
+
+    await context.sync();
+
+    const trackedChangesById = new Map<string, Word.TrackedChange>();
+    const trackedChangesWithoutId: Word.TrackedChange[] = [];
+
+    const addTrackedChange = (tc: Word.TrackedChange) => {
+      const id = String((tc as { id?: string | number }).id ?? "");
+      if (id.length > 0) {
+        trackedChangesById.set(id, tc);
+      } else if (!trackedChangesWithoutId.includes(tc)) {
+        trackedChangesWithoutId.push(tc);
+      }
+    };
+
+    for (const tc of ccTrackedChanges.items) {
+      addTrackedChange(tc);
+    }
+
+    const candidateBodyTrackedChanges = bodyTrackedChanges.items.filter(
+      (tc) => {
+        const id = String((tc as { id?: string | number }).id ?? "");
+        return id.length === 0 || !trackedChangesById.has(id);
+      },
+    );
+
+    const candidateRanges = candidateBodyTrackedChanges.map((tc) =>
+      tc.getRange(),
+    );
+    const comparisons = candidateRanges.map((range) =>
+      range.compareLocationWith(ccRange),
+    );
+
+    if (comparisons.length > 0) {
+      await context.sync();
+    }
+
+    for (
+      let index = 0;
+      index < candidateBodyTrackedChanges.length;
+      index += 1
+    ) {
+      const tc = candidateBodyTrackedChanges[index];
+      if (
+        RESOLUTION_RELATED_RELATIONS.includes(
+          comparisons[index].value as string,
+        )
+      ) {
+        addTrackedChange(tc);
+      }
+    }
+
+    return [
+      ...Array.from(trackedChangesById.values()),
+      ...trackedChangesWithoutId,
+    ];
+  }
+
   /**
    * Resolves the text to analyze: returns the current selection if non-empty,
    * otherwise falls back to the full document body (Transparent Fallback pattern).
@@ -372,14 +455,13 @@ export class WordAdapter implements IDocumentPort {
           };
         }
 
-        // 3b. track-change branch: use CC-scoped TC lookup via cc.getTrackedChanges().
-        // This is more precise than body.getTrackedChanges() + compareLocationWith
-        // because it only returns TCs that are directly inside this CC's range.
-        const ccTCs = cc.getTrackedChanges();
-        ccTCs.load({ select: "type,id" });
-        await context.sync();
+        // 3b. track-change branch: resolve all tracked changes semantically tied
+        // to this CC. Some replace operations expose only one side through
+        // `cc.getTrackedChanges()`, so we must also inspect overlapping body TCs.
+        const trackedChanges =
+          await this.collectTrackedChangesForContentControl(context, cc);
 
-        if (ccTCs.items.length === 0) {
+        if (trackedChanges.length === 0) {
           cc.delete(true);
           await context.sync();
           return {
@@ -389,7 +471,7 @@ export class WordAdapter implements IDocumentPort {
           };
         }
 
-        for (const tc of ccTCs.items) {
+        for (const tc of trackedChanges) {
           if (action === "accept") {
             tc.accept();
           } else {
@@ -397,14 +479,29 @@ export class WordAdapter implements IDocumentPort {
           }
         }
 
-        // 4. Delete the Content Control anchor itself
-        cc.delete(true);
-        await context.sync();
+        // 4. Delete the Content Control anchor itself.
+        //
+        // Rejecting a native insertion may remove the inserted-side CC anchor as a
+        // side effect of restoring the original text. In that case, the semantic
+        // reject already succeeded and a late CC cleanup failure must not degrade
+        // the final result to `error`.
+        try {
+          cc.delete(true);
+          await context.sync();
+        } catch (cleanupError) {
+          if (action === "accept") {
+            throw cleanupError;
+          }
+
+          console.warn(
+            `⚠️ [WordAdapter] "${suggestion.id}": reject cleanup skipped after successful resolution: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+          );
+        }
 
         return {
           status:
             action === "accept" ? ("accepted" as const) : ("rejected" as const),
-          trackedChangesAffected: ccTCs.items.length,
+          trackedChangesAffected: trackedChanges.length,
           commentDeleted,
         };
       });

@@ -8,7 +8,7 @@
  *
  * Each command:
  * 1. Searches the document for the original text (case-sensitive).
- * 2. Sets changeTrackingMode to trackAll.
+ * 2. Loads the current `changeTrackingMode` and then sets it to trackAll.
  * 3. Calls range.insertText(suggestedText, replace) — Word records it as TC.
  * 4. Inserts a comment on the inserted range with category + justification.
  * 5. Wraps the inserted range in a ContentControl tagged `stylistic:{type}:{id}`.
@@ -36,12 +36,19 @@ type IndexedText = {
  * `execute()` and never reach this function.
  */
 function classifyChange(suggestion: Suggestion): ChangeType {
-  const hasOriginal = suggestion.originalText.length > 0;
+  const hasOriginal = suggestion.anchor.length > 0;
   const hasSuggested = (suggestion.suggestedText?.length ?? 0) > 0;
   if (hasOriginal && !hasSuggested) return "delete";
   if (!hasOriginal && hasSuggested) return "insert";
   return "replace";
 }
+
+/** Minimal search surface shared by `Word.Body` and `Word.Range`. */
+type SearchContainer = {
+  search(text: string, options: Record<string, boolean>): Word.RangeCollection;
+  load(property: "text"): void;
+  text: string;
+};
 
 function removeWhitespaceWithIndices(text: string): IndexedText {
   const indices: number[] = [];
@@ -92,11 +99,100 @@ export class ApplySuggestionCommand {
 
   constructor(private readonly suggestion: Suggestion) {
     this.id = suggestion.id;
-    this.description = `Apply suggestion [${suggestion.type}]: "${suggestion.originalText.substring(0, 40)}" → "${(suggestion.suggestedText ?? "").substring(0, 40)}"`;
+    this.description = `Apply suggestion [${suggestion.type}]: "${suggestion.anchor.substring(0, 40)}" → "${(suggestion.suggestedText ?? "").substring(0, 40)}"`;
   }
 
   /**
-   * Executes the command: searches for `originalText` in the document and
+   * Searches a body or range using the standard three-step fallback strategy.
+   */
+  private async searchWithFallback(
+    context: Word.RequestContext,
+    container: SearchContainer,
+    searchText: string,
+  ): Promise<Word.Range | null> {
+    const searchOptions = { matchCase: true, matchWholeWord: false };
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    let results!: Word.RangeCollection;
+    if (searchText.length <= 256) {
+      results = container.search(searchText, searchOptions);
+      results.load("items");
+      await context.sync();
+    }
+
+    if (searchText.length > 256 || results.items.length === 0) {
+      results = container.search(searchText, {
+        matchCase: true,
+        matchWholeWord: false,
+        ignorePunct: true,
+        ignoreSpace: true,
+      });
+      results.load("items");
+      await context.sync();
+    }
+
+    if (results.items.length > 0) {
+      return results.items[0];
+    }
+
+    container.load("text");
+    await context.sync();
+
+    const fallbackSearchText = findWhitespaceInsensitiveSlice(
+      searchText,
+      container.text,
+    );
+    if (!fallbackSearchText) {
+      return null;
+    }
+
+    results = container.search(fallbackSearchText, searchOptions);
+    results.load("items");
+    await context.sync();
+
+    return results.items[0] ?? null;
+  }
+
+  /**
+   * Resolves the exact anchor range by first locating the surrounding context,
+   * then searching the anchor within that context range.
+   */
+  private async resolveAnchorRange(
+    context: Word.RequestContext,
+    body: Word.Body,
+  ): Promise<Word.Range | null> {
+    const contextRange = await this.searchWithFallback(
+      context,
+      body as SearchContainer,
+      this.suggestion.context,
+    );
+    if (!contextRange) {
+      return null;
+    }
+
+    return this.searchWithFallback(
+      context,
+      contextRange as unknown as SearchContainer,
+      this.suggestion.anchor,
+    );
+  }
+
+  /**
+   * Loads the current document tracking mode before any read access.
+   *
+   * Office.js proxy properties are not guaranteed to be materialized until the
+   * property is explicitly loaded and synchronized.
+   */
+  private async loadCurrentChangeTrackingMode(
+    context: Word.RequestContext,
+  ): Promise<Word.ChangeTrackingMode> {
+    context.document.load("changeTrackingMode");
+    await context.sync();
+    return context.document.changeTrackingMode as Word.ChangeTrackingMode;
+  }
+
+  /**
+   * Executes the command: searches for the anchor within its context and
    * replaces it with a native Word tracked change.
    *
    * Returns `{ success: false }` for recoverable application failures such as
@@ -104,7 +200,7 @@ export class ApplySuggestionCommand {
    */
   async execute(): Promise<CommandResult> {
     console.log(
-      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.originalText.substring(0, 40)}" → "${(this.suggestion.suggestedText ?? "").substring(0, 40)}"`,
+      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.anchor.substring(0, 40)}" → "${(this.suggestion.suggestedText ?? "").substring(0, 40)}"`,
     );
 
     if (this.suggestion.type === "comment-only") {
@@ -126,79 +222,18 @@ export class ApplySuggestionCommand {
 
     try {
       return await Word.run(async (context) => {
-        const searchOptions = {
-          matchCase: true,
-          matchWholeWord: false,
-        };
-
-        let searchText = this.suggestion.originalText;
-
-        // Attempt 1: exact match (skip if text exceeds 256-char Word API limit)
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        let results!: Word.RangeCollection;
-        if (searchText.length <= 256) {
-          results = context.document.body.search(searchText, searchOptions);
-          results.load("items");
-          await context.sync();
-        }
-
-        // Attempt 1.5: ignorePunct + ignoreSpace — handles em-dashes, ¡, ¿, …
-        // Triggered when text exceeds the API limit OR exact match found nothing.
-        if (searchText.length > 256 || results.items.length === 0) {
-          results = context.document.body.search(searchText, {
-            matchCase: true,
-            matchWholeWord: false,
-            ignorePunct: true,
-            ignoreSpace: true,
-          });
-          results.load("items");
-          await context.sync();
-
-          if (results.items.length > 0) {
-            console.log(
-              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace)`,
-            );
-          }
-        }
-
-        if (results.items.length === 0) {
-          context.document.body.load("text");
-          await context.sync();
-
-          const fallbackSearchText = findWhitespaceInsensitiveSlice(
-            this.suggestion.originalText,
-            context.document.body.text,
+        const body = context.document.body;
+        let range = await this.resolveAnchorRange(context, body);
+        if (!range) {
+          console.warn(
+            `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado`,
           );
-
-          if (!fallbackSearchText) {
-            console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`,
-            );
-            return {
-              success: false,
-              commandId: this.id,
-              error: "Texto original no encontrado",
-            };
-          }
-
-          searchText = fallbackSearchText;
-          results = context.document.body.search(searchText, searchOptions);
-          results.load("items");
-          await context.sync();
-
-          if (results.items.length === 0) {
-            console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado`,
-            );
-            return {
-              success: false,
-              commandId: this.id,
-              error: "Texto original no encontrado",
-            };
-          }
+          return {
+            success: false,
+            commandId: this.id,
+            error: "Anchor no encontrado en el contexto",
+          };
         }
-
-        let range = results.items[0];
 
         const parentCC = range.parentContentControlOrNullObject;
         parentCC.load("tag");
@@ -218,25 +253,20 @@ export class ApplySuggestionCommand {
           parentCC.delete(true);
           await context.sync();
 
-          results = context.document.body.search(searchText, searchOptions);
-          results.load("items");
-          await context.sync();
-
-          if (results.items.length === 0) {
+          range = await this.resolveAnchorRange(context, body);
+          if (!range) {
             console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente`,
+              `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado tras eliminar CC existente`,
             );
             return {
               success: false,
               commandId: this.id,
-              error: "Texto no encontrado tras eliminar CC existente",
+              error: "Anchor no encontrado en el contexto",
             };
           }
-
-          range = results.items[0];
         }
 
-        const previousMode = context.document.changeTrackingMode;
+        const previousMode = await this.loadCurrentChangeTrackingMode(context);
         context.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
         await context.sync();
 
@@ -279,7 +309,7 @@ export class ApplySuggestionCommand {
   }
 
   /**
-   * Executes the comment-only path: locates `originalText` in the document and
+   * Executes the comment-only path: locates the anchor within its context and
    * inserts a Word comment at that range with NO tracked change markup.
    *
    * changeTrackingMode is NOT read or modified in this path.
@@ -290,79 +320,18 @@ export class ApplySuggestionCommand {
   private async executeCommentOnly(): Promise<CommandResult> {
     try {
       return await Word.run(async (context) => {
-        const searchOptions = {
-          matchCase: true,
-          matchWholeWord: false,
-        };
-
-        let searchText = this.suggestion.originalText;
-
-        // Attempt 1: exact match (skip if text exceeds 256-char Word API limit)
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        let results!: Word.RangeCollection;
-        if (searchText.length <= 256) {
-          results = context.document.body.search(searchText, searchOptions);
-          results.load("items");
-          await context.sync();
-        }
-
-        // Attempt 1.5: ignorePunct + ignoreSpace — handles em-dashes, ¡, ¿, …
-        // Triggered when text exceeds the API limit OR exact match found nothing.
-        if (searchText.length > 256 || results.items.length === 0) {
-          results = context.document.body.search(searchText, {
-            matchCase: true,
-            matchWholeWord: false,
-            ignorePunct: true,
-            ignoreSpace: true,
-          });
-          results.load("items");
-          await context.sync();
-
-          if (results.items.length > 0) {
-            console.log(
-              `🔍 [ApplySuggestionCommand] "${this.id}": encontrado con attempt 1.5 (ignorePunct+ignoreSpace) (comment-only)`,
-            );
-          }
-        }
-
-        if (results.items.length === 0) {
-          context.document.body.load("text");
-          await context.sync();
-
-          const fallbackSearchText = findWhitespaceInsensitiveSlice(
-            this.suggestion.originalText,
-            context.document.body.text,
+        const body = context.document.body;
+        let range = await this.resolveAnchorRange(context, body);
+        if (!range) {
+          console.warn(
+            `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado (comment-only)`,
           );
-
-          if (!fallbackSearchText) {
-            console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`,
-            );
-            return {
-              success: false,
-              commandId: this.id,
-              error: "Texto original no encontrado",
-            };
-          }
-
-          searchText = fallbackSearchText;
-          results = context.document.body.search(searchText, searchOptions);
-          results.load("items");
-          await context.sync();
-
-          if (results.items.length === 0) {
-            console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado (comment-only)`,
-            );
-            return {
-              success: false,
-              commandId: this.id,
-              error: "Texto original no encontrado",
-            };
-          }
+          return {
+            success: false,
+            commandId: this.id,
+            error: "Anchor no encontrado en el contexto",
+          };
         }
-
-        let range = results.items[0];
 
         const parentCC = range.parentContentControlOrNullObject;
         parentCC.load("tag");
@@ -380,22 +349,17 @@ export class ApplySuggestionCommand {
           parentCC.delete(true);
           await context.sync();
 
-          results = context.document.body.search(searchText, searchOptions);
-          results.load("items");
-          await context.sync();
-
-          if (results.items.length === 0) {
+          range = await this.resolveAnchorRange(context, body);
+          if (!range) {
             console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": texto no encontrado tras eliminar CC existente (comment-only)`,
+              `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado tras eliminar CC existente (comment-only)`,
             );
             return {
               success: false,
               commandId: this.id,
-              error: "Texto no encontrado tras eliminar CC existente",
+              error: "Anchor no encontrado en el contexto",
             };
           }
-
-          range = results.items[0];
         }
 
         console.log(

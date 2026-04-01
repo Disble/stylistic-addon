@@ -7,7 +7,13 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/tests", "!**/*.test.ts", "!**/*.spec.ts"]
+    "includes": [
+      "**",
+      "!**/tests",
+      "!**/*.test.ts",
+      "!**/*.spec.ts",
+      "!**/*TestHelper.ts"
+    ]
   },
   "formatter": {
     "enabled": true,
