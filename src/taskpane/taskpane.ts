@@ -56,7 +56,9 @@ import {
 const STATUS_DISPLAY_MS = 4000;
 
 type OfficeLike = {
-  onReady(callback: (info: { host: string }) => void): Promise<unknown> | void;
+  onReady(
+    callback: (info: { host: string }) => void,
+  ): Promise<unknown> | undefined;
   HostType?: {
     Word?: string;
   };

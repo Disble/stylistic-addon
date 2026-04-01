@@ -137,7 +137,7 @@ describe("GuardAppliedHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.pendingSuggestions).toHaveLength(1);
-      expect(ctx.pendingSuggestions![0].id).toBe("s2");
+      expect(ctx.pendingSuggestions?.[0].id).toBe("s2");
     });
 
     it("should call next() when at least one suggestion remains", async () => {
@@ -297,7 +297,7 @@ describe("GuardAppliedHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.pendingSuggestions).toHaveLength(1);
-      expect(ctx.pendingSuggestions![0].id).toBe("c1");
+      expect(ctx.pendingSuggestions?.[0].id).toBe("c1");
       expect(next).toHaveBeenCalledOnce();
     });
 
@@ -333,7 +333,7 @@ describe("GuardAppliedHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.pendingSuggestions).toHaveLength(2);
-      expect(ctx.pendingSuggestions!.map((s) => s.id)).toEqual(["tc2", "co2"]);
+      expect(ctx.pendingSuggestions?.map((s) => s.id)).toEqual(["tc2", "co2"]);
       expect(next).toHaveBeenCalledOnce();
     });
   });

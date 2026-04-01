@@ -129,7 +129,7 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(1);
-      expect(ctx.uniqueSuggestions![0].id).toBe("s1");
+      expect(ctx.uniqueSuggestions?.[0].id).toBe("s1");
     });
 
     it("should keep the first occurrence and discard subsequent duplicates", async () => {
@@ -155,8 +155,8 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(1);
-      expect(ctx.uniqueSuggestions![0].id).toBe("first");
-      expect(ctx.uniqueSuggestions![0].suggestedText).toBe("versión 1");
+      expect(ctx.uniqueSuggestions?.[0].id).toBe("first");
+      expect(ctx.uniqueSuggestions?.[0].suggestedText).toBe("versión 1");
     });
 
     it("should handle a mix of unique and duplicate suggestions", async () => {
@@ -172,7 +172,7 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(3);
-      expect(ctx.uniqueSuggestions!.map((s) => s.id)).toEqual([
+      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual([
         "s1",
         "s2",
         "s4",
@@ -196,7 +196,7 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(1);
-      expect(ctx.uniqueSuggestions![0].id).toBe("lower");
+      expect(ctx.uniqueSuggestions?.[0].id).toBe("lower");
     });
 
     it("should preserve the original casing of the kept suggestion", async () => {
@@ -208,7 +208,7 @@ describe("DeduplicateHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(ctx.uniqueSuggestions![0].originalText).toBe("MiTexto");
+      expect(ctx.uniqueSuggestions?.[0].originalText).toBe("MiTexto");
     });
   });
 
@@ -229,7 +229,7 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(1);
-      expect(ctx.uniqueSuggestions![0].id).toBe("s1");
+      expect(ctx.uniqueSuggestions?.[0].id).toBe("s1");
     });
 
     it("should still call next() even when many duplicates are removed", async () => {
@@ -352,7 +352,7 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(2);
-      expect(ctx.uniqueSuggestions!.map((s) => s.id)).toEqual(["c1", "c2"]);
+      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual(["c1", "c2"]);
     });
 
     it("should keep multiple comment-only suggestions from different runs that share originalText", async () => {
@@ -388,7 +388,7 @@ describe("DeduplicateHandler", () => {
 
       // tc1 kept, tc2 removed; co1 and co2 both kept
       expect(ctx.uniqueSuggestions).toHaveLength(3);
-      expect(ctx.uniqueSuggestions!.map((s) => s.id)).toEqual([
+      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual([
         "tc1",
         "co1",
         "co2",
@@ -423,7 +423,7 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(1);
-      expect(ctx.uniqueSuggestions![0].id).toBe("same-id");
+      expect(ctx.uniqueSuggestions?.[0].id).toBe("same-id");
     });
   });
 });

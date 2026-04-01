@@ -239,10 +239,10 @@ describe("SuggestionStateMachine", () => {
         thrown = e as Error;
       }
       expect(thrown).toBeInstanceOf(InvalidSuggestionTransitionError);
-      expect(thrown!.message).toContain('"pending"');
-      expect(thrown!.message).toContain('"accepted"');
-      expect(thrown!.message).toContain("Allowed:");
-      expect(thrown!.message).toMatch(/Invalid transition/);
+      expect(thrown?.message).toContain('"pending"');
+      expect(thrown?.message).toContain('"accepted"');
+      expect(thrown?.message).toContain("Allowed:");
+      expect(thrown?.message).toMatch(/Invalid transition/);
     });
 
     it("error name is 'InvalidSuggestionTransitionError'", () => {
@@ -252,7 +252,7 @@ describe("SuggestionStateMachine", () => {
       } catch (e) {
         thrown = e as Error;
       }
-      expect(thrown!.name).toBe("InvalidSuggestionTransitionError");
+      expect(thrown?.name).toBe("InvalidSuggestionTransitionError");
     });
   });
 

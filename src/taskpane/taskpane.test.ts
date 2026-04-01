@@ -201,7 +201,7 @@ class FakeElement {
 
   addEventListener(event: string, handler: (ev: any) => void) {
     if (!this.listeners.has(event)) this.listeners.set(event, []);
-    this.listeners.get(event)!.push(handler);
+    this.listeners.get(event)?.push(handler);
   }
 
   /** Synchronously fires all "click" listeners */
@@ -416,15 +416,15 @@ describe("taskpane entrypoint", () => {
 
     officeHarness.triggerReady({ host: "Excel" });
     expect(doc.getElementById("sideload-msg")!.style.display).toBe("block");
-    expect(doc.getElementById("btn-analyze")!.onclick).toBeNull();
+    expect(doc.getElementById("btn-analyze")?.onclick).toBeNull();
 
     officeHarness.triggerReady({ host: "Word" });
     expect(doc.getElementById("sideload-msg")!.style.display).toBe("none");
     expect(doc.getElementById("app-body")!.style.display).toBe("flex");
-    expect(doc.getElementById("btn-analyze")!.onclick).toEqual(
+    expect(doc.getElementById("btn-analyze")?.onclick).toEqual(
       expect.any(Function),
     );
-    expect(doc.getElementById("btn-cleanup")!.onclick).toEqual(
+    expect(doc.getElementById("btn-cleanup")?.onclick).toEqual(
       expect.any(Function),
     );
   });
@@ -449,7 +449,7 @@ describe("taskpane entrypoint", () => {
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
 
-    await doc.getElementById("btn-analyze")!.onclick?.({} as MouseEvent);
+    await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(taskpaneMocks.run.mock.calls[0][0]).toMatchObject({
@@ -463,25 +463,25 @@ describe("taskpane entrypoint", () => {
       "block",
     );
     expect(doc.getElementById("progress-bar")!.style.display).toBe("");
-    expect(doc.getElementById("progress-bar")!.style.width).toBe("25%");
-    expect(doc.getElementById("progress-text")!.textContent).toBe(
+    expect(doc.getElementById("progress-bar")?.style.width).toBe("25%");
+    expect(doc.getElementById("progress-text")?.textContent).toBe(
       "Analizando fragmentos...",
     );
     expect(doc.getElementById("results-panel")!.style.display).toBe("block");
-    expect(doc.getElementById("results-summary")!.textContent).toBe(
+    expect(doc.getElementById("results-summary")?.textContent).toBe(
       "Sobre selección — 1 de 1 sugerencias aplicadas como Track Changes.",
     );
-    expect(doc.getElementById("results-list")!.children).toHaveLength(1);
+    expect(doc.getElementById("results-list")?.children).toHaveLength(1);
     expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
-    expect(doc.getElementById("status-bar")!.textContent).toBe(
+    expect(doc.getElementById("status-bar")?.textContent).toBe(
       "1 sugerencia(s) insertada(s) como Track Changes (selección).",
     );
-    expect(doc.getElementById("status-bar")!.className).toBe(
+    expect(doc.getElementById("status-bar")?.className).toBe(
       "stylistic-status success",
     );
-    expect(doc.getElementById("btn-analyze")!.disabled).toBe(false);
-    expect(doc.getElementById("profile-select")!.disabled).toBe(false);
-    expect(doc.getElementById("btn-analyze-label")!.textContent).toBe(
+    expect(doc.getElementById("btn-analyze")?.disabled).toBe(false);
+    expect(doc.getElementById("profile-select")?.disabled).toBe(false);
+    expect(doc.getElementById("btn-analyze-label")?.textContent).toBe(
       "Analizar y sugerir",
     );
 
@@ -507,10 +507,10 @@ describe("taskpane entrypoint", () => {
     officeHarness.triggerReady({ host: "Word" });
 
     const firstRun = doc
-      .getElementById("btn-analyze")!
-      .onclick?.({} as MouseEvent);
+      .getElementById("btn-analyze")
+      ?.onclick?.({} as MouseEvent);
     await Promise.resolve();
-    await doc.getElementById("btn-analyze")!.onclick?.({} as MouseEvent);
+    await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(warnSpy).toHaveBeenCalledWith(
@@ -536,15 +536,15 @@ describe("taskpane entrypoint", () => {
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
 
-    await doc.getElementById("btn-cleanup")!.onclick?.({} as MouseEvent);
+    await doc.getElementById("btn-cleanup")?.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
     expect(doc.getElementById("cleanup-section")!.style.display).toBe("none");
-    expect(doc.getElementById("status-bar")!.textContent).toBe(
+    expect(doc.getElementById("status-bar")?.textContent).toBe(
       "2 comentario(s) eliminado(s), 0 conservado(s).",
     );
-    expect(doc.getElementById("btn-cleanup")!.disabled).toBe(false);
-    expect(doc.getElementById("btn-cleanup-label")!.textContent).toBe(
+    expect(doc.getElementById("btn-cleanup")?.disabled).toBe(false);
+    expect(doc.getElementById("btn-cleanup-label")?.textContent).toBe(
       "Limpiar comentarios resueltos",
     );
   });
@@ -575,9 +575,9 @@ async function renderViaEmitter(
 
   await importTaskpane();
   officeHarness.triggerReady({ host: "Word" });
-  await doc.getElementById("btn-analyze")!.onclick?.({} as MouseEvent);
+  await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
 
-  return doc.getElementById("results-list")!.children;
+  return doc.getElementById("results-list")?.children;
 }
 
 describe("Accept/Reject buttons", () => {
@@ -640,17 +640,17 @@ describe("Accept/Reject buttons", () => {
     // Accept button should read "Entendido", not "✓"
     const acceptBtn = li.querySelector('[data-action="accept"]');
     expect(acceptBtn).not.toBeNull();
-    expect(acceptBtn!.textContent).toBe("Entendido");
+    expect(acceptBtn?.textContent).toBe("Entendido");
 
     // Reject button should read "Ignorar", not "✗"
     const rejectBtn = li.querySelector('[data-action="reject"]');
     expect(rejectBtn).not.toBeNull();
-    expect(rejectBtn!.textContent).toBe("Ignorar");
+    expect(rejectBtn?.textContent).toBe("Ignorar");
 
     // Comment-only type badge must be visible
     const typeBadge = li.querySelector(".result-type-badge--comment");
     expect(typeBadge).not.toBeNull();
-    expect(typeBadge!.textContent).toBe("comentario");
+    expect(typeBadge?.textContent).toBe("comentario");
   });
 
   it("4.0b — track-change suggestion: diff block present, '✓'/'✗' button labels", async () => {
@@ -669,11 +669,11 @@ describe("Accept/Reject buttons", () => {
 
     const acceptBtn = li.querySelector('[data-action="accept"]');
     expect(acceptBtn).not.toBeNull();
-    expect(acceptBtn!.textContent).toBe("✓");
+    expect(acceptBtn?.textContent).toBe("✓");
 
     const rejectBtn = li.querySelector('[data-action="reject"]');
     expect(rejectBtn).not.toBeNull();
-    expect(rejectBtn!.textContent).toBe("✗");
+    expect(rejectBtn?.textContent).toBe("✗");
   });
 
   it("4.1 — renders accept and reject buttons for non-failed suggestions", async () => {
@@ -690,13 +690,13 @@ describe("Accept/Reject buttons", () => {
     const rejectBtn1 = li1.querySelector('[data-action="reject"]');
     expect(acceptBtn1).not.toBeNull();
     expect(rejectBtn1).not.toBeNull();
-    expect(acceptBtn1!.getAttribute("data-suggestion-id")).toBe("s-1");
-    expect(rejectBtn1!.getAttribute("data-suggestion-id")).toBe("s-1");
+    expect(acceptBtn1?.getAttribute("data-suggestion-id")).toBe("s-1");
+    expect(rejectBtn1?.getAttribute("data-suggestion-id")).toBe("s-1");
 
     const li2 = liItems[1];
     const acceptBtn2 = li2.querySelector('[data-action="accept"]');
     expect(acceptBtn2).not.toBeNull();
-    expect(acceptBtn2!.getAttribute("data-suggestion-id")).toBe("s-2");
+    expect(acceptBtn2?.getAttribute("data-suggestion-id")).toBe("s-2");
   });
 
   it("4.2 — failed suggestions do NOT have accept/reject buttons", async () => {
@@ -781,7 +781,7 @@ describe("Accept/Reject buttons", () => {
     expect(li.classList.contains("result-already-resolved")).toBe(true);
     const noteSpan = li.querySelector(".result-already-resolved-note");
     expect(noteSpan).not.toBeNull();
-    expect(noteSpan!.textContent).toBe("(ya resuelto)");
+    expect(noteSpan?.textContent).toBe("(ya resuelto)");
     // The user's button click IS the feedback signal — already-resolved must send feedback
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({ rating: "positive" }),
@@ -810,7 +810,7 @@ describe("Accept/Reject buttons", () => {
     expect(li.classList.contains("result-already-resolved")).toBe(true);
     const noteSpan = li.querySelector(".result-already-resolved-note");
     expect(noteSpan).not.toBeNull();
-    expect(noteSpan!.textContent).toBe("(ya resuelto)");
+    expect(noteSpan?.textContent).toBe("(ya resuelto)");
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({ rating: "negative" }),
     );
@@ -837,7 +837,7 @@ describe("Accept/Reject buttons", () => {
     expect(li.classList.contains("result-cc-not-found")).toBe(true);
     const noteSpan = li.querySelector(".result-cc-not-found-note");
     expect(noteSpan).not.toBeNull();
-    expect(noteSpan!.textContent).toBe("(aplicación falló)");
+    expect(noteSpan?.textContent).toBe("(aplicación falló)");
     // Terminal UI — actions div removed, buttons not re-enabled
     expect(li.querySelector(".result-actions")).toBeNull();
     expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
@@ -939,10 +939,10 @@ describe("Accept/Reject buttons", () => {
     const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
     expect(rejectBtn.disabled).toBe(false);
     // Status bar should show error message
-    expect(doc.getElementById("status-bar")!.textContent).toBe(
+    expect(doc.getElementById("status-bar")?.textContent).toBe(
       "El documento está protegido",
     );
-    expect(doc.getElementById("status-bar")!.className).toBe(
+    expect(doc.getElementById("status-bar")?.className).toBe(
       "stylistic-status error",
     );
   });
@@ -1028,7 +1028,7 @@ describe("Feedback button + accordion", () => {
 
     const feedbackBtn = li.querySelector('[data-action="feedback"]');
     expect(feedbackBtn).not.toBeNull();
-    expect(feedbackBtn!.getAttribute("aria-label")).toBe("Dejar feedback");
+    expect(feedbackBtn?.getAttribute("aria-label")).toBe("Dejar feedback");
   });
 
   it("F.2 — renderResults() injects .feedback-accordion with .feedback-textarea per non-failed suggestion", async () => {

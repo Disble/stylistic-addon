@@ -6,7 +6,8 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": true
+    "ignoreUnknown": true,
+    "includes": ["**", "!**/tests", "!**/*.test.ts", "!**/*.spec.ts"]
   },
   "formatter": {
     "enabled": true,
@@ -25,6 +26,14 @@
             "filenameCases": ["PascalCase", "camelCase"],
             "requireAscii": true
           }
+        },
+        "noNonNullAssertion": {
+          "level": "off"
+        }
+      },
+      "suspicious": {
+        "noExplicitAny": {
+          "level": "warn"
         }
       }
     }

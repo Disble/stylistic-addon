@@ -311,7 +311,7 @@ describe("ReadTextHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.text).toBe(largeText);
-      expect(ctx.text!.length).toBe(500_000);
+      expect(ctx.text?.length).toBe(500_000);
       expect(next).toHaveBeenCalledOnce();
     });
   });

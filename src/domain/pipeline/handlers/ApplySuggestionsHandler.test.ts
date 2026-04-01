@@ -295,9 +295,9 @@ describe("ApplySuggestionsHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(ctx.result!.successCount).toBe(2);
-      expect(ctx.result!.failedSuggestions).toHaveLength(1);
-      expect(ctx.result!.failedSuggestions[0].id).toBe("failed-1");
+      expect(ctx.result?.successCount).toBe(2);
+      expect(ctx.result?.failedSuggestions).toHaveLength(1);
+      expect(ctx.result?.failedSuggestions[0].id).toBe("failed-1");
     });
 
     it("should still call next() and emit events even with failures", async () => {
@@ -339,8 +339,8 @@ describe("ApplySuggestionsHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(ctx.result!.successCount).toBe(0);
-      expect(ctx.result!.failedSuggestions).toHaveLength(2);
+      expect(ctx.result?.successCount).toBe(0);
+      expect(ctx.result?.failedSuggestions).toHaveLength(2);
       // Still calls next() — handler does not abort on failures
       expect(next).toHaveBeenCalledOnce();
     });

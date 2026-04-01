@@ -15,7 +15,7 @@ describe("DEFAULT_PROFILES", () => {
       (p) => p.id === "narrativa-literaria",
     );
     expect(fiction).toBeDefined();
-    expect(fiction!.label).toBe("Literatura de ficción");
+    expect(fiction?.label).toBe("Literatura de ficción");
   });
 
   it("has exactly 4 profiles", () => {
@@ -47,7 +47,7 @@ describe("DEFAULT_PROFILES", () => {
       (p) => p.id === "narrativa-literaria",
     );
     expect(fiction).toBeDefined();
-    expect(fiction!.label).toBe("Literatura de ficción");
+    expect(fiction?.label).toBe("Literatura de ficción");
   });
 
   it("has exactly 4 profiles", () => {

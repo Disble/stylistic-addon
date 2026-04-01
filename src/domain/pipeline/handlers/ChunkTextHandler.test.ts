@@ -64,7 +64,7 @@ describe("ChunkTextHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.chunks).toHaveLength(1);
-      expect(ctx.chunks![0].text).toBe("Hello world");
+      expect(ctx.chunks?.[0].text).toBe("Hello world");
     });
 
     it("sets correct metadata on the single chunk", async () => {
@@ -76,7 +76,7 @@ describe("ChunkTextHandler", () => {
 
       await handler.handle(ctx, next);
 
-      const chunk = ctx.chunks![0];
+      const chunk = ctx.chunks?.[0];
       expect(chunk.index).toBe(0);
       expect(chunk.total).toBe(1);
       expect(chunk.startOffset).toBe(0);
@@ -113,9 +113,9 @@ describe("ChunkTextHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(ctx.chunks!.length).toBeGreaterThanOrEqual(2);
-      expect(ctx.chunks![0].text).toBe(paragraph1);
-      expect(ctx.chunks![1].text).toBe(paragraph2);
+      expect(ctx.chunks?.length).toBeGreaterThanOrEqual(2);
+      expect(ctx.chunks?.[0].text).toBe(paragraph1);
+      expect(ctx.chunks?.[1].text).toBe(paragraph2);
     });
 
     it("sets correct total on all chunks", async () => {
@@ -129,7 +129,7 @@ describe("ChunkTextHandler", () => {
 
       await handler.handle(ctx, next);
 
-      const total = ctx.chunks!.length;
+      const total = ctx.chunks?.length;
       for (const chunk of ctx.chunks!) {
         expect(chunk.total).toBe(total);
       }
@@ -146,8 +146,8 @@ describe("ChunkTextHandler", () => {
 
       await handler.handle(ctx, next);
 
-      for (let i = 0; i < ctx.chunks!.length; i++) {
-        expect(ctx.chunks![i].index).toBe(i);
+      for (let i = 0; i < ctx.chunks?.length; i++) {
+        expect(ctx.chunks?.[i].index).toBe(i);
       }
     });
 
@@ -189,7 +189,7 @@ describe("ChunkTextHandler", () => {
         maxChunkSize: 150,
       });
       await handler.handle(ctxSmall, vi.fn<() => Promise<void>>());
-      expect(ctxSmall.chunks!.length).toBeGreaterThan(1);
+      expect(ctxSmall.chunks?.length).toBeGreaterThan(1);
     });
   });
 
@@ -208,7 +208,7 @@ describe("ChunkTextHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.chunks).toHaveLength(1);
-      expect(ctx.chunks![0].text).toBe(
+      expect(ctx.chunks?.[0].text).toBe(
         "One continuous paragraph without breaks.",
       );
     });
@@ -239,7 +239,7 @@ describe("ChunkTextHandler", () => {
 
       // Should produce exactly 1 chunk because there's no paragraph boundary
       expect(ctx.chunks).toHaveLength(1);
-      expect(ctx.chunks![0].text).toBe(bigParagraph);
+      expect(ctx.chunks?.[0].text).toBe(bigParagraph);
     });
   });
 

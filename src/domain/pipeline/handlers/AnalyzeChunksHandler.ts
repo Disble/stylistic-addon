@@ -58,7 +58,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
       console.log(
         submitResult.runId
           ? `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} enviado con runId "${submitResult.runId}"`
-          : `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} submit falló${submitResult.error ? " ⚠️ " + submitResult.error : ""}`,
+          : `🤖 [AnalyzeChunksHandler] Chunk ${chunk.index + 1} submit falló${submitResult.error ? ` ⚠️ ${submitResult.error}` : ""}`,
       );
 
       ctx.emitter.emitProgress(
@@ -97,7 +97,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
           runId,
         );
         console.log(
-          `🤖 [AnalyzeChunksHandler] Poll chunk ${chunk.index + 1} → ${pollResult.status}${pollResult.error ? " ⚠️ " + pollResult.error : ""}`,
+          `🤖 [AnalyzeChunksHandler] Poll chunk ${chunk.index + 1} → ${pollResult.status}${pollResult.error ? ` ⚠️ ${pollResult.error}` : ""}`,
         );
 
         if (this.isPendingStatus(pollResult.status)) {

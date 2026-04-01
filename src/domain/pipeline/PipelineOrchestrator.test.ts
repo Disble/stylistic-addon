@@ -643,7 +643,7 @@ describe("PipelineOrchestrator", () => {
       const calls: string[] = [];
 
       const conditionalHandler: PipelineHandler = {
-        handle: vi.fn(async (ctx, next) => {
+        handle: vi.fn(async (_ctx, next) => {
           calls.push("handler");
           await next();
         }),
