@@ -1,4 +1,4 @@
-/* global Word, console, DOMParser, XMLSerializer */
+/* global Word, console */
 
 /**
  * ApplySuggestionCommand — Command pattern for tracked-change insertion.
@@ -8,23 +8,19 @@
  *
  * Each command:
  * 1. Searches the document for the original text (case-sensitive).
- * 2. Extracts run formatting (`<w:rPr>`) from the matched range.
- * 3. Disables `changeTrackingMode` (to avoid double-tracking the OOXML insertion).
- * 4. Builds the OOXML package via `OoxmlPackageBuilder`.
- * 5. Inserts the package, replacing the matched range.
+ * 2. Sets changeTrackingMode to trackAll.
+ * 3. Calls range.insertText(suggestedText, replace) — Word records it as TC.
+ * 4. Inserts a comment on the inserted range with category + justification.
+ * 5. Wraps the inserted range in a ContentControl tagged `stylistic:{type}:{id}`.
  * 6. Restores `changeTrackingMode` in a `finally` block.
  *
  * Each suggestion runs in its own `Word.run` context (per-suggestion isolation)
- * to avoid stale ranges after OOXML insertions shift document positions.
- *
- * An `undo()` method can be added in a future iteration to support reverting
- * individual tracked changes.
+ * to avoid stale ranges after insertions shift document positions.
  *
  * @module ApplySuggestionCommand
  */
 
 import type { ChangeType, CommandResult, Suggestion } from "../../domain/types";
-import { OoxmlPackageBuilder } from "./ooxml/OoxmlPackageBuilder";
 
 type IndexedText = {
   text: string;
@@ -45,23 +41,6 @@ function classifyChange(suggestion: Suggestion): ChangeType {
   if (hasOriginal && !hasSuggested) return "delete";
   if (!hasOriginal && hasSuggested) return "insert";
   return "replace";
-}
-
-/**
- * Extracts the first `<w:rPr>` element from a flat OPC OOXML string.
- * Used to preserve the original text's formatting in the tracked change.
- */
-function extractRunProperties(ooxml: string): string | null {
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(ooxml, "application/xml");
-    const nsW = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const rPr = doc.getElementsByTagNameNS(nsW, "rPr")[0];
-    if (!rPr) return null;
-    return new XMLSerializer().serializeToString(rPr);
-  } catch {
-    return null;
-  }
 }
 
 function removeWhitespaceWithIndices(text: string): IndexedText {
@@ -118,7 +97,7 @@ export class ApplySuggestionCommand {
 
   /**
    * Executes the command: searches for `originalText` in the document and
-   * replaces it with an OOXML tracked change package.
+   * replaces it with a native Word tracked change.
    *
    * Returns `{ success: false }` for recoverable application failures such as
    * missing anchor text, missing search matches, or Office insertion errors.
@@ -257,49 +236,30 @@ export class ApplySuggestionCommand {
           range = results.items[0];
         }
 
-        const rangeOoxml = range.getOoxml();
-        await context.sync();
-        // eslint-disable-next-line office-addins/load-object-before-read
-        const runProps = extractRunProperties(rangeOoxml.value);
-
-        context.document.load("changeTrackingMode");
-        await context.sync();
         const previousMode = context.document.changeTrackingMode;
-        context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
+        context.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
         await context.sync();
 
         try {
-          const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-
-          const ooxml = new OoxmlPackageBuilder()
-            .withRunProperties(runProps)
-            .withChange(
-              this.suggestion.originalText,
-              this.suggestion.suggestedText ?? "",
-              changeType,
-              "Stylistic",
-              now,
-            )
-            .withComment(
-              this.suggestion.category,
-              this.suggestion.justification,
-              "Stylistic",
-              now,
-            )
-            .build();
-
           console.log(
-            `📄 [ApplySuggestionCommand] "${this.id}": insertando OOXML (tipo: ${changeType})`,
+            `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
           );
-          const insertedRange = range.insertOoxml(
-            ooxml,
+
+          const insertedRange = range.insertText(
+            this.suggestion.suggestedText ?? "",
             Word.InsertLocation.replace,
           );
+
+          insertedRange.insertComment(
+            `[${this.suggestion.category}]\n${this.suggestion.justification}`,
+          );
+
           const cc = insertedRange.insertContentControl();
           cc.tag = `stylistic:${this.suggestion.type}:${this.suggestion.id}`;
           cc.appearance = "Hidden";
           cc.cannotDelete = false;
           await context.sync();
+
           console.log(
             `✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`,
           );
@@ -321,6 +281,8 @@ export class ApplySuggestionCommand {
   /**
    * Executes the comment-only path: locates `originalText` in the document and
    * inserts a Word comment at that range with NO tracked change markup.
+   *
+   * changeTrackingMode is NOT read or modified in this path.
    *
    * The search + fallback logic mirrors the track-change path so both paths
    * share the same whitespace-insensitive anchor resolution behaviour.
@@ -436,30 +398,20 @@ export class ApplySuggestionCommand {
           range = results.items[0];
         }
 
-        const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
-
-        const ooxml = new OoxmlPackageBuilder()
-          .withComment(
-            this.suggestion.category,
-            this.suggestion.justification,
-            "Stylistic",
-            now,
-            this.suggestion.originalText,
-          )
-          .build();
-
         console.log(
-          `📄 [ApplySuggestionCommand] "${this.id}": insertando comment-only OOXML`,
+          `📄 [ApplySuggestionCommand] "${this.id}": insertando comment-only nativo`,
         );
-        const insertedRange = range.insertOoxml(
-          ooxml,
-          Word.InsertLocation.replace,
+
+        range.insertComment(
+          `[${this.suggestion.category}]\n${this.suggestion.justification}`,
         );
-        const cc = insertedRange.insertContentControl();
+
+        const cc = range.insertContentControl();
         cc.tag = `stylistic:comment-only:${this.suggestion.id}`;
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
+
         console.log(
           `✅ [ApplySuggestionCommand] "${this.id}": comment-only insertado exitosamente`,
         );

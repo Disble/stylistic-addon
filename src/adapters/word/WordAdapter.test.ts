@@ -366,112 +366,15 @@ describe("WordAdapter", () => {
   });
 
   describe("getAppliedOriginalTexts", () => {
-    it("returns an empty set when there are no Stylistic deleted tracked changes", async () => {
-      const tracked = {
-        items: [
-          { author: "Stylistic", type: "Inserted", getRange: vi.fn() },
-          { author: "Otro", type: "Deleted", getRange: vi.fn() },
-        ],
-        load: vi.fn(),
-      };
+    // SR-DG-02 — no stylistic CCs → empty Set
+    it("SR-DG-02: returns an empty set when there are no stylistic: CCs", async () => {
       const context = {
         document: {
-          body: {
-            getTrackedChanges: vi.fn(() => tracked),
-          },
-          contentControls: { items: [], load: vi.fn() },
-        },
-        sync: vi.fn().mockResolvedValue(undefined),
-      };
-
-      installWordWithContext(context);
-
-      const result = await adapter.getAppliedOriginalTexts();
-
-      expect(result).toEqual(new Set());
-      expect(tracked.load).toHaveBeenCalledWith({ select: "author,type" });
-      expect(tracked.items[0].getRange).not.toHaveBeenCalled();
-      expect(tracked.items[1].getRange).not.toHaveBeenCalled();
-      expect(context.sync).toHaveBeenCalledTimes(1);
-    });
-
-    it("collects and deduplicates texts from Stylistic deleted tracked changes only", async () => {
-      const rangeA = { load: vi.fn(), text: "primero" };
-      const rangeB = { load: vi.fn(), text: "segundo" };
-      const rangeDuplicate = { load: vi.fn(), text: "primero" };
-      const ignoredInsertedRange = { load: vi.fn(), text: "ignorado" };
-      const ignoredAuthorRange = { load: vi.fn(), text: "ignorado" };
-
-      const deletedA = {
-        author: "Stylistic",
-        type: "Deleted",
-        getRange: vi.fn(() => rangeA),
-      };
-      const deletedB = {
-        author: "Stylistic",
-        type: "Deleted",
-        getRange: vi.fn(() => rangeB),
-      };
-      const deletedDuplicate = {
-        author: "Stylistic",
-        type: "Deleted",
-        getRange: vi.fn(() => rangeDuplicate),
-      };
-      const inserted = {
-        author: "Stylistic",
-        type: "Inserted",
-        getRange: vi.fn(() => ignoredInsertedRange),
-      };
-      const otherAuthor = {
-        author: "Reviewer",
-        type: "Deleted",
-        getRange: vi.fn(() => ignoredAuthorRange),
-      };
-      const tracked = {
-        items: [deletedA, inserted, otherAuthor, deletedB, deletedDuplicate],
-        load: vi.fn(),
-      };
-      const context = {
-        document: {
-          body: {
-            getTrackedChanges: vi.fn(() => tracked),
-          },
-          contentControls: { items: [], load: vi.fn() },
-        },
-        sync: vi.fn().mockResolvedValue(undefined),
-      };
-
-      installWordWithContext(context);
-
-      const result = await adapter.getAppliedOriginalTexts();
-
-      expect(result).toEqual(new Set(["primero", "segundo"]));
-      expect(deletedA.getRange).toHaveBeenCalledOnce();
-      expect(deletedB.getRange).toHaveBeenCalledOnce();
-      expect(deletedDuplicate.getRange).toHaveBeenCalledOnce();
-      expect(inserted.getRange).not.toHaveBeenCalled();
-      expect(otherAuthor.getRange).not.toHaveBeenCalled();
-      expect(rangeA.load).toHaveBeenCalledWith("text");
-      expect(rangeB.load).toHaveBeenCalledWith("text");
-      expect(rangeDuplicate.load).toHaveBeenCalledWith("text");
-      expect(context.sync).toHaveBeenCalledTimes(2);
-    });
-
-    it("includes the range text of active comment-only CCs", async () => {
-      const ccRange = { load: vi.fn(), text: "texto en observación" };
-      const commentOnlyCC = {
-        tag: "stylistic:comment-only:chunk0-0",
-        getRange: vi.fn(() => ccRange),
-      };
-
-      const tracked = { items: [], load: vi.fn() };
-      const context = {
-        document: {
-          body: {
-            getTrackedChanges: vi.fn(() => tracked),
-          },
           contentControls: {
-            items: [commentOnlyCC],
+            items: [
+              { tag: "other-cc", getRange: vi.fn() },
+              { tag: "chunk0-0", getRange: vi.fn() },
+            ],
             load: vi.fn(),
           },
         },
@@ -482,10 +385,80 @@ describe("WordAdapter", () => {
 
       const result = await adapter.getAppliedOriginalTexts();
 
-      expect(result).toEqual(new Set(["texto en observación"]));
+      expect(result).toEqual(new Set());
+      // Non-stylistic CCs must NOT have getRange called
+      expect(context.document.contentControls.items[0].getRange).not.toHaveBeenCalled();
+      expect(context.document.contentControls.items[1].getRange).not.toHaveBeenCalled();
+      expect(context.sync).toHaveBeenCalledTimes(1);
+    });
+
+    // SR-DG-01 — both stylistic:track-change: and stylistic:comment-only: CCs
+    it("SR-DG-01: collects texts from both track-change and comment-only stylistic CCs", async () => {
+      const rangeTC = { load: vi.fn(), text: "originalText1" };
+      const rangeCO = { load: vi.fn(), text: "originalText2" };
+      const rangeOther = { load: vi.fn(), text: "should not appear" };
+
+      const trackChangeCC = {
+        tag: "stylistic:track-change:s1",
+        getRange: vi.fn(() => rangeTC),
+      };
+      const commentOnlyCC = {
+        tag: "stylistic:comment-only:s2",
+        getRange: vi.fn(() => rangeCO),
+      };
+      const nonStylisticCC = {
+        tag: "other-cc",
+        getRange: vi.fn(() => rangeOther),
+      };
+
+      const context = {
+        document: {
+          contentControls: {
+            items: [trackChangeCC, commentOnlyCC, nonStylisticCC],
+            load: vi.fn(),
+          },
+        },
+        sync: vi.fn().mockResolvedValue(undefined),
+      };
+
+      installWordWithContext(context);
+
+      const result = await adapter.getAppliedOriginalTexts();
+
+      expect(result).toEqual(new Set(["originalText1", "originalText2"]));
+      expect(trackChangeCC.getRange).toHaveBeenCalledOnce();
       expect(commentOnlyCC.getRange).toHaveBeenCalledOnce();
-      expect(ccRange.load).toHaveBeenCalledWith("text");
+      expect(nonStylisticCC.getRange).not.toHaveBeenCalled();
+      expect(rangeTC.load).toHaveBeenCalledWith("text");
+      expect(rangeCO.load).toHaveBeenCalledWith("text");
       expect(context.sync).toHaveBeenCalledTimes(2);
+    });
+
+    it("deduplicates texts when multiple stylistic CCs span the same text", async () => {
+      const range1 = { load: vi.fn(), text: "texto duplicado" };
+      const range2 = { load: vi.fn(), text: "texto duplicado" };
+      const range3 = { load: vi.fn(), text: "texto único" };
+
+      const context = {
+        document: {
+          contentControls: {
+            items: [
+              { tag: "stylistic:track-change:s1", getRange: vi.fn(() => range1) },
+              { tag: "stylistic:track-change:s2", getRange: vi.fn(() => range2) },
+              { tag: "stylistic:comment-only:s3", getRange: vi.fn(() => range3) },
+            ],
+            load: vi.fn(),
+          },
+        },
+        sync: vi.fn().mockResolvedValue(undefined),
+      };
+
+      installWordWithContext(context);
+
+      const result = await adapter.getAppliedOriginalTexts();
+
+      expect(result).toEqual(new Set(["texto duplicado", "texto único"]));
+      expect(result.size).toBe(2);
     });
 
     it("propagates Word.run errors", async () => {

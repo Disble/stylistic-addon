@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Suggestion } from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
-import { OoxmlPackageBuilder } from "./ooxml/OoxmlPackageBuilder";
 
 type ParentCC = {
   tag: string;
@@ -24,9 +23,14 @@ type ApplyTestContext = {
     sync: ReturnType<typeof vi.fn>;
   };
   range: {
-    getOoxml: ReturnType<typeof vi.fn>;
-    insertOoxml: ReturnType<typeof vi.fn>;
+    insertText: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    insertComment: ReturnType<typeof vi.fn>;
     parentContentControlOrNullObject: ParentCC;
+  };
+  insertedRange: {
+    insertContentControl: ReturnType<typeof vi.fn>;
+    insertComment: ReturnType<typeof vi.fn>;
   };
   cc: {
     tag: string;
@@ -36,8 +40,10 @@ type ApplyTestContext = {
 };
 
 type SearchRange = {
-  getOoxml: ReturnType<typeof vi.fn>;
-  insertOoxml: ReturnType<typeof vi.fn>;
+  insertText: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+  insertComment: ReturnType<typeof vi.fn>;
+  insertContentControl: ReturnType<typeof vi.fn>;
   parentContentControlOrNullObject: ParentCC;
 };
 
@@ -59,48 +65,11 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function installXmlMocks(
-  options: {
-    hasRunProperties?: boolean;
-    serializedRunProperties?: string;
-    throwOnParse?: boolean;
-  } = {},
-): void {
-  const {
-    hasRunProperties = true,
-    serializedRunProperties = "<w:rPr><w:b/></w:rPr>",
-    throwOnParse = false,
-  } = options;
-
-  vi.stubGlobal(
-    "DOMParser",
-    vi.fn().mockImplementation(() => ({
-      parseFromString: vi.fn(() => {
-        if (throwOnParse) {
-          throw new Error("parse failed");
-        }
-
-        return {
-          getElementsByTagNameNS: vi.fn(() => (hasRunProperties ? [{}] : [])),
-        };
-      }),
-    })),
-  );
-
-  vi.stubGlobal(
-    "XMLSerializer",
-    vi.fn().mockImplementation(() => ({
-      serializeToString: vi.fn(() => serializedRunProperties),
-    })),
-  );
-}
-
 function installWordContext(
   options: {
     resultsItems?: SearchRange[];
     searchResultsSequence?: SearchRange[][];
     documentText?: string;
-    rangeOoxml?: string;
     initialTrackingMode?: string;
     insertError?: Error;
     onSync?: (count: number) => void | Promise<void>;
@@ -111,8 +80,7 @@ function installWordContext(
     resultsItems,
     searchResultsSequence,
     documentText = "",
-    rangeOoxml = "<pkg:package />",
-    initialTrackingMode = "trackAll",
+    initialTrackingMode = "off",
     insertError,
     onSync,
     parentCC: parentCCOverride,
@@ -129,15 +97,19 @@ function installWordContext(
   const cc = { tag: "", appearance: "", cannotDelete: true };
   const insertedRange = {
     insertContentControl: vi.fn(() => cc),
+    insertComment: vi.fn(),
   };
+
   const range: SearchRange = {
-    getOoxml: vi.fn(() => ({ value: rangeOoxml })),
-    insertOoxml: vi.fn(() => {
+    insertText: vi.fn(() => {
       if (insertError) {
         throw insertError;
       }
       return insertedRange;
     }),
+    delete: vi.fn(),
+    insertComment: vi.fn(),
+    insertContentControl: vi.fn(() => cc),
     parentContentControlOrNullObject: parentCC,
   };
 
@@ -148,7 +120,8 @@ function installWordContext(
     document: {
       body: {
         search: vi.fn(() => {
-          const nextItems = searchResultsSequence?.[searchCalls.length] ??
+          const nextItems =
+            searchResultsSequence?.[searchCalls.length] ??
             resultsItems ?? [range];
           const results = {
             items: nextItems,
@@ -172,6 +145,8 @@ function installWordContext(
   vi.stubGlobal("Word", {
     ChangeTrackingMode: {
       off: "off",
+      trackAll: "trackAll",
+      trackMine: "trackMine",
     },
     InsertLocation: {
       replace: "Replace",
@@ -181,14 +156,13 @@ function installWordContext(
     ),
   });
 
-  return { context, range, cc };
+  return { context, range, insertedRange, cc };
 }
 
 describe("ApplySuggestionCommand", () => {
   beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    installXmlMocks();
   });
 
   afterEach(() => {
@@ -197,9 +171,225 @@ describe("ApplySuggestionCommand", () => {
     vi.unstubAllGlobals();
   });
 
+  // ─── SC-TC-01: Replace path ───────────────────────────────────────────────
+
+  it("SC-TC-01: sets trackAll, calls insertText(replace), restores mode, wraps in CC", async () => {
+    const { context, insertedRange, cc } = installWordContext({
+      initialTrackingMode: "off",
+    });
+
+    const command = new ApplySuggestionCommand(makeSuggestion());
+    const result = await command.execute();
+
+    // Result
+    expect(result).toEqual({ success: true, commandId: "s1" });
+
+    // changeTrackingMode was set to trackAll BEFORE insertion
+    // (verified by the sequence: it must have been trackAll at insertion time,
+    // and restored to "off" after)
+    expect(context.document.changeTrackingMode).toBe("off");
+
+    // insertText called with (suggestedText, replace)
+    const { range } = installWordContext(); // just for type ref — we use context above
+    // We check via the search result range — but we need the actual range used.
+    // The context.document.body.search returns range items, so get them via mock:
+    const searchResult = context.document.body.search.mock.results[0]
+      ?.value as SearchResults;
+    const usedRange = searchResult.items[0];
+    expect(usedRange.insertText).toHaveBeenCalledWith(
+      "texto sugerido",
+      "Replace",
+    );
+
+    // CC was tagged correctly
+    expect(cc.tag).toBe("stylistic:track-change:s1");
+    expect(cc.appearance).toBe("Hidden");
+    expect(cc.cannotDelete).toBe(false);
+
+    // insertedRange.insertContentControl was called
+    expect(insertedRange.insertContentControl).toHaveBeenCalled();
+  });
+
+  it("SC-TC-01b: changeTrackingMode set to trackAll before insertText and restored to prior value in finally", async () => {
+    const modeSequence: string[] = [];
+
+    const { context } = installWordContext({
+      initialTrackingMode: "off",
+      onSync: async () => {
+        modeSequence.push(context.document.changeTrackingMode);
+      },
+    });
+
+    const command = new ApplySuggestionCommand(makeSuggestion());
+    await command.execute();
+
+    // At some sync point, mode was "trackAll"
+    expect(modeSequence).toContain("trackAll");
+    // Final value is restored to "off"
+    expect(context.document.changeTrackingMode).toBe("off");
+  });
+
+  // ─── SC-TC-02: Delete path ────────────────────────────────────────────────
+
+  it("SC-TC-02: delete path — insertText('', replace) called when suggestedText is empty", async () => {
+    const { context } = installWordContext({ initialTrackingMode: "off" });
+
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ suggestedText: "" }),
+    );
+    const result = await command.execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+
+    const searchResult = context.document.body.search.mock.results[0]
+      ?.value as SearchResults;
+    const usedRange = searchResult.items[0];
+    expect(usedRange.insertText).toHaveBeenCalledWith("", "Replace");
+    // changeTrackingMode restored
+    expect(context.document.changeTrackingMode).toBe("off");
+  });
+
+  // ─── SC-TC-03: Insert without anchor (unsupported) ────────────────────────
+
+  it("SC-TC-03: returns { success: false } for insert-only suggestions without touching document", async () => {
+    const { context } = installWordContext();
+
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ originalText: "", suggestedText: "texto sugerido" }),
+    );
+    const result = await command.execute();
+
+    expect(result).toEqual({
+      success: false,
+      commandId: "s1",
+      error: "Insert-only suggestions require anchor text",
+    });
+    expect(context.document.body.search).not.toHaveBeenCalled();
+    expect(context.document.load).not.toHaveBeenCalled();
+  });
+
+  // ─── SC-TC-04: Original text not found ───────────────────────────────────
+
+  it("SC-TC-04: returns { success: false } when original text not found — changeTrackingMode NOT modified", async () => {
+    const { context } = installWordContext({
+      resultsItems: [],
+      initialTrackingMode: "off",
+    });
+
+    const command = new ApplySuggestionCommand(makeSuggestion());
+    const result = await command.execute();
+
+    expect(result).toEqual({
+      success: false,
+      commandId: "s1",
+      error: "Texto original no encontrado",
+    });
+    // changeTrackingMode must not have been modified
+    expect(context.document.changeTrackingMode).toBe("off");
+    expect(context.document.load).not.toHaveBeenCalled();
+  });
+
+  // ─── SC-TC-05: changeTrackingMode always restored even on error ───────────
+
+  it("SC-TC-05: restores changeTrackingMode to 'off' even when insertText throws", async () => {
+    const insertionError = new Error("insert failed");
+    const { context } = installWordContext({
+      insertError: insertionError,
+      initialTrackingMode: "off",
+    });
+
+    const command = new ApplySuggestionCommand(makeSuggestion());
+    const result = await command.execute();
+
+    expect(result).toEqual({
+      success: false,
+      commandId: "s1",
+      error: "insert failed",
+    });
+    expect(context.document.changeTrackingMode).toBe("off");
+  });
+
+  // ─── SC-CO-01: Comment-only happy path ───────────────────────────────────
+
+  it("SC-CO-01: comment-only — calls range.insertComment, NO changeTrackingMode change, CC tagged", async () => {
+    const { context, cc } = installWordContext({
+      initialTrackingMode: "trackAll",
+    });
+
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "chunk1-5",
+        type: "comment-only",
+        suggestedText: undefined,
+        originalText: "texto original",
+        category: "Estilo",
+        justification: "Mejora la claridad",
+      }),
+    );
+    const result = await command.execute();
+
+    expect(result).toEqual({ success: true, commandId: "chunk1-5" });
+
+    // Comment inserted on the range
+    const searchResult = context.document.body.search.mock.results[0]
+      ?.value as SearchResults;
+    const usedRange = searchResult.items[0];
+    expect(usedRange.insertComment).toHaveBeenCalledWith(
+      "[Estilo]\nMejora la claridad",
+    );
+
+    // CC tagged correctly
+    expect(cc.tag).toBe("stylistic:comment-only:chunk1-5");
+    expect(cc.appearance).toBe("Hidden");
+
+    // changeTrackingMode NOT touched
+    expect(context.document.changeTrackingMode).toBe("trackAll");
+    expect(context.document.load).not.toHaveBeenCalled();
+  });
+
+  // ─── SC-CO-02: Comment-only text not found ───────────────────────────────
+
+  it("SC-CO-02: comment-only — returns { success: false } when text not found", async () => {
+    const { context } = installWordContext({ resultsItems: [] });
+
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ type: "comment-only", suggestedText: undefined }),
+    );
+    const result = await command.execute();
+
+    expect(result).toEqual({
+      success: false,
+      commandId: "s1",
+      error: "Texto original no encontrado",
+    });
+    expect(context.document.body.search).toHaveBeenCalledWith("texto original", {
+      matchCase: true,
+      matchWholeWord: false,
+    });
+  });
+
+  // ─── SC-CO-03: changeTrackingMode never touched in comment-only ───────────
+
+  it("SC-CO-03: changeTrackingMode never read or set in comment-only path", async () => {
+    const { context } = installWordContext({
+      initialTrackingMode: "trackAll",
+    });
+
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ type: "comment-only", suggestedText: undefined }),
+    );
+    await command.execute();
+
+    // document.load must NOT have been called (loading changeTrackingMode)
+    expect(context.document.load).not.toHaveBeenCalled();
+    // Value unchanged
+    expect(context.document.changeTrackingMode).toBe("trackAll");
+  });
+
+  // ─── Existing search/fallback behaviors ──────────────────────────────────
+
   it("returns a failed result when the original text is not found", async () => {
     const { context } = installWordContext({ resultsItems: [] });
-    const builderSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "build");
 
     const command = new ApplySuggestionCommand(makeSuggestion());
     const result = await command.execute();
@@ -221,7 +411,6 @@ describe("ApplySuggestionCommand", () => {
     );
     expect(results.load).toHaveBeenCalledWith("items");
     expect(context.document.load).not.toHaveBeenCalled();
-    expect(builderSpy).not.toHaveBeenCalled();
   });
 
   it("falls back to the exact document slice when backend whitespace differs from Word text", async () => {
@@ -234,8 +423,10 @@ describe("ApplySuggestionCommand", () => {
       documentText,
     });
     const fallbackRange: SearchRange = {
-      getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-      insertOoxml: range.insertOoxml,
+      insertText: range.insertText,
+      delete: vi.fn(),
+      insertComment: vi.fn(),
+      insertContentControl: vi.fn(() => ({ tag: "", appearance: "", cannotDelete: true })),
       parentContentControlOrNullObject: {
         tag: "",
         isNullObject: true,
@@ -285,8 +476,10 @@ describe("ApplySuggestionCommand", () => {
 
     const { context, range } = installWordContext({ documentText });
     const fallbackRange: SearchRange = {
-      getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-      insertOoxml: range.insertOoxml,
+      insertText: range.insertText,
+      delete: vi.fn(),
+      insertComment: vi.fn(),
+      insertContentControl: vi.fn(() => ({ tag: "", appearance: "", cannotDelete: true })),
       parentContentControlOrNullObject: {
         tag: "",
         isNullObject: true,
@@ -320,103 +513,53 @@ describe("ApplySuggestionCommand", () => {
     );
   });
 
-  it("builds OOXML for replace suggestions, inserts it, and restores tracking mode", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-04-05T06:07:08.999Z"));
-
-    const { context, range } = installWordContext({
-      rangeOoxml:
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:rPr><w:i/></w:rPr></w:document>',
-    });
-    const withRunPropertiesSpy = vi.spyOn(
-      OoxmlPackageBuilder.prototype,
-      "withRunProperties",
-    );
-    const withChangeSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withChange");
-    const withCommentSpy = vi.spyOn(
-      OoxmlPackageBuilder.prototype,
-      "withComment",
-    );
-
-    const command = new ApplySuggestionCommand(makeSuggestion());
-    const result = await command.execute();
-
-    expect(result).toEqual({ success: true, commandId: "s1" });
-    expect(context.document.load).toHaveBeenCalledWith("changeTrackingMode");
-    // QUIRK: in the node test runtime, run property extraction falls back to null
-    // even when OOXML contains <w:rPr>, because the command swallows parser issues.
-    expect(withRunPropertiesSpy).toHaveBeenCalledWith(null);
-    expect(withChangeSpy).toHaveBeenCalledWith(
-      "texto original",
-      "texto sugerido",
-      "replace",
-      "Stylistic",
-      "2025-04-05T06:07:08Z",
-    );
-    expect(withCommentSpy).toHaveBeenCalledWith(
-      "Estilo",
-      "Mejora la claridad",
-      "Stylistic",
-      "2025-04-05T06:07:08Z",
-    );
-    expect(range.insertOoxml).toHaveBeenCalledWith(
-      expect.stringContaining(
-        '<w:delText xml:space="preserve">texto original</w:delText>',
-      ),
-      "Replace",
-    );
-    expect(context.document.changeTrackingMode).toBe("trackAll");
-    expect(context.sync).toHaveBeenCalledTimes(7);
-  });
-
-  it.each([
-    {
-      originalText: "texto original",
-      suggestedText: "texto sugerido",
-      expectedType: "replace",
-      expectedSearchText: "texto original",
-    },
-    {
-      originalText: "texto original",
-      suggestedText: "",
-      expectedType: "delete",
-      expectedSearchText: "texto original",
-    },
-  ])("classifies $expectedType suggestions through the public execute() path", async ({
-    originalText,
-    suggestedText,
-    expectedType,
-    expectedSearchText,
-  }) => {
+  it("classifies replace suggestions and calls insertText with suggestedText", async () => {
     const { context } = installWordContext();
-    const withChangeSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withChange");
 
     const command = new ApplySuggestionCommand(
-      makeSuggestion({ originalText, suggestedText }),
+      makeSuggestion({
+        originalText: "texto original",
+        suggestedText: "texto sugerido",
+      }),
     );
-
     await command.execute();
 
     expect(context.document.body.search).toHaveBeenCalledWith(
-      expectedSearchText,
+      "texto original",
       {
         matchCase: true,
         matchWholeWord: false,
       },
     );
-    expect(withChangeSpy).toHaveBeenCalledWith(
-      originalText,
-      suggestedText,
-      expectedType,
-      "Stylistic",
-      expect.any(String),
+    const searchResult = context.document.body.search.mock.results[0]
+      ?.value as SearchResults;
+    const usedRange = searchResult.items[0];
+    expect(usedRange.insertText).toHaveBeenCalledWith("texto sugerido", "Replace");
+  });
+
+  it("classifies delete suggestions and calls insertText with empty string", async () => {
+    const { context } = installWordContext();
+
+    const command = new ApplySuggestionCommand(
+      makeSuggestion({ originalText: "texto original", suggestedText: "" }),
     );
+    await command.execute();
+
+    expect(context.document.body.search).toHaveBeenCalledWith(
+      "texto original",
+      {
+        matchCase: true,
+        matchWholeWord: false,
+      },
+    );
+    const searchResult = context.document.body.search.mock.results[0]
+      ?.value as SearchResults;
+    const usedRange = searchResult.items[0];
+    expect(usedRange.insertText).toHaveBeenCalledWith("", "Replace");
   });
 
   it("returns a failed result for insert-only suggestions without searching for empty text", async () => {
-    const { context, range } = installWordContext();
-    const withChangeSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "withChange");
-    const buildSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "build");
+    const { context } = installWordContext();
 
     const command = new ApplySuggestionCommand(
       makeSuggestion({ originalText: "", suggestedText: "texto sugerido" }),
@@ -431,39 +574,6 @@ describe("ApplySuggestionCommand", () => {
     });
     expect(context.document.body.search).not.toHaveBeenCalled();
     expect(context.document.load).not.toHaveBeenCalled();
-    expect(range.getOoxml).not.toHaveBeenCalled();
-    expect(range.insertOoxml).not.toHaveBeenCalled();
-    expect(withChangeSpy).not.toHaveBeenCalled();
-    expect(buildSpy).not.toHaveBeenCalled();
-  });
-
-  it("falls back to null run properties when OOXML parsing fails", async () => {
-    installXmlMocks({ throwOnParse: true });
-    installWordContext();
-    const withRunPropertiesSpy = vi.spyOn(
-      OoxmlPackageBuilder.prototype,
-      "withRunProperties",
-    );
-
-    const command = new ApplySuggestionCommand(makeSuggestion());
-    const result = await command.execute();
-
-    expect(result).toEqual({ success: true, commandId: "s1" });
-    expect(withRunPropertiesSpy).toHaveBeenCalledWith(null);
-  });
-
-  it("returns a failed result when insertion throws and still restores tracking mode", async () => {
-    const insertionError = new Error("insert failed");
-    const { context } = installWordContext({ insertError: insertionError });
-
-    const command = new ApplySuggestionCommand(makeSuggestion());
-
-    await expect(command.execute()).resolves.toEqual({
-      success: false,
-      commandId: "s1",
-      error: "insert failed",
-    });
-    expect(context.document.changeTrackingMode).toBe("trackAll");
   });
 
   it("assigns a namespaced CC tag with the suggestion type for track-change suggestions", async () => {
@@ -479,15 +589,16 @@ describe("ApplySuggestionCommand", () => {
 
   describe("already-covered detection (CC nesting prevention)", () => {
     function makeCleanRange(): SearchRange {
+      const cleanCC = { tag: "", appearance: "", cannotDelete: true };
+      const cleanInsertedRange = {
+        insertContentControl: vi.fn(() => cleanCC),
+        insertComment: vi.fn(),
+      };
       return {
-        getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-        insertOoxml: vi.fn(() => ({
-          insertContentControl: vi.fn(() => ({
-            tag: "",
-            appearance: "",
-            cannotDelete: true,
-          })),
-        })),
+        insertText: vi.fn(() => cleanInsertedRange),
+        delete: vi.fn(),
+        insertComment: vi.fn(),
+        insertContentControl: vi.fn(() => cleanCC),
         parentContentControlOrNullObject: {
           tag: "",
           isNullObject: true,
@@ -497,7 +608,7 @@ describe("ApplySuggestionCommand", () => {
       };
     }
 
-    it("deletes the existing Stylistic CC, re-searches, and inserts OOXML for track-change", async () => {
+    it("deletes the existing Stylistic CC, re-searches, and inserts for track-change", async () => {
       const coveredCC: ParentCC = {
         tag: "stylistic:track-change:chunk0-0",
         isNullObject: false,
@@ -505,8 +616,10 @@ describe("ApplySuggestionCommand", () => {
         delete: vi.fn(),
       };
       const coveredRange: SearchRange = {
-        getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-        insertOoxml: vi.fn(),
+        insertText: vi.fn(),
+        delete: vi.fn(),
+        insertComment: vi.fn(),
+        insertContentControl: vi.fn(),
         parentContentControlOrNullObject: coveredCC,
       };
       const freshRange = makeCleanRange();
@@ -520,11 +633,11 @@ describe("ApplySuggestionCommand", () => {
       expect(result).toEqual({ success: true, commandId: "s1" });
       expect(coveredCC.delete).toHaveBeenCalledWith(true);
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
-      expect(coveredRange.insertOoxml).not.toHaveBeenCalled();
-      expect(freshRange.insertOoxml).toHaveBeenCalled();
+      expect(coveredRange.insertText).not.toHaveBeenCalled();
+      expect(freshRange.insertText).toHaveBeenCalled();
     });
 
-    it("deletes the existing legacy chunk CC, re-searches, and inserts OOXML", async () => {
+    it("deletes the existing legacy chunk CC, re-searches, and inserts", async () => {
       const coveredCC: ParentCC = {
         tag: "chunk0-0",
         isNullObject: false,
@@ -532,8 +645,10 @@ describe("ApplySuggestionCommand", () => {
         delete: vi.fn(),
       };
       const coveredRange: SearchRange = {
-        getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-        insertOoxml: vi.fn(),
+        insertText: vi.fn(),
+        delete: vi.fn(),
+        insertComment: vi.fn(),
+        insertContentControl: vi.fn(),
         parentContentControlOrNullObject: coveredCC,
       };
       const freshRange = makeCleanRange();
@@ -547,8 +662,8 @@ describe("ApplySuggestionCommand", () => {
       expect(result).toEqual({ success: true, commandId: "s1" });
       expect(coveredCC.delete).toHaveBeenCalledWith(true);
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
-      expect(coveredRange.insertOoxml).not.toHaveBeenCalled();
-      expect(freshRange.insertOoxml).toHaveBeenCalled();
+      expect(coveredRange.insertText).not.toHaveBeenCalled();
+      expect(freshRange.insertText).toHaveBeenCalled();
     });
 
     it("proceeds normally when range has no parent CC (isNullObject: true)", async () => {
@@ -563,7 +678,7 @@ describe("ApplySuggestionCommand", () => {
       expect(
         range.parentContentControlOrNullObject.delete,
       ).not.toHaveBeenCalled();
-      expect(range.insertOoxml).toHaveBeenCalled();
+      expect(range.insertText).toHaveBeenCalled();
     });
 
     it("returns { success: false } when re-search after CC deletion finds nothing", async () => {
@@ -574,8 +689,10 @@ describe("ApplySuggestionCommand", () => {
         delete: vi.fn(),
       };
       const coveredRange: SearchRange = {
-        getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-        insertOoxml: vi.fn(),
+        insertText: vi.fn(),
+        delete: vi.fn(),
+        insertComment: vi.fn(),
+        insertContentControl: vi.fn(),
         parentContentControlOrNullObject: coveredCC,
       };
       installWordContext({
@@ -594,7 +711,7 @@ describe("ApplySuggestionCommand", () => {
       expect(coveredCC.delete).toHaveBeenCalledWith(true);
     });
 
-    it("deletes the existing Stylistic CC, re-searches, and inserts OOXML for comment-only", async () => {
+    it("deletes the existing Stylistic CC, re-searches, and inserts for comment-only", async () => {
       const coveredCC: ParentCC = {
         tag: "stylistic:comment-only:chunk1-5",
         isNullObject: false,
@@ -602,8 +719,10 @@ describe("ApplySuggestionCommand", () => {
         delete: vi.fn(),
       };
       const coveredRange: SearchRange = {
-        getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-        insertOoxml: vi.fn(),
+        insertText: vi.fn(),
+        delete: vi.fn(),
+        insertComment: vi.fn(),
+        insertContentControl: vi.fn(),
         parentContentControlOrNullObject: coveredCC,
       };
       const freshRange = makeCleanRange();
@@ -619,15 +738,15 @@ describe("ApplySuggestionCommand", () => {
       expect(result).toEqual({ success: true, commandId: "s1" });
       expect(coveredCC.delete).toHaveBeenCalledWith(true);
       expect(context.document.body.search).toHaveBeenCalledTimes(2);
-      expect(coveredRange.insertOoxml).not.toHaveBeenCalled();
-      expect(freshRange.insertOoxml).toHaveBeenCalled();
+      expect(coveredRange.insertText).not.toHaveBeenCalled();
+      // freshRange gets insertComment called (comment-only path)
+      expect(freshRange.insertComment).toHaveBeenCalled();
     });
 
     it("stateful mock: text survives CC removal — self-enforcing without keepContent assertion", async () => {
       // Behavioral mock: search() closes over textDeleted.
       // delete(false) → textDeleted=true → 2nd search returns [] → success:false → test FAILS
-      // delete(true)  → textDeleted=false → 2nd search returns freshRange → OOXML applied → PASSES
-      // This catches the delete(false) regression WITHOUT any toHaveBeenCalledWith check.
+      // delete(true)  → textDeleted=false → 2nd search returns freshRange → inserted → PASSES
       let textDeleted = false;
       let searchCalls = 0;
 
@@ -640,8 +759,10 @@ describe("ApplySuggestionCommand", () => {
         }),
       };
       const coveredRange: SearchRange = {
-        getOoxml: vi.fn(() => ({ value: "<pkg:package />" })),
-        insertOoxml: vi.fn(),
+        insertText: vi.fn(),
+        delete: vi.fn(),
+        insertComment: vi.fn(),
+        insertContentControl: vi.fn(),
         parentContentControlOrNullObject: coveredCC,
       };
       const freshRange = makeCleanRange();
@@ -659,13 +780,13 @@ describe("ApplySuggestionCommand", () => {
             text: "",
           },
           load: vi.fn(),
-          changeTrackingMode: "trackAll",
+          changeTrackingMode: "off",
         },
         sync: vi.fn(async () => {}),
       };
 
       vi.stubGlobal("Word", {
-        ChangeTrackingMode: { off: "off" },
+        ChangeTrackingMode: { off: "off", trackAll: "trackAll", trackMine: "trackMine" },
         InsertLocation: { replace: "Replace" },
         run: vi.fn(async (cb: (ctx: typeof context) => unknown) => cb(context)),
       });
@@ -676,29 +797,8 @@ describe("ApplySuggestionCommand", () => {
 
       // No keepContent argument assertion — behavior proves it:
       expect(result).toEqual({ success: true, commandId: "s1" });
-      expect(freshRange.insertOoxml).toHaveBeenCalled();
+      expect(freshRange.insertText).toHaveBeenCalled();
     });
-  });
-
-  it("does not embed font specs from rPr to prevent Symbol font corruption in tracked changes", async () => {
-    installXmlMocks({
-      serializedRunProperties:
-        '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>',
-    });
-    const { range } = installWordContext();
-
-    const command = new ApplySuggestionCommand(
-      makeSuggestion({
-        originalText:
-          "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien, de eso estoy segura —aseguró con una cálida sonrisa.",
-        suggestedText:
-          "—Posiblemente no ahora —Ivana mostró una sonrisa ligera—, pero sé que algún día nos llevaremos bien; de eso estoy segura —aseguró con una cálida sonrisa.",
-      }),
-    );
-    await command.execute();
-
-    const [insertedOoxml] = range.insertOoxml.mock.calls[0] as [string, string];
-    expect(insertedOoxml).not.toContain("w:rFonts");
   });
 
   describe("special character search", () => {
@@ -732,7 +832,6 @@ describe("ApplySuggestionCommand", () => {
         matchCase: true,
         matchWholeWord: false,
       });
-      // Verify these exact options — no other matchXxx flags that could block special chars
       const callArgs = context.document.body.search.mock.calls[0] as [
         string,
         object,
@@ -884,30 +983,9 @@ describe("ApplySuggestionCommand", () => {
 
   describe("comment-only suggestions", () => {
     it("inserts only a comment — no tracked change markup — when type is comment-only", async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2025-04-05T06:07:08.999Z"));
-
-      const { cc } = installWordContext();
-      const withChangeSpy = vi.spyOn(
-        OoxmlPackageBuilder.prototype,
-        "withChange",
-      );
-      const withDeletionSpy = vi.spyOn(
-        OoxmlPackageBuilder.prototype,
-        "withDeletion",
-      );
-      const withInsertionSpy = vi.spyOn(
-        OoxmlPackageBuilder.prototype,
-        "withInsertion",
-      );
-      const withRunPropertiesSpy = vi.spyOn(
-        OoxmlPackageBuilder.prototype,
-        "withRunProperties",
-      );
-      const withCommentSpy = vi.spyOn(
-        OoxmlPackageBuilder.prototype,
-        "withComment",
-      );
+      const { context, cc } = installWordContext({
+        initialTrackingMode: "trackAll",
+      });
 
       const command = new ApplySuggestionCommand(
         makeSuggestion({
@@ -922,23 +1000,26 @@ describe("ApplySuggestionCommand", () => {
       const result = await command.execute();
 
       expect(result).toEqual({ success: true, commandId: "chunk1-5" });
-      expect(withChangeSpy).not.toHaveBeenCalled();
-      expect(withDeletionSpy).not.toHaveBeenCalled();
-      expect(withInsertionSpy).not.toHaveBeenCalled();
-      expect(withRunPropertiesSpy).not.toHaveBeenCalled();
-      expect(withCommentSpy).toHaveBeenCalledWith(
-        "Estilo",
-        "Mejora la claridad",
-        "Stylistic",
-        "2025-04-05T06:07:08Z",
-        "texto original",
+
+      const searchResult = context.document.body.search.mock.results[0]
+        ?.value as SearchResults;
+      const usedRange = searchResult.items[0];
+      expect(usedRange.insertComment).toHaveBeenCalledWith(
+        "[Estilo]\nMejora la claridad",
       );
+
+      // No OOXML building — no insertText
+      expect(usedRange.insertText).not.toHaveBeenCalled();
+
+      // changeTrackingMode NOT touched
+      expect(context.document.changeTrackingMode).toBe("trackAll");
+      expect(context.document.load).not.toHaveBeenCalled();
+
       expect(cc.tag).toBe("stylistic:comment-only:chunk1-5");
     });
 
     it("returns a failed result when original text is not found for a comment-only suggestion", async () => {
       const { context } = installWordContext({ resultsItems: [] });
-      const buildSpy = vi.spyOn(OoxmlPackageBuilder.prototype, "build");
 
       const command = new ApplySuggestionCommand(
         makeSuggestion({ type: "comment-only", suggestedText: undefined }),
@@ -957,7 +1038,6 @@ describe("ApplySuggestionCommand", () => {
           matchWholeWord: false,
         },
       );
-      expect(buildSpy).not.toHaveBeenCalled();
     });
 
     it("does not mutate changeTrackingMode for comment-only suggestions", async () => {
@@ -972,47 +1052,6 @@ describe("ApplySuggestionCommand", () => {
 
       expect(context.document.load).not.toHaveBeenCalled();
       expect(context.document.changeTrackingMode).toBe("trackAll");
-    });
-
-    it("passes originalText to withComment so the OOXML body preserves the matched text", async () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(new Date("2025-04-05T06:07:08.999Z"));
-
-      const { range } = installWordContext();
-      const withCommentSpy = vi.spyOn(
-        OoxmlPackageBuilder.prototype,
-        "withComment",
-      );
-
-      const command = new ApplySuggestionCommand(
-        makeSuggestion({
-          id: "chunk2-7",
-          type: "comment-only",
-          suggestedText: undefined,
-          originalText: "texto original",
-          category: "Estilo",
-          justification: "Mejora la claridad",
-        }),
-      );
-      await command.execute();
-
-      expect(withCommentSpy).toHaveBeenCalledWith(
-        "Estilo",
-        "Mejora la claridad",
-        "Stylistic",
-        "2025-04-05T06:07:08Z",
-        "texto original",
-      );
-
-      // The OOXML actually passed to insertOoxml must contain the originalText in the body
-      const [insertedOoxml] = range.insertOoxml.mock.calls[0] as [
-        string,
-        string,
-      ];
-      const bodyStart = insertedOoxml.indexOf("<w:body>");
-      const bodyEnd = insertedOoxml.indexOf("</w:body>");
-      const body = insertedOoxml.slice(bodyStart, bodyEnd);
-      expect(body).toContain("texto original");
     });
   });
 });

@@ -27,7 +27,6 @@ import type {
 } from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
 import {
-  COMMENT_ONLY_TAG_PREFIX,
   cleanupResolvedComments,
   OVERLAPPING_RELATIONS,
 } from "./cleanup/CommentCleanup";
@@ -128,58 +127,44 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
-   * Returns the set of original texts already applied as Stylistic tracked
-   * deletions OR as active comment-only suggestions.
+   * Returns the set of original texts already applied as Stylistic suggestions
+   * (both track-change and comment-only types).
    *
    * Used as a guard to prevent duplicate tracked changes and duplicate
    * comment-only suggestions on re-run.
    *
-   * For track-change suggestions: reads the deleted range text from the TCs.
-   * For comment-only suggestions: reads the range text of the CC anchor itself,
-   * which spans the original text at insertion time.
+   * Detects all active Stylistic CCs by tag prefix (`stylistic:`), which covers
+   * both `stylistic:track-change:{id}` and `stylistic:comment-only:{id}` tags.
+   * For each matching CC, reads the range text (the original text at insertion time).
    */
   async getAppliedOriginalTexts(): Promise<Set<string>> {
     console.log(
-      "🛡️ [WordAdapter] Consultando tracked changes y CCs comment-only de Stylistic...",
+      "🛡️ [WordAdapter] Consultando CCs de Stylistic (track-change + comment-only)...",
     );
     return Word.run(async (context) => {
-      const tracked = context.document.body.getTrackedChanges();
       const allCCs = context.document.contentControls;
-      tracked.load({ select: "author,type" });
-      allCCs.load({ select: "tag" });
+      allCCs.load("items");
       await context.sync();
 
-      const stylisticDeletions = tracked.items.filter(
-        (tc) => tc.author === "Stylistic" && (tc.type as string) === "Deleted",
-      );
-
       // JS-side prefix filter — Office.js getByTag() is exact-match only
-      const commentOnlyCCs = allCCs.items.filter((cc) =>
-        cc.tag.startsWith(COMMENT_ONLY_TAG_PREFIX),
+      const stylisticCCs = allCCs.items.filter((cc) =>
+        cc.tag.startsWith("stylistic:"),
       );
 
-      if (stylisticDeletions.length === 0 && commentOnlyCCs.length === 0) {
+      if (stylisticCCs.length === 0) {
         return new Set<string>();
       }
 
-      const tcRanges = stylisticDeletions.map((tc) => tc.getRange());
-      tcRanges.forEach((r) => {
-        r.load("text");
-      });
-
-      const ccRanges = commentOnlyCCs.map((cc) => cc.getRange());
-      ccRanges.forEach((r) => {
+      const ranges = stylisticCCs.map((cc) => cc.getRange());
+      ranges.forEach((r) => {
         r.load("text");
       });
 
       await context.sync();
 
-      const texts = new Set([
-        ...tcRanges.map((r) => r.text),
-        ...ccRanges.map((r) => r.text),
-      ]);
+      const texts = new Set(ranges.map((r) => r.text));
       console.log(
-        `🛡️ [WordAdapter] ${texts.size} texto(s) ya rastreado(s) (TC + comment-only)`,
+        `🛡️ [WordAdapter] ${texts.size} texto(s) ya rastreado(s) (stylistic: CCs)`,
       );
       return texts;
     });
@@ -387,16 +372,15 @@ export class WordAdapter implements IDocumentPort {
           };
         }
 
-        // 3b. track-change branch: accept/reject TCs inside the CC
-        // The CC tag already uniquely identifies this suggestion — all TCs
-        // inside it belong to it. No author filter needed or reliable.
-        const tcs = cc.getTrackedChanges();
-        tcs.load("items");
+        // 3b. track-change branch: use CC-scoped TC lookup via cc.getTrackedChanges().
+        // This is more precise than body.getTrackedChanges() + compareLocationWith
+        // because it only returns TCs that are directly inside this CC's range.
+        const ccTCs = cc.getTrackedChanges();
+        ccTCs.load({ select: "type,id" });
         await context.sync();
 
-        if (tcs.items.length === 0) {
-          // TCs already resolved but CC still present — clean up the orphaned CC
-          cc.delete(true); // true = keep content
+        if (ccTCs.items.length === 0) {
+          cc.delete(true);
           await context.sync();
           return {
             status: "already-resolved" as const,
@@ -405,7 +389,7 @@ export class WordAdapter implements IDocumentPort {
           };
         }
 
-        for (const tc of tcs.items) {
+        for (const tc of ccTCs.items) {
           if (action === "accept") {
             tc.accept();
           } else {
@@ -414,13 +398,13 @@ export class WordAdapter implements IDocumentPort {
         }
 
         // 4. Delete the Content Control anchor itself
-        cc.delete(true); // true = keep content
+        cc.delete(true);
         await context.sync();
 
         return {
           status:
             action === "accept" ? ("accepted" as const) : ("rejected" as const),
-          trackedChangesAffected: tcs.items.length,
+          trackedChangesAffected: ccTCs.items.length,
           commentDeleted,
         };
       });

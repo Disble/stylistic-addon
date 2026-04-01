@@ -3,26 +3,20 @@
 /**
  * Comment cleanup — Range Colocation pattern for orphaned comment removal.
  *
- * Deletes Stylistic comments whose tracked changes have been resolved
- * (accepted or rejected by the user). Uses `Range.compareLocationWith()` to
- * determine whether a comment is still spatially anchored to a pending
- * tracked change. The document itself is the source of truth — no in-memory
- * registry is needed and no cross-session state is required.
+ * Deletes Stylistic comments that are no longer anchored to an active
+ * comment-only Content Control. Uses `Range.compareLocationWith()` to
+ * determine whether a comment is still spatially colocated with a
+ * `stylistic:comment-only:` tagged Content Control. The document itself is
+ * the source of truth — no in-memory registry is needed and no cross-session
+ * state is required.
  *
  * Algorithm:
- * 0. Pre-filter: load all Content Controls and identify those owned by active
- *    comment-only suggestions (tag prefix `stylistic:comment-only:`). Comments
- *    anchored to those CCs are excluded from the TC-colocation check — they
- *    are managed by their own lifecycle and must not be deleted here.
- * 1. Load all Stylistic comments and tracked changes with properties.
- * 2. Short-circuit only for "track-change" comments (those NOT owned by a
- *    comment-only CC). If all TCs are resolved, delete only those comments.
- * 3. Get document ranges for each remaining comment and tracked change.
- * 4. Compare every comment range against every TC range (spatial matrix).
- * 5. Delete track-change comments with no overlapping TC; keep the rest.
- *
- * Backward compatibility: CC tags without the `stylistic:` prefix (legacy bare
- * IDs) are treated as `track-change` — they are not comment-only.
+ * 1. Load all Stylistic comments and all Content Controls.
+ * 2. Filter CCs by the `stylistic:comment-only:` tag prefix.
+ * 3. Short-circuit: if no such CCs exist, delete all Stylistic comments.
+ * 4. Get document ranges for each comment and each active CC.
+ * 5. Compare every comment range against every CC range (spatial matrix).
+ * 6. Delete comments with no overlapping CC; keep the rest.
  *
  * Never touches comments authored by anyone other than "Stylistic".
  *
@@ -46,9 +40,8 @@ export const OVERLAPPING_RELATIONS: string[] = [
 ];
 
 /**
- * Deletes Stylistic comments whose tracked changes have been resolved.
- * Comments owned by active comment-only Content Controls are never deleted
- * by this function — they are managed by `resolveSuggestion()`.
+ * Deletes Stylistic comments that are no longer colocated with an active
+ * `stylistic:comment-only:` Content Control.
  *
  * @returns Counts of deleted and kept Stylistic comments.
  */
@@ -61,11 +54,9 @@ export async function cleanupResolvedComments(): Promise<{
   );
 
   return Word.run(async (context) => {
-    // Sync 1: load collections with filtering properties + all Content Controls
-    const tracked = context.document.body.getTrackedChanges();
+    // Sync 1: load collections
     const comments = context.document.body.getComments();
     const allCCs = context.document.contentControls;
-    tracked.load({ select: "author,type" });
     comments.load({ select: "authorName" });
     allCCs.load({ select: "tag" });
     await context.sync();
@@ -73,128 +64,68 @@ export async function cleanupResolvedComments(): Promise<{
     const stylisticComments = comments.items.filter(
       (c) => c.authorName === "Stylistic",
     );
-    const stylisticTCs = tracked.items.filter(
-      (tc) => tc.author === "Stylistic",
-    );
 
-    // Pre-filter: find all active comment-only Content Controls (JS-side prefix filter,
-    // because Office.js getByTag() is exact-match only — no prefix query available).
-    const commentOnlyCCs = allCCs.items.filter((cc) =>
+    // Pre-filter: find all active comment-only Content Controls (JS-side prefix
+    // filter — Office.js getByTag() is exact-match only, no prefix query).
+    const stylisticCCs = allCCs.items.filter((cc) =>
       cc.tag.startsWith(COMMENT_ONLY_TAG_PREFIX),
     );
 
     console.log(
-      `🧽 [CommentCleanup] ${stylisticComments.length} comentarios, ${stylisticTCs.length} TCs, ` +
-        `${commentOnlyCCs.length} CCs comment-only activos`,
+      `🧽 [CommentCleanup] ${stylisticComments.length} comentarios Stylistic, ` +
+        `${stylisticCCs.length} CCs comment-only activos`,
     );
 
     if (stylisticComments.length === 0) {
       return { deleted: 0, kept: 0 };
     }
 
-    // Sync 2: get ranges for all comment-only CCs so we can match comments to them
-    const commentOnlyCCRanges = commentOnlyCCs.map((cc) => cc.getRange());
-    const commentRangesForCCCheck = stylisticComments.map((c) => c.getRange());
+    // Sync 2: get ranges for comments and CCs
+    const commentRanges = stylisticComments.map((c) => c.getRange());
+    const ccRanges = stylisticCCs.map((cc) => cc.getRange());
     await context.sync();
 
-    // Sync 3: build colocation matrix between comments and comment-only CC ranges
-    const commentOnlyCommentIndices = new Set<number>();
-
-    if (commentOnlyCCs.length > 0) {
-      const ccComparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
-        [];
-      for (let i = 0; i < stylisticComments.length; i++) {
-        ccComparisons[i] = [];
-        for (let j = 0; j < commentOnlyCCRanges.length; j++) {
-          ccComparisons[i][j] = commentRangesForCCCheck[i].compareLocationWith(
-            commentOnlyCCRanges[j],
-          );
-        }
-      }
-      await context.sync();
-
-      // Identify which Stylistic comments are anchored to a comment-only CC
-      for (let i = 0; i < stylisticComments.length; i++) {
-        const isOwnedByCommentOnlyCC = commentOnlyCCRanges.some((_, j) =>
-          OVERLAPPING_RELATIONS.includes(ccComparisons[i][j].value as string),
-        );
-        if (isOwnedByCommentOnlyCC) {
-          commentOnlyCommentIndices.add(i);
-        }
-      }
-    }
-
-    console.log(
-      `🧽 [CommentCleanup] ${commentOnlyCommentIndices.size} comentario(s) protegidos por CCs comment-only`,
-    );
-
-    // Separate track-change comments (subject to TC-colocation check) from
-    // comment-only comments (managed by resolveSuggestion — skip here).
-    const trackChangeCommentIndices = stylisticComments
-      .map((_, i) => i)
-      .filter((i) => !commentOnlyCommentIndices.has(i));
-
-    const trackChangeComments = trackChangeCommentIndices.map(
-      (i) => stylisticComments[i],
-    );
-
-    if (trackChangeComments.length === 0) {
-      console.log(
-        "🧽 [CommentCleanup] Sin comentarios track-change que limpiar",
-      );
-      return { deleted: 0, kept: commentOnlyCommentIndices.size };
-    }
-
-    // Short-circuit: all TCs resolved → delete only track-change comments
-    if (stylisticTCs.length === 0) {
-      for (const comment of trackChangeComments) {
+    // Short-circuit: no active comment-only CCs → delete all Stylistic comments
+    if (stylisticCCs.length === 0) {
+      for (const comment of stylisticComments) {
         comment.delete();
       }
       await context.sync();
       console.log(
-        `🧽 [CommentCleanup] ${trackChangeComments.length} eliminados (short-circuit), ` +
-          `${commentOnlyCommentIndices.size} conservados (comment-only)`,
+        `🧽 [CommentCleanup] ${stylisticComments.length} eliminados (sin CCs activos)`,
       );
-      return {
-        deleted: trackChangeComments.length,
-        kept: commentOnlyCommentIndices.size,
-      };
+      return { deleted: stylisticComments.length, kept: 0 };
     }
 
-    // Sync 4: get document ranges for track-change comments and TCs
-    const tcCommentRanges = trackChangeComments.map((c) => c.getRange());
-    const tcRanges = stylisticTCs.map((tc) => tc.getRange());
-    await context.sync();
-
-    // Sync 5: build spatial comparison matrix (track-change comments × TCs)
+    // Sync 3: build spatial comparison matrix (comments × CCs)
     const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
       [];
-    for (let i = 0; i < tcCommentRanges.length; i++) {
+    for (let i = 0; i < commentRanges.length; i++) {
       comparisons[i] = [];
-      for (let j = 0; j < tcRanges.length; j++) {
-        comparisons[i][j] = tcCommentRanges[i].compareLocationWith(tcRanges[j]);
+      for (let j = 0; j < ccRanges.length; j++) {
+        comparisons[i][j] = commentRanges[i].compareLocationWith(ccRanges[j]);
       }
     }
     await context.sync();
 
-    // Evaluate colocation and schedule deletes for track-change comments only
+    // Evaluate colocation: keep comments overlapping a CC; delete orphans
     let deleted = 0;
-    let kept = commentOnlyCommentIndices.size; // comment-only comments always kept here
+    let kept = 0;
 
-    for (let i = 0; i < trackChangeComments.length; i++) {
-      const hasColocatedTC = tcRanges.some((_, j) =>
+    for (let i = 0; i < stylisticComments.length; i++) {
+      const hasColocatedCC = ccRanges.some((_, j) =>
         OVERLAPPING_RELATIONS.includes(comparisons[i][j].value as string),
       );
 
-      if (hasColocatedTC) {
+      if (hasColocatedCC) {
         kept++;
       } else {
-        trackChangeComments[i].delete();
+        stylisticComments[i].delete();
         deleted++;
       }
     }
 
-    // Sync 6: execute deletes
+    // Sync 4: execute deletes
     await context.sync();
     console.log(
       `🧽 [CommentCleanup] ${deleted} eliminados, ${kept} conservados`,
