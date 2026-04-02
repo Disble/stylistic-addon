@@ -1,16 +1,16 @@
 {
   "compilerOptions": {
     "allowJs": true,
-    "ignoreDeprecations": "5.0",
-    "baseUrl": ".",
+    "module": "es2022",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "jsx": "react",
     "noEmitOnError": true,
     "outDir": "lib",
     "sourceMap": true,
-    "target": "es5",
-    "lib": ["es2015", "dom"],
+    "target": "es2016",
+    "lib": ["es2016", "dom"],
     "types": ["office-js", "office-runtime", "vitest/globals"],
     "skipLibCheck": true
   },
