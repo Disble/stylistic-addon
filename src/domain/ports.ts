@@ -66,6 +66,12 @@ export interface IDocumentPort {
   ): Promise<InsertionResult>;
 
   /**
+   * Returns a dry-run summary of the cleanup operation.
+   * Used by the task pane to decide whether the cleanup CTA should be visible.
+   */
+  getCleanupPreview(): Promise<{ deletable: number; kept: number }>;
+
+  /**
    * Deletes Stylistic comments whose tracked changes have been resolved.
    * Never touches comments from other authors.
    */

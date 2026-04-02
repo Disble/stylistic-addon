@@ -29,6 +29,21 @@ describe("WordAdapter.cleanupResolvedComments", () => {
     expect(cleanupMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
   });
 
+  it("delegates cleanup preview without mutating comments", async () => {
+    cleanupMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 2,
+      kept: 1,
+    });
+
+    await expect(adapter.getCleanupPreview()).resolves.toEqual({
+      deletable: 2,
+      kept: 1,
+    });
+
+    expect(cleanupMocks.getCleanupPreview).toHaveBeenCalledOnce();
+    expect(cleanupMocks.cleanupResolvedComments).not.toHaveBeenCalled();
+  });
+
   it("propagates cleanup errors", async () => {
     cleanupMocks.cleanupResolvedComments.mockRejectedValueOnce(
       new Error("cleanup failed"),

@@ -60,6 +60,7 @@ function makeMockDocumentPort(): IDocumentPort {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
     applySuggestions: vi.fn(),
+    getCleanupPreview: vi.fn(),
     cleanupResolvedComments: vi.fn(),
     acceptSuggestion: vi.fn(),
     rejectSuggestion: vi.fn(),

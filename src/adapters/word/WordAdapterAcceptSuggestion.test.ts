@@ -54,7 +54,8 @@ describe("WordAdapter.acceptSuggestion", () => {
       compareLocationWith: vi.fn(() => ({ value: "Equal" })),
     };
     const comment = {
-      authorName: "Stylistic",
+      authorName: "Usuario de prueba",
+      content: "[Claridad]\nMas claro",
       getRange: vi.fn(() => commentRange),
       delete: commentDeleteSpy,
     };
@@ -144,6 +145,139 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.error).toBeUndefined();
     expect(tcAcceptSpy).toHaveBeenCalledOnce();
     expect(context._cc.delete).toHaveBeenCalledWith(true);
+  });
+
+  it("accepts and deletes the matching comment by content when authorName is not Stylistic", async () => {
+    const suggestion = makeSuggestion();
+    const tcAcceptSpy = vi.fn();
+    const targetCommentDeleteSpy = vi.fn();
+    const secondCommentDeleteSpy = vi.fn();
+    const commentRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+    };
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      spanTCItems: [
+        {
+          type: "Deleted",
+          accept: tcAcceptSpy,
+          reject: vi.fn(),
+        },
+      ],
+      comments: [
+        {
+          authorName: "Usuario de prueba",
+          content: "[Claridad]\nMas claro",
+          getRange: vi.fn(() => commentRange),
+          delete: targetCommentDeleteSpy,
+        },
+        {
+          authorName: "Usuario de prueba",
+          content: "[Registro]\nOtra cosa",
+          getRange: vi.fn(() => commentRange),
+          delete: secondCommentDeleteSpy,
+        },
+      ],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.commentDeleted).toBe(true);
+    expect(tcAcceptSpy).toHaveBeenCalledOnce();
+    expect(targetCommentDeleteSpy).toHaveBeenCalledOnce();
+    expect(secondCommentDeleteSpy).not.toHaveBeenCalled();
+  });
+
+  it("accepts and deletes the first colocated Stylistic comment even when content differs", async () => {
+    const suggestion = makeSuggestion({
+      category: "Gramática",
+      justification: "Ajuste actualizado",
+    });
+    const tcAcceptSpy = vi.fn();
+    const colocatedDeleteSpy = vi.fn();
+    const distantDeleteSpy = vi.fn();
+    const colocatedRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+    };
+    const distantRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Before" })),
+    };
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      spanTCItems: [
+        {
+          type: "Deleted",
+          accept: tcAcceptSpy,
+          reject: vi.fn(),
+        },
+      ],
+      comments: [
+        {
+          authorName: "Usuario de prueba",
+          content: "[Gramática]\nVersión previa del comentario",
+          getRange: vi.fn(() => colocatedRange),
+          delete: colocatedDeleteSpy,
+        },
+        {
+          authorName: "Usuario de prueba",
+          content: "[Claridad]\nComentario de otra sugerencia",
+          getRange: vi.fn(() => distantRange),
+          delete: distantDeleteSpy,
+        },
+      ],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.commentDeleted).toBe(true);
+    expect(tcAcceptSpy).toHaveBeenCalledOnce();
+    expect(colocatedDeleteSpy).toHaveBeenCalledOnce();
+    expect(distantDeleteSpy).not.toHaveBeenCalled();
+  });
+
+  it("accepts and deletes a colocated Stylistic comment when Word returns CRLF content", async () => {
+    const suggestion = makeSuggestion({
+      category: "Gramática",
+      justification: "Ajuste actualizado",
+    });
+    const tcAcceptSpy = vi.fn();
+    const commentDeleteSpy = vi.fn();
+    const commentRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+    };
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      spanTCItems: [
+        {
+          type: "Deleted",
+          accept: tcAcceptSpy,
+          reject: vi.fn(),
+        },
+      ],
+      comments: [
+        {
+          authorName: "Usuario de prueba",
+          content: "[Gramática]\r\nComentario desde Word",
+          getRange: vi.fn(() => commentRange),
+          delete: commentDeleteSpy,
+        },
+      ],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.commentDeleted).toBe(true);
+    expect(tcAcceptSpy).toHaveBeenCalledOnce();
+    expect(commentDeleteSpy).toHaveBeenCalledOnce();
   });
 
   it("accepts overlapping body tracked changes when the CC-scoped collection misses one side", async () => {
@@ -263,7 +397,8 @@ describe("WordAdapter.acceptSuggestion", () => {
       compareLocationWith: vi.fn(() => ({ value: "Equal" })),
     };
     const comment = {
-      authorName: "Stylistic",
+      authorName: "Usuario de prueba",
+      content: "[Claridad]\nMas claro",
       getRange: vi.fn(() => commentRange),
       delete: commentDeleteSpy,
     };

@@ -55,7 +55,8 @@ describe("WordAdapter.rejectSuggestion", () => {
       compareLocationWith: vi.fn(() => ({ value: "Equal" })),
     };
     const comment = {
-      authorName: "Stylistic",
+      authorName: "Usuario de prueba",
+      content: "[Claridad]\nMas claro",
       getRange: vi.fn(() => commentRange),
       delete: commentDeleteSpy,
     };
@@ -105,7 +106,8 @@ describe("WordAdapter.rejectSuggestion", () => {
       compareLocationWith: vi.fn(() => ({ value: "Equal" })),
     };
     const comment = {
-      authorName: "Stylistic",
+      authorName: "Usuario de prueba",
+      content: "[Claridad]\nMas claro",
       getRange: vi.fn(() => commentRange),
       delete: commentDeleteSpy,
     };

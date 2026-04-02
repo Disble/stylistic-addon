@@ -65,7 +65,13 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("sideload-msg")!.style.display).toBe("block");
     expect(doc.getElementById("btn-analyze")?.onclick).toBeNull();
 
+    taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 1,
+      kept: 0,
+    });
+
     officeHarness.triggerReady({ host: "Word" });
+    await Promise.resolve();
     expect(doc.getElementById("sideload-msg")!.style.display).toBe("none");
     expect(doc.getElementById("app-body")!.style.display).toBe("flex");
     expect(doc.getElementById("btn-analyze")?.onclick).toEqual(
@@ -74,6 +80,8 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("btn-cleanup")?.onclick).toEqual(
       expect.any(Function),
     );
+    expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledOnce();
+    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
   });
 
   it("runs the pipeline with the selected profile and updates terminal UI state from emitted events", async () => {
@@ -92,11 +100,21 @@ describe("taskpane entrypoint", () => {
         true,
       );
     });
+    taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 0,
+      kept: 0,
+    });
+    taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 1,
+      kept: 0,
+    });
 
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
+    await Promise.resolve();
 
     await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
+    await Promise.resolve();
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(taskpaneMocks.run.mock.calls[0][0]).toMatchObject({
@@ -120,6 +138,7 @@ describe("taskpane entrypoint", () => {
       "1 sugerencia(s) insertada(s) como Track Changes (selección).",
     );
     expect(doc.getElementById("btn-analyze")?.disabled).toBe(false);
+    expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(doc.getElementById("progress-container")!.style.display).toBe("none");
@@ -175,5 +194,57 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("status-bar")?.textContent).toBe(
       "2 comentario(s) eliminado(s), 0 conservado(s).",
     );
+  });
+
+  it("keeps the cleanup section visible on bootstrap when deletable comments already exist", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+    taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 3,
+      kept: 1,
+    });
+
+    await importTaskpane();
+    officeHarness.triggerReady({ host: "Word" });
+    await Promise.resolve();
+
+    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
+    expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledOnce();
+  });
+
+  it("hides the cleanup section after analysis when no deletable comments remain", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+    doc.getElementById("cleanup-section")!.style.display = "block";
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.emitter.emitComplete(
+        [makeSuggestion()],
+        { successCount: 1, failedSuggestions: [] },
+        [],
+        false,
+      );
+    });
+    taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 1,
+      kept: 0,
+    });
+    taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 0,
+      kept: 1,
+    });
+
+    await importTaskpane();
+    officeHarness.triggerReady({ host: "Word" });
+    await Promise.resolve();
+
+    await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
+    await Promise.resolve();
+
+    expect(doc.getElementById("cleanup-section")!.style.display).toBe("none");
   });
 });

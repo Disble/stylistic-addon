@@ -21,6 +21,7 @@
  */
 
 import type { ChangeType, CommandResult, Suggestion } from "../../domain/types";
+import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
 
 type IndexedText = {
   text: string;
@@ -281,7 +282,10 @@ export class ApplySuggestionCommand {
           );
 
           insertedRange.insertComment(
-            `[${this.suggestion.category}]\n${this.suggestion.justification}`,
+            buildStylisticCommentContent(
+              this.suggestion.category,
+              this.suggestion.justification,
+            ),
           );
 
           const cc = insertedRange.insertContentControl();
@@ -367,7 +371,10 @@ export class ApplySuggestionCommand {
         );
 
         range.insertComment(
-          `[${this.suggestion.category}]\n${this.suggestion.justification}`,
+          buildStylisticCommentContent(
+            this.suggestion.category,
+            this.suggestion.justification,
+          ),
         );
 
         const cc = range.insertContentControl();

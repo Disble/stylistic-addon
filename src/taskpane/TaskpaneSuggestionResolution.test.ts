@@ -71,6 +71,10 @@ describe("taskpane suggestion resolution guardrails", () => {
   it("clicking Accept applies terminal accepted UI and removes buttons", async () => {
     const doc = createTaskpaneDocument();
     const suggestion = makeSuggestion({ id: "s-1" });
+    taskpaneMocks.getCleanupPreview
+      .mockResolvedValueOnce({ deletable: 0, kept: 1 })
+      .mockResolvedValueOnce({ deletable: 0, kept: 1 })
+      .mockResolvedValueOnce({ deletable: 1, kept: 0 });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
     const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
@@ -78,16 +82,22 @@ describe("taskpane suggestion resolution guardrails", () => {
     acceptBtn.click();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledWith(suggestion);
     expect(li.classList.contains("result-accepted")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
+    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
   });
 
   it("clicking Reject applies terminal rejected UI and removes buttons", async () => {
     const doc = createTaskpaneDocument();
     const suggestion = makeSuggestion({ id: "s-1" });
+    taskpaneMocks.getCleanupPreview
+      .mockResolvedValueOnce({ deletable: 0, kept: 1 })
+      .mockResolvedValueOnce({ deletable: 0, kept: 1 })
+      .mockResolvedValueOnce({ deletable: 1, kept: 0 });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
     const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
@@ -95,11 +105,13 @@ describe("taskpane suggestion resolution guardrails", () => {
     rejectBtn.click();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(taskpaneMocks.rejectSuggestion).toHaveBeenCalledWith(suggestion);
     expect(li.classList.contains("result-rejected")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
+    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
   });
 
   it("keeps terminal rejected UI even when adapter ignored late cleanup failure", async () => {

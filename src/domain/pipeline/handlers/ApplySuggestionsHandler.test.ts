@@ -44,6 +44,7 @@ function makeMockDocumentPort(
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
     applySuggestions: vi.fn().mockResolvedValue(result),
+    getCleanupPreview: vi.fn(),
     cleanupResolvedComments: vi.fn(),
     acceptSuggestion: vi.fn(),
     rejectSuggestion: vi.fn(),

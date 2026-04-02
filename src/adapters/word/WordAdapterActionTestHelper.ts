@@ -10,6 +10,7 @@ type MockTrackedChange = {
 
 type MockComment = {
   authorName?: string;
+  content?: string;
   getRange: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
 };

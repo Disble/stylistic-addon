@@ -132,6 +132,7 @@ export function bootstrapTaskpane(
     appBody.style.display = "flex";
     analyzeButton.onclick = handleAnalyze;
     cleanupButton.onclick = handleCleanup;
+    void refreshCleanupVisibility();
   });
 }
 
@@ -189,6 +190,27 @@ function hideProgress(): void {
     const container = document.getElementById("progress-container");
     if (container) container.style.display = "none";
   }, 1000);
+}
+
+/**
+ * Syncs the cleanup CTA visibility with the current document state.
+ * Shows the section only when there are deletable Stylistic comments.
+ */
+async function refreshCleanupVisibility(): Promise<void> {
+  const cleanupSection = document.getElementById("cleanup-section");
+  if (!cleanupSection) {
+    return;
+  }
+
+  try {
+    const { deletable } = await documentPort.getCleanupPreview();
+    cleanupSection.style.display = deletable > 0 ? "block" : "none";
+  } catch (error) {
+    console.warn(
+      "⚠️ [Taskpane] No se pudo calcular la visibilidad de limpieza:",
+      error,
+    );
+  }
 }
 
 /**
@@ -538,6 +560,8 @@ async function handleAcceptSuggestion(
     };
     void feedbackPort.sendFeedback(payload);
   }
+
+  void refreshCleanupVisibility();
 }
 
 /**
@@ -594,6 +618,8 @@ async function handleRejectSuggestion(
     };
     void feedbackPort.sendFeedback(payload);
   }
+
+  void refreshCleanupVisibility();
 }
 
 // ---------------------------------------------------------------------------
@@ -616,7 +642,6 @@ async function handleAnalyze(): Promise<void> {
 
   setAnalyzeLoading(true);
   document.getElementById("results-panel")!.style.display = "none";
-  document.getElementById("cleanup-section")!.style.display = "none";
 
   const emitter = new PipelineEventEmitter();
   const ctx: PipelineContext = {
@@ -645,10 +670,7 @@ async function handleAnalyze(): Promise<void> {
     onComplete(suggestions, result, chunkErrors, isSelection) {
       hideProgress();
       renderResults(suggestions, result, chunkErrors, isSelection);
-
-      if (result.successCount > 0) {
-        document.getElementById("cleanup-section")!.style.display = "block";
-      }
+      void refreshCleanupVisibility();
 
       const scopeSuffix = isSelection ? " (selección)" : "";
       if (result.failedSuggestions.length > 0 && result.successCount > 0) {
@@ -717,10 +739,8 @@ async function handleCleanup(): Promise<void> {
       `${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`,
       "success",
     );
-
-    if (kept === 0) {
-      document.getElementById("cleanup-section")!.style.display = "none";
-    }
+    document.getElementById("cleanup-section")!.style.display =
+      kept > 0 ? "block" : "none";
   } catch (error) {
     showStatus(toUserMessage(error), "error");
   } finally {

@@ -28,8 +28,10 @@ import type {
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
 import {
   cleanupResolvedComments,
+  getCleanupPreview,
   OVERLAPPING_RELATIONS,
 } from "./cleanup/CommentCleanup";
+import { isStylisticComment } from "./StylisticCommentBuilder";
 
 type ParagraphSnapshot = {
   text?: string;
@@ -341,6 +343,13 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
+   * Returns a dry-run summary of comments that can be deleted right now.
+   */
+  async getCleanupPreview(): Promise<{ deletable: number; kept: number }> {
+    return getCleanupPreview();
+  }
+
+  /**
    * Deletes Stylistic comments whose tracked changes have been resolved.
    * Delegates to the `CommentCleanup` module (Range Colocation pattern).
    */
@@ -418,12 +427,10 @@ export class WordAdapter implements IDocumentPort {
 
         // 2. Find and delete the colocated Stylistic comment (shared by both branches)
         const comments = context.document.body.getComments();
-        comments.load({ select: "authorName" });
+        comments.load({ select: "authorName,content" });
         await context.sync();
 
-        const stylisticComments = comments.items.filter(
-          (c) => c.authorName === "Stylistic",
-        );
+        const stylisticComments = comments.items.filter(isStylisticComment);
         let commentDeleted = false;
         const ccRange = cc.getRange();
 

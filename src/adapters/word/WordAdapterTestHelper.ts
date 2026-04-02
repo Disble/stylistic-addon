@@ -6,6 +6,7 @@ const hoistedCommandMocks = vi.hoisted(() => ({
 }));
 
 const hoistedCleanupMocks = vi.hoisted(() => ({
+  getCleanupPreview: vi.fn(),
   cleanupResolvedComments: vi.fn(),
 }));
 
@@ -39,6 +40,7 @@ vi.mock("./ApplySuggestionCommand", () => ({
 }));
 
 vi.mock("./cleanup/CommentCleanup", () => ({
+  getCleanupPreview: hoistedCleanupMocks.getCleanupPreview,
   cleanupResolvedComments: hoistedCleanupMocks.cleanupResolvedComments,
   OVERLAPPING_RELATIONS: [
     "Equal",
@@ -51,7 +53,7 @@ vi.mock("./cleanup/CommentCleanup", () => ({
     "OverlapsBefore",
     "OverlapsAfter",
   ],
-  COMMENT_ONLY_TAG_PREFIX: "stylistic:comment-only:",
+  STYLISTIC_TAG_PREFIX: "stylistic:",
 }));
 
 type WordRunCallback<T> = (context: any) => Promise<T> | T;

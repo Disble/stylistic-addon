@@ -4,6 +4,8 @@ const hoistedTaskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],
   run: vi.fn<(ctx: any) => Promise<void>>(),
   wordAdapterConstructor: vi.fn(),
+  getCleanupPreview:
+    vi.fn<() => Promise<{ deletable: number; kept: number }>>(),
   cleanupResolvedComments:
     vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
   acceptSuggestion: vi.fn(),
@@ -29,6 +31,10 @@ vi.mock("../adapters/word/WordAdapter", () => ({
 
     cleanupResolvedComments() {
       return hoistedTaskpaneMocks.cleanupResolvedComments();
+    }
+
+    getCleanupPreview() {
+      return hoistedTaskpaneMocks.getCleanupPreview();
     }
 
     acceptSuggestion(suggestion: any) {
@@ -396,6 +402,10 @@ export function resetTaskpaneHarness() {
   vi.useFakeTimers();
   taskpaneMocks.orchestratorHandlers = [];
   taskpaneMocks.run.mockResolvedValue(undefined);
+  taskpaneMocks.getCleanupPreview.mockResolvedValue({
+    deletable: 0,
+    kept: 0,
+  });
   taskpaneMocks.cleanupResolvedComments.mockResolvedValue({
     deleted: 0,
     kept: 0,
