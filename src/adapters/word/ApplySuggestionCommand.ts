@@ -300,8 +300,7 @@ export class ApplySuggestionCommand {
 
           return { success: true, commandId: this.id };
         } finally {
-          context.document.changeTrackingMode =
-            previousMode as Word.ChangeTrackingMode;
+          context.document.changeTrackingMode = previousMode;
           await context.sync();
         }
       });

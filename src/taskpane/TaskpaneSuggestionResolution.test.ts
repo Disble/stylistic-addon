@@ -10,6 +10,27 @@ import {
   teardownTaskpaneHarness,
 } from "./TaskpaneTestHelper";
 
+/** Returns a required fake document element or throws in tests. */
+function getRequiredElement(
+  doc: ReturnType<typeof createTaskpaneDocument>,
+  id: string,
+): FakeElement {
+  const element = doc.getElementById(id);
+  if (!element) {
+    throw new Error(`Missing fake DOM element: ${id}`);
+  }
+  return element;
+}
+
+/** Returns a required fake child element from a selector or throws in tests. */
+function getRequiredChild(parent: FakeElement, selector: string): FakeElement {
+  const child = parent.querySelector(selector);
+  if (!child) {
+    throw new Error(`Missing child for selector: ${selector}`);
+  }
+  return child;
+}
+
 describe("taskpane suggestion resolution guardrails", () => {
   const taskpaneMocks = getTaskpaneMocks();
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -39,19 +60,13 @@ describe("taskpane suggestion resolution guardrails", () => {
 
     expect(liItems).toHaveLength(2);
     expect(
-      liItems[0].querySelector('[data-action="accept"]')?.getAttribute(
-        "data-suggestion-id",
-      ),
+      liItems[0].querySelector('[data-action="accept"]')?.dataset.suggestionId,
     ).toBe("s-1");
     expect(
-      liItems[0].querySelector('[data-action="reject"]')?.getAttribute(
-        "data-suggestion-id",
-      ),
+      liItems[0].querySelector('[data-action="reject"]')?.dataset.suggestionId,
     ).toBe("s-1");
     expect(
-      liItems[1].querySelector('[data-action="accept"]')?.getAttribute(
-        "data-suggestion-id",
-      ),
+      liItems[1].querySelector('[data-action="accept"]')?.dataset.suggestionId,
     ).toBe("s-2");
   });
 
@@ -63,7 +78,7 @@ describe("taskpane suggestion resolution guardrails", () => {
 
     expect(liItems[0].querySelector('[data-action="accept"]')).toBeNull();
     expect(liItems[0].querySelector('[data-action="reject"]')).toBeNull();
-    expect((liItems[0].querySelector(".result-failed") as FakeElement).textContent).toBe(
+    expect(getRequiredChild(liItems[0], ".result-failed").textContent).toBe(
       `No encontrado: "${suggestion.anchor}"`,
     );
   });
@@ -77,7 +92,7 @@ describe("taskpane suggestion resolution guardrails", () => {
       .mockResolvedValueOnce({ deletable: 1, kept: 0 });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
     await Promise.resolve();
@@ -88,7 +103,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.classList.contains("result-accepted")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
-    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
+    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
   });
 
   it("clicking Reject applies terminal rejected UI and removes buttons", async () => {
@@ -100,7 +115,7 @@ describe("taskpane suggestion resolution guardrails", () => {
       .mockResolvedValueOnce({ deletable: 1, kept: 0 });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+    const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
 
     rejectBtn.click();
     await Promise.resolve();
@@ -111,7 +126,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.classList.contains("result-rejected")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
-    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
+    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
   });
 
   it("keeps terminal rejected UI even when adapter ignored late cleanup failure", async () => {
@@ -129,7 +144,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+    const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
 
     rejectBtn.click();
     await Promise.resolve();
@@ -151,7 +166,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
     await Promise.resolve();
@@ -178,7 +193,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const rejectBtn = li.querySelector('[data-action="reject"]') as FakeElement;
+    const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
 
     rejectBtn.click();
     await Promise.resolve();
@@ -202,7 +217,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
     await Promise.resolve();
@@ -228,7 +243,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
     await Promise.resolve();
@@ -265,7 +280,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
     await Promise.resolve();
@@ -292,7 +307,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
     await Promise.resolve();
@@ -300,7 +315,7 @@ describe("taskpane suggestion resolution guardrails", () => {
 
     expect(acceptBtn.disabled).toBe(false);
     expect(
-      (li.querySelector('[data-action="reject"]') as FakeElement).disabled,
+      getRequiredChild(li, '[data-action="reject"]').disabled,
     ).toBe(false);
     expect(doc.getElementById("status-bar")?.textContent).toBe(
       "El documento está protegido",
@@ -319,7 +334,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = li.querySelector('[data-action="accept"]') as FakeElement;
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
     await Promise.resolve();
@@ -327,7 +342,7 @@ describe("taskpane suggestion resolution guardrails", () => {
 
     expect(acceptBtn.disabled).toBe(false);
     expect(
-      (li.querySelector('[data-action="reject"]') as FakeElement).disabled,
+      getRequiredChild(li, '[data-action="reject"]').disabled,
     ).toBe(false);
   });
 });

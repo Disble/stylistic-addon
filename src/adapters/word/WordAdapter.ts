@@ -43,11 +43,11 @@ type ParagraphSnapshot = {
 const PARAGRAPH_LOAD_FIELDS =
   "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent";
 
-const RESOLUTION_RELATED_RELATIONS = [
+const RESOLUTION_RELATED_RELATIONS = new Set([
   ...OVERLAPPING_RELATIONS,
   "AdjacentBefore",
   "AdjacentAfter",
-];
+]);
 
 function isHeadingStyle(styleBuiltIn?: string): boolean {
   return styleBuiltIn === "Title" || /^Heading\d+$/.test(styleBuiltIn ?? "");
@@ -148,9 +148,7 @@ export class WordAdapter implements IDocumentPort {
     ) {
       const tc = candidateBodyTrackedChanges[index];
       if (
-        RESOLUTION_RELATED_RELATIONS.includes(
-          comparisons[index].value as string,
-        )
+        RESOLUTION_RELATED_RELATIONS.has(comparisons[index].value as string)
       ) {
         addTrackedChange(tc);
       }
@@ -380,6 +378,81 @@ export class WordAdapter implements IDocumentPort {
     return { newFormatResult, legacyResult };
   }
 
+  /** Maps a resolution action to its terminal success status. */
+  private toResolutionStatus(action: "accept" | "reject") {
+    return action === "accept" ? ("accepted" as const) : ("rejected" as const);
+  }
+
+  /** Deletes the Stylistic comment colocated with the suggestion CC range. */
+  private async deleteColocatedStylisticComment(
+    context: Word.RequestContext,
+    cc: Word.ContentControl,
+  ): Promise<boolean> {
+    const comments = context.document.body.getComments();
+    comments.load({ select: "authorName,content" });
+    await context.sync();
+
+    const stylisticComments = comments.items.filter(isStylisticComment);
+    const ccRange = cc.getRange();
+
+    for (const comment of stylisticComments) {
+      const commentRange = comment.getRange();
+      const locationResult = commentRange.compareLocationWith(ccRange);
+      await context.sync();
+      if (OVERLAPPING_RELATIONS.includes(locationResult.value as string)) {
+        comment.delete();
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /** Resolves the comment-only branch by deleting the CC and returning terminal status. */
+  private async resolveCommentOnlySuggestion(
+    context: Word.RequestContext,
+    cc: Word.ContentControl,
+    suggestion: Suggestion,
+    action: "accept" | "reject",
+    commentDeleted: boolean,
+  ): Promise<SuggestionActionResult> {
+    cc.delete(true);
+    await context.sync();
+    console.log(
+      `🗨️ [WordAdapter] "${suggestion.id}": comment-only ${action}ed, comentario eliminado: ${commentDeleted}`,
+    );
+
+    return {
+      status: this.toResolutionStatus(action),
+      trackedChangesAffected: 0,
+      commentDeleted,
+    };
+  }
+
+  /**
+   * Deletes the CC anchor after tracked changes were already resolved.
+   * Reject can legitimately lose the inserted-side CC as a side effect.
+   */
+  private async cleanupResolvedSuggestionAnchor(
+    context: Word.RequestContext,
+    cc: Word.ContentControl,
+    suggestion: Suggestion,
+    action: "accept" | "reject",
+  ): Promise<void> {
+    try {
+      cc.delete(true);
+      await context.sync();
+    } catch (cleanupError) {
+      if (action === "accept") {
+        throw cleanupError;
+      }
+
+      console.warn(
+        `⚠️ [WordAdapter] "${suggestion.id}": reject cleanup skipped after successful resolution: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+      );
+    }
+  }
+
   /**
    * Shared implementation for accepting or rejecting a suggestion.
    *
@@ -426,40 +499,20 @@ export class WordAdapter implements IDocumentPort {
         }
 
         // 2. Find and delete the colocated Stylistic comment (shared by both branches)
-        const comments = context.document.body.getComments();
-        comments.load({ select: "authorName,content" });
-        await context.sync();
-
-        const stylisticComments = comments.items.filter(isStylisticComment);
-        let commentDeleted = false;
-        const ccRange = cc.getRange();
-
-        for (const comment of stylisticComments) {
-          const commentRange = comment.getRange();
-          const locationResult = commentRange.compareLocationWith(ccRange);
-          await context.sync();
-          if (OVERLAPPING_RELATIONS.includes(locationResult.value as string)) {
-            comment.delete();
-            commentDeleted = true;
-            break;
-          }
-        }
+        const commentDeleted = await this.deleteColocatedStylisticComment(
+          context,
+          cc,
+        );
 
         // 3a. comment-only branch: no TCs to process — just delete the CC
         if (suggestion.type === "comment-only") {
-          cc.delete(true); // true = keep content
-          await context.sync();
-          console.log(
-            `🗨️ [WordAdapter] "${suggestion.id}": comment-only ${action}ed, comentario eliminado: ${commentDeleted}`,
-          );
-          return {
-            status:
-              action === "accept"
-                ? ("accepted" as const)
-                : ("rejected" as const),
-            trackedChangesAffected: 0,
+          return this.resolveCommentOnlySuggestion(
+            context,
+            cc,
+            suggestion,
+            action,
             commentDeleted,
-          };
+          );
         }
 
         // 3b. track-change branch: resolve all tracked changes semantically tied
@@ -486,28 +539,15 @@ export class WordAdapter implements IDocumentPort {
           }
         }
 
-        // 4. Delete the Content Control anchor itself.
-        //
-        // Rejecting a native insertion may remove the inserted-side CC anchor as a
-        // side effect of restoring the original text. In that case, the semantic
-        // reject already succeeded and a late CC cleanup failure must not degrade
-        // the final result to `error`.
-        try {
-          cc.delete(true);
-          await context.sync();
-        } catch (cleanupError) {
-          if (action === "accept") {
-            throw cleanupError;
-          }
-
-          console.warn(
-            `⚠️ [WordAdapter] "${suggestion.id}": reject cleanup skipped after successful resolution: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-          );
-        }
+        await this.cleanupResolvedSuggestionAnchor(
+          context,
+          cc,
+          suggestion,
+          action,
+        );
 
         return {
-          status:
-            action === "accept" ? ("accepted" as const) : ("rejected" as const),
+          status: this.toResolutionStatus(action),
           trackedChangesAffected: trackedChanges.length,
           commentDeleted,
         };

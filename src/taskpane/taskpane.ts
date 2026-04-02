@@ -138,6 +138,17 @@ export function bootstrapTaskpane(
 
 bootstrapTaskpane();
 
+/** Returns a required DOM element by id or throws with a clear error. */
+function getRequiredElement<T extends HTMLElement = HTMLElement>(
+  id: string,
+): T {
+  const element = document.getElementById(id);
+  if (!element) {
+    throw new Error(`Missing required DOM element: ${id}`);
+  }
+  return element as T;
+}
+
 // ---------------------------------------------------------------------------
 // UI Helpers
 // ---------------------------------------------------------------------------
@@ -147,7 +158,7 @@ bootstrapTaskpane();
  * Auto-hides after {@link STATUS_DISPLAY_MS} milliseconds.
  */
 function showStatus(message: string, type: "success" | "error"): void {
-  const bar = document.getElementById("status-bar")!;
+  const bar = getRequiredElement("status-bar");
   bar.textContent = message;
   bar.className = `stylistic-status ${type}`;
   bar.style.display = "block";
@@ -161,7 +172,7 @@ function showStatus(message: string, type: "success" | "error"): void {
  */
 function setAnalyzeLoading(loading: boolean): void {
   const btn = document.getElementById("btn-analyze") as HTMLButtonElement;
-  const label = document.getElementById("btn-analyze-label")!;
+  const label = getRequiredElement("btn-analyze-label");
   const select = document.getElementById("profile-select") as HTMLSelectElement;
   btn.disabled = loading;
   select.disabled = loading;
@@ -172,9 +183,9 @@ function setAnalyzeLoading(loading: boolean): void {
  * Updates the progress bar and text in the progress area.
  */
 function updateProgress(current: number, total: number, message: string): void {
-  const container = document.getElementById("progress-container")!;
-  const bar = document.getElementById("progress-bar")!;
-  const text = document.getElementById("progress-text")!;
+  const container = getRequiredElement("progress-container");
+  const bar = getRequiredElement("progress-bar");
+  const text = getRequiredElement("progress-text");
 
   container.style.display = "block";
   const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
@@ -213,6 +224,242 @@ async function refreshCleanupVisibility(): Promise<void> {
   }
 }
 
+/** Builds the summary sentence displayed above the rendered suggestion list. */
+function buildResultsSummary(
+  suggestions: Suggestion[],
+  result: InsertionResult,
+  chunkErrors: string[],
+  isSelection: boolean,
+): string {
+  const total = suggestions.length;
+  const applied = result.successCount;
+  const failed = result.failedSuggestions.length;
+  const scopePrefix = isSelection ? "Sobre selección — " : "";
+
+  let summaryText = `${scopePrefix}${applied} de ${total} sugerencias aplicadas como Track Changes.`;
+  if (failed > 0) {
+    summaryText += ` ${failed} no encontrada(s) en el texto.`;
+  }
+  if (chunkErrors.length > 0) {
+    summaryText += ` ${chunkErrors.length} fragmento(s) con error.`;
+  }
+
+  return summaryText;
+}
+
+/** Creates the metadata row for one suggestion card. */
+function createSuggestionMetaRow(
+  suggestion: Suggestion,
+  isFailed: boolean,
+  isCommentOnly: boolean,
+): HTMLDivElement {
+  const meta = document.createElement("div");
+  meta.className = "card-meta";
+
+  const catBadge = document.createElement("span");
+  catBadge.className = "result-category";
+  catBadge.textContent = suggestion.category;
+  meta.appendChild(catBadge);
+
+  if (isFailed) {
+    return meta;
+  }
+
+  const sevBadge = document.createElement("span");
+  sevBadge.className = `result-severity result-severity--${suggestion.severity}`;
+  sevBadge.textContent = suggestion.severity;
+  meta.appendChild(sevBadge);
+
+  if (isCommentOnly) {
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "result-type-badge result-type-badge--comment";
+    typeBadge.textContent = "comentario";
+    meta.appendChild(typeBadge);
+  }
+
+  return meta;
+}
+
+/** Renders the failed-state content for one suggestion card. */
+function appendFailedCardContent(
+  li: HTMLLIElement,
+  suggestion: Suggestion,
+): void {
+  const failedSpan = document.createElement("span");
+  failedSpan.className = "result-failed";
+  failedSpan.textContent = `No encontrado: "${suggestion.anchor}"`;
+  li.appendChild(failedSpan);
+
+  const justSpan = document.createElement("span");
+  justSpan.className = "result-justification";
+  justSpan.textContent = suggestion.justification;
+  li.appendChild(justSpan);
+}
+
+/** Creates one action button for accept/reject/feedback actions. */
+function createActionButton(
+  action: "accept" | "reject" | "feedback",
+  suggestionId: string,
+  isCommentOnly: boolean,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.dataset.action = action;
+
+  if (action === "feedback") {
+    button.className = "feedback-btn";
+    button.setAttribute("aria-label", "Dejar feedback");
+    button.textContent = "💬";
+    return button;
+  }
+
+  button.className = isCommentOnly
+    ? "result-action-btn result-action-btn--text"
+    : "result-action-btn";
+  button.dataset.suggestionId = suggestionId;
+
+  if (action === "accept") {
+    button.setAttribute("aria-label", "Aceptar sugerencia");
+    button.textContent = isCommentOnly ? "Entendido" : "✓";
+  } else {
+    button.setAttribute("aria-label", "Rechazar sugerencia");
+    button.textContent = isCommentOnly ? "Ignorar" : "✗";
+  }
+
+  return button;
+}
+
+/** Renders the actionable content (diff, justification, actions, accordion). */
+function appendActionableCardContent(
+  li: HTMLLIElement,
+  suggestion: Suggestion,
+  isCommentOnly: boolean,
+): void {
+  const clickable = document.createElement("div");
+  clickable.className = "card-clickable-area";
+
+  if (!isCommentOnly) {
+    const diff = document.createElement("div");
+    diff.className = "card-diff";
+
+    const origSpan = document.createElement("span");
+    origSpan.className = "result-original";
+    origSpan.textContent = suggestion.anchor;
+    diff.appendChild(origSpan);
+
+    const arrowSpan = document.createElement("span");
+    arrowSpan.className = "result-arrow";
+    arrowSpan.textContent = " -> ";
+    diff.appendChild(arrowSpan);
+
+    const sugSpan = document.createElement("span");
+    sugSpan.className = "result-suggested";
+    sugSpan.textContent = suggestion.suggestedText ?? "";
+    diff.appendChild(sugSpan);
+
+    clickable.appendChild(diff);
+  }
+
+  const justSpan = document.createElement("span");
+  justSpan.className = "result-justification";
+  justSpan.textContent = suggestion.justification;
+  clickable.appendChild(justSpan);
+  li.appendChild(clickable);
+
+  const footer = document.createElement("div");
+  footer.className = "card-footer";
+
+  const actionsSpan = document.createElement("span");
+  actionsSpan.className = "result-actions";
+  actionsSpan.appendChild(
+    createActionButton("accept", suggestion.id, isCommentOnly),
+  );
+  actionsSpan.appendChild(
+    createActionButton("reject", suggestion.id, isCommentOnly),
+  );
+  actionsSpan.appendChild(
+    createActionButton("feedback", suggestion.id, isCommentOnly),
+  );
+
+  footer.appendChild(actionsSpan);
+  li.appendChild(footer);
+
+  const accordion = document.createElement("div");
+  accordion.className = "feedback-accordion";
+  const textarea = document.createElement("textarea");
+  textarea.className = "feedback-textarea";
+  textarea.setAttribute("placeholder", "Comentario opcional...");
+  accordion.appendChild(textarea);
+  li.appendChild(accordion);
+}
+
+/** Builds one suggestion card and returns whether it is in failed state. */
+function createSuggestionCard(
+  suggestion: Suggestion,
+  failedSuggestions: Suggestion[],
+): { li: HTMLLIElement; isFailed: boolean } {
+  const isFailed = failedSuggestions.some((f) => f.id === suggestion.id);
+  const isCommentOnly = suggestion.type === "comment-only";
+
+  const li = document.createElement("li");
+  li.className = "suggestion-card";
+  li.dataset.severity = suggestion.severity;
+  li.appendChild(createSuggestionMetaRow(suggestion, isFailed, isCommentOnly));
+
+  if (isFailed) {
+    appendFailedCardContent(li, suggestion);
+    return { li, isFailed: true };
+  }
+
+  appendActionableCardContent(li, suggestion, isCommentOnly);
+  return { li, isFailed: false };
+}
+
+/** Wires per-card interaction handlers for navigation, feedback, accept and reject. */
+function wireSuggestionCardInteractions(
+  li: HTMLLIElement,
+  suggestion: Suggestion,
+): void {
+  const clickableEl = li.querySelector(
+    ".card-clickable-area",
+  ) as HTMLElement | null;
+  if (clickableEl) {
+    clickableEl.addEventListener("click", () => {
+      void documentPort.navigateToText(suggestion.anchor);
+    });
+  }
+
+  const acceptBtnEl = li.querySelector(
+    '[data-action="accept"]',
+  ) as HTMLButtonElement | null;
+  const rejectBtnEl = li.querySelector(
+    '[data-action="reject"]',
+  ) as HTMLButtonElement | null;
+  const feedbackBtnEl = li.querySelector(
+    '[data-action="feedback"]',
+  ) as HTMLButtonElement | null;
+  const accordionEl = li.querySelector(
+    ".feedback-accordion",
+  ) as HTMLElement | null;
+
+  if (feedbackBtnEl && accordionEl) {
+    feedbackBtnEl.addEventListener("click", () => {
+      accordionEl.classList.toggle("feedback-accordion--open");
+    });
+  }
+
+  const sm = new SuggestionStateMachine();
+  if (acceptBtnEl) {
+    acceptBtnEl.addEventListener("click", () =>
+      handleAcceptSuggestion(suggestion, li, acceptBtnEl, rejectBtnEl, sm),
+    );
+  }
+  if (rejectBtnEl) {
+    rejectBtnEl.addEventListener("click", () =>
+      handleRejectSuggestion(suggestion, li, acceptBtnEl, rejectBtnEl, sm),
+    );
+  }
+}
+
 /**
  * Renders the results panel showing each suggestion and its outcome.
  */
@@ -222,198 +469,23 @@ function renderResults(
   chunkErrors: string[],
   isSelection: boolean,
 ): void {
-  const panel = document.getElementById("results-panel")!;
-  const summary = document.getElementById("results-summary")!;
-  const list = document.getElementById("results-list")!;
+  const panel = getRequiredElement("results-panel");
+  const summary = getRequiredElement("results-summary");
+  const list = getRequiredElement("results-list");
 
-  const total = suggestions.length;
-  const applied = result.successCount;
-  const failed = result.failedSuggestions.length;
-
-  const scopePrefix = isSelection ? "Sobre selección — " : "";
-  let summaryText = `${scopePrefix}${applied} de ${total} sugerencias aplicadas como Track Changes.`;
-  if (failed > 0) summaryText += ` ${failed} no encontrada(s) en el texto.`;
-  if (chunkErrors.length > 0)
-    summaryText += ` ${chunkErrors.length} fragmento(s) con error.`;
-  summary.textContent = summaryText;
+  summary.textContent = buildResultsSummary(
+    suggestions,
+    result,
+    chunkErrors,
+    isSelection,
+  );
 
   list.innerHTML = "";
-  for (const s of suggestions) {
-    const isFailed = result.failedSuggestions.some((f) => f.id === s.id);
-    const isCommentOnly = s.type === "comment-only";
-
-    const li = document.createElement("li");
-    li.className = "suggestion-card";
-    li.setAttribute("data-severity", s.severity);
-
-    // --- Meta row: category + severity badges ---
-    const meta = document.createElement("div");
-    meta.className = "card-meta";
-
-    const catBadge = document.createElement("span");
-    catBadge.className = "result-category";
-    catBadge.textContent = s.category;
-    meta.appendChild(catBadge);
-
-    if (!isFailed) {
-      const sevBadge = document.createElement("span");
-      sevBadge.className = `result-severity result-severity--${s.severity}`;
-      sevBadge.textContent = s.severity;
-      meta.appendChild(sevBadge);
-
-      if (isCommentOnly) {
-        const typeBadge = document.createElement("span");
-        typeBadge.className = "result-type-badge result-type-badge--comment";
-        typeBadge.textContent = "comentario";
-        meta.appendChild(typeBadge);
-      }
-    }
-    li.appendChild(meta);
-
-    if (isFailed) {
-      const failedSpan = document.createElement("span");
-      failedSpan.className = "result-failed";
-      failedSpan.textContent = `No encontrado: "${s.anchor}"`;
-      li.appendChild(failedSpan);
-
-      const justSpan = document.createElement("span");
-      justSpan.className = "result-justification";
-      justSpan.textContent = s.justification;
-      li.appendChild(justSpan);
-    } else {
-      // Clickable area: meta + diff + justification trigger navigation on click.
-      // This div is a SIBLING of card-footer, so clicks on action buttons never
-      // bubble into this element and cannot accidentally trigger navigation.
-      const clickable = document.createElement("div");
-      clickable.className = "card-clickable-area";
-
-      // Diff block (track-change only)
-      if (!isCommentOnly) {
-        const diff = document.createElement("div");
-        diff.className = "card-diff";
-
-        const origSpan = document.createElement("span");
-        origSpan.className = "result-original";
-        origSpan.textContent = s.anchor;
-        diff.appendChild(origSpan);
-
-        const arrowSpan = document.createElement("span");
-        arrowSpan.className = "result-arrow";
-        arrowSpan.textContent = " \u2192 ";
-        diff.appendChild(arrowSpan);
-
-        const sugSpan = document.createElement("span");
-        sugSpan.className = "result-suggested";
-        sugSpan.textContent = s.suggestedText ?? "";
-        diff.appendChild(sugSpan);
-
-        clickable.appendChild(diff);
-      }
-
-      // Justification
-      const justSpan = document.createElement("span");
-      justSpan.className = "result-justification";
-      justSpan.textContent = s.justification;
-      clickable.appendChild(justSpan);
-
-      li.appendChild(clickable);
-
-      // Footer: action buttons — NOT inside clickable area
-      const footer = document.createElement("div");
-      footer.className = "card-footer";
-
-      const actionsSpan = document.createElement("span");
-      actionsSpan.className = "result-actions";
-
-      const acceptBtn = document.createElement("button");
-      acceptBtn.className = isCommentOnly
-        ? "result-action-btn result-action-btn--text"
-        : "result-action-btn";
-      acceptBtn.setAttribute("data-action", "accept");
-      acceptBtn.setAttribute("data-suggestion-id", s.id);
-      acceptBtn.setAttribute("aria-label", "Aceptar sugerencia");
-      acceptBtn.textContent = isCommentOnly ? "Entendido" : "✓";
-
-      const rejectBtn = document.createElement("button");
-      rejectBtn.className = isCommentOnly
-        ? "result-action-btn result-action-btn--text"
-        : "result-action-btn";
-      rejectBtn.setAttribute("data-action", "reject");
-      rejectBtn.setAttribute("data-suggestion-id", s.id);
-      rejectBtn.setAttribute("aria-label", "Rechazar sugerencia");
-      rejectBtn.textContent = isCommentOnly ? "Ignorar" : "✗";
-
-      const feedbackBtn = document.createElement("button");
-      feedbackBtn.className = "feedback-btn";
-      feedbackBtn.setAttribute("data-action", "feedback");
-      feedbackBtn.setAttribute("aria-label", "Dejar feedback");
-      feedbackBtn.textContent = "💬";
-
-      actionsSpan.appendChild(acceptBtn);
-      actionsSpan.appendChild(rejectBtn);
-      actionsSpan.appendChild(feedbackBtn);
-      footer.appendChild(actionsSpan);
-      li.appendChild(footer);
-
-      // Feedback accordion
-      const accordion = document.createElement("div");
-      accordion.className = "feedback-accordion";
-      const textarea = document.createElement("textarea");
-      textarea.className = "feedback-textarea";
-      textarea.setAttribute("placeholder", "Comentario opcional...");
-      accordion.appendChild(textarea);
-      li.appendChild(accordion);
-    }
-
-    list.appendChild(li);
-
-    if (!isFailed) {
-      // Navigation: click on the card content area (not on buttons) → scroll Word to text.
-      // Using a dedicated sibling div (card-clickable-area) instead of the li itself ensures
-      // that button clicks in card-footer NEVER reach this handler — no event.stopPropagation
-      // or closest() checks needed.
-      const clickableEl = li.querySelector(
-        ".card-clickable-area",
-      ) as HTMLElement | null;
-      if (clickableEl) {
-        clickableEl.addEventListener("click", () => {
-          void documentPort.navigateToText(s.anchor);
-        });
-      }
-
-      const acceptBtnEl = li.querySelector(
-        '[data-action="accept"]',
-      ) as HTMLButtonElement | null;
-      const rejectBtnEl = li.querySelector(
-        '[data-action="reject"]',
-      ) as HTMLButtonElement | null;
-      const feedbackBtnEl = li.querySelector(
-        '[data-action="feedback"]',
-      ) as HTMLButtonElement | null;
-      const accordionEl = li.querySelector(
-        ".feedback-accordion",
-      ) as HTMLElement | null;
-
-      if (feedbackBtnEl && accordionEl) {
-        feedbackBtnEl.addEventListener("click", () => {
-          accordionEl.classList.toggle("feedback-accordion--open");
-        });
-      }
-
-      // One state machine per card — guards double-clicks and enforces valid transitions.
-      // The SM instance is closed over by both handlers and GC'd when the list is cleared.
-      const sm = new SuggestionStateMachine();
-
-      if (acceptBtnEl) {
-        acceptBtnEl.addEventListener("click", () =>
-          handleAcceptSuggestion(s, li, acceptBtnEl, rejectBtnEl, sm),
-        );
-      }
-      if (rejectBtnEl) {
-        rejectBtnEl.addEventListener("click", () =>
-          handleRejectSuggestion(s, li, acceptBtnEl, rejectBtnEl, sm),
-        );
-      }
+  for (const suggestion of suggestions) {
+    const card = createSuggestionCard(suggestion, result.failedSuggestions);
+    list.appendChild(card.li);
+    if (!card.isFailed) {
+      wireSuggestionCardInteractions(card.li, suggestion);
     }
   }
 
@@ -425,7 +497,18 @@ function renderResults(
  * Recognizes common Office.js error codes.
  */
 function toUserMessage(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
+  if (!(error instanceof Error)) {
+    if (typeof error === "string") {
+      return error;
+    }
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Error no serializable";
+    }
+  }
+
   const officeError = error as Error & { code?: string };
   switch (officeError.code) {
     case "AccessDenied":
@@ -550,9 +633,9 @@ async function handleAcceptSuggestion(
     const payload: FeedbackPayload = {
       category: suggestion.category,
       originalText: suggestion.anchor,
-      ...(suggestion.suggestedText !== undefined
-        ? { suggestedText: suggestion.suggestedText }
-        : {}),
+      ...(suggestion.suggestedText === undefined
+        ? {}
+        : { suggestedText: suggestion.suggestedText }),
       justification: suggestion.justification,
       rating: "positive",
       severity: suggestion.severity,
@@ -608,9 +691,9 @@ async function handleRejectSuggestion(
     const payload: FeedbackPayload = {
       category: suggestion.category,
       originalText: suggestion.anchor,
-      ...(suggestion.suggestedText !== undefined
-        ? { suggestedText: suggestion.suggestedText }
-        : {}),
+      ...(suggestion.suggestedText === undefined
+        ? {}
+        : { suggestedText: suggestion.suggestedText }),
       justification: suggestion.justification,
       rating: "negative",
       severity: suggestion.severity,
@@ -641,7 +724,7 @@ async function handleAnalyze(): Promise<void> {
   }
 
   setAnalyzeLoading(true);
-  document.getElementById("results-panel")!.style.display = "none";
+  getRequiredElement("results-panel").style.display = "none";
 
   const emitter = new PipelineEventEmitter();
   const ctx: PipelineContext = {
@@ -725,7 +808,7 @@ async function handleAnalyze(): Promise<void> {
 async function handleCleanup(): Promise<void> {
   console.log("🧽 [Taskpane] Iniciando limpieza de comentarios resueltos...");
   const btn = document.getElementById("btn-cleanup") as HTMLButtonElement;
-  const label = document.getElementById("btn-cleanup-label")!;
+  const label = getRequiredElement("btn-cleanup-label");
 
   btn.disabled = true;
   label.textContent = "Limpiando...";
@@ -739,7 +822,7 @@ async function handleCleanup(): Promise<void> {
       `${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`,
       "success",
     );
-    document.getElementById("cleanup-section")!.style.display =
+    getRequiredElement("cleanup-section").style.display =
       kept > 0 ? "block" : "none";
   } catch (error) {
     showStatus(toUserMessage(error), "error");

@@ -15,6 +15,15 @@ import {
   RETRY_BASE_DELAY_MS,
 } from "../infrastructure/config";
 
+/** Returns a required fake element in taskpane entrypoint tests. */
+function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: string) {
+  const el = doc.getElementById(id);
+  if (!el) {
+    throw new Error(`Missing fake DOM element: ${id}`);
+  }
+  return el;
+}
+
 describe("taskpane entrypoint", () => {
   const taskpaneMocks = getTaskpaneMocks();
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -62,7 +71,7 @@ describe("taskpane entrypoint", () => {
     );
 
     officeHarness.triggerReady({ host: "Excel" });
-    expect(doc.getElementById("sideload-msg")!.style.display).toBe("block");
+    expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("block");
     expect(doc.getElementById("btn-analyze")?.onclick).toBeNull();
 
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
@@ -72,8 +81,8 @@ describe("taskpane entrypoint", () => {
 
     officeHarness.triggerReady({ host: "Word" });
     await Promise.resolve();
-    expect(doc.getElementById("sideload-msg")!.style.display).toBe("none");
-    expect(doc.getElementById("app-body")!.style.display).toBe("flex");
+    expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("none");
+    expect(getRequiredElement(doc, "app-body").style.display).toBe("flex");
     expect(doc.getElementById("btn-analyze")?.onclick).toEqual(
       expect.any(Function),
     );
@@ -81,7 +90,7 @@ describe("taskpane entrypoint", () => {
       expect.any(Function),
     );
     expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledOnce();
-    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
+    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
   });
 
   it("runs the pipeline with the selected profile and updates terminal UI state from emitted events", async () => {
@@ -124,7 +133,7 @@ describe("taskpane entrypoint", () => {
       analysisPort: expect.any(Object),
       emitter: expect.any(Object),
     });
-    expect(doc.getElementById("progress-container")!.style.display).toBe("block");
+    expect(getRequiredElement(doc, "progress-container").style.display).toBe("block");
     expect(doc.getElementById("progress-bar")?.style.width).toBe("25%");
     expect(doc.getElementById("progress-text")?.textContent).toBe(
       "Analizando fragmentos...",
@@ -133,7 +142,7 @@ describe("taskpane entrypoint", () => {
       "Sobre selección — 1 de 1 sugerencias aplicadas como Track Changes.",
     );
     expect(doc.getElementById("results-list")?.children).toHaveLength(1);
-    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
+    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
     expect(doc.getElementById("status-bar")?.textContent).toBe(
       "1 sugerencia(s) insertada(s) como Track Changes (selección).",
     );
@@ -141,10 +150,10 @@ describe("taskpane entrypoint", () => {
     expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(doc.getElementById("progress-container")!.style.display).toBe("none");
+    expect(getRequiredElement(doc, "progress-container").style.display).toBe("none");
 
     await vi.advanceTimersByTimeAsync(4000);
-    expect(doc.getElementById("status-bar")!.style.display).toBe("none");
+    expect(getRequiredElement(doc, "status-bar").style.display).toBe("none");
   });
 
   it("ignores analyze clicks while a run is already in progress", async () => {
@@ -177,7 +186,7 @@ describe("taskpane entrypoint", () => {
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
     (globalThis as any).Office = officeHarness.office;
-    doc.getElementById("cleanup-section")!.style.display = "block";
+    getRequiredElement(doc, "cleanup-section").style.display = "block";
 
     taskpaneMocks.cleanupResolvedComments.mockResolvedValueOnce({
       deleted: 2,
@@ -190,7 +199,7 @@ describe("taskpane entrypoint", () => {
     await doc.getElementById("btn-cleanup")?.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
-    expect(doc.getElementById("cleanup-section")!.style.display).toBe("none");
+    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("none");
     expect(doc.getElementById("status-bar")?.textContent).toBe(
       "2 comentario(s) eliminado(s), 0 conservado(s).",
     );
@@ -210,7 +219,7 @@ describe("taskpane entrypoint", () => {
     officeHarness.triggerReady({ host: "Word" });
     await Promise.resolve();
 
-    expect(doc.getElementById("cleanup-section")!.style.display).toBe("block");
+    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
     expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledOnce();
   });
 
@@ -219,7 +228,7 @@ describe("taskpane entrypoint", () => {
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
     (globalThis as any).Office = officeHarness.office;
-    doc.getElementById("cleanup-section")!.style.display = "block";
+    getRequiredElement(doc, "cleanup-section").style.display = "block";
 
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
       ctx.emitter.emitComplete(
@@ -245,6 +254,6 @@ describe("taskpane entrypoint", () => {
     await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
     await Promise.resolve();
 
-    expect(doc.getElementById("cleanup-section")!.style.display).toBe("none");
+    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("none");
   });
 });

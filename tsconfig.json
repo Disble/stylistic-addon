@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "allowJs": true,
+    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "esModuleInterop": true,
     "experimentalDecorators": true,

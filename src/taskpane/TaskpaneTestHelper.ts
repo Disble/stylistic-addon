@@ -56,6 +56,11 @@ vi.mock("../adapters/mastra/MastraAdapter", () => ({
     constructor() {
       hoistedTaskpaneMocks.mastraAdapterConstructor();
     }
+
+    /** Keeps mock shape explicit and avoids constructor-only class lint issues. */
+    ping(): number {
+      return 0;
+    }
   },
 }));
 
@@ -63,6 +68,11 @@ vi.mock("../adapters/RetryAnalysisDecorator", () => ({
   RetryAnalysisDecorator: class {
     constructor(...args: unknown[]) {
       hoistedTaskpaneMocks.retryDecoratorConstructor(...args);
+    }
+
+    /** Keeps mock shape explicit and avoids constructor-only class lint issues. */
+    ping(): number {
+      return 0;
     }
   },
 }));
@@ -128,12 +138,12 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
 export class FakeClassList {
-  private classes = new Set<string>();
+  private readonly classes = new Set<string>();
 
   add(...names: string[]) {
     for (const name of names) {
@@ -168,6 +178,7 @@ export class FakeClassList {
 
 export class FakeElement {
   style = { display: "", width: "" };
+  dataset: Record<string, string> = {};
 
   get className(): string {
     return this.classList.toString();
@@ -195,7 +206,7 @@ export class FakeElement {
 
   private text = "";
   private html = "";
-  private listeners = new Map<string, Array<(ev: any) => void>>();
+  private readonly listeners = new Map<string, Array<(ev: any) => void>>();
 
   get textContent(): string {
     return this.text;
@@ -275,6 +286,12 @@ export class FakeElement {
 
   setAttribute(name: string, value: string) {
     (this as any)[`_attr_${name}`] = value;
+    if (name.startsWith("data-")) {
+      const datasetKey = name
+        .slice(5)
+        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      this.dataset[datasetKey] = value;
+    }
   }
 
   getAttribute(name: string): string | null {
@@ -283,13 +300,13 @@ export class FakeElement {
 }
 
 function matchesSelector(el: FakeElement, selector: string): boolean {
-  const attrEqMatch = selector.match(/^\[([^\]="]+)="([^"]+)"\]$/);
+  const attrEqMatch = /^\[([^\]="]+)="([^"]+)"\]$/.exec(selector);
   if (attrEqMatch) {
     const [, attr, value] = attrEqMatch;
     return (el as any)[attr] === value || (el as any)[`_attr_${attr}`] === value;
   }
 
-  const attrMatch = selector.match(/^\[([^\]="]+)\]$/);
+  const attrMatch = /^\[([^\]="]+)\]$/.exec(selector);
   if (attrMatch) {
     const [, attr] = attrMatch;
     return (
@@ -298,7 +315,7 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
     );
   }
 
-  const classMatch = selector.match(/^\.(.+)$/);
+  const classMatch = /^\.(.+)$/.exec(selector);
   if (classMatch) {
     return el.classList.contains(classMatch[1]);
   }
@@ -324,6 +341,15 @@ export class FakeDocument {
   }
 }
 
+/** Returns a required fake element by id or throws in tests. */
+function getRequiredElement(doc: FakeDocument, id: string): FakeElement {
+  const el = doc.getElementById(id);
+  if (!el) {
+    throw new Error(`Missing fake DOM element: ${id}`);
+  }
+  return el;
+}
+
 /**
  * Creates the fake taskpane DOM with the default initial visibility state.
  */
@@ -346,14 +372,14 @@ export function createTaskpaneDocument(): FakeDocument {
     "cleanup-section",
   ]);
 
-  doc.getElementById("sideload-msg")!.style.display = "block";
-  doc.getElementById("app-body")!.style.display = "none";
-  doc.getElementById("cleanup-section")!.style.display = "none";
-  doc.getElementById("results-panel")!.style.display = "block";
-  doc.getElementById("progress-container")!.style.display = "none";
-  doc.getElementById("profile-select")!.value = "narrativa-literaria";
-  doc.getElementById("btn-analyze-label")!.textContent = "Analizar y sugerir";
-  doc.getElementById("btn-cleanup-label")!.textContent =
+  getRequiredElement(doc, "sideload-msg").style.display = "block";
+  getRequiredElement(doc, "app-body").style.display = "none";
+  getRequiredElement(doc, "cleanup-section").style.display = "none";
+  getRequiredElement(doc, "results-panel").style.display = "block";
+  getRequiredElement(doc, "progress-container").style.display = "none";
+  getRequiredElement(doc, "profile-select").value = "narrativa-literaria";
+  getRequiredElement(doc, "btn-analyze-label").textContent = "Analizar y sugerir";
+  getRequiredElement(doc, "btn-cleanup-label").textContent =
     "Limpiar comentarios resueltos";
 
   return doc;
