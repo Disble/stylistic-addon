@@ -72,6 +72,7 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
+    expect(result.transitionedToZeroPending).toBe(false);
     expect(tcReject1).toHaveBeenCalledOnce();
     expect(tcReject2).toHaveBeenCalledOnce();
     expect(tcAccept1).not.toHaveBeenCalled();
@@ -92,6 +93,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const result = await adapter.rejectSuggestion(suggestion);
 
     expect(result.status).toBe("cc-not-found");
+    expect(result.showDisableTrackChangesCta).toBe(false);
   });
 
   it("rejects comment-only suggestions by deleting the comment and the CC only", async () => {
@@ -269,5 +271,31 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(2);
     expect(rejectAddedSpy).toHaveBeenCalledOnce();
     expect(rejectDeletedSpy).toHaveBeenCalledOnce();
+  });
+
+  it("signals the disable CTA when rejecting the final pending artifact reaches zero", async () => {
+    const suggestion = makeSuggestion({ id: "s-final" });
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      spanTCItems: [
+        {
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => {
+            context.document.contentControls.items = [];
+          }),
+        },
+      ],
+      comments: [],
+    });
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.pendingAfter.pendingStylisticArtifacts).toBe(0);
+    expect(result.transitionedToZeroPending).toBe(true);
+    expect(result.showDisableTrackChangesCta).toBe(true);
   });
 });

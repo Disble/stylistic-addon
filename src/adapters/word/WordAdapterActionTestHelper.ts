@@ -19,7 +19,11 @@ type ResolveSuggestionContext = {
   document: {
     contentControls: {
       getByTag: ReturnType<typeof vi.fn>;
+      load: ReturnType<typeof vi.fn>;
+      items: Array<{ tag: string }>;
     };
+    load: ReturnType<typeof vi.fn>;
+    changeTrackingMode: string;
     body: {
       getComments: ReturnType<typeof vi.fn>;
       getTrackedChanges: ReturnType<typeof vi.fn>;
@@ -67,7 +71,14 @@ export function installWordWithContext(context: ResolveSuggestionContext) {
   const run: MockWordGlobal["run"] = async <T>(
     callback: (ctx: ResolveSuggestionContext) => Promise<T> | T
   ) => callback(context);
-  vi.stubGlobal("Word", { run } satisfies MockWordGlobal);
+  vi.stubGlobal("Word", {
+    run,
+    ChangeTrackingMode: {
+      off: "off",
+      trackAll: "trackAll",
+      trackMine: "trackMine",
+    },
+  });
   return run;
 }
 
@@ -78,7 +89,14 @@ export function installRejectingWord(error: Error) {
   const run: MockWordGlobal["run"] = async () => {
     throw error;
   };
-  vi.stubGlobal("Word", { run } satisfies MockWordGlobal);
+  vi.stubGlobal("Word", {
+    run,
+    ChangeTrackingMode: {
+      off: "off",
+      trackAll: "trackAll",
+      trackMine: "trackMine",
+    },
+  });
   return run;
 }
 
@@ -121,13 +139,19 @@ export function makeResolveSuggestionContext({
     load: vi.fn(),
   };
 
+  const documentContentControls = {
+    getByTag: vi.fn(() => ccsCollection),
+    load: vi.fn(),
+    items: ccFound ? [{ tag: "stylistic:track-change:s-1" }] : [],
+  };
+
   const commentsCollection = { items: comments, load: vi.fn() };
 
   return {
     document: {
-      contentControls: {
-        getByTag: vi.fn(() => ccsCollection),
-      },
+      contentControls: documentContentControls,
+      load: vi.fn(),
+      changeTrackingMode: "trackAll",
       body: {
         getComments: vi.fn(() => commentsCollection),
         getTrackedChanges: vi.fn(() => bodyTCCollection),

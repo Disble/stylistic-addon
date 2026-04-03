@@ -11,6 +11,7 @@
  * - Read document text (full body or active selection).
  * - Query existing Stylistic tracked changes (Guard pattern).
  * - Apply suggestions as tracked changes via `ApplySuggestionCommand`.
+ * - Own workflow-level Track Changes lifecycle and document-derived pending state.
  * - Delegate comment cleanup to `CommentCleanup`.
  *
  * @module WordAdapter
@@ -18,8 +19,9 @@
 
 import type { IDocumentPort } from "../../domain/ports";
 import type {
+  ApplySuggestionsResult,
   CommandResult,
-  InsertionResult,
+  DocumentReviewState,
   ProgressCallback,
   Suggestion,
   SuggestionActionResult,
@@ -32,6 +34,10 @@ import {
   OVERLAPPING_RELATIONS,
 } from "./cleanup/CommentCleanup";
 import { isStylisticComment } from "./StylisticCommentBuilder";
+
+const STYLISTIC_TAG_PREFIX = "stylistic:";
+
+type ResolutionStatus = "accepted" | "rejected" | "already-resolved";
 
 type ParagraphSnapshot = {
   text?: string;
@@ -85,6 +91,70 @@ function buildStructuredParagraphText(paragraphs: ParagraphSnapshot[]): string {
 }
 
 export class WordAdapter implements IDocumentPort {
+  /**
+   * Creates a normalized document-review snapshot.
+   */
+  private buildDocumentReviewState(
+    pendingStylisticArtifacts: number,
+    trackChangesActive: boolean,
+  ): DocumentReviewState {
+    return {
+      pendingStylisticArtifacts,
+      hasPendingStylisticArtifacts: pendingStylisticArtifacts > 0,
+      trackChangesActive,
+    };
+  }
+
+  /**
+   * Returns the current Track Changes activation state for the document.
+   */
+  private async loadTrackChangesActive(
+    context: Word.RequestContext,
+  ): Promise<boolean> {
+    context.document.load("changeTrackingMode");
+    await context.sync();
+    return context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
+  }
+
+  /**
+   * Reads the authoritative document-derived review state in the current batch.
+   */
+  private async inspectDocumentReviewState(
+    context: Word.RequestContext,
+  ): Promise<DocumentReviewState> {
+    const allCCs = context.document.contentControls;
+    allCCs.load("items/tag");
+    context.document.load("changeTrackingMode");
+    await context.sync();
+
+    const pendingStylisticArtifacts = allCCs.items.filter((cc) =>
+      cc.tag.startsWith(STYLISTIC_TAG_PREFIX),
+    ).length;
+    const trackChangesActive =
+      context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
+
+    return this.buildDocumentReviewState(
+      pendingStylisticArtifacts,
+      trackChangesActive,
+    );
+  }
+
+  /**
+   * Enables Track Changes once, lazily, before the first real track-change insertion.
+   */
+  private async ensureTrackChangesActive(
+    context: Word.RequestContext,
+  ): Promise<boolean> {
+    const alreadyActive = await this.loadTrackChangesActive(context);
+    if (alreadyActive) {
+      return false;
+    }
+
+    context.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
+    await context.sync();
+    return true;
+  }
+
   /**
    * Resolves all tracked changes semantically tied to a suggestion CC.
    *
@@ -231,7 +301,7 @@ export class WordAdapter implements IDocumentPort {
 
       // JS-side prefix filter — Office.js getByTag() is exact-match only
       const stylisticCCs = allCCs.items.filter((cc) =>
-        cc.tag.startsWith("stylistic:"),
+        cc.tag.startsWith(STYLISTIC_TAG_PREFIX),
       );
 
       if (stylisticCCs.length === 0) {
@@ -272,6 +342,88 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
+   * Activates Track Changes once per batch when the current suggestion requires it.
+   */
+  private async prepareTrackChangesForSuggestion(
+    suggestion: Suggestion,
+    trackChangesPrepared: boolean,
+  ): Promise<{ trackChangesPrepared: boolean; activatedForBatch: boolean }> {
+    if (trackChangesPrepared || suggestion.type !== "track-change") {
+      return { trackChangesPrepared, activatedForBatch: false };
+    }
+
+    const activated = await Word.run(async (context) =>
+      this.ensureTrackChangesActive(context),
+    );
+
+    return {
+      trackChangesPrepared: true,
+      activatedForBatch: activated,
+    };
+  }
+
+  /**
+   * Executes one suggestion command and normalizes unexpected thrown errors.
+   */
+  private async executeSuggestionCommand(
+    suggestion: Suggestion,
+  ): Promise<CommandResult> {
+    const command = new ApplySuggestionCommand(suggestion);
+
+    try {
+      return await command.execute();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        commandId: suggestion.id,
+        error: message,
+      };
+    }
+  }
+
+  /**
+   * Updates counters and logs after one command execution.
+   */
+  private registerSuggestionOutcome(
+    suggestion: Suggestion,
+    commandResult: CommandResult,
+    failedSuggestions: Suggestion[],
+    successCount: number,
+  ): number {
+    if (commandResult.success) {
+      console.log(`✅ [WordAdapter] "${suggestion.id}" aplicada`);
+      return successCount + 1;
+    }
+
+    failedSuggestions.push(suggestion);
+    console.warn(
+      `⚠️ [WordAdapter] "${suggestion.id}" falló: ${commandResult.error}`,
+    );
+    return successCount;
+  }
+
+  /**
+   * Reports progress through the optional callback.
+   */
+  private reportApplyProgress(
+    onProgress: ProgressCallback | undefined,
+    completedCount: number,
+    total: number,
+  ): void {
+    if (!onProgress) {
+      return;
+    }
+
+    onProgress(
+      "applying",
+      completedCount,
+      total,
+      `Aplicando sugerencia ${completedCount} de ${total}...`,
+    );
+  }
+
+  /**
    * Applies suggestions as tracked changes using `ApplySuggestionCommand`
    * (Command pattern). Each suggestion runs in its own `Word.run` context
    * (per-suggestion isolation) to avoid stale ranges after OOXML insertions.
@@ -283,13 +435,19 @@ export class WordAdapter implements IDocumentPort {
   async applySuggestions(
     suggestions: Suggestion[],
     onProgress?: ProgressCallback,
-  ): Promise<InsertionResult> {
+  ): Promise<ApplySuggestionsResult> {
     console.log(
       `📝 [WordAdapter] applySuggestions: ${suggestions.length} sugerencias`,
     );
 
     if (suggestions.length === 0) {
-      return { successCount: 0, failedSuggestions: [] };
+      const pendingAfter = await this.getDocumentReviewState();
+      return {
+        successCount: 0,
+        failedSuggestions: [],
+        pendingAfter,
+        trackChangesActivatedForBatch: false,
+      };
     }
 
     // Apply end-of-document suggestions first so earlier searches are unaffected
@@ -298,46 +456,53 @@ export class WordAdapter implements IDocumentPort {
 
     const failedSuggestions: Suggestion[] = [];
     let successCount = 0;
+    let trackChangesPrepared = false;
+    let trackChangesActivatedForBatch = false;
 
     for (const suggestion of sortedSuggestions) {
-      const command = new ApplySuggestionCommand(suggestion);
-      let commandResult: CommandResult;
-
-      try {
-        commandResult = await command.execute();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        commandResult = {
-          success: false,
-          commandId: suggestion.id,
-          error: message,
-        };
+      const trackChangesState = await this.prepareTrackChangesForSuggestion(
+        suggestion,
+        trackChangesPrepared,
+      );
+      trackChangesPrepared = trackChangesState.trackChangesPrepared;
+      if (trackChangesState.activatedForBatch) {
+        trackChangesActivatedForBatch = true;
       }
 
-      if (commandResult.success) {
-        successCount++;
-        console.log(`✅ [WordAdapter] "${suggestion.id}" aplicada`);
-      } else {
-        failedSuggestions.push(suggestion);
-        console.warn(
-          `⚠️ [WordAdapter] "${suggestion.id}" falló: ${commandResult.error}`,
-        );
-      }
+      const commandResult = await this.executeSuggestionCommand(suggestion);
+      successCount = this.registerSuggestionOutcome(
+        suggestion,
+        commandResult,
+        failedSuggestions,
+        successCount,
+      );
 
-      if (onProgress) {
-        onProgress(
-          "applying",
-          successCount + failedSuggestions.length,
-          suggestions.length,
-          `Aplicando sugerencia ${successCount + failedSuggestions.length} de ${suggestions.length}...`,
-        );
-      }
+      this.reportApplyProgress(
+        onProgress,
+        successCount + failedSuggestions.length,
+        suggestions.length,
+      );
     }
 
     console.log(
       `📝 [WordAdapter] Completado: ${successCount} éxitos, ${failedSuggestions.length} fallos`,
     );
-    return { successCount, failedSuggestions };
+
+    const pendingAfter = await this.getDocumentReviewState();
+
+    return {
+      successCount,
+      failedSuggestions,
+      pendingAfter,
+      trackChangesActivatedForBatch,
+    };
+  }
+
+  /**
+   * Returns the current document-derived Stylistic review state.
+   */
+  async getDocumentReviewState(): Promise<DocumentReviewState> {
+    return Word.run((context) => this.inspectDocumentReviewState(context));
   }
 
   /**
@@ -379,8 +544,35 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /** Maps a resolution action to its terminal success status. */
-  private toResolutionStatus(action: "accept" | "reject") {
+  private toResolutionStatus(action: "accept" | "reject"): ResolutionStatus {
     return action === "accept" ? ("accepted" as const) : ("rejected" as const);
+  }
+
+  /**
+   * Builds a document-aware resolution result, including the zero-pending CTA signal.
+   */
+  private buildResolutionResult(
+    status: SuggestionActionResult["status"],
+    trackedChangesAffected: number,
+    commentDeleted: boolean,
+    pendingBefore: DocumentReviewState,
+    pendingAfter: DocumentReviewState,
+    error?: string,
+  ): SuggestionActionResult {
+    const transitionedToZeroPending =
+      pendingBefore.hasPendingStylisticArtifacts &&
+      !pendingAfter.hasPendingStylisticArtifacts;
+
+    return {
+      status,
+      trackedChangesAffected,
+      commentDeleted,
+      pendingAfter,
+      transitionedToZeroPending,
+      showDisableTrackChangesCta:
+        transitionedToZeroPending && pendingAfter.trackChangesActive,
+      ...(error ? { error } : {}),
+    };
   }
 
   /** Deletes the Stylistic comment colocated with the suggestion CC range. */
@@ -415,18 +607,22 @@ export class WordAdapter implements IDocumentPort {
     suggestion: Suggestion,
     action: "accept" | "reject",
     commentDeleted: boolean,
+    pendingBefore: DocumentReviewState,
   ): Promise<SuggestionActionResult> {
     cc.delete(true);
     await context.sync();
+    const pendingAfter = await this.inspectDocumentReviewState(context);
     console.log(
       `🗨️ [WordAdapter] "${suggestion.id}": comment-only ${action}ed, comentario eliminado: ${commentDeleted}`,
     );
 
-    return {
-      status: this.toResolutionStatus(action),
-      trackedChangesAffected: 0,
+    return this.buildResolutionResult(
+      this.toResolutionStatus(action),
+      0,
       commentDeleted,
-    };
+      pendingBefore,
+      pendingAfter,
+    );
   }
 
   /**
@@ -473,6 +669,8 @@ export class WordAdapter implements IDocumentPort {
   ): Promise<SuggestionActionResult> {
     try {
       return await Word.run(async (context) => {
+        const pendingBefore = await this.inspectDocumentReviewState(context);
+
         // 1. Find the Content Control — try new tag format first, fall back to legacy bare ID
         const { newFormatResult, legacyResult } = this.findCCByTag(
           context,
@@ -491,11 +689,13 @@ export class WordAdapter implements IDocumentPort {
         }
 
         if (!cc) {
-          return {
-            status: "cc-not-found" as const,
-            trackedChangesAffected: 0,
-            commentDeleted: false,
-          };
+          return this.buildResolutionResult(
+            "cc-not-found",
+            0,
+            false,
+            pendingBefore,
+            pendingBefore,
+          );
         }
 
         // 2. Find and delete the colocated Stylistic comment (shared by both branches)
@@ -512,6 +712,7 @@ export class WordAdapter implements IDocumentPort {
             suggestion,
             action,
             commentDeleted,
+            pendingBefore,
           );
         }
 
@@ -524,11 +725,14 @@ export class WordAdapter implements IDocumentPort {
         if (trackedChanges.length === 0) {
           cc.delete(true);
           await context.sync();
-          return {
-            status: "already-resolved" as const,
-            trackedChangesAffected: 0,
+          const pendingAfter = await this.inspectDocumentReviewState(context);
+          return this.buildResolutionResult(
+            "already-resolved",
+            0,
             commentDeleted,
-          };
+            pendingBefore,
+            pendingAfter,
+          );
         }
 
         for (const tc of trackedChanges) {
@@ -546,18 +750,28 @@ export class WordAdapter implements IDocumentPort {
           action,
         );
 
-        return {
-          status: this.toResolutionStatus(action),
-          trackedChangesAffected: trackedChanges.length,
+        const pendingAfter = await this.inspectDocumentReviewState(context);
+
+        return this.buildResolutionResult(
+          this.toResolutionStatus(action),
+          trackedChanges.length,
           commentDeleted,
-        };
+          pendingBefore,
+          pendingAfter,
+        );
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const pendingAfter = await this.getDocumentReviewState().catch(() =>
+        this.buildDocumentReviewState(0, false),
+      );
       return {
         status: "error" as const,
         trackedChangesAffected: 0,
         commentDeleted: false,
+        pendingAfter,
+        transitionedToZeroPending: false,
+        showDisableTrackChangesCta: false,
         error: message,
       };
     }
@@ -583,6 +797,16 @@ export class WordAdapter implements IDocumentPort {
     suggestion: Suggestion,
   ): Promise<SuggestionActionResult> {
     return this.resolveSuggestion(suggestion, "reject");
+  }
+
+  /**
+   * Disables Track Changes only when the user explicitly requests it.
+   */
+  async disableTrackChanges(): Promise<void> {
+    await Word.run(async (context) => {
+      context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
+      await context.sync();
+    });
   }
 
   /**

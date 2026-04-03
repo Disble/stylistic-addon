@@ -85,7 +85,14 @@ export function installWordWithContext(context: any) {
   const run = vi.fn(async <T>(callback: WordRunCallback<T>) =>
     callback(context),
   );
-  vi.stubGlobal("Word", { run });
+  vi.stubGlobal("Word", {
+    run,
+    ChangeTrackingMode: {
+      off: "off",
+      trackAll: "trackAll",
+      trackMine: "trackMine",
+    },
+  });
   return run;
 }
 

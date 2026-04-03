@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getCommandMocks,
+  installWordWithContext,
   makeSuggestion,
 } from "./WordAdapterTestHelper";
 import { WordAdapter } from "./WordAdapter";
@@ -21,14 +22,29 @@ describe("WordAdapter.applySuggestions", () => {
   afterEach(() => {
     logSpy.mockRestore();
     warnSpy.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it("returns an empty insertion result when there are no suggestions", async () => {
+    installWordWithContext({
+      document: {
+        contentControls: { load: vi.fn(), items: [] },
+        load: vi.fn(),
+        changeTrackingMode: "off",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    });
     const onProgress = vi.fn();
 
     await expect(adapter.applySuggestions([], onProgress)).resolves.toEqual({
       successCount: 0,
       failedSuggestions: [],
+      pendingAfter: {
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: false,
+      },
+      trackChangesActivatedForBatch: false,
     });
 
     expect(commandMocks.constructor).not.toHaveBeenCalled();
@@ -37,6 +53,14 @@ describe("WordAdapter.applySuggestions", () => {
   });
 
   it("maps command results into successCount, failedSuggestions, and progress events", async () => {
+    installWordWithContext({
+      document: {
+        contentControls: { load: vi.fn(), items: [{ tag: "stylistic:track-change:s-2" }] },
+        load: vi.fn(),
+        changeTrackingMode: "trackAll",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    });
     const first = makeSuggestion({ id: "s-1", anchor: "uno", context: "Contexto uno" });
     const second = makeSuggestion({ id: "s-2", anchor: "dos", context: "Contexto dos" });
     const onProgress = vi.fn();
@@ -54,6 +78,12 @@ describe("WordAdapter.applySuggestions", () => {
     ).resolves.toEqual({
       successCount: 1,
       failedSuggestions: [first],
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      trackChangesActivatedForBatch: false,
     });
 
     expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, second);
@@ -78,6 +108,14 @@ describe("WordAdapter.applySuggestions", () => {
   });
 
   it("converts command rejections into failed suggestions and continues processing", async () => {
+    installWordWithContext({
+      document: {
+        contentControls: { load: vi.fn(), items: [{ tag: "stylistic:track-change:s-1" }] },
+        load: vi.fn(),
+        changeTrackingMode: "trackAll",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    });
     const first = makeSuggestion({ id: "s-1", anchor: "uno", context: "Contexto uno" });
     const second = makeSuggestion({ id: "s-2", anchor: "dos", context: "Contexto dos" });
     const third = makeSuggestion({ id: "s-3", anchor: "tres", context: "Contexto tres" });
@@ -93,6 +131,12 @@ describe("WordAdapter.applySuggestions", () => {
     ).resolves.toEqual({
       successCount: 2,
       failedSuggestions: [second],
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      trackChangesActivatedForBatch: false,
     });
 
     expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, third);
@@ -105,6 +149,14 @@ describe("WordAdapter.applySuggestions", () => {
   });
 
   it("applies suggestions in reverse array order to avoid content-control interference", async () => {
+    installWordWithContext({
+      document: {
+        contentControls: { load: vi.fn(), items: [{ tag: "stylistic:track-change:s-a" }] },
+        load: vi.fn(),
+        changeTrackingMode: "trackAll",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    });
     const suggA = makeSuggestion({
       id: "s-a",
       anchor: "texto al inicio del doc",
@@ -134,6 +186,14 @@ describe("WordAdapter.applySuggestions", () => {
   });
 
   it("keeps same-paragraph suggestions independent by applying the later one first", async () => {
+    installWordWithContext({
+      document: {
+        contentControls: { load: vi.fn(), items: [{ tag: "stylistic:track-change:s-late" }] },
+        load: vi.fn(),
+        changeTrackingMode: "trackAll",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    });
     const earlyInParagraph = makeSuggestion({
       id: "s-early",
       anchor: "apenas eran un par de pasos alrededor de ella",
@@ -154,8 +214,58 @@ describe("WordAdapter.applySuggestions", () => {
       lateInParagraph,
     ]);
 
-    expect(result).toEqual({ successCount: 2, failedSuggestions: [] });
+    expect(result).toEqual({
+      successCount: 2,
+      failedSuggestions: [],
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      trackChangesActivatedForBatch: false,
+    });
     expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, lateInParagraph);
     expect(commandMocks.constructor).toHaveBeenNthCalledWith(2, earlyInParagraph);
+  });
+
+  it("does not enable Track Changes for comment-only-only batches", async () => {
+    const context = {
+      document: {
+        contentControls: { load: vi.fn(), items: [{ tag: "stylistic:comment-only:s-1" }] },
+        load: vi.fn(),
+        changeTrackingMode: "off",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+    installWordWithContext(context);
+
+    commandMocks.execute.mockResolvedValueOnce({ success: true, commandId: "s-1" });
+
+    const result = await adapter.applySuggestions([
+      makeSuggestion({ id: "s-1", type: "comment-only", suggestedText: undefined }),
+    ]);
+
+    expect(result.trackChangesActivatedForBatch).toBe(false);
+    expect(context.document.changeTrackingMode).toBe("off");
+  });
+
+  it("enables Track Changes lazily once for the first track-change suggestion in an off document", async () => {
+    const context = {
+      document: {
+        contentControls: { load: vi.fn(), items: [{ tag: "stylistic:track-change:s-1" }] },
+        load: vi.fn(),
+        changeTrackingMode: "off",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+    installWordWithContext(context);
+
+    commandMocks.execute.mockResolvedValueOnce({ success: true, commandId: "s-1" });
+
+    const result = await adapter.applySuggestions([makeSuggestion({ id: "s-1" })]);
+
+    expect(result.trackChangesActivatedForBatch).toBe(true);
+    expect(context.document.changeTrackingMode).toBe("trackAll");
+    expect(result.pendingAfter.trackChangesActive).toBe(true);
   });
 });

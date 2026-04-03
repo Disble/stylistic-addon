@@ -9,10 +9,12 @@
  * - Register a `PipelineObserver` to update the UI during analysis.
  * - Render results after pipeline completion.
  * - Handle the comment cleanup button (direct adapter call, no pipeline needed).
+ * - Handle the explicit Track Changes deactivation CTA after zero pending.
  *
  * This module contains NO pipeline logic, NO Word API calls, and NO backend
  * communication. All analysis flows through the `PipelineOrchestrator`.
- * All document operations go through `WordAdapter` via `IDocumentPort`.
+ * Resolution workflow semantics go through `SuggestionResolutionWorkflow`, and
+ * all document operations go through `WordAdapter` via `IDocumentPort`.
  *
  * @module taskpane
  */
@@ -36,14 +38,15 @@ import {
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
 import type { IFeedbackPort } from "../domain/ports";
+import { SuggestionResolutionWorkflow } from "../domain/suggestion/SuggestionResolutionWorkflow";
 import {
   mapResultStatusToState,
   SuggestionStateMachine,
 } from "../domain/suggestion/SuggestionStateMachine";
 import type {
-  FeedbackPayload,
   InsertionResult,
   Suggestion,
+  SuggestionResolutionWorkflowResult,
   SuggestionState,
 } from "../domain/types";
 import {
@@ -78,6 +81,10 @@ const analysisPort = new RetryAnalysisDecorator(
 );
 
 const feedbackPort: IFeedbackPort = new FeedbackAdapter();
+const suggestionResolutionWorkflow = new SuggestionResolutionWorkflow(
+  documentPort,
+  feedbackPort,
+);
 
 const orchestrator = new PipelineOrchestrator([
   new ReadTextHandler(),
@@ -123,8 +130,19 @@ export function bootstrapTaskpane(
     const cleanupButton = doc.getElementById(
       "btn-cleanup",
     ) as HTMLButtonElement | null;
+    const disableTrackChangesButton = doc.getElementById(
+      "btn-disable-track-changes",
+    ) as HTMLButtonElement | null;
 
-    if (!(sideloadMessage && appBody && analyzeButton && cleanupButton)) {
+    if (
+      !(
+        sideloadMessage &&
+        appBody &&
+        analyzeButton &&
+        cleanupButton &&
+        disableTrackChangesButton
+      )
+    ) {
       return;
     }
 
@@ -132,7 +150,9 @@ export function bootstrapTaskpane(
     appBody.style.display = "flex";
     analyzeButton.onclick = handleAnalyze;
     cleanupButton.onclick = handleCleanup;
+    disableTrackChangesButton.onclick = handleDisableTrackChanges;
     void refreshCleanupVisibility();
+    void refreshTrackChangesCtaVisibility();
   });
 }
 
@@ -219,6 +239,36 @@ async function refreshCleanupVisibility(): Promise<void> {
   } catch (error) {
     console.warn(
       "⚠️ [Taskpane] No se pudo calcular la visibilidad de limpieza:",
+      error,
+    );
+  }
+}
+
+/**
+ * Syncs the Track Changes CTA visibility from document-derived workflow semantics.
+ */
+function setDisableTrackChangesCtaVisible(visible: boolean): void {
+  const ctaSection = document.getElementById("disable-track-changes-section");
+  if (!ctaSection) {
+    return;
+  }
+
+  ctaSection.style.display = visible ? "block" : "none";
+}
+
+/**
+ * Rehydrates Track Changes CTA visibility from the authoritative document state.
+ */
+async function refreshTrackChangesCtaVisibility(): Promise<void> {
+  try {
+    const reviewState = await documentPort.getDocumentReviewState();
+    setDisableTrackChangesCtaVisible(
+      !reviewState.hasPendingStylisticArtifacts &&
+        reviewState.trackChangesActive,
+    );
+  } catch (error) {
+    console.warn(
+      "⚠️ [Taskpane] No se pudo calcular la visibilidad del CTA de Track Changes:",
       error,
     );
   }
@@ -490,6 +540,7 @@ function renderResults(
   }
 
   panel.style.display = "block";
+  setDisableTrackChangesCtaVisible(false);
 }
 
 /**
@@ -585,6 +636,25 @@ function applySuggestionCardState(
   }
 }
 
+/** Returns the optional free-text feedback comment associated with a card. */
+function getSuggestionFeedbackComment(li: HTMLElement): string | undefined {
+  const textarea = li.querySelector(".feedback-textarea") as
+    | (HTMLTextAreaElement & { value?: string })
+    | null;
+  const commentText = textarea?.value?.trim();
+  return commentText && commentText.length > 0 ? commentText : undefined;
+}
+
+/**
+ * Applies shared taskpane consequences after a workflow-owned resolution.
+ */
+async function applyResolutionWorkflowUi(
+  result: SuggestionResolutionWorkflowResult,
+): Promise<void> {
+  setDisableTrackChangesCtaVisible(result.showDisableTrackChangesCta);
+  await refreshCleanupVisibility();
+}
+
 // ---------------------------------------------------------------------------
 // Accept / Reject Suggestion Handlers
 // ---------------------------------------------------------------------------
@@ -608,7 +678,10 @@ async function handleAcceptSuggestion(
   if (acceptBtn) acceptBtn.disabled = true;
   if (rejectBtn) rejectBtn.disabled = true;
 
-  const result = await documentPort.acceptSuggestion(suggestion);
+  const result = await suggestionResolutionWorkflow.acceptSuggestion(
+    suggestion,
+    getSuggestionFeedbackComment(li),
+  );
 
   // cc-not-found: terminal UI (remove actions, amber note), SM stays at error
   if (result.status === "cc-not-found") {
@@ -622,29 +695,7 @@ async function handleAcceptSuggestion(
   const targetState = mapResultStatusToState(result.status);
   sm.transition(targetState);
   applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
-
-  // Feedback on explicit acceptance — also for "already-resolved" since the button
-  // click itself is the feedback signal, regardless of the document's prior state.
-  if (sm.state === "accepted" || sm.state === "already-resolved") {
-    const textarea = li.querySelector(".feedback-textarea") as
-      | (HTMLTextAreaElement & { value?: string })
-      | null;
-    const commentText = textarea?.value?.trim();
-    const payload: FeedbackPayload = {
-      category: suggestion.category,
-      originalText: suggestion.anchor,
-      ...(suggestion.suggestedText === undefined
-        ? {}
-        : { suggestedText: suggestion.suggestedText }),
-      justification: suggestion.justification,
-      rating: "positive",
-      severity: suggestion.severity,
-      ...(commentText ? { comment: commentText } : {}),
-    };
-    void feedbackPort.sendFeedback(payload);
-  }
-
-  void refreshCleanupVisibility();
+  await applyResolutionWorkflowUi(result);
 }
 
 /**
@@ -666,7 +717,10 @@ async function handleRejectSuggestion(
   if (acceptBtn) acceptBtn.disabled = true;
   if (rejectBtn) rejectBtn.disabled = true;
 
-  const result = await documentPort.rejectSuggestion(suggestion);
+  const result = await suggestionResolutionWorkflow.rejectSuggestion(
+    suggestion,
+    getSuggestionFeedbackComment(li),
+  );
 
   // cc-not-found: terminal UI (remove actions, amber note), SM stays at error
   if (result.status === "cc-not-found") {
@@ -680,29 +734,7 @@ async function handleRejectSuggestion(
   const targetState = mapResultStatusToState(result.status);
   sm.transition(targetState);
   applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
-
-  // Feedback on explicit rejection — also for "already-resolved" since the button
-  // click itself is the feedback signal, regardless of the document's prior state.
-  if (sm.state === "rejected" || sm.state === "already-resolved") {
-    const textarea = li.querySelector(".feedback-textarea") as
-      | (HTMLTextAreaElement & { value?: string })
-      | null;
-    const commentText = textarea?.value?.trim();
-    const payload: FeedbackPayload = {
-      category: suggestion.category,
-      originalText: suggestion.anchor,
-      ...(suggestion.suggestedText === undefined
-        ? {}
-        : { suggestedText: suggestion.suggestedText }),
-      justification: suggestion.justification,
-      rating: "negative",
-      severity: suggestion.severity,
-      ...(commentText ? { comment: commentText } : {}),
-    };
-    void feedbackPort.sendFeedback(payload);
-  }
-
-  void refreshCleanupVisibility();
+  await applyResolutionWorkflowUi(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -829,5 +861,33 @@ async function handleCleanup(): Promise<void> {
   } finally {
     btn.disabled = false;
     label.textContent = "Limpiar comentarios resueltos";
+  }
+}
+
+/**
+ * Handles the explicit post-review CTA to disable Track Changes.
+ */
+async function handleDisableTrackChanges(): Promise<void> {
+  const btn = document.getElementById(
+    "btn-disable-track-changes",
+  ) as HTMLButtonElement | null;
+  const label = document.getElementById("btn-disable-track-changes-label");
+
+  if (!(btn && label)) {
+    return;
+  }
+
+  btn.disabled = true;
+  label.textContent = "Desactivando...";
+
+  try {
+    await documentPort.disableTrackChanges();
+    setDisableTrackChangesCtaVisible(false);
+    showStatus("Control de cambios desactivado.", "success");
+  } catch (error) {
+    showStatus(toUserMessage(error), "error");
+  } finally {
+    btn.disabled = false;
+    label.textContent = "Desactivar control de cambios";
   }
 }

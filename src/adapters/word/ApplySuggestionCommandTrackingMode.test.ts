@@ -31,7 +31,7 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
     expect(env.context.document.body.search).not.toHaveBeenCalled();
   });
 
-  it("restores changeTrackingMode when insertText throws", async () => {
+  it("returns insertion errors without reading or mutating changeTrackingMode", async () => {
     const env = installWordContext({
       initialTrackingMode: "off",
       insertError: new Error("insert failed"),
@@ -45,16 +45,20 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
       error: "insert failed",
     });
     expect(env.context.document.changeTrackingMode).toBe("off");
-    expect(env.context.document.load).toHaveBeenCalledWith("changeTrackingMode");
+    expect(env.context.document.load).not.toHaveBeenCalledWith(
+      "changeTrackingMode",
+    );
   });
 
-  it("loads changeTrackingMode before reading the previous mode", async () => {
+  it("does not load or read changeTrackingMode for track-change suggestions", async () => {
     const env = installWordContext({ initialTrackingMode: "trackMine" });
 
     const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
-    expect(env.context.document.load).toHaveBeenCalledWith("changeTrackingMode");
+    expect(env.context.document.load).not.toHaveBeenCalledWith(
+      "changeTrackingMode",
+    );
     expect(env.context.document.changeTrackingMode).toBe("trackMine");
   });
 

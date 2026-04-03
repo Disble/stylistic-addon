@@ -2,6 +2,29 @@
 
 This document describes the architecture of Stylistic, the design patterns used, the data flow, and the rationale behind every key decision.
 
+> **Important correction:** this document explains the current architecture and its patterns, but the authoritative clarification of the addon's frontend domain and the new Track Changes lifecycle policy now lives in [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md).
+
+---
+
+## Frontend Domain Clarification
+
+The `stylistic-addon` frontend domain is:
+
+> **Presentar al usuario sugerencias de estilo provenientes del backend y permitirle aceptarlas, rechazarlas o debatirlas dentro de Word.**
+
+This clarification matters because several implementation mechanisms are important but are **not** the full frontend domain on their own:
+
+- `DocumentReviewState` is an important internal support concept, but not the whole domain.
+- `PipelineStateMachine` and the analysis pipeline are workflow mechanisms, not the domain definition.
+- `changeTrackingMode` and Word content controls are infrastructure/host concerns, not domain language.
+
+The current documentation should therefore be read with this distinction in mind:
+
+- **domain goal** → user interaction with style suggestions in Word,
+- **supporting state** → `DocumentReviewState`, pending/resolved review artifacts,
+- **workflow state** → `PipelineStateMachine`, future resolution workflow state,
+- **infrastructure** → Office.js, tags, comments, polling, `changeTrackingMode`.
+
 ---
 
 ## Architectural Pattern: Hexagonal Architecture (Ports & Adapters)
@@ -110,6 +133,19 @@ src/
 | Document Port | `IDocumentPort` | `WordAdapter` (Office.js) |
 | Analysis Port | `IAnalysisPort` | `RetryAnalysisDecorator` → `MastraAdapter` (@mastra/client-js) |
 
+### Important ownership note: Track Changes lifecycle
+
+The historical implementation uses a preserve-and-restore pattern inside `ApplySuggestionCommand.ts` to toggle `changeTrackingMode` per suggestion. That explains the current behavior, but it should **not** be treated as the desired long-term architectural ownership model.
+
+The corrected target direction is:
+
+- per-suggestion commands mutate one suggestion,
+- workflow/application layers own Track Changes lifecycle policy,
+- document-derived pending review state determines whether Track Changes should remain enabled,
+- the UI offers a final CTA when zero pending Stylistic artifacts remain.
+
+See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md) for the full requirement decisions and future-aligned architecture.
+
 ### Domain Patterns (Non-GoF)
 
 | Pattern | Location | Description |
@@ -124,6 +160,8 @@ src/
 | **Retry + Exponential Backoff** | `RetryAnalysisDecorator.ts` | `delay = baseMs * 2^attempt` between retries. 3 max attempts. Separated from `MastraAdapter` via Decorator. |
 | **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after OOXML insertions shift document positions. |
 | **Composition Root** | `taskpane/taskpane.ts` | Single wiring point: instantiates adapters, decorators, orchestrator, and state machine. No other module knows the full dependency graph. |
+
+> **Documentation note:** Preserve-and-Restore accurately describes the current code path, but the Track Changes requirement change intentionally moves the desired ownership model away from per-suggestion toggling. Keep that distinction explicit when editing this section in the future.
 
 ---
 

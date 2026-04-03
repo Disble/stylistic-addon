@@ -32,6 +32,25 @@ Load this skill BEFORE writing ANY code in this project. It is the authoritative
 
 The dependency rule is **inviolable**: outer layers depend on inner layers. Inner layers NEVER import from outer layers.
 
+### Frontend domain definition (authoritative)
+
+When reasoning about this project, do **not** define the addon as “just a client for the backend” and do **not** confuse internal review state with the full domain.
+
+The frontend domain is:
+
+> **Presentar al usuario sugerencias de estilo provenientes del backend y permitirle aceptarlas, rechazarlas o debatirlas dentro de Word.**
+
+Use this definition to evaluate names, layering, workflow ownership, and future refactors.
+
+### Minimum ubiquitous language
+
+- **`ReviewSuggestion`** — a suggestion already contextualized in Word, with frontend-owned state and interactions.
+- **`DocumentReviewState`** — the logical state of Stylistic review artifacts as they exist in the document.
+- **`ReviewProcessState`** — temporary workflow/process state (`reading`, `analyzing`, `applying`, etc.).
+- **`Debate`** — future first-class capability; not equivalent to current fire-and-forget feedback.
+
+If a change blurs those boundaries, stop and correct the model before writing code.
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  PRESENTATION — src/taskpane/                                    │
@@ -307,6 +326,20 @@ idle → reading → connecting → chunking → analyzing → applying → done
                                                                 → error
 ```
 
+### Architectural direction for suggestion resolution
+
+The analysis pipeline is already Chain of Responsibility. Future work that touches accept/reject resolution must respect the same architectural language.
+
+Treat accept/reject as a workflow, not as ad-hoc procedural glue between `taskpane.ts` and `WordAdapter`.
+
+Required direction:
+
+- resolution flow → **Chain of Responsibility**
+- per-action variation (`accept` / `reject`) → **Strategy**
+- feedback → included in the workflow result, but **never blocking** for UX
+
+Do **not** let `taskpane.ts` become the long-term owner of review workflow semantics.
+
 ---
 
 ## 12. WorkflowInput Shape — Current Backend Contract
@@ -355,6 +388,19 @@ interface WorkflowInput {
 | Decorator | `adapters/RetryAnalysisDecorator.ts` | Adds retry without modifying `MastraAdapter` |
 | Facade | `adapters/word/WordAdapter.ts` | Hides Office.js complexity behind `IDocumentPort` |
 | Ports & Adapters | Entire architecture | Testability and extensibility |
+
+### Track Changes lifecycle rule (requirement change)
+
+If you touch the Track Changes lifecycle, follow these rules:
+
+1. **Never** toggle `changeTrackingMode` per suggestion as a desired target architecture.
+2. Enable Track Changes **lazily**, only when the first real `track-change` suggestion is applied.
+3. Keep Track Changes enabled while **any Stylistic artifact remains pending in Word**.
+4. The source of truth for “pending” is the **document**, not the taskpane.
+5. When pending Stylistic artifacts reach zero, do **not** auto-disable Track Changes.
+6. Instead, expose a UI CTA with a single action: **`Desactivar control de cambios`**.
+
+The current code may not fully implement these rules yet. Treat this skill as the architectural target.
 
 ---
 

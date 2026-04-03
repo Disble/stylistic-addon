@@ -1,5 +1,6 @@
 import type { IAnalysisPort, IDocumentPort } from "../../ports";
 import type {
+  ApplySuggestionsResult,
   InsertionResult,
   ProgressCallback,
   Suggestion,
@@ -28,17 +29,23 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 }
 
 function makeInsertionResult(
-  overrides: Partial<InsertionResult> = {},
-): InsertionResult {
+  overrides: Partial<ApplySuggestionsResult> = {},
+): ApplySuggestionsResult {
   return {
     successCount: 1,
     failedSuggestions: [],
+    pendingAfter: {
+      pendingStylisticArtifacts: 1,
+      hasPendingStylisticArtifacts: true,
+      trackChangesActive: true,
+    },
+    trackChangesActivatedForBatch: false,
     ...overrides,
   };
 }
 
 function makeMockDocumentPort(
-  result: InsertionResult = makeInsertionResult(),
+  result: ApplySuggestionsResult = makeInsertionResult(),
 ): IDocumentPort {
   return {
     getTextToAnalyze: vi.fn(),
@@ -48,6 +55,8 @@ function makeMockDocumentPort(
     cleanupResolvedComments: vi.fn(),
     acceptSuggestion: vi.fn(),
     rejectSuggestion: vi.fn(),
+    getDocumentReviewState: vi.fn(),
+    disableTrackChanges: vi.fn(),
     navigateToText: vi.fn(),
   };
 }

@@ -1,7 +1,10 @@
 import type { IDocumentPort } from "./ports";
 import type {
+  ApplySuggestionsResult,
+  DocumentReviewState,
   Suggestion,
   SuggestionActionResult,
+  SuggestionResolutionWorkflowResult,
   SuggestionState,
   WorkflowSuggestion,
 } from "./types";
@@ -29,13 +32,50 @@ const _result: SuggestionActionResult = {
   status: "accepted",
   trackedChangesAffected: 2,
   commentDeleted: true,
+  pendingAfter: {
+    pendingStylisticArtifacts: 1,
+    hasPendingStylisticArtifacts: true,
+    trackChangesActive: true,
+  },
+  transitionedToZeroPending: false,
+  showDisableTrackChangesCta: false,
 };
 
 const _resultWithError: SuggestionActionResult = {
   status: "error",
   trackedChangesAffected: 0,
   commentDeleted: false,
+  pendingAfter: {
+    pendingStylisticArtifacts: 0,
+    hasPendingStylisticArtifacts: false,
+    trackChangesActive: false,
+  },
+  transitionedToZeroPending: false,
+  showDisableTrackChangesCta: false,
   error: "something went wrong",
+};
+
+const _reviewState: DocumentReviewState = {
+  pendingStylisticArtifacts: 1,
+  hasPendingStylisticArtifacts: true,
+  trackChangesActive: true,
+};
+
+const _applyResult: ApplySuggestionsResult = {
+  successCount: 1,
+  failedSuggestions: [],
+  pendingAfter: _reviewState,
+  trackChangesActivatedForBatch: true,
+};
+
+const _workflowResult: SuggestionResolutionWorkflowResult = {
+  status: "accepted",
+  trackedChangesAffected: 1,
+  commentDeleted: true,
+  pendingAfter: _reviewState,
+  transitionedToZeroPending: false,
+  showDisableTrackChangesCta: false,
+  feedbackStatus: "sent",
 };
 
 const _suggestion: Suggestion = {
@@ -62,6 +102,9 @@ void _result;
 void _resultWithError;
 void _suggestion;
 void _workflowSuggestion;
+void _reviewState;
+void _applyResult;
+void _workflowResult;
 
 type _SuggestionHasOriginalText = Suggestion extends { originalText: string }
   ? true
@@ -92,11 +135,25 @@ type _HasReject = IDocumentPort extends {
 }
   ? true
   : false;
+type _HasReviewState = IDocumentPort extends {
+  getDocumentReviewState(): Promise<DocumentReviewState>;
+}
+  ? true
+  : false;
+type _HasDisableTrackChanges = IDocumentPort extends {
+  disableTrackChanges(): Promise<void>;
+}
+  ? true
+  : false;
 const _checkAccept: _HasAccept = true;
 const _checkReject: _HasReject = true;
+const _checkReviewState: _HasReviewState = true;
+const _checkDisableTrackChanges: _HasDisableTrackChanges = true;
 
 void _checkAccept;
 void _checkReject;
+void _checkReviewState;
+void _checkDisableTrackChanges;
 
 // ---------------------------------------------------------------------------
 // Runtime no-op test so Vitest registers the file

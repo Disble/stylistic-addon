@@ -4,12 +4,20 @@ const hoistedTaskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],
   run: vi.fn<(ctx: any) => Promise<void>>(),
   wordAdapterConstructor: vi.fn(),
+  getDocumentReviewState: vi.fn<
+    () => Promise<{
+      pendingStylisticArtifacts: number;
+      hasPendingStylisticArtifacts: boolean;
+      trackChangesActive: boolean;
+    }>
+  >(),
   getCleanupPreview:
     vi.fn<() => Promise<{ deletable: number; kept: number }>>(),
   cleanupResolvedComments:
     vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
   acceptSuggestion: vi.fn(),
   rejectSuggestion: vi.fn(),
+  disableTrackChanges: vi.fn<() => Promise<void>>(),
   navigateToText: vi.fn<(text: string) => Promise<void>>(),
   mastraAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
@@ -37,12 +45,20 @@ vi.mock("../adapters/word/WordAdapter", () => ({
       return hoistedTaskpaneMocks.getCleanupPreview();
     }
 
+    getDocumentReviewState() {
+      return hoistedTaskpaneMocks.getDocumentReviewState();
+    }
+
     acceptSuggestion(suggestion: any) {
       return hoistedTaskpaneMocks.acceptSuggestion(suggestion);
     }
 
     rejectSuggestion(suggestion: any) {
       return hoistedTaskpaneMocks.rejectSuggestion(suggestion);
+    }
+
+    disableTrackChanges() {
+      return hoistedTaskpaneMocks.disableTrackChanges();
     }
 
     navigateToText(text: string) {
@@ -245,6 +261,9 @@ export class FakeElement {
   }
 
   click() {
+    if (this.onclick) {
+      this.onclick({} as MouseEvent);
+    }
     for (const handler of this.listeners.get("click") ?? []) {
       handler({} as MouseEvent);
     }
@@ -303,12 +322,26 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
   const attrEqMatch = /^\[([^\]="]+)="([^"]+)"\]$/.exec(selector);
   if (attrEqMatch) {
     const [, attr, value] = attrEqMatch;
+    if (attr.startsWith("data-")) {
+      const datasetKey = attr
+        .slice(5)
+        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      return el.dataset[datasetKey] === value;
+    }
+
     return (el as any)[attr] === value || (el as any)[`_attr_${attr}`] === value;
   }
 
   const attrMatch = /^\[([^\]="]+)\]$/.exec(selector);
   if (attrMatch) {
     const [, attr] = attrMatch;
+    if (attr.startsWith("data-")) {
+      const datasetKey = attr
+        .slice(5)
+        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      return el.dataset[datasetKey] !== undefined;
+    }
+
     return (
       (el as any)[attr] !== undefined ||
       (el as any)[`_attr_${attr}`] !== undefined
@@ -368,19 +401,25 @@ export function createTaskpaneDocument(): FakeDocument {
     "progress-text",
     "results-panel",
     "results-summary",
-    "results-list",
-    "cleanup-section",
-  ]);
+      "results-list",
+      "cleanup-section",
+      "disable-track-changes-section",
+      "btn-disable-track-changes",
+      "btn-disable-track-changes-label",
+    ]);
 
   getRequiredElement(doc, "sideload-msg").style.display = "block";
   getRequiredElement(doc, "app-body").style.display = "none";
   getRequiredElement(doc, "cleanup-section").style.display = "none";
+  getRequiredElement(doc, "disable-track-changes-section").style.display = "none";
   getRequiredElement(doc, "results-panel").style.display = "block";
   getRequiredElement(doc, "progress-container").style.display = "none";
   getRequiredElement(doc, "profile-select").value = "narrativa-literaria";
   getRequiredElement(doc, "btn-analyze-label").textContent = "Analizar y sugerir";
   getRequiredElement(doc, "btn-cleanup-label").textContent =
     "Limpiar comentarios resueltos";
+  getRequiredElement(doc, "btn-disable-track-changes-label").textContent =
+    "Desactivar control de cambios";
 
   return doc;
 }
@@ -437,15 +476,30 @@ export function resetTaskpaneHarness() {
     kept: 0,
   });
   taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
+  taskpaneMocks.disableTrackChanges.mockResolvedValue(undefined);
   taskpaneMocks.acceptSuggestion.mockResolvedValue({
     status: "accepted",
     trackedChangesAffected: 2,
     commentDeleted: true,
+    pendingAfter: {
+      pendingStylisticArtifacts: 1,
+      hasPendingStylisticArtifacts: true,
+      trackChangesActive: true,
+    },
+    transitionedToZeroPending: false,
+    showDisableTrackChangesCta: false,
   });
   taskpaneMocks.rejectSuggestion.mockResolvedValue({
     status: "rejected",
     trackedChangesAffected: 2,
     commentDeleted: true,
+    pendingAfter: {
+      pendingStylisticArtifacts: 1,
+      hasPendingStylisticArtifacts: true,
+      trackChangesActive: true,
+    },
+    transitionedToZeroPending: false,
+    showDisableTrackChangesCta: false,
   });
 
   delete (globalThis as any).document;

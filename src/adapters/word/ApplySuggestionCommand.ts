@@ -8,14 +8,16 @@
  *
  * Each command:
  * 1. Searches the document for the original text (case-sensitive).
- * 2. Loads the current `changeTrackingMode` and then sets it to trackAll.
- * 3. Calls range.insertText(suggestedText, replace) — Word records it as TC.
- * 4. Inserts a comment on the inserted range with category + justification.
- * 5. Wraps the inserted range in a ContentControl tagged `stylistic:{type}:{id}`.
- * 6. Restores `changeTrackingMode` in a `finally` block.
+ * 2. Calls range.insertText(suggestedText, replace) — assuming the workflow
+ *    layer already enabled Track Changes when appropriate.
+ * 3. Inserts a comment on the inserted range with category + justification.
+ * 4. Wraps the inserted range in a ContentControl tagged `stylistic:{type}:{id}`.
  *
  * Each suggestion runs in its own `Word.run` context (per-suggestion isolation)
  * to avoid stale ranges after insertions shift document positions.
+ *
+ * This command intentionally does NOT own Track Changes lifecycle policy.
+ * Global document review state is coordinated by the workflow/document layer.
  *
  * @module ApplySuggestionCommand
  */
@@ -179,20 +181,6 @@ export class ApplySuggestionCommand {
   }
 
   /**
-   * Loads the current document tracking mode before any read access.
-   *
-   * Office.js proxy properties are not guaranteed to be materialized until the
-   * property is explicitly loaded and synchronized.
-   */
-  private async loadCurrentChangeTrackingMode(
-    context: Word.RequestContext,
-  ): Promise<Word.ChangeTrackingMode> {
-    context.document.load("changeTrackingMode");
-    await context.sync();
-    return context.document.changeTrackingMode as Word.ChangeTrackingMode;
-  }
-
-  /**
    * Executes the command: searches for the anchor within its context and
    * replaces it with a native Word tracked change.
    *
@@ -267,42 +255,33 @@ export class ApplySuggestionCommand {
           }
         }
 
-        const previousMode = await this.loadCurrentChangeTrackingMode(context);
-        context.document.changeTrackingMode = Word.ChangeTrackingMode.trackAll;
+        console.log(
+          `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
+        );
+
+        const insertedRange = range.insertText(
+          this.suggestion.suggestedText ?? "",
+          Word.InsertLocation.replace,
+        );
+
+        insertedRange.insertComment(
+          buildStylisticCommentContent(
+            this.suggestion.category,
+            this.suggestion.justification,
+          ),
+        );
+
+        const cc = insertedRange.insertContentControl();
+        cc.tag = `stylistic:${this.suggestion.type}:${this.suggestion.id}`;
+        cc.appearance = "Hidden";
+        cc.cannotDelete = false;
         await context.sync();
 
-        try {
-          console.log(
-            `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
-          );
+        console.log(
+          `✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`,
+        );
 
-          const insertedRange = range.insertText(
-            this.suggestion.suggestedText ?? "",
-            Word.InsertLocation.replace,
-          );
-
-          insertedRange.insertComment(
-            buildStylisticCommentContent(
-              this.suggestion.category,
-              this.suggestion.justification,
-            ),
-          );
-
-          const cc = insertedRange.insertContentControl();
-          cc.tag = `stylistic:${this.suggestion.type}:${this.suggestion.id}`;
-          cc.appearance = "Hidden";
-          cc.cannotDelete = false;
-          await context.sync();
-
-          console.log(
-            `✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`,
-          );
-
-          return { success: true, commandId: this.id };
-        } finally {
-          context.document.changeTrackingMode = previousMode;
-          await context.sync();
-        }
+        return { success: true, commandId: this.id };
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

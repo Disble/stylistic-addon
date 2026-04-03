@@ -98,12 +98,16 @@ describe("taskpane suggestion resolution guardrails", () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledWith(suggestion);
     expect(li.classList.contains("result-accepted")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
+    expect(
+      getRequiredElement(doc, "disable-track-changes-section").style.display,
+    ).toBe("none");
   });
 
   it("clicking Reject applies terminal rejected UI and removes buttons", async () => {
@@ -121,12 +125,16 @@ describe("taskpane suggestion resolution guardrails", () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(taskpaneMocks.rejectSuggestion).toHaveBeenCalledWith(suggestion);
     expect(li.classList.contains("result-rejected")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
+    expect(
+      getRequiredElement(doc, "disable-track-changes-section").style.display,
+    ).toBe("none");
   });
 
   it("keeps terminal rejected UI even when adapter ignored late cleanup failure", async () => {
@@ -134,6 +142,13 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: "rejected",
       trackedChangesAffected: 2,
       commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: false,
+      showDisableTrackChangesCta: false,
     });
 
     const doc = createTaskpaneDocument();
@@ -149,6 +164,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     rejectBtn.click();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(li.classList.contains("result-rejected")).toBe(true);
     expect(li.querySelector(".result-actions")).toBeNull();
@@ -160,6 +176,13 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: "already-resolved",
       trackedChangesAffected: 0,
       commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: false,
+      showDisableTrackChangesCta: false,
     });
 
     const doc = createTaskpaneDocument();
@@ -169,6 +192,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -187,6 +211,13 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: "already-resolved",
       trackedChangesAffected: 0,
       commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: false,
+      showDisableTrackChangesCta: false,
     });
 
     const doc = createTaskpaneDocument();
@@ -196,6 +227,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
 
     rejectBtn.click();
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -211,6 +243,13 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: "cc-not-found",
       trackedChangesAffected: 0,
       commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: false,
+      showDisableTrackChangesCta: false,
     });
 
     const doc = createTaskpaneDocument();
@@ -220,6 +259,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -236,6 +276,13 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: string;
       trackedChangesAffected: number;
       commentDeleted: boolean;
+      pendingAfter: {
+        pendingStylisticArtifacts: number;
+        hasPendingStylisticArtifacts: boolean;
+        trackChangesActive: boolean;
+      };
+      transitionedToZeroPending: boolean;
+      showDisableTrackChangesCta: boolean;
     }>();
     taskpaneMocks.acceptSuggestion.mockReturnValue(firstCall);
 
@@ -254,7 +301,15 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: "accepted",
       trackedChangesAffected: 1,
       commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: false,
+      showDisableTrackChangesCta: false,
     });
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -268,12 +323,26 @@ describe("taskpane suggestion resolution guardrails", () => {
         status: "error",
         trackedChangesAffected: 0,
         commentDeleted: false,
+        pendingAfter: {
+          pendingStylisticArtifacts: 1,
+          hasPendingStylisticArtifacts: true,
+          trackChangesActive: true,
+        },
+        transitionedToZeroPending: false,
+        showDisableTrackChangesCta: false,
         error: "timeout",
       })
       .mockResolvedValueOnce({
         status: "accepted",
         trackedChangesAffected: 1,
         commentDeleted: true,
+        pendingAfter: {
+          pendingStylisticArtifacts: 1,
+          hasPendingStylisticArtifacts: true,
+          trackChangesActive: true,
+        },
+        transitionedToZeroPending: false,
+        showDisableTrackChangesCta: false,
       });
 
     const doc = createTaskpaneDocument();
@@ -285,9 +354,11 @@ describe("taskpane suggestion resolution guardrails", () => {
     acceptBtn.click();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
     expect(acceptBtn.disabled).toBe(false);
 
     acceptBtn.click();
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -300,6 +371,13 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: "error",
       trackedChangesAffected: 0,
       commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: false,
+      showDisableTrackChangesCta: false,
       error: "El documento está protegido",
     });
 
@@ -310,6 +388,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -327,6 +406,13 @@ describe("taskpane suggestion resolution guardrails", () => {
       status: "not-found",
       trackedChangesAffected: 0,
       commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: false,
+      showDisableTrackChangesCta: false,
       error: "Texto no encontrado",
     });
 
@@ -339,10 +425,75 @@ describe("taskpane suggestion resolution guardrails", () => {
     acceptBtn.click();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(acceptBtn.disabled).toBe(false);
     expect(
       getRequiredChild(li, '[data-action="reject"]').disabled,
     ).toBe(false);
+  });
+
+  it("shows the disable Track Changes CTA only when final resolution reaches zero pending", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "accepted",
+      trackedChangesAffected: 1,
+      commentDeleted: true,
+      pendingAfter: {
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: true,
+      showDisableTrackChangesCta: true,
+    });
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-final" });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
+
+    acceptBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      getRequiredElement(doc, "disable-track-changes-section").style.display,
+    ).toBe("block");
+  });
+
+  it("lets the user disable Track Changes from the explicit CTA", async () => {
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-final" });
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "accepted",
+      trackedChangesAffected: 1,
+      commentDeleted: true,
+      pendingAfter: {
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      },
+      transitionedToZeroPending: true,
+      showDisableTrackChangesCta: true,
+    });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    getRequiredChild(li, '[data-action="accept"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    getRequiredElement(doc, "btn-disable-track-changes").click();
+    await Promise.resolve();
+
+    expect(taskpaneMocks.disableTrackChanges).toHaveBeenCalledOnce();
+    expect(
+      getRequiredElement(doc, "disable-track-changes-section").style.display,
+    ).toBe("none");
+    expect(getRequiredElement(doc, "status-bar").textContent).toBe(
+      "Control de cambios desactivado.",
+    );
   });
 });

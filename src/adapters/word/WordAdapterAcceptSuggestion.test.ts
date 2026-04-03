@@ -73,6 +73,8 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
     expect(result.commentDeleted).toBe(true);
+    expect(result.transitionedToZeroPending).toBe(false);
+    expect(result.showDisableTrackChangesCta).toBe(false);
     expect(tcAccept1).toHaveBeenCalledOnce();
     expect(tcAccept2).toHaveBeenCalledOnce();
     expect(commentDeleteSpy).toHaveBeenCalledOnce();
@@ -93,6 +95,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("cc-not-found");
     expect(result.trackedChangesAffected).toBe(0);
     expect(result.commentDeleted).toBe(false);
+    expect(result.transitionedToZeroPending).toBe(false);
   });
 
   it("returns already-resolved when the CC remains but no tracked changes are found", async () => {
@@ -142,6 +145,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(1);
     expect(result.commentDeleted).toBe(false);
+    expect(result.pendingAfter.hasPendingStylisticArtifacts).toBe(true);
     expect(result.error).toBeUndefined();
     expect(tcAcceptSpy).toHaveBeenCalledOnce();
     expect(context._cc.delete).toHaveBeenCalledWith(true);
@@ -383,6 +387,7 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     expect(result.status).toBe("error");
     expect(result.error).toContain("Document is read-only");
+    expect(result.showDisableTrackChangesCta).toBe(false);
   });
 
   it("accepts comment-only suggestions by deleting the comment and the CC only", async () => {
@@ -418,5 +423,31 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.commentDeleted).toBe(true);
     expect(commentDeleteSpy).toHaveBeenCalledOnce();
     expect(context._cc.delete).toHaveBeenCalledWith(true);
+  });
+
+  it("signals the disable CTA when accepting the final pending artifact reaches zero", async () => {
+    const suggestion = makeSuggestion({ id: "s-final" });
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      spanTCItems: [
+        {
+          type: "Deleted",
+          accept: vi.fn(() => {
+            context.document.contentControls.items = [];
+          }),
+          reject: vi.fn(),
+        },
+      ],
+      comments: [],
+    });
+
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.pendingAfter.pendingStylisticArtifacts).toBe(0);
+    expect(result.transitionedToZeroPending).toBe(true);
+    expect(result.showDisableTrackChangesCta).toBe(true);
   });
 });

@@ -69,6 +69,39 @@ export interface InsertionResult {
   failedSuggestions: Suggestion[];
 }
 
+/**
+ * Document-derived review state for Stylistic artifacts currently materialized
+ * in Word.
+ */
+export interface DocumentReviewState {
+  /** Number of pending Stylistic artifacts still active in the document. */
+  pendingStylisticArtifacts: number;
+
+  /** Convenience boolean derived from `pendingStylisticArtifacts > 0`. */
+  hasPendingStylisticArtifacts: boolean;
+
+  /** Whether Word Track Changes is currently active for the document. */
+  trackChangesActive: boolean;
+}
+
+/**
+ * Batch insertion result enriched with document-review semantics.
+ *
+ * The pipeline still consumes the insertion counters, while the workflow layer
+ * can observe whether Track Changes was activated lazily and what pending state
+ * remained in the document after the batch finished.
+ */
+export interface ApplySuggestionsResult extends InsertionResult {
+  /** Document-derived review state after the batch finishes. */
+  pendingAfter: DocumentReviewState;
+
+  /**
+   * `true` when this batch had to activate Track Changes before applying the
+   * first real `track-change` suggestion.
+   */
+  trackChangesActivatedForBatch: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Text Chunking
 // ---------------------------------------------------------------------------
@@ -462,6 +495,30 @@ export interface SuggestionActionResult {
   trackedChangesAffected: number;
   /** Whether the associated Stylistic comment was successfully deleted. */
   commentDeleted: boolean;
+  /** Document-derived review state immediately after the resolution attempt. */
+  pendingAfter: DocumentReviewState;
+  /** `true` only when this resolution moved the document from pending > 0 to 0. */
+  transitionedToZeroPending: boolean;
+  /**
+   * `true` when the UI should expose the explicit CTA to disable Track Changes.
+   * This is never an auto-disable instruction.
+   */
+  showDisableTrackChangesCta: boolean;
   /** Human-readable error message when status is "error" or "not-found". */
   error?: string;
+}
+
+/** Fire-and-forget feedback dispatch semantics exposed by the resolution workflow. */
+export type FeedbackDispatchStatus = "sent" | "failed" | "skipped";
+
+/**
+ * Shared resolution workflow result consumed by the taskpane.
+ *
+ * Extends the document mutation result with feedback observability while
+ * keeping feedback non-blocking for the user.
+ */
+export interface SuggestionResolutionWorkflowResult
+  extends SuggestionActionResult {
+  /** Best-effort feedback dispatch outcome observed by the workflow. */
+  feedbackStatus: FeedbackDispatchStatus;
 }

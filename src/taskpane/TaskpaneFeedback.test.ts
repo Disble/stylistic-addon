@@ -127,6 +127,23 @@ describe("taskpane feedback controls", () => {
     );
   });
 
+  it("keeps feedback non-blocking even when the adapter rejects it later", async () => {
+    taskpaneMocks.feedbackSendFeedback.mockRejectedValueOnce(
+      new Error("feedback failed"),
+    );
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-feedback" });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    (li.querySelector('[data-action="accept"]') as FakeElement).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(li.classList.contains("result-accepted")).toBe(true);
+  });
+
   it("omits empty textarea comments from the feedback payload", async () => {
     const doc = createTaskpaneDocument();
     const suggestion = makeSuggestion({ id: "s-1" });

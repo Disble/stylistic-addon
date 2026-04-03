@@ -78,8 +78,14 @@ describe("taskpane entrypoint", () => {
       deletable: 1,
       kept: 0,
     });
+    taskpaneMocks.getDocumentReviewState.mockResolvedValueOnce({
+      pendingStylisticArtifacts: 0,
+      hasPendingStylisticArtifacts: false,
+      trackChangesActive: true,
+    });
 
     officeHarness.triggerReady({ host: "Word" });
+    await Promise.resolve();
     await Promise.resolve();
     expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("none");
     expect(getRequiredElement(doc, "app-body").style.display).toBe("flex");
@@ -89,8 +95,42 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("btn-cleanup")?.onclick).toEqual(
       expect.any(Function),
     );
+    expect(doc.getElementById("btn-disable-track-changes")?.onclick).toEqual(
+      expect.any(Function),
+    );
     expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledOnce();
+    expect(taskpaneMocks.getDocumentReviewState).toHaveBeenCalledOnce();
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
+    expect(
+      getRequiredElement(doc, "disable-track-changes-section").style.display,
+    ).toBe("block");
+  });
+
+  it("rehydrates disable Track Changes CTA from document state on panel open", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({
+      deletable: 0,
+      kept: 0,
+    });
+    taskpaneMocks.getDocumentReviewState.mockResolvedValueOnce({
+      pendingStylisticArtifacts: 0,
+      hasPendingStylisticArtifacts: false,
+      trackChangesActive: true,
+    });
+
+    await importTaskpane();
+    officeHarness.triggerReady({ host: "Word" });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(taskpaneMocks.getDocumentReviewState).toHaveBeenCalledOnce();
+    expect(
+      getRequiredElement(doc, "disable-track-changes-section").style.display,
+    ).toBe("block");
   });
 
   it("runs the pipeline with the selected profile and updates terminal UI state from emitted events", async () => {

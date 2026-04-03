@@ -17,10 +17,11 @@
  */
 
 import type {
+  ApplySuggestionsResult,
   ChunkPollResult,
   ChunkSubmitResult,
+  DocumentReviewState,
   FeedbackPayload,
-  InsertionResult,
   ProgressCallback,
   Suggestion,
   SuggestionActionResult,
@@ -63,7 +64,7 @@ export interface IDocumentPort {
   applySuggestions(
     suggestions: Suggestion[],
     onProgress?: ProgressCallback,
-  ): Promise<InsertionResult>;
+  ): Promise<ApplySuggestionsResult>;
 
   /**
    * Returns a dry-run summary of the cleanup operation.
@@ -90,6 +91,18 @@ export interface IDocumentPort {
    * Returns a result object — never throws.
    */
   rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
+
+  /**
+   * Inspects the document-derived Stylistic review state.
+   * The document is the source of truth for pending artifacts.
+   */
+  getDocumentReviewState(): Promise<DocumentReviewState>;
+
+  /**
+   * Lets the user explicitly disable Word Track Changes after Stylistic pending
+   * artifacts reach zero. Never called automatically.
+   */
+  disableTrackChanges(): Promise<void>;
 
   /**
    * Navigates the document view to the first occurrence of the given text.

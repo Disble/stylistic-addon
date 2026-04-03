@@ -119,6 +119,26 @@ Recommended split for `taskpane`:
 
 But DO NOT confuse file splitting with quality improvement. A small lying test is still a lying test.
 
+### Important correction: taskpane tests DO exist in this repo
+
+Earlier guidance in this project family sometimes treated `src/taskpane/**` as effectively excluded from unit-style coverage because it is DOM-dependent.
+
+That is too absolute for `stylistic-addon`.
+
+Current repo reality:
+
+- `TaskpaneEntrypoint.test.ts`
+- `TaskpaneSuggestionPresentation.test.ts`
+- `TaskpaneSuggestionResolution.test.ts`
+- `TaskpaneFeedback.test.ts`
+
+all provide useful fake-DOM guardrail coverage.
+
+**Correct rule**:
+- taskpane tests are valid when they protect presentation semantics and user-flow guardrails,
+- but they are **Tier 2**, not the primary integration shield,
+- fake-DOM taskpane tests must not be mistaken for real Office/Word boundary confidence.
+
 ---
 
 ### 5. Protect semantic outcomes for tracked changes
@@ -240,6 +260,31 @@ When a regression reveals that a prior fix or prior test strategy was incomplete
 4. record the corrected pattern so future agents do not reintroduce the same mistake
 
 This repo MUST preserve operational learning, not just code diffs.
+
+### 10.1 New lesson: workflow extraction deserves its own tests
+
+When logic moves out of `taskpane.ts` or `WordAdapter.ts` into a dedicated workflow object (for example `SuggestionResolutionWorkflow`), do not rely only on adapter tests plus taskpane tests.
+
+Add a focused suite for the workflow itself when it owns:
+
+- action branching (`accept` / `reject`)
+- non-blocking feedback dispatch
+- workflow result semantics such as `feedbackStatus`
+
+Otherwise the workflow can become a blind spot hidden between UI guardrails and adapter contracts.
+
+### 10.2 New lesson: Track Changes lifecycle needs both negative and positive proofs
+
+For this repo, it is not enough to prove that comment-only batches do **not** enable Track Changes.
+
+You must also prove the positive path:
+
+- document starts with tracking `off`
+- first real `track-change` suggestion is applied
+- workflow enables Track Changes exactly once
+- result semantics expose that activation (`trackChangesActivatedForBatch`)
+
+Testing only the negative path leaves the new lifecycle partially uncertified.
 
 ---
 

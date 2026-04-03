@@ -120,6 +120,21 @@ body {
   background: #3b3a39;
 }
 
+.stylistic-btn--warning {
+  background: #fff4e5;
+  color: #8a3b00;
+  border-color: #ca5010;
+}
+
+.stylistic-btn--warning:hover {
+  background: #fde7cf;
+  border-color: #a1460a;
+}
+
+.stylistic-btn--warning:active {
+  background: #f7d6b5;
+}
+
 .stylistic-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -485,6 +500,12 @@ body {
   flex-shrink: 0;
   border-top: 1px solid #edebe9;
   padding: 8px 0 12px;
+  background: #fafafa;
+}
+
+#disable-track-changes-section {
+  flex-shrink: 0;
+  padding-bottom: 12px;
   background: #fafafa;
 }
 
