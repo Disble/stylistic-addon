@@ -10,7 +10,11 @@
  * @module PipelineEvents
  */
 
-import type { InsertionResult, PipelineState, Suggestion } from "../types";
+import type {
+  ApplySuggestionsResult,
+  PipelineState,
+  Suggestion,
+} from "../types";
 
 // ---------------------------------------------------------------------------
 // Observer interface
@@ -36,7 +40,7 @@ export interface PipelineObserver {
   /** Called when the pipeline completes (success or partial success). */
   onComplete?(
     suggestions: Suggestion[],
-    result: InsertionResult,
+    result: ApplySuggestionsResult,
     chunkErrors: string[],
     isSelection: boolean,
   ): void;
@@ -112,7 +116,7 @@ export class PipelineEventEmitter {
 
   emitComplete(
     suggestions: Suggestion[],
-    result: InsertionResult,
+    result: ApplySuggestionsResult,
     chunkErrors: string[],
     isSelection: boolean,
   ): void {

@@ -13,8 +13,8 @@
  *
  * This module contains NO pipeline logic, NO Word API calls, and NO backend
  * communication. All analysis flows through the `PipelineOrchestrator`.
- * Resolution workflow semantics go through `SuggestionResolutionWorkflow`, and
- * all document operations go through `WordAdapter` via `IDocumentPort`.
+ * Resolution/taskpane review coordination goes through `ReviewSessionMediator`,
+ * and all document operations go through `WordAdapter` via `IDocumentPort`.
  *
  * @module taskpane
  */
@@ -38,15 +38,16 @@ import {
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
 import type { IFeedbackPort } from "../domain/ports";
-import { SuggestionResolutionWorkflow } from "../domain/suggestion/SuggestionResolutionWorkflow";
+import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import {
   mapResultStatusToState,
   SuggestionStateMachine,
 } from "../domain/suggestion/SuggestionStateMachine";
 import type {
-  InsertionResult,
+  ApplySuggestionsResult,
   Suggestion,
-  SuggestionResolutionWorkflowResult,
+  SuggestionApplicationFailure,
+  SuggestionResolutionMediatorResult,
   SuggestionState,
 } from "../domain/types";
 import {
@@ -81,7 +82,7 @@ const analysisPort = new RetryAnalysisDecorator(
 );
 
 const feedbackPort: IFeedbackPort = new FeedbackAdapter();
-const suggestionResolutionWorkflow = new SuggestionResolutionWorkflow(
+const reviewSessionMediator = new ReviewSessionMediator(
   documentPort,
   feedbackPort,
 );
@@ -261,11 +262,8 @@ function setDisableTrackChangesCtaVisible(visible: boolean): void {
  */
 async function refreshTrackChangesCtaVisibility(): Promise<void> {
   try {
-    const reviewState = await documentPort.getDocumentReviewState();
-    setDisableTrackChangesCtaVisible(
-      !reviewState.hasPendingStylisticArtifacts &&
-        reviewState.trackChangesActive,
-    );
+    const taskpaneState = await reviewSessionMediator.rehydrateTaskpaneState();
+    setDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
   } catch (error) {
     console.warn(
       "⚠️ [Taskpane] No se pudo calcular la visibilidad del CTA de Track Changes:",
@@ -277,24 +275,60 @@ async function refreshTrackChangesCtaVisibility(): Promise<void> {
 /** Builds the summary sentence displayed above the rendered suggestion list. */
 function buildResultsSummary(
   suggestions: Suggestion[],
-  result: InsertionResult,
+  result: ApplySuggestionsResult,
   chunkErrors: string[],
   isSelection: boolean,
 ): string {
   const total = suggestions.length;
   const applied = result.successCount;
   const failed = result.failedSuggestions.length;
+  const notFound = result.failedSuggestions.filter(
+    (failure) => failure.reason === "not-found",
+  ).length;
+  const failedOther = failed - notFound;
   const scopePrefix = isSelection ? "Sobre selección — " : "";
 
   let summaryText = `${scopePrefix}${applied} de ${total} sugerencias aplicadas como Track Changes.`;
-  if (failed > 0) {
-    summaryText += ` ${failed} no encontrada(s) en el texto.`;
+  if (notFound > 0) {
+    summaryText += ` ${notFound} no encontrada(s) en el texto.`;
+  }
+  if (failedOther > 0) {
+    summaryText += ` ${failedOther} no pudo/pudieron aplicarse.`;
   }
   if (chunkErrors.length > 0) {
     summaryText += ` ${chunkErrors.length} fragmento(s) con error.`;
   }
 
   return summaryText;
+}
+
+/** Builds a natural status-bar message for mixed apply outcomes. */
+function buildApplyStatusMessage(
+  result: ApplySuggestionsResult,
+  isSelection: boolean,
+): string {
+  const scopeSuffix = isSelection ? " (selección)" : "";
+  const notFoundCount = result.failedSuggestions.filter(
+    (failure) => failure.reason === "not-found",
+  ).length;
+  const failedOtherCount = result.failedSuggestions.length - notFoundCount;
+
+  if (result.successCount > 0 && result.failedSuggestions.length === 0) {
+    return `${result.successCount} sugerencia(s) insertada(s) como Track Changes${scopeSuffix}.`;
+  }
+
+  if (result.successCount > 0) {
+    const fragments = [`${result.successCount} aplicada(s)`];
+    if (notFoundCount > 0) {
+      fragments.push(`${notFoundCount} no encontrada(s)`);
+    }
+    if (failedOtherCount > 0) {
+      fragments.push(`${failedOtherCount} fallida(s)`);
+    }
+    return `${fragments.join(", ")}${scopeSuffix}.`;
+  }
+
+  return "Ninguna sugerencia pudo aplicarse al documento actual.";
 }
 
 /** Creates the metadata row for one suggestion card. */
@@ -333,17 +367,27 @@ function createSuggestionMetaRow(
 /** Renders the failed-state content for one suggestion card. */
 function appendFailedCardContent(
   li: HTMLLIElement,
-  suggestion: Suggestion,
+  failure: SuggestionApplicationFailure,
 ): void {
   const failedSpan = document.createElement("span");
   failedSpan.className = "result-failed";
-  failedSpan.textContent = `No encontrado: "${suggestion.anchor}"`;
+  failedSpan.textContent =
+    failure.reason === "not-found"
+      ? `No encontrado: "${failure.suggestion.anchor}"`
+      : `No se pudo aplicar: "${failure.suggestion.anchor}"`;
   li.appendChild(failedSpan);
 
   const justSpan = document.createElement("span");
   justSpan.className = "result-justification";
-  justSpan.textContent = suggestion.justification;
+  justSpan.textContent = failure.suggestion.justification;
   li.appendChild(justSpan);
+
+  if (failure.reason !== "not-found") {
+    const detailSpan = document.createElement("span");
+    detailSpan.className = "result-failure-detail";
+    detailSpan.textContent = failure.message;
+    li.appendChild(detailSpan);
+  }
 }
 
 /** Creates one action button for accept/reject/feedback actions. */
@@ -445,9 +489,12 @@ function appendActionableCardContent(
 /** Builds one suggestion card and returns whether it is in failed state. */
 function createSuggestionCard(
   suggestion: Suggestion,
-  failedSuggestions: Suggestion[],
+  failedSuggestions: SuggestionApplicationFailure[],
 ): { li: HTMLLIElement; isFailed: boolean } {
-  const isFailed = failedSuggestions.some((f) => f.id === suggestion.id);
+  const failure = failedSuggestions.find(
+    (f) => f.suggestion.id === suggestion.id,
+  );
+  const isFailed = Boolean(failure);
   const isCommentOnly = suggestion.type === "comment-only";
 
   const li = document.createElement("li");
@@ -455,8 +502,8 @@ function createSuggestionCard(
   li.dataset.severity = suggestion.severity;
   li.appendChild(createSuggestionMetaRow(suggestion, isFailed, isCommentOnly));
 
-  if (isFailed) {
-    appendFailedCardContent(li, suggestion);
+  if (failure) {
+    appendFailedCardContent(li, failure);
     return { li, isFailed: true };
   }
 
@@ -515,7 +562,7 @@ function wireSuggestionCardInteractions(
  */
 function renderResults(
   suggestions: Suggestion[],
-  result: InsertionResult,
+  result: ApplySuggestionsResult,
   chunkErrors: string[],
   isSelection: boolean,
 ): void {
@@ -540,7 +587,9 @@ function renderResults(
   }
 
   panel.style.display = "block";
-  setDisableTrackChangesCtaVisible(false);
+  setDisableTrackChangesCtaVisible(
+    result.documentState === "ready-to-disable-track-changes",
+  );
 }
 
 /**
@@ -649,10 +698,17 @@ function getSuggestionFeedbackComment(li: HTMLElement): string | undefined {
  * Applies shared taskpane consequences after a workflow-owned resolution.
  */
 async function applyResolutionWorkflowUi(
-  result: SuggestionResolutionWorkflowResult,
+  result: SuggestionResolutionMediatorResult,
 ): Promise<void> {
-  setDisableTrackChangesCtaVisible(result.showDisableTrackChangesCta);
-  await refreshCleanupVisibility();
+  setDisableTrackChangesCtaVisible(
+    result.taskpaneState.showDisableTrackChangesCta,
+  );
+  const cleanupSection = document.getElementById("cleanup-section");
+  if (cleanupSection) {
+    cleanupSection.style.display = result.taskpaneState.showCleanupSection
+      ? "block"
+      : "none";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -678,7 +734,7 @@ async function handleAcceptSuggestion(
   if (acceptBtn) acceptBtn.disabled = true;
   if (rejectBtn) rejectBtn.disabled = true;
 
-  const result = await suggestionResolutionWorkflow.acceptSuggestion(
+  const result = await reviewSessionMediator.acceptSuggestion(
     suggestion,
     getSuggestionFeedbackComment(li),
   );
@@ -717,7 +773,7 @@ async function handleRejectSuggestion(
   if (acceptBtn) acceptBtn.disabled = true;
   if (rejectBtn) rejectBtn.disabled = true;
 
-  const result = await suggestionResolutionWorkflow.rejectSuggestion(
+  const result = await reviewSessionMediator.rejectSuggestion(
     suggestion,
     getSuggestionFeedbackComment(li),
   );
@@ -786,24 +842,10 @@ async function handleAnalyze(): Promise<void> {
       hideProgress();
       renderResults(suggestions, result, chunkErrors, isSelection);
       void refreshCleanupVisibility();
-
-      const scopeSuffix = isSelection ? " (selección)" : "";
-      if (result.failedSuggestions.length > 0 && result.successCount > 0) {
-        showStatus(
-          `${result.successCount} aplicada(s), ${result.failedSuggestions.length} no encontrada(s)${scopeSuffix}.`,
-          "success",
-        );
-      } else if (result.successCount > 0) {
-        showStatus(
-          `${result.successCount} sugerencia(s) insertada(s) como Track Changes${scopeSuffix}.`,
-          "success",
-        );
-      } else {
-        showStatus(
-          "Ninguna sugerencia pudo aplicarse al documento actual.",
-          "error",
-        );
-      }
+      showStatus(
+        buildApplyStatusMessage(result, isSelection),
+        result.successCount > 0 ? "success" : "error",
+      );
     },
   };
 
@@ -881,8 +923,8 @@ async function handleDisableTrackChanges(): Promise<void> {
   label.textContent = "Desactivando...";
 
   try {
-    await documentPort.disableTrackChanges();
-    setDisableTrackChangesCtaVisible(false);
+    const taskpaneState = await reviewSessionMediator.disableTrackChanges();
+    setDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
     showStatus("Control de cambios desactivado.", "success");
   } catch (error) {
     showStatus(toUserMessage(error), "error");

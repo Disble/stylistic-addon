@@ -73,8 +73,6 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
     expect(result.commentDeleted).toBe(true);
-    expect(result.transitionedToZeroPending).toBe(false);
-    expect(result.showDisableTrackChangesCta).toBe(false);
     expect(tcAccept1).toHaveBeenCalledOnce();
     expect(tcAccept2).toHaveBeenCalledOnce();
     expect(commentDeleteSpy).toHaveBeenCalledOnce();
@@ -95,7 +93,6 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("cc-not-found");
     expect(result.trackedChangesAffected).toBe(0);
     expect(result.commentDeleted).toBe(false);
-    expect(result.transitionedToZeroPending).toBe(false);
   });
 
   it("returns already-resolved when the CC remains but no tracked changes are found", async () => {
@@ -387,7 +384,6 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     expect(result.status).toBe("error");
     expect(result.error).toContain("Document is read-only");
-    expect(result.showDisableTrackChangesCta).toBe(false);
   });
 
   it("accepts comment-only suggestions by deleting the comment and the CC only", async () => {
@@ -447,7 +443,6 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     expect(result.status).toBe("accepted");
     expect(result.pendingAfter.pendingStylisticArtifacts).toBe(0);
-    expect(result.transitionedToZeroPending).toBe(true);
-    expect(result.showDisableTrackChangesCta).toBe(true);
+    expect(result.documentState).toBe("ready-to-disable-track-changes");
   });
 });

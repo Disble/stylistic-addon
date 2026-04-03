@@ -1,7 +1,6 @@
 import type { IAnalysisPort, IDocumentPort } from "../../ports";
 import type {
   ApplySuggestionsResult,
-  InsertionResult,
   ProgressCallback,
   Suggestion,
 } from "../../types";
@@ -39,6 +38,7 @@ function makeInsertionResult(
       hasPendingStylisticArtifacts: true,
       trackChangesActive: true,
     },
+    documentState: "pending-review",
     trackChangesActivatedForBatch: false,
     ...overrides,
   };
@@ -295,7 +295,13 @@ describe("ApplySuggestionsHandler", () => {
       });
       const result = makeInsertionResult({
         successCount: 2,
-        failedSuggestions: [failedSuggestion],
+        failedSuggestions: [
+          {
+            suggestion: failedSuggestion,
+            reason: "not-found",
+            message: "Anchor no encontrado en el contexto",
+          },
+        ],
       });
       const docPort = makeMockDocumentPort(result);
 
@@ -310,7 +316,7 @@ describe("ApplySuggestionsHandler", () => {
 
       expect(ctx.result?.successCount).toBe(2);
       expect(ctx.result?.failedSuggestions).toHaveLength(1);
-      expect(ctx.result?.failedSuggestions[0].id).toBe("failed-1");
+      expect(ctx.result?.failedSuggestions[0].suggestion.id).toBe("failed-1");
     });
 
     it("should still call next() and emit events even with failures", async () => {
@@ -320,7 +326,13 @@ describe("ApplySuggestionsHandler", () => {
 
       const result = makeInsertionResult({
         successCount: 0,
-        failedSuggestions: [makeSuggestion()],
+        failedSuggestions: [
+          {
+            suggestion: makeSuggestion(),
+            reason: "command-error",
+            message: "insert failed",
+          },
+        ],
       });
       const docPort = makeMockDocumentPort(result);
       const ctx = makePipelineContext([makeSuggestion()], docPort, { emitter });
@@ -345,7 +357,11 @@ describe("ApplySuggestionsHandler", () => {
       ];
       const result = makeInsertionResult({
         successCount: 0,
-        failedSuggestions: failed,
+        failedSuggestions: failed.map((suggestion) => ({
+          suggestion,
+          reason: "not-found" as const,
+          message: "Anchor no encontrado en el contexto",
+        })),
       });
       const docPort = makeMockDocumentPort(result);
       const ctx = makePipelineContext(failed, docPort);

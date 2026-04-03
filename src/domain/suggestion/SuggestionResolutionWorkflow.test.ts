@@ -32,8 +32,7 @@ function makeActionResult(
       hasPendingStylisticArtifacts: true,
       trackChangesActive: true,
     },
-    transitionedToZeroPending: false,
-    showDisableTrackChangesCta: false,
+    documentState: "pending-review",
     ...overrides,
   };
 }

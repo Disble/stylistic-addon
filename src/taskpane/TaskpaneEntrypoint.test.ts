@@ -24,6 +24,13 @@ function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: 
   return el;
 }
 
+/** Flushes queued microtasks created by taskpane workflows/mediators. */
+async function flushTaskpaneWork(times = 6) {
+  for (let index = 0; index < times; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe("taskpane entrypoint", () => {
   const taskpaneMocks = getTaskpaneMocks();
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -85,8 +92,7 @@ describe("taskpane entrypoint", () => {
     });
 
     officeHarness.triggerReady({ host: "Word" });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
     expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("none");
     expect(getRequiredElement(doc, "app-body").style.display).toBe("flex");
     expect(doc.getElementById("btn-analyze")?.onclick).toEqual(
@@ -98,7 +104,7 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("btn-disable-track-changes")?.onclick).toEqual(
       expect.any(Function),
     );
-    expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledOnce();
+    expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledTimes(2);
     expect(taskpaneMocks.getDocumentReviewState).toHaveBeenCalledOnce();
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
     expect(
@@ -124,8 +130,7 @@ describe("taskpane entrypoint", () => {
 
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(taskpaneMocks.getDocumentReviewState).toHaveBeenCalledOnce();
     expect(
@@ -144,7 +149,17 @@ describe("taskpane entrypoint", () => {
       ctx.emitter.emitProgress(1, 4, "Analizando fragmentos...");
       ctx.emitter.emitComplete(
         [makeSuggestion()],
-        { successCount: 1, failedSuggestions: [] },
+        {
+          successCount: 1,
+          failedSuggestions: [],
+          pendingAfter: {
+            pendingStylisticArtifacts: 1,
+            hasPendingStylisticArtifacts: true,
+            trackChangesActive: true,
+          },
+          documentState: "pending-review",
+          trackChangesActivatedForBatch: false,
+        },
         [],
         true,
       );
@@ -160,7 +175,7 @@ describe("taskpane entrypoint", () => {
 
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
     await Promise.resolve();
@@ -194,6 +209,49 @@ describe("taskpane entrypoint", () => {
 
     await vi.advanceTimersByTimeAsync(4000);
     expect(getRequiredElement(doc, "status-bar").style.display).toBe("none");
+  });
+
+  it("renders natural mixed status copy without zero-count fragments", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.emitter.emitComplete(
+        [makeSuggestion({ id: "s-ok" }), makeSuggestion({ id: "s-fail" })],
+        {
+          successCount: 1,
+          failedSuggestions: [
+            {
+              suggestion: makeSuggestion({ id: "s-fail" }),
+              reason: "command-error",
+              message: "GeneralException",
+            },
+          ],
+          pendingAfter: {
+            pendingStylisticArtifacts: 1,
+            hasPendingStylisticArtifacts: true,
+            trackChangesActive: true,
+          },
+          documentState: "pending-review",
+          trackChangesActivatedForBatch: false,
+        },
+        [],
+        false,
+      );
+    });
+
+    await importTaskpane();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+
+    await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
+    await Promise.resolve();
+
+    expect(doc.getElementById("status-bar")?.textContent).toBe(
+      "1 aplicada(s), 1 fallida(s).",
+    );
   });
 
   it("ignores analyze clicks while a run is already in progress", async () => {
@@ -257,7 +315,7 @@ describe("taskpane entrypoint", () => {
 
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
     expect(taskpaneMocks.getCleanupPreview).toHaveBeenCalledOnce();
@@ -273,7 +331,17 @@ describe("taskpane entrypoint", () => {
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
       ctx.emitter.emitComplete(
         [makeSuggestion()],
-        { successCount: 1, failedSuggestions: [] },
+        {
+          successCount: 1,
+          failedSuggestions: [],
+          pendingAfter: {
+            pendingStylisticArtifacts: 1,
+            hasPendingStylisticArtifacts: true,
+            trackChangesActive: true,
+          },
+          documentState: "pending-review",
+          trackChangesActivatedForBatch: false,
+        },
         [],
         false,
       );
@@ -289,7 +357,7 @@ describe("taskpane entrypoint", () => {
 
     await importTaskpane();
     officeHarness.triggerReady({ host: "Word" });
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
     await Promise.resolve();

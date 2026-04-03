@@ -273,6 +273,7 @@ export class ApplySuggestionCommand {
 
         const cc = insertedRange.insertContentControl();
         cc.tag = `stylistic:${this.suggestion.type}:${this.suggestion.id}`;
+        cc.title = this.suggestion.anchor;
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
@@ -357,6 +358,7 @@ export class ApplySuggestionCommand {
 
         const cc = range.insertContentControl();
         cc.tag = `stylistic:comment-only:${this.suggestion.id}`;
+        cc.title = this.suggestion.anchor;
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();

@@ -1,4 +1,9 @@
-import type { InsertionResult, PipelineState, Suggestion } from "../types";
+import type {
+  ApplySuggestionsResult,
+  PipelineState,
+  Suggestion,
+  SuggestionApplicationFailure,
+} from "../types";
 import { PipelineEventEmitter, type PipelineObserver } from "./PipelineEvents";
 
 // ---------------------------------------------------------------------------
@@ -21,9 +26,32 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 }
 
 function makeInsertionResult(
-  overrides: Partial<InsertionResult> = {},
-): InsertionResult {
-  return { successCount: 1, failedSuggestions: [], ...overrides };
+  overrides: Partial<ApplySuggestionsResult> = {},
+): ApplySuggestionsResult {
+  return {
+    successCount: 1,
+    failedSuggestions: [],
+    pendingAfter: {
+      pendingStylisticArtifacts: 1,
+      hasPendingStylisticArtifacts: true,
+      trackChangesActive: true,
+    },
+    documentState: "pending-review",
+    trackChangesActivatedForBatch: false,
+    ...overrides,
+  };
+}
+
+function makeFailure(
+  suggestion: Suggestion,
+  overrides: Partial<SuggestionApplicationFailure> = {},
+): SuggestionApplicationFailure {
+  return {
+    suggestion,
+    reason: "not-found",
+    message: "Anchor no encontrado en el contexto",
+    ...overrides,
+  };
 }
 
 // ---------------------------------------------------------------------------

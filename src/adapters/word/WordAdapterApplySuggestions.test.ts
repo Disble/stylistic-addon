@@ -44,6 +44,7 @@ describe("WordAdapter.applySuggestions", () => {
         hasPendingStylisticArtifacts: false,
         trackChangesActive: false,
       },
+      documentState: "idle",
       trackChangesActivatedForBatch: false,
     });
 
@@ -77,12 +78,19 @@ describe("WordAdapter.applySuggestions", () => {
       adapter.applySuggestions([first, second], onProgress),
     ).resolves.toEqual({
       successCount: 1,
-      failedSuggestions: [first],
+      failedSuggestions: [
+        {
+          suggestion: first,
+          reason: "not-found",
+          message: "Texto original no encontrado",
+        },
+      ],
       pendingAfter: {
         pendingStylisticArtifacts: 1,
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
+      documentState: "pending-review",
       trackChangesActivatedForBatch: false,
     });
 
@@ -130,12 +138,19 @@ describe("WordAdapter.applySuggestions", () => {
       adapter.applySuggestions([first, second, third], onProgress),
     ).resolves.toEqual({
       successCount: 2,
-      failedSuggestions: [second],
+      failedSuggestions: [
+        {
+          suggestion: second,
+          reason: "command-error",
+          message: "insert failed",
+        },
+      ],
       pendingAfter: {
         pendingStylisticArtifacts: 1,
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
+      documentState: "pending-review",
       trackChangesActivatedForBatch: false,
     });
 
@@ -222,6 +237,7 @@ describe("WordAdapter.applySuggestions", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
+      documentState: "pending-review",
       trackChangesActivatedForBatch: false,
     });
     expect(commandMocks.constructor).toHaveBeenNthCalledWith(1, lateInParagraph);

@@ -106,6 +106,67 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
     expect(result.size).toBe(2);
   });
 
+  it("prefers persisted original text metadata from ContentControl.title over mutated visible range text", async () => {
+    const mutatedReplaceRange = { load: vi.fn(), text: "parece que es" };
+    const mutatedCommentOnlyRange = { load: vi.fn(), text: "tomar" };
+
+    const context = {
+      document: {
+        contentControls: {
+          items: [
+            {
+              tag: "stylistic:track-change:s1",
+              title: "parece que es la",
+              getRange: vi.fn(() => mutatedReplaceRange),
+            },
+            {
+              tag: "stylistic:comment-only:s2",
+              title: "se cometen",
+              getRange: vi.fn(() => mutatedCommentOnlyRange),
+            },
+          ],
+          load: vi.fn(),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    const result = await adapter.getAppliedOriginalTexts();
+
+    expect(result).toEqual(new Set(["parece que es la", "se cometen"]));
+    expect(mutatedReplaceRange.load).not.toHaveBeenCalledWith("text");
+    expect(mutatedCommentOnlyRange.load).not.toHaveBeenCalledWith("text");
+  });
+
+  it("falls back to range text for legacy Stylistic content controls without persisted title metadata", async () => {
+    const legacyRange = { load: vi.fn(), text: "texto legado" };
+
+    const context = {
+      document: {
+        contentControls: {
+          items: [
+            {
+              tag: "stylistic:track-change:legacy-s1",
+              title: "",
+              getRange: vi.fn(() => legacyRange),
+            },
+          ],
+          load: vi.fn(),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    const result = await adapter.getAppliedOriginalTexts();
+
+    expect(result).toEqual(new Set(["texto legado"]));
+    expect(legacyRange.load).toHaveBeenCalledWith("text");
+  });
+
   it("propagates Word.run errors", async () => {
     installRejectingWord(new Error("Tracked changes unavailable"));
 

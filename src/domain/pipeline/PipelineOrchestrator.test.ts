@@ -703,6 +703,14 @@ describe("PipelineOrchestrator", () => {
         ctx.result = {
           successCount: ctx.rawSuggestions?.length ?? 0,
           failedSuggestions: [],
+          pendingAfter: {
+            pendingStylisticArtifacts: ctx.rawSuggestions?.length ?? 0,
+            hasPendingStylisticArtifacts: (ctx.rawSuggestions?.length ?? 0) > 0,
+            trackChangesActive: (ctx.rawSuggestions?.length ?? 0) > 0,
+          },
+          documentState:
+            (ctx.rawSuggestions?.length ?? 0) > 0 ? "pending-review" : "idle",
+          trackChangesActivatedForBatch: false,
         };
       });
 
@@ -720,7 +728,17 @@ describe("PipelineOrchestrator", () => {
       expect(ctx.text).toBe("Hello world. This is a test.");
       expect(ctx.chunks).toHaveLength(1);
       expect(ctx.rawSuggestions).toHaveLength(1);
-      expect(ctx.result).toEqual({ successCount: 1, failedSuggestions: [] });
+      expect(ctx.result).toEqual({
+        successCount: 1,
+        failedSuggestions: [],
+        pendingAfter: {
+          pendingStylisticArtifacts: 1,
+          hasPendingStylisticArtifacts: true,
+          trackChangesActive: true,
+        },
+        documentState: "pending-review",
+        trackChangesActivatedForBatch: false,
+      });
     });
 
     it("simulates abort at read phase (empty document)", async () => {

@@ -18,6 +18,10 @@
  */
 
 import type { IDocumentPort } from "../../domain/ports";
+import {
+  DocumentReviewStateMachine,
+  type DocumentReviewUiState,
+} from "../../domain/review/DocumentReviewStateMachine";
 import type {
   ApplySuggestionsResult,
   CommandResult,
@@ -25,6 +29,8 @@ import type {
   ProgressCallback,
   Suggestion,
   SuggestionActionResult,
+  SuggestionApplicationFailure,
+  SuggestionApplicationFailureReason,
   TextSource,
 } from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
@@ -103,6 +109,15 @@ export class WordAdapter implements IDocumentPort {
       hasPendingStylisticArtifacts: pendingStylisticArtifacts > 0,
       trackChangesActive,
     };
+  }
+
+  /**
+   * Derives the explicit document-review UI state from a document snapshot.
+   */
+  private deriveDocumentState(
+    reviewState: DocumentReviewState,
+  ): DocumentReviewUiState {
+    return DocumentReviewStateMachine.deriveState(reviewState);
   }
 
   /**
@@ -288,7 +303,9 @@ export class WordAdapter implements IDocumentPort {
    *
    * Detects all active Stylistic CCs by tag prefix (`stylistic:`), which covers
    * both `stylistic:track-change:{id}` and `stylistic:comment-only:{id}` tags.
-   * For each matching CC, reads the range text (the original text at insertion time).
+   * For each matching CC, prefers persisted anchor metadata from `cc.title`.
+   * Falls back to the visible range text only for legacy CCs created before that
+   * metadata existed.
    */
   async getAppliedOriginalTexts(): Promise<Set<string>> {
     console.log(
@@ -296,7 +313,7 @@ export class WordAdapter implements IDocumentPort {
     );
     return Word.run(async (context) => {
       const allCCs = context.document.contentControls;
-      allCCs.load("items");
+      allCCs.load("items/tag,items/title");
       await context.sync();
 
       // JS-side prefix filter — Office.js getByTag() is exact-match only
@@ -308,14 +325,28 @@ export class WordAdapter implements IDocumentPort {
         return new Set<string>();
       }
 
-      const ranges = stylisticCCs.map((cc) => cc.getRange());
-      ranges.forEach((r) => {
-        r.load("text");
-      });
+      const texts = new Set<string>();
+      const legacyRanges: Word.Range[] = [];
 
-      await context.sync();
+      for (const cc of stylisticCCs) {
+        const persistedAnchor = cc.title?.trim();
+        if (persistedAnchor) {
+          texts.add(persistedAnchor);
+          continue;
+        }
 
-      const texts = new Set(ranges.map((r) => r.text));
+        const range = cc.getRange();
+        range.load("text");
+        legacyRanges.push(range);
+      }
+
+      if (legacyRanges.length > 0) {
+        await context.sync();
+        for (const range of legacyRanges) {
+          texts.add(range.text);
+        }
+      }
+
       console.log(
         `🛡️ [WordAdapter] ${texts.size} texto(s) ya rastreado(s) (stylistic: CCs)`,
       );
@@ -383,12 +414,37 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
+   * Infers a stable failure reason from a command error message.
+   */
+  private inferApplicationFailureReason(
+    commandResult: CommandResult,
+  ): SuggestionApplicationFailureReason {
+    const message = commandResult.error?.toLowerCase() ?? "";
+
+    if (
+      message.includes("anchor no encontrado") ||
+      message.includes("texto original no encontrado")
+    ) {
+      return "not-found";
+    }
+
+    if (
+      message.includes("cc existente") ||
+      message.includes("content control")
+    ) {
+      return "covered-by-existing-cc";
+    }
+
+    return "command-error";
+  }
+
+  /**
    * Updates counters and logs after one command execution.
    */
   private registerSuggestionOutcome(
     suggestion: Suggestion,
     commandResult: CommandResult,
-    failedSuggestions: Suggestion[],
+    failedSuggestions: SuggestionApplicationFailure[],
     successCount: number,
   ): number {
     if (commandResult.success) {
@@ -396,7 +452,11 @@ export class WordAdapter implements IDocumentPort {
       return successCount + 1;
     }
 
-    failedSuggestions.push(suggestion);
+    failedSuggestions.push({
+      suggestion,
+      reason: this.inferApplicationFailureReason(commandResult),
+      message: commandResult.error ?? "Error desconocido al aplicar sugerencia",
+    });
     console.warn(
       `⚠️ [WordAdapter] "${suggestion.id}" falló: ${commandResult.error}`,
     );
@@ -446,6 +506,7 @@ export class WordAdapter implements IDocumentPort {
         successCount: 0,
         failedSuggestions: [],
         pendingAfter,
+        documentState: this.deriveDocumentState(pendingAfter),
         trackChangesActivatedForBatch: false,
       };
     }
@@ -454,7 +515,7 @@ export class WordAdapter implements IDocumentPort {
     // by Content Controls created for later positions in the same paragraph.
     const sortedSuggestions = this.sortByDocumentPosition(suggestions);
 
-    const failedSuggestions: Suggestion[] = [];
+    const failedSuggestions: SuggestionApplicationFailure[] = [];
     let successCount = 0;
     let trackChangesPrepared = false;
     let trackChangesActivatedForBatch = false;
@@ -494,6 +555,7 @@ export class WordAdapter implements IDocumentPort {
       successCount,
       failedSuggestions,
       pendingAfter,
+      documentState: this.deriveDocumentState(pendingAfter),
       trackChangesActivatedForBatch,
     };
   }
@@ -549,7 +611,7 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
-   * Builds a document-aware resolution result, including the zero-pending CTA signal.
+   * Builds a document-aware resolution result.
    */
   private buildResolutionResult(
     status: SuggestionActionResult["status"],
@@ -559,18 +621,17 @@ export class WordAdapter implements IDocumentPort {
     pendingAfter: DocumentReviewState,
     error?: string,
   ): SuggestionActionResult {
-    const transitionedToZeroPending =
-      pendingBefore.hasPendingStylisticArtifacts &&
-      !pendingAfter.hasPendingStylisticArtifacts;
+    const transition = DocumentReviewStateMachine.evaluateTransition(
+      pendingBefore,
+      pendingAfter,
+    );
 
     return {
       status,
       trackedChangesAffected,
       commentDeleted,
       pendingAfter,
-      transitionedToZeroPending,
-      showDisableTrackChangesCta:
-        transitionedToZeroPending && pendingAfter.trackChangesActive,
+      documentState: transition.to,
       ...(error ? { error } : {}),
     };
   }
@@ -770,8 +831,7 @@ export class WordAdapter implements IDocumentPort {
         trackedChangesAffected: 0,
         commentDeleted: false,
         pendingAfter,
-        transitionedToZeroPending: false,
-        showDisableTrackChangesCta: false,
+        documentState: this.deriveDocumentState(pendingAfter),
         error: message,
       };
     }

@@ -1,4 +1,8 @@
-import type { InsertionResult, Suggestion } from "../domain/types";
+import type {
+  ApplySuggestionsResult,
+  Suggestion,
+  SuggestionApplicationFailure,
+} from "../domain/types";
 
 const hoistedTaskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],
@@ -463,7 +467,7 @@ export async function importTaskpane() {
  */
 export function resetTaskpaneHarness() {
   const taskpaneMocks = getTaskpaneMocks();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   vi.useFakeTimers();
   taskpaneMocks.orchestratorHandlers = [];
   taskpaneMocks.run.mockResolvedValue(undefined);
@@ -486,8 +490,7 @@ export function resetTaskpaneHarness() {
       hasPendingStylisticArtifacts: true,
       trackChangesActive: true,
     },
-    transitionedToZeroPending: false,
-    showDisableTrackChangesCta: false,
+    documentState: "pending-review",
   });
   taskpaneMocks.rejectSuggestion.mockResolvedValue({
     status: "rejected",
@@ -498,8 +501,7 @@ export function resetTaskpaneHarness() {
       hasPendingStylisticArtifacts: true,
       trackChangesActive: true,
     },
-    transitionedToZeroPending: false,
-    showDisableTrackChangesCta: false,
+    documentState: "pending-review",
   });
 
   delete (globalThis as any).document;
@@ -528,12 +530,27 @@ export async function renderViaEmitter(
   (globalThis as any).document = doc;
   (globalThis as any).Office = officeHarness.office;
 
-  const failedSuggestions = suggestions.filter((suggestion) =>
-    failedIds.includes(suggestion.id),
-  );
-  const result: InsertionResult = {
+  const failedSuggestions: SuggestionApplicationFailure[] = suggestions
+    .filter((suggestion) => failedIds.includes(suggestion.id))
+    .map((suggestion) => ({
+      suggestion,
+      reason: "not-found",
+      message: "Anchor no encontrado en el contexto",
+    }));
+  const result: ApplySuggestionsResult = {
     successCount: suggestions.length - failedSuggestions.length,
     failedSuggestions,
+    pendingAfter: {
+      pendingStylisticArtifacts: suggestions.length - failedSuggestions.length,
+      hasPendingStylisticArtifacts:
+        suggestions.length - failedSuggestions.length > 0,
+      trackChangesActive: suggestions.length - failedSuggestions.length > 0,
+    },
+    documentState:
+      suggestions.length - failedSuggestions.length > 0
+        ? "pending-review"
+        : "idle",
+    trackChangesActivatedForBatch: suggestions.length - failedSuggestions.length > 0,
   };
 
   taskpaneMocks.run.mockImplementationOnce(async (ctx: any) => {

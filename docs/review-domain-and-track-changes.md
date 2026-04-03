@@ -155,6 +155,18 @@ This includes, conceptually:
 
 This is an important internal model, but it is **not the entire domain**.
 
+Current implementation note:
+
+- `DocumentReviewState` remains the authoritative snapshot derived from Word.
+- `DocumentReviewStateMachine` is the explicit frontend/application state model
+  built on top of that snapshot to keep taskpane review UI semantics consistent.
+- `ReviewSessionMediator` is the explicit coordinator that combines document
+  resolution outcomes, cleanup visibility, and review-state UI consequences for
+  the taskpane.
+- This means the document is still the source of truth, while the state machine
+  is the single interpreter of review-state UI rules and the mediator is the
+  single coordinator of taskpane-facing review policy.
+
 ### 5.3 `ReviewProcessState`
 
 **Definition:**
@@ -171,6 +183,11 @@ Examples:
 - `error`
 
 This is distinct from `DocumentReviewState`.
+
+It is also distinct from `DocumentReviewStateMachine`:
+
+- `ReviewProcessState` describes **what the frontend is doing right now**.
+- `DocumentReviewStateMachine` describes **what review state the taskpane must expose based on the document reality**.
 
 ### 5.4 `Debate`
 
@@ -234,6 +251,8 @@ The codebase already contains strong patterns, but some concepts are mixed toget
 - The analysis pipeline already uses Chain of Responsibility.
 - State machines already exist.
 - Suggestion resolution already has meaningful lifecycle semantics.
+- Document-review UI semantics now have an explicit state machine instead of scattered boolean checks.
+- Taskpane-facing review coordination now has an explicit mediator instead of procedural glue in `taskpane.ts`.
 
 ### What was missing
 

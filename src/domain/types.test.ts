@@ -8,6 +8,7 @@ import type {
   SuggestionState,
   WorkflowSuggestion,
 } from "./types";
+import type { DocumentReviewUiState } from "./review/DocumentReviewStateMachine";
 
 // ---------------------------------------------------------------------------
 // SuggestionState — compile-time assignability checks
@@ -37,8 +38,7 @@ const _result: SuggestionActionResult = {
     hasPendingStylisticArtifacts: true,
     trackChangesActive: true,
   },
-  transitionedToZeroPending: false,
-  showDisableTrackChangesCta: false,
+  documentState: "pending-review",
 };
 
 const _resultWithError: SuggestionActionResult = {
@@ -50,10 +50,11 @@ const _resultWithError: SuggestionActionResult = {
     hasPendingStylisticArtifacts: false,
     trackChangesActive: false,
   },
-  transitionedToZeroPending: false,
-  showDisableTrackChangesCta: false,
+  documentState: "idle",
   error: "something went wrong",
 };
+
+const _documentUiState: DocumentReviewUiState = "ready-to-disable-track-changes";
 
 const _reviewState: DocumentReviewState = {
   pendingStylisticArtifacts: 1,
@@ -65,6 +66,7 @@ const _applyResult: ApplySuggestionsResult = {
   successCount: 1,
   failedSuggestions: [],
   pendingAfter: _reviewState,
+  documentState: "pending-review",
   trackChangesActivatedForBatch: true,
 };
 
@@ -73,8 +75,7 @@ const _workflowResult: SuggestionResolutionWorkflowResult = {
   trackedChangesAffected: 1,
   commentDeleted: true,
   pendingAfter: _reviewState,
-  transitionedToZeroPending: false,
-  showDisableTrackChangesCta: false,
+  documentState: "pending-review",
   feedbackStatus: "sent",
 };
 
@@ -103,6 +104,7 @@ void _resultWithError;
 void _suggestion;
 void _workflowSuggestion;
 void _reviewState;
+void _documentUiState;
 void _applyResult;
 void _workflowResult;
 

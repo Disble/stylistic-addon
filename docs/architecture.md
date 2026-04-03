@@ -69,6 +69,9 @@ src/
 ├── domain/                         ← Zero framework dependencies
 │   ├── types.ts                    ← Shared interfaces (no runtime code)
 │   ├── ports.ts                    ← IDocumentPort, IAnalysisPort
+│   ├── review/
+│   │   ├── DocumentReviewStateMachine.ts ← explicit document-review UI semantics
+│   │   └── ReviewSessionMediator.ts      ← coordinates resolution + taskpane review state
 │   └── pipeline/
 │       ├── PipelineContext.ts      ← Shared state between handlers
 │       ├── PipelineStateMachine.ts ← State machine (State pattern)
@@ -116,7 +119,9 @@ src/
 | **Chain of Responsibility** | Behavioral | `domain/pipeline/handlers/` | Each of the 7 analysis phases is an independent handler. The orchestrator runs them in sequence; any handler can abort the chain by setting `ctx.aborted = true`. |
 | **Command** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | Each suggestion is encapsulated as a `DocumentCommand` with an `execute()` method. Enables future `undo()` support without restructuring. |
 | **Observer** | Behavioral | `domain/pipeline/PipelineEvents.ts` | `PipelineEventEmitter` notifies registered `PipelineObserver` instances of phase starts, progress, completion, and aborts. The UI registers one observer; future analytics can register another without touching the pipeline. |
+| **Mediator** | Behavioral | `domain/review/ReviewSessionMediator.ts` | Centralizes coordination between resolution workflow, document review state machine, cleanup visibility, and taskpane-facing review semantics. Prevents `taskpane.ts` from orchestrating cross-layer policy manually. |
 | **State** | Behavioral | `domain/pipeline/PipelineStateMachine.ts` | Explicit state transitions (`idle → reading → connecting → chunking → analyzing → applying → done/error`) prevent concurrent runs and make lifecycle visible in code. |
+| **State** | Behavioral | `domain/review/DocumentReviewStateMachine.ts` | Translates the authoritative `DocumentReviewState` snapshot into explicit document-review UI states (`idle`, `pending-review`, `ready-to-disable-track-changes`) so Track Changes CTA rules stop living in scattered booleans. |
 | **Strategy** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` selects `insert`, `delete`, or `replace` tracked-change type based on suggestion content. |
 | **Template Method** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `execute()` has a fixed algorithm skeleton: search → extract format → disable tracking → build OOXML → insert → restore tracking. |
 | **Iterator** | Behavioral | `handlers/AnalyzeChunksHandler.ts`, `adapters/word/WordAdapter.ts` | Sequential iteration over chunks and suggestions via `for...of`. |
@@ -141,7 +146,9 @@ The corrected target direction is:
 
 - per-suggestion commands mutate one suggestion,
 - workflow/application layers own Track Changes lifecycle policy,
+- `ReviewSessionMediator` is the explicit coordinator for taskpane-facing review policy,
 - document-derived pending review state determines whether Track Changes should remain enabled,
+- `DocumentReviewStateMachine` is the explicit application model that converts that document snapshot into taskpane-visible review states,
 - the UI offers a final CTA when zero pending Stylistic artifacts remain.
 
 See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md) for the full requirement decisions and future-aligned architecture.
@@ -160,6 +167,7 @@ See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md)
 | **Retry + Exponential Backoff** | `RetryAnalysisDecorator.ts` | `delay = baseMs * 2^attempt` between retries. 3 max attempts. Separated from `MastraAdapter` via Decorator. |
 | **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after OOXML insertions shift document positions. |
 | **Composition Root** | `taskpane/taskpane.ts` | Single wiring point: instantiates adapters, decorators, orchestrator, and state machine. No other module knows the full dependency graph. |
+| **Derived Snapshot + Explicit UI State** | `WordAdapter.ts`, `domain/review/DocumentReviewStateMachine.ts`, `domain/review/ReviewSessionMediator.ts`, `taskpane.ts` | Word remains the source of truth through `DocumentReviewState`, the state machine centralizes review UI semantics, and the mediator coordinates cleanup/CTA/taskpane consequences as one policy surface. |
 
 > **Documentation note:** Preserve-and-Restore accurately describes the current code path, but the Track Changes requirement change intentionally moves the desired ownership model away from per-suggestion toggling. Keep that distinction explicit when editing this section in the future.
 
@@ -217,7 +225,52 @@ PipelineOrchestrator.run(ctx)
 
 taskpane.ts: PipelineObserver.onComplete()
   └── renderResults() → updates DOM
-  └── Shows cleanup button if successCount > 0
+  └── Rehydrates `DocumentReviewStateMachine` from `result.pendingAfter`
+  └── Applies cleanup/CTA visibility from explicit review state
+
+### Document Review State Flow
+
+```
+Word document (authoritative host state)
+        │
+        ├──► WordAdapter.inspectDocumentReviewState()
+        │       └── derives DocumentReviewState {
+        │             pendingStylisticArtifacts,
+        │             hasPendingStylisticArtifacts,
+        │             trackChangesActive
+        │           }
+        │
+        ├──► DocumentReviewStateMachine.deriveState()
+        │       └── maps snapshot to one explicit UI state:
+        │             - idle
+        │             - pending-review
+        │             - ready-to-disable-track-changes
+        │
+        ├──► ReviewSessionMediator
+        │       └── combines document review state + cleanup preview +
+        │           resolution workflow result into one taskpane-facing state
+        │
+        └──► taskpane.ts
+                └── renders from mediator output instead of cross-layer glue logic
+```
+
+### Why this state machine was added
+
+Originally, document-review UI semantics were inferred in multiple places with
+booleans like:
+
+- `hasPendingStylisticArtifacts`
+- `trackChangesActive`
+- `showDisableTrackChangesCta`
+
+That approach made the code vulnerable to UI inconsistency because the same rule
+could be reinterpreted differently by the adapter, workflow, and taskpane.
+
+The current correction keeps the architectural distinction explicit:
+
+- `DocumentReviewState` = authoritative snapshot read from Word
+- `DocumentReviewStateMachine` = explicit frontend state model derived from that snapshot
+- `taskpane.ts` = renders from the state model, not from ad-hoc boolean combinations
 ```
 
 ### Comment Cleanup Flow (Direct port call, no pipeline)

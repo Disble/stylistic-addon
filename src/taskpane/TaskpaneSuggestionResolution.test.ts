@@ -31,6 +31,13 @@ function getRequiredChild(parent: FakeElement, selector: string): FakeElement {
   return child;
 }
 
+/** Flushes microtasks scheduled by the taskpane review mediator/workflows. */
+async function flushTaskpaneWork(times = 8) {
+  for (let index = 0; index < times; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe("taskpane suggestion resolution guardrails", () => {
   const taskpaneMocks = getTaskpaneMocks();
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -83,22 +90,58 @@ describe("taskpane suggestion resolution guardrails", () => {
     );
   });
 
+  it("renders non-not-found failures without lying about the cause", async () => {
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-fail" });
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx: any) => {
+      ctx.emitter.emitComplete(
+        [suggestion],
+        {
+          successCount: 0,
+          failedSuggestions: [
+            {
+              suggestion,
+              reason: "command-error",
+              message: "GeneralException",
+            },
+          ],
+          pendingAfter: {
+            pendingStylisticArtifacts: 0,
+            hasPendingStylisticArtifacts: false,
+            trackChangesActive: false,
+          },
+          documentState: "idle",
+          trackChangesActivatedForBatch: false,
+        },
+        [],
+        false,
+      );
+    });
+
+    const liItems = await renderViaEmitter(doc, [suggestion]);
+
+    expect(getRequiredChild(liItems[0], ".result-failed").textContent).toBe(
+      `No se pudo aplicar: "${suggestion.anchor}"`,
+    );
+    expect(
+      getRequiredChild(liItems[0], ".result-failure-detail").textContent,
+    ).toBe("GeneralException");
+  });
+
   it("clicking Accept applies terminal accepted UI and removes buttons", async () => {
     const doc = createTaskpaneDocument();
     const suggestion = makeSuggestion({ id: "s-1" });
     taskpaneMocks.getCleanupPreview
       .mockResolvedValueOnce({ deletable: 0, kept: 1 })
       .mockResolvedValueOnce({ deletable: 0, kept: 1 })
-      .mockResolvedValueOnce({ deletable: 1, kept: 0 });
+      .mockResolvedValueOnce({ deletable: 2, kept: 0 });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledWith(suggestion);
     expect(li.classList.contains("result-accepted")).toBe(true);
@@ -116,16 +159,13 @@ describe("taskpane suggestion resolution guardrails", () => {
     taskpaneMocks.getCleanupPreview
       .mockResolvedValueOnce({ deletable: 0, kept: 1 })
       .mockResolvedValueOnce({ deletable: 0, kept: 1 })
-      .mockResolvedValueOnce({ deletable: 1, kept: 0 });
+      .mockResolvedValueOnce({ deletable: 2, kept: 0 });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
     const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
 
     rejectBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(taskpaneMocks.rejectSuggestion).toHaveBeenCalledWith(suggestion);
     expect(li.classList.contains("result-rejected")).toBe(true);
@@ -147,8 +187,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: false,
-      showDisableTrackChangesCta: false,
+      documentState: "pending-review",
     });
 
     const doc = createTaskpaneDocument();
@@ -162,9 +201,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
 
     rejectBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(li.classList.contains("result-rejected")).toBe(true);
     expect(li.querySelector(".result-actions")).toBeNull();
@@ -181,8 +218,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: false,
-      showDisableTrackChangesCta: false,
+      documentState: "pending-review",
     });
 
     const doc = createTaskpaneDocument();
@@ -192,10 +228,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(li.classList.contains("result-already-resolved")).toBe(true);
     expect(
@@ -216,8 +249,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: false,
-      showDisableTrackChangesCta: false,
+      documentState: "pending-review",
     });
 
     const doc = createTaskpaneDocument();
@@ -227,10 +259,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
 
     rejectBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(li.classList.contains("result-already-resolved")).toBe(true);
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
@@ -248,8 +277,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: false,
-      showDisableTrackChangesCta: false,
+      documentState: "pending-review",
     });
 
     const doc = createTaskpaneDocument();
@@ -259,9 +287,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(li.classList.contains("result-cc-not-found")).toBe(true);
     expect(li.querySelector(".result-actions")).toBeNull();
@@ -281,8 +307,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: boolean;
         trackChangesActive: boolean;
       };
-      transitionedToZeroPending: boolean;
-      showDisableTrackChangesCta: boolean;
+      documentState: "pending-review" | "idle" | "ready-to-disable-track-changes";
     }>();
     taskpaneMocks.acceptSuggestion.mockReturnValue(firstCall);
 
@@ -293,9 +318,9 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
+    await flushTaskpaneWork(2);
     acceptBtn.click();
-    await Promise.resolve();
+    await flushTaskpaneWork(2);
 
     resolve({
       status: "accepted",
@@ -306,12 +331,9 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: false,
-      showDisableTrackChangesCta: false,
+      documentState: "pending-review",
     });
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledTimes(1);
     expect(li.classList.contains("result-accepted")).toBe(true);
@@ -328,8 +350,7 @@ describe("taskpane suggestion resolution guardrails", () => {
           hasPendingStylisticArtifacts: true,
           trackChangesActive: true,
         },
-        transitionedToZeroPending: false,
-        showDisableTrackChangesCta: false,
+        documentState: "pending-review",
         error: "timeout",
       })
       .mockResolvedValueOnce({
@@ -341,8 +362,7 @@ describe("taskpane suggestion resolution guardrails", () => {
           hasPendingStylisticArtifacts: true,
           trackChangesActive: true,
         },
-        transitionedToZeroPending: false,
-        showDisableTrackChangesCta: false,
+        documentState: "pending-review",
       });
 
     const doc = createTaskpaneDocument();
@@ -352,15 +372,11 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
     expect(acceptBtn.disabled).toBe(false);
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(li.classList.contains("result-accepted")).toBe(true);
     expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledTimes(2);
@@ -376,8 +392,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: false,
-      showDisableTrackChangesCta: false,
+      documentState: "pending-review",
       error: "El documento está protegido",
     });
 
@@ -388,9 +403,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(acceptBtn.disabled).toBe(false);
     expect(
@@ -411,8 +424,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: false,
-      showDisableTrackChangesCta: false,
+      documentState: "pending-review",
       error: "Texto no encontrado",
     });
 
@@ -423,9 +435,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(acceptBtn.disabled).toBe(false);
     expect(
@@ -443,8 +453,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: false,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: true,
-      showDisableTrackChangesCta: true,
+      documentState: "ready-to-disable-track-changes",
     });
 
     const doc = createTaskpaneDocument();
@@ -454,10 +463,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
 
     acceptBtn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(
       getRequiredElement(doc, "disable-track-changes-section").style.display,
@@ -476,17 +482,15 @@ describe("taskpane suggestion resolution guardrails", () => {
         hasPendingStylisticArtifacts: false,
         trackChangesActive: true,
       },
-      transitionedToZeroPending: true,
-      showDisableTrackChangesCta: true,
+      documentState: "ready-to-disable-track-changes",
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
     getRequiredChild(li, '[data-action="accept"]').click();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     getRequiredElement(doc, "btn-disable-track-changes").click();
-    await Promise.resolve();
+    await flushTaskpaneWork();
 
     expect(taskpaneMocks.disableTrackChanges).toHaveBeenCalledOnce();
     expect(

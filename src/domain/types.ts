@@ -59,14 +59,36 @@ export interface Suggestion {
 }
 
 /**
+ * Machine-readable failure reasons for one suggestion application attempt.
+ */
+export type SuggestionApplicationFailureReason =
+  | "not-found"
+  | "covered-by-existing-cc"
+  | "command-error";
+
+/**
+ * One failed suggestion application with preserved reason and message.
+ */
+export interface SuggestionApplicationFailure {
+  /** The suggestion that could not be applied. */
+  suggestion: Suggestion;
+
+  /** Stable failure reason used by UI and telemetry. */
+  reason: SuggestionApplicationFailureReason;
+
+  /** Human-readable adapter message captured at the failure boundary. */
+  message: string;
+}
+
+/**
  * Result of attempting to insert suggestions as tracked changes in Word.
  */
 export interface InsertionResult {
   /** Number of suggestions successfully applied as tracked changes. */
   successCount: number;
 
-  /** Suggestions whose anchor was not found in the document. */
-  failedSuggestions: Suggestion[];
+  /** Suggestions that failed to apply, with preserved failure semantics. */
+  failedSuggestions: SuggestionApplicationFailure[];
 }
 
 /**
@@ -85,6 +107,20 @@ export interface DocumentReviewState {
 }
 
 /**
+ * Taskpane-facing review state derived by the explicit review mediator.
+ */
+export interface ReviewTaskpaneState {
+  /** Explicit document-review UI state currently exposed to the user. */
+  documentState: import("./review/DocumentReviewStateMachine").DocumentReviewUiState;
+
+  /** Whether the taskpane should expose the final Track Changes deactivation CTA. */
+  showDisableTrackChangesCta: boolean;
+
+  /** Whether the cleanup section should currently be visible in the taskpane. */
+  showCleanupSection: boolean;
+}
+
+/**
  * Batch insertion result enriched with document-review semantics.
  *
  * The pipeline still consumes the insertion counters, while the workflow layer
@@ -94,6 +130,9 @@ export interface DocumentReviewState {
 export interface ApplySuggestionsResult extends InsertionResult {
   /** Document-derived review state after the batch finishes. */
   pendingAfter: DocumentReviewState;
+
+  /** Explicit document-review UI state after the batch finishes. */
+  documentState: import("./review/DocumentReviewStateMachine").DocumentReviewUiState;
 
   /**
    * `true` when this batch had to activate Track Changes before applying the
@@ -497,13 +536,8 @@ export interface SuggestionActionResult {
   commentDeleted: boolean;
   /** Document-derived review state immediately after the resolution attempt. */
   pendingAfter: DocumentReviewState;
-  /** `true` only when this resolution moved the document from pending > 0 to 0. */
-  transitionedToZeroPending: boolean;
-  /**
-   * `true` when the UI should expose the explicit CTA to disable Track Changes.
-   * This is never an auto-disable instruction.
-   */
-  showDisableTrackChangesCta: boolean;
+  /** Explicit document-review UI state after the resolution attempt. */
+  documentState: import("./review/DocumentReviewStateMachine").DocumentReviewUiState;
   /** Human-readable error message when status is "error" or "not-found". */
   error?: string;
 }
@@ -521,4 +555,13 @@ export interface SuggestionResolutionWorkflowResult
   extends SuggestionActionResult {
   /** Best-effort feedback dispatch outcome observed by the workflow. */
   feedbackStatus: FeedbackDispatchStatus;
+}
+
+/**
+ * Resolution result enriched with taskpane-facing mediated review state.
+ */
+export interface SuggestionResolutionMediatorResult
+  extends SuggestionResolutionWorkflowResult {
+  /** Centralized taskpane state produced by the explicit mediator. */
+  taskpaneState: ReviewTaskpaneState;
 }

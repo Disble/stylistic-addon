@@ -12,7 +12,7 @@
  */
 
 import type { IAnalysisPort, IDocumentPort } from "../ports";
-import type { InsertionResult, Suggestion, TextChunk } from "../types";
+import type { ApplySuggestionsResult, Suggestion, TextChunk } from "../types";
 import type { PipelineEventEmitter } from "./PipelineEvents";
 
 /**
@@ -69,7 +69,7 @@ export interface PipelineContext {
   pendingSuggestions?: Suggestion[];
 
   // --- Set by ApplySuggestionsHandler ---
-  result?: InsertionResult;
+  result?: ApplySuggestionsResult;
 
   // --- Abort mechanism (set by any handler) ---
 
