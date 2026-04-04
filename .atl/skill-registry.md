@@ -7,6 +7,7 @@ Generated for project: `stylistic-addon`
 | Name | Scope | Path | Trigger / Use When |
 |---|---|---|---|
 | `stylistic-addon-testing` | project | `.claude/skills/stylistic-addon-testing/SKILL.md` | Use for addon tests, Office.js mocks, tracked-change regressions, and confidence audits. |
+| `stylistic-addon-debugging` | project | `.claude/skills/stylistic-addon-debugging/SKILL.md` | Use when debugging a regression that escaped tests, investigating Word/Office.js behavior mismatches, or fixing a bug. |
 | `mastra` | project | `.claude/skills/mastra/SKILL.md` | Use for any Mastra development; verify current APIs/docs before touching `@mastra/*`. |
 | `kin` | user | `C:/Users/User/.config/opencode/skills/kin/SKILL.md` | Use when code touches external libraries, library stack traces appear, or API signatures are uncertain. |
 | `kin-init` | user | `C:/Users/User/.config/opencode/skills/kin-init/SKILL.md` | Use to register or repair KIN integration and docs routing. |

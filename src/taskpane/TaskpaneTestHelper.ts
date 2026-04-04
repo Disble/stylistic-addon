@@ -333,7 +333,9 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
       return el.dataset[datasetKey] === value;
     }
 
-    return (el as any)[attr] === value || (el as any)[`_attr_${attr}`] === value;
+    return (
+      (el as any)[attr] === value || (el as any)[`_attr_${attr}`] === value
+    );
   }
 
   const attrMatch = /^\[([^\]="]+)\]$/.exec(selector);
@@ -405,21 +407,23 @@ export function createTaskpaneDocument(): FakeDocument {
     "progress-text",
     "results-panel",
     "results-summary",
-      "results-list",
-      "cleanup-section",
-      "disable-track-changes-section",
-      "btn-disable-track-changes",
-      "btn-disable-track-changes-label",
-    ]);
+    "results-list",
+    "cleanup-section",
+    "disable-track-changes-section",
+    "btn-disable-track-changes",
+    "btn-disable-track-changes-label",
+  ]);
 
   getRequiredElement(doc, "sideload-msg").style.display = "block";
   getRequiredElement(doc, "app-body").style.display = "none";
   getRequiredElement(doc, "cleanup-section").style.display = "none";
-  getRequiredElement(doc, "disable-track-changes-section").style.display = "none";
+  getRequiredElement(doc, "disable-track-changes-section").style.display =
+    "none";
   getRequiredElement(doc, "results-panel").style.display = "block";
   getRequiredElement(doc, "progress-container").style.display = "none";
   getRequiredElement(doc, "profile-select").value = "narrativa-literaria";
-  getRequiredElement(doc, "btn-analyze-label").textContent = "Analizar y sugerir";
+  getRequiredElement(doc, "btn-analyze-label").textContent =
+    "Analizar y sugerir";
   getRequiredElement(doc, "btn-cleanup-label").textContent =
     "Limpiar comentarios resueltos";
   getRequiredElement(doc, "btn-disable-track-changes-label").textContent =
@@ -491,6 +495,12 @@ export function resetTaskpaneHarness() {
       trackChangesActive: true,
     },
     documentState: "pending-review",
+    feedbackStatus: "sent",
+    taskpaneState: {
+      documentState: "pending-review",
+      showDisableTrackChangesCta: false,
+      showCleanupSection: false,
+    },
   });
   taskpaneMocks.rejectSuggestion.mockResolvedValue({
     status: "rejected",
@@ -502,6 +512,12 @@ export function resetTaskpaneHarness() {
       trackChangesActive: true,
     },
     documentState: "pending-review",
+    feedbackStatus: "sent",
+    taskpaneState: {
+      documentState: "pending-review",
+      showDisableTrackChangesCta: false,
+      showCleanupSection: false,
+    },
   });
 
   delete (globalThis as any).document;
@@ -550,7 +566,8 @@ export async function renderViaEmitter(
       suggestions.length - failedSuggestions.length > 0
         ? "pending-review"
         : "idle",
-    trackChangesActivatedForBatch: suggestions.length - failedSuggestions.length > 0,
+    trackChangesActivatedForBatch:
+      suggestions.length - failedSuggestions.length > 0,
   };
 
   taskpaneMocks.run.mockImplementationOnce(async (ctx: any) => {

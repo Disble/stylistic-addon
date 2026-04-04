@@ -2,10 +2,13 @@ import type { IDocumentPort } from "./ports";
 import type {
   ApplySuggestionsResult,
   DocumentReviewState,
+  ReplaceSuggestionIdentity,
   Suggestion,
   SuggestionActionResult,
+  SuggestionObservationStatus,
   SuggestionResolutionWorkflowResult,
   SuggestionState,
+  WordArtifactRef,
   WorkflowSuggestion,
 } from "./types";
 import type { DocumentReviewUiState } from "./review/DocumentReviewStateMachine";
@@ -19,6 +22,7 @@ const _state2: SuggestionState = "accepted";
 const _state3: SuggestionState = "rejected";
 const _state4: SuggestionState = "already-resolved";
 const _state5: SuggestionState = "unobservable";
+const _state6: SuggestionState = "identity-lost";
 
 // Suppress unused variable warnings
 void _state1;
@@ -26,6 +30,42 @@ void _state2;
 void _state3;
 void _state4;
 void _state5;
+void _state6;
+
+const _observation1: SuggestionObservationStatus = "confirmed-pending";
+const _observation2: SuggestionObservationStatus = "confirmed-resolved";
+const _observation3: SuggestionObservationStatus = "unobservable";
+const _observation4: SuggestionObservationStatus = "identity-lost";
+
+void _observation1;
+void _observation2;
+void _observation3;
+void _observation4;
+
+const _artifactRef: WordArtifactRef = {
+  kind: "content-control",
+  role: "inserted-side",
+  value: "stylistic:track-change:s1",
+};
+
+const _replaceIdentity: ReplaceSuggestionIdentity = {
+  suggestionId: "s1",
+  version: "compound-v2",
+  insertedSideRef: _artifactRef,
+  deletedSideRef: {
+    kind: "anchor",
+    role: "deleted-side",
+    value: "texto original",
+  },
+  anchorRef: {
+    kind: "anchor",
+    role: "operational-anchor",
+    value: "Contexto con texto original.",
+  },
+};
+
+void _artifactRef;
+void _replaceIdentity;
 
 // ---------------------------------------------------------------------------
 // SuggestionActionResult — shape checks

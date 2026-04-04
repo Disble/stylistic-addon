@@ -4,7 +4,7 @@
 
 Current model: `ApplySuggestionCommand` creates one inserted-side `ContentControl`; `WordAdapter` later infers the whole replace via `cc.getTrackedChanges()` + `body.getTrackedChanges()` + spatial overlap. Proposed model: one `ReviewSuggestion` keeps one domain identity and multiple `WordArtifactRef`s. Business status is computed only after an explicit observation step.
 
-Phase A is defensive: `0 tracked changes observed` MUST stop mapping to `already-resolved`. Phase B introduces compound replace identity for newly applied suggestions while still reading legacy artifacts conservatively.
+Phase A is defensive: `0 tracked changes observed` MUST stop mapping to `already-resolved`. Phase B introduces compound replace identity for newly applied suggestions and removes `legacy-v1` as a supported replace-resolution path.
 
 ## Architecture Decisions
 
@@ -13,7 +13,7 @@ Phase A is defensive: `0 tracked changes observed` MUST stop mapping to `already
 | Observation vs business status | Split them explicitly | Keep one flat status enum | Prevents epistemic bug: host invisibility is not resolution |
 | New states | Add `unobservable` and `identity-lost`; keep `already-resolved` only for positive confirmation | Reuse `error` or `already-resolved` | `unobservable` = host could not prove state; `identity-lost` = v2 identity is incomplete/corrupt |
 | Replace identity | Compound identity with inserted-side ref, deleted-side ref, anchor ref | Keep CC as full identity | Replace is semantically two-sided in Word |
-| Rollout | Two phases, dual-read legacy/v2 | Big-bang rewrite | Stops false positives fast and reduces migration risk |
+| Rollout | Two phases with hard cut to `compound-v2` in Phase B | Long-lived dual-read legacy/v2 | Stops false positives fast without keeping the broken model alive |
 
 ## Data Flow
 
@@ -30,7 +30,7 @@ Proposed: identity + refs → observe refs → observation status → business s
 
 - A replace suggestion MUST NOT treat one inserted-side `ContentControl` as the whole identity.
 - `already-resolved` MUST require positive evidence of prior accept/reject resolution.
-- `0 tracked changes observed` MUST yield `unobservable` for legacy/partial identity, never terminal success.
+- `0 tracked changes observed` MUST yield `unobservable`, never terminal success.
 - V2 replace identity is fully observable only when inserted-side and deleted-side semantics are both accounted for.
 - Feedback MUST be skipped for `unobservable` and `identity-lost`.
 
@@ -61,12 +61,11 @@ interface WordArtifactRef {
   kind: "content-control" | "tracked-change" | "comment" | "anchor";
   role: "inserted-side" | "deleted-side" | "operational-anchor";
   value: string;
-  legacy?: boolean;
 }
 
 interface ReplaceSuggestionIdentity {
   suggestionId: string;
-  version: "legacy-v1" | "compound-v2";
+  version: "compound-v2";
   insertedSideRef: WordArtifactRef;
   deletedSideRef?: WordArtifactRef;
   anchorRef?: WordArtifactRef;
@@ -82,7 +81,7 @@ interface ReplaceSuggestionIdentity {
 | `src/domain/types.ts` | Modify | Add observation/identity types and new action statuses |
 | `src/domain/ports.ts` | Modify | Preserve port shape but document stronger result contract |
 | `src/adapters/word/ApplySuggestionCommand.ts` | Modify | Emit versioned replace metadata; stop implying CC = full identity |
-| `src/adapters/word/WordAdapter.ts` | Modify | Split observation from resolution; dual-read legacy/v2 |
+| `src/adapters/word/WordAdapter.ts` | Modify | Split observation from resolution; require compound-v2 for replace resolution |
 | `src/domain/suggestion/SuggestionResolutionWorkflow.ts` | Modify | Skip feedback for ambiguous observation states |
 | `src/domain/suggestion/SuggestionStateMachine.ts` | Modify | Treat `unobservable` as non-terminal retryable; `identity-lost` likely terminal-warning |
 | `src/domain/review/ReviewSessionMediator.ts` | Modify | Pass through richer resolution semantics |
@@ -97,15 +96,15 @@ interface ReplaceSuggestionIdentity {
 | Unit | feedback skipped on ambiguous states | `SuggestionResolutionWorkflow.test.ts` |
 | Unit | valid state transitions for new states | `SuggestionStateMachine.test.ts` |
 | Integration-ish | taskpane rendering for `unobservable` / `identity-lost` | `TaskpaneSuggestionResolution.test.ts` |
-| Regression | legacy bare-ID and `stylistic:{type}:{id}` artifacts | action test helpers + adapter tests |
+| Regression | reject bare-ID as unsupported and certify `compound-v2`/corrupt metadata paths | action test helpers + adapter tests |
 
 ## Migration / Rollout
 
-Backward compatibility is dual-read:
-- legacy artifacts: bare ID or current `stylistic:{type}:{id}` tags, no compound metadata;
-- v2 artifacts: versioned compound identity metadata.
-
-Legacy artifacts remain actionable, but lack of evidence downgrades to `unobservable`, never `already-resolved`. No document migration is required.
+Phase B adopts a hard cut for replace resolution:
+- replace suggestions are written and resolved only through `compound-v2` metadata,
+- bare-ID / `legacy-v1` replace artifacts are not treated as supported identities,
+- corrupt or incomplete compound metadata downgrades to `identity-lost`,
+- lack of observation downgrades to `unobservable`, never `already-resolved`.
 
 ## Risks / Tradeoffs / Open Questions
 
@@ -119,5 +118,5 @@ Legacy artifacts remain actionable, but lack of evidence downgrades to `unobserv
 1. Phase A statuses + tests in domain/adapter/workflow/taskpane.
 2. Ship conservative behavior with feedback suppression.
 3. Add v2 replace identity write path in `ApplySuggestionCommand`.
-4. Add dual-read observation path in `WordAdapter`.
-5. Add `identity-lost` handling and legacy/v2 regression matrix.
+4. Add compound-v2 observation path in `WordAdapter`.
+5. Add `identity-lost` handling and hard-cut regression matrix.

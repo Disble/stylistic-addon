@@ -2,11 +2,11 @@
 name: stylistic-addon-testing
 description: >
   Testing conventions and anti-patterns for the stylistic-addon Word Add-in project.
-  Trigger: When writing, reviewing, refactoring, or debugging tests in `stylistic-addon`, especially Office.js mocks, Word adapter behavior, taskpane flows, and regression coverage.
+  Trigger: When writing, reviewing, or refactoring tests in `stylistic-addon`, especially Office.js mocks, Word adapter behavior, taskpane flows, and regression coverage.
 license: Apache-2.0
 metadata:
   author: gentleman-programming
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Skill: stylistic-addon-testing
@@ -14,26 +14,8 @@ metadata:
 ## When to Use
 
 - Writing or changing any `.test.ts` file in `stylistic-addon`
-- Debugging a regression that escaped despite existing tests
 - Touching Office.js mocks, `Word.run`, tracked changes, comments, or content controls
 - Reviewing whether a test provides real confidence or only plumbing coverage
-
-## Bug Intake Pattern
-
-This repo's bug reports often arrive as:
-
-- screenshots from real Word or the taskpane
-- explicit **current behavior**
-- explicit **expected behavior**
-
-Treat that input as first-class evidence.
-
-**Workflow**:
-1. extract what the screenshot proves visually
-2. write down the semantic mismatch (`actual` vs `expected`)
-3. only then inspect code and tests
-
-Do NOT rush into implementation before you understand what the host/UI evidence is actually telling you.
 
 ## Critical Patterns
 
@@ -188,6 +170,111 @@ That means:
 
 **Methodology rule**: a GREEN suite is provisional until the behavior is rechecked in real Word. If Word disproves the model, update the tests first, then the implementation.
 
+#### Verified repo lesson: `Range.getTrackedChanges()` can expose replace evidence that CC/body queries miss
+
+Another real-host correction showed that a replace suggestion can remain fully
+pending in Word while:
+
+- `ContentControl.getTrackedChanges()` returns no actionable changes,
+- `Body.getTrackedChanges()` filtered by proximity also returns nothing useful,
+- but `ContentControl.getRange().getTrackedChanges()` exposes the actionable
+  insertion/deletion pair.
+
+That means:
+
+- `cc.getTrackedChanges()` is also a **partial source**, not a privileged one,
+- body-level proximity heuristics are still insufficient on their own,
+- strict tests must model the case where the host exposes the relevant changes
+  only through the CC range.
+
+**Testing rule**: add a RED case where `cc.getTrackedChanges()` is empty,
+`body.getTrackedChanges()` is empty or irrelevant, and only
+`cc.getRange().getTrackedChanges()` returns the actionable replace changes. The
+adapter must resolve successfully in that scenario.
+
+#### Verified repo lesson: persisted identity must be used to re-localize actionable ranges
+
+Another escaped regression showed that persisting richer metadata (`compound-v2`)
+is not enough if the adapter only validates it and then falls back to CC/body
+proximity heuristics.
+
+In real-host-style scenarios, the actionable replace changes may be discoverable
+only after re-locating the persisted operational anchor and querying tracked
+changes from that range.
+
+That means:
+
+- identity metadata is not merely diagnostic,
+- `anchorRef` must be tested as an operational recovery mechanism,
+- a suite that validates metadata presence but never exercises anchor-based
+  re-location is still incomplete.
+
+**Testing rule**: add a RED case where CC-scoped tracked changes, CC-range
+tracked changes, and body-proximity tracked changes are all empty, but the range
+re-located through the persisted operational anchor exposes the actionable
+replace changes. The adapter must resolve successfully in that scenario.
+
+#### Verified repo lesson: do not delete colocated comments before resolution is confirmed
+
+Another correction showed that the colocated Stylistic comment can still carry
+useful host-level evidence for a pending replace suggestion.
+
+If the adapter deletes that comment before it finishes observing the replace,
+it can destroy the last actionable range that still exposes the tracked changes.
+
+That means:
+
+- comment cleanup is not always a harmless pre-step,
+- `acceptSuggestion` / `rejectSuggestion` sequencing matters,
+- tests must model the case where the comment range is the only remaining
+  observable source of the replace change pair.
+
+**Testing rule**: add a RED case where CC-scoped, CC-range, operational-anchor,
+and body-proximity evidence are empty, but the colocated comment range exposes
+the actionable tracked changes. Resolution must succeed, and the comment must be
+deleted only after tracked-change resolution is confirmed.
+
+#### Verified repo lesson: duplicate tags can make `getByTag()` return the wrong CC
+
+Another real-host correction showed that `contentControls.getByTag()` may return
+multiple artifacts for the same logical suggestion, and blindly taking
+`items[0]` can select a stale or legacy wrapper that does not carry the expected
+`compound-v2` metadata.
+
+That means:
+
+- tag equality alone is not sufficient to choose the operational artifact,
+- tests that assume one tag maps to exactly one CC can hide real-host failures,
+- resolution must explicitly prefer the CC whose metadata matches the expected
+  replace identity contract.
+
+**Testing rule**: add a RED case where `getByTag()` returns multiple CCs with
+the same tag, the first one is legacy/non-v2, and a later one has valid
+`compound-v2` metadata plus actionable tracked changes. The adapter must choose
+the valid v2 candidate instead of `items[0]`.
+
+#### Verified repo lesson: reject can succeed in Word before later cleanup/state reads fail
+
+Another real-host correction showed that `rejectSuggestion` can complete the
+host-level rejection successfully and still throw a later `GeneralException`
+during cleanup or post-resolution state inspection.
+
+If the adapter treats that late exception as total failure, the taskpane becomes
+desynchronized from the document: Word is already correct, but the UI reports an
+error.
+
+That means:
+
+- not all post-resolution exceptions are semantically equal,
+- reject flows must distinguish "reject failed" from "reject succeeded but
+  later housekeeping failed",
+- tests must explicitly model host success followed by late invalidation.
+
+**Testing rule**: add a RED case where `reject()` is executed on the tracked
+changes successfully, but a later cleanup or `inspectDocumentReviewState()` call
+throws `GeneralException`. The adapter must still return `rejected` rather than
+degrading to `error`.
+
 ---
 
 ### 6. Reclassify tests by confidence tier
@@ -204,64 +291,7 @@ Test count does NOT equal confidence. Tier 1 matters most.
 
 ---
 
-### 7. Use the bug investigation ladder
-
-Investigate escaped regressions in this order unless the evidence clearly skips a layer:
-
-1. **Observed symptom** — screenshots, current behavior, expected behavior
-2. **UI/taskpane state** — terminal rendering, action buttons, visible user feedback
-3. **Adapter result contract** — returned status, semantic success vs cleanup failure
-4. **Creation/resolution mechanics** — WordAdapter, ApplySuggestionCommand, comments, CCs, tracked changes
-5. **Host semantics** — Office.js range relations, proxy loading, object invalidation, batch timing
-
-This avoids getting trapped in a single file too early.
-
----
-
-### 8. Choose test types by bug layer
-
-For cross-layer bugs, do NOT spray the same assertion everywhere. Use the right test in the right place:
-
-| Layer | Test type | Purpose |
-|---|---|---|
-| Creation / host interaction | causal or contract test | prove the real boundary behavior |
-| Adapter | regression + semantic verification | prove the bug is fixed semantically |
-| Taskpane / UI | guardrail test | prevent false-success or retryable bad states |
-
-Useful categories for this repo:
-- **regression tests** — reproduce the escaped bug exactly
-- **semantic/state verification tests** — verify resolved document or UI state
-- **contract/boundary tests** — Office.js/SDK expectations
-- **guardrail tests** — stop misleading terminal UI states
-- **bug-path focused split** — isolate only the suites involved in the active bug
-
----
-
-### 9. Split tests surgically during active bug work
-
-Do NOT refactor the whole suite during an active bug unless the user asks.
-
-Instead:
-- split only the test files on the current bug path
-- reduce cognitive load around the live investigation
-- keep the wider suite cleanup as a separate effort
-
-This repo already validated that pattern during the native tracked-change bug fixes.
-
----
-
-### 10. Document corrections of corrections
-
-When a regression reveals that a prior fix or prior test strategy was incomplete:
-
-1. fix the production bug
-2. update the relevant skill or instruction file
-3. explain why the previous test or assumption failed
-4. record the corrected pattern so future agents do not reintroduce the same mistake
-
-This repo MUST preserve operational learning, not just code diffs.
-
-### 10.1 New lesson: workflow extraction deserves its own tests
+### 7. Workflow extraction deserves its own tests
 
 When logic moves out of `taskpane.ts` or `WordAdapter.ts` into a dedicated workflow object (for example `SuggestionResolutionWorkflow`), do not rely only on adapter tests plus taskpane tests.
 
@@ -273,7 +303,7 @@ Add a focused suite for the workflow itself when it owns:
 
 Otherwise the workflow can become a blind spot hidden between UI guardrails and adapter contracts.
 
-### 10.2 New lesson: Track Changes lifecycle needs both negative and positive proofs
+### 8. Track Changes lifecycle needs both negative and positive proofs
 
 For this repo, it is not enough to prove that comment-only batches do **not** enable Track Changes.
 
@@ -287,18 +317,6 @@ You must also prove the positive path:
 Testing only the negative path leaves the new lifecycle partially uncertified.
 
 ---
-
-### 11. Why bug 2 was faster than bug 1
-
-The second native tracked-change bug was resolved with fewer user iterations because the workflow improved:
-
-- the first bug taught us not to trust the first GREEN
-- the active bug-path tests were split into focused suites
-- the tracing moved across adapter + UI layers immediately
-- the screenshots were used as semantic evidence, not decoration
-- the hypothesis was framed in terms of semantic success vs cleanup failure
-
-**Meta-lesson**: the goal is not just to fix the current bug, but to become faster and sharper on the next one.
 
 ## Proven Anti-Patterns in This Repo
 

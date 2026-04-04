@@ -146,6 +146,23 @@ describe("SuggestionResolutionWorkflow", () => {
     expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
   });
 
+  it("skips feedback for identity-lost results", async () => {
+    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+      makeActionResult({
+        status: "identity-lost",
+        trackedChangesAffected: 0,
+        commentDeleted: false,
+        error:
+          "La metadata compound-v2 de la sugerencia está incompleta o corrupta.",
+      }),
+    );
+
+    const result = await workflow.acceptSuggestion(makeSuggestion());
+
+    expect(result.feedbackStatus).toBe("skipped");
+    expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
+  });
+
   it("returns failed feedback status when the feedback port throws synchronously", async () => {
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
       makeActionResult({ status: "accepted" }),

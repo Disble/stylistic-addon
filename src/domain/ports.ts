@@ -82,6 +82,11 @@ export interface IDocumentPort {
    * Accepts all Stylistic tracked changes associated with a suggestion.
    * Also deletes the associated Stylistic comment if present.
    * Returns a result object — never throws.
+   *
+   * Result contract:
+   * - `already-resolved` requires positive evidence of prior resolution
+   * - `unobservable` means Word could not prove the suggestion state yet
+   * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
    */
   acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
 
@@ -89,6 +94,11 @@ export interface IDocumentPort {
    * Rejects all Stylistic tracked changes associated with a suggestion.
    * Also deletes the associated Stylistic comment if present.
    * Returns a result object — never throws.
+   *
+   * Result contract:
+   * - `already-resolved` requires positive evidence of prior resolution
+   * - `unobservable` means Word could not prove the suggestion state yet
+   * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
    */
   rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
 

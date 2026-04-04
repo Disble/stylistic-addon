@@ -9,6 +9,13 @@ import {
   teardownTaskpaneHarness,
 } from "./TaskpaneTestHelper";
 
+/** Flushes taskpane microtasks for async review resolution tests. */
+async function flushTaskpaneWork(times = 8) {
+  for (let index = 0; index < times; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe("taskpane feedback controls", () => {
   const taskpaneMocks = getTaskpaneMocks();
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -128,6 +135,23 @@ describe("taskpane feedback controls", () => {
   });
 
   it("keeps feedback non-blocking even when the adapter rejects it later", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce({
+      status: "accepted",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      feedbackStatus: "sent",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
+    });
     taskpaneMocks.feedbackSendFeedback.mockRejectedValueOnce(
       new Error("feedback failed"),
     );
@@ -137,11 +161,41 @@ describe("taskpane feedback controls", () => {
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
     (li.querySelector('[data-action="accept"]') as FakeElement).click();
+    await flushTaskpaneWork();
+
+    expect(li.classList.contains("result-accepted")).toBe(true);
+  });
+
+  it("does not send feedback when the resolution ends in identity-lost", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce({
+      status: "identity-lost",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      error: "La metadata compound-v2 de la sugerencia está incompleta o corrupta.",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
+    });
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-identity-lost" });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    (li.querySelector('[data-action="accept"]') as FakeElement).click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(li.classList.contains("result-accepted")).toBe(true);
+    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });
 
   it("omits empty textarea comments from the feedback payload", async () => {

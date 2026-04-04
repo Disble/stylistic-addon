@@ -59,6 +59,19 @@ export const RETRY_BASE_DELAY_MS = 1_000;
 export const POLL_INTERVAL_MS = 1_000;
 
 // ---------------------------------------------------------------------------
+// Word Artifact Identity
+// ---------------------------------------------------------------------------
+
+/** Prefix used by all Stylistic Content Control tags persisted in Word. */
+export const STYLISTIC_TAG_PREFIX = "stylistic:";
+
+/**
+ * Prefix for versioned Content Control title metadata used by compound replace
+ * identities. The raw JSON payload is appended after this marker.
+ */
+export const STYLISTIC_IDENTITY_TITLE_PREFIX = "stylistic-meta-v2:";
+
+// ---------------------------------------------------------------------------
 // Default Profiles
 // ---------------------------------------------------------------------------
 

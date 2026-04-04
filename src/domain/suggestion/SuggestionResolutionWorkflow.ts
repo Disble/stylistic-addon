@@ -97,6 +97,8 @@ export class SuggestionResolutionWorkflow {
 
   /**
    * Feedback is only emitted for explicit terminal user actions.
+   * Ambiguous observation states such as `unobservable` and `identity-lost`
+   * must never emit feedback.
    */
   private shouldSendFeedback(result: SuggestionActionResult): boolean {
     return (

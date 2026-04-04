@@ -7,6 +7,8 @@ import {
   type ParentCC,
 } from "./ApplySuggestionCommandTestHelper";
 
+const IDENTITY_TITLE_PREFIX = "stylistic-meta-v2:";
+
 describe("ApplySuggestionCommand content-control recovery", () => {
   beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -95,5 +97,60 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
     expect(freshAnchor.insertText).toHaveBeenCalledOnce();
+  });
+
+  it("persists compound v2 replace metadata for replace suggestions", async () => {
+    const env = installWordContext();
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "replace-1",
+        anchor: "texto original",
+        suggestedText: "texto sugerido",
+        context: "Contexto con texto original.",
+        type: "track-change",
+      }),
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "replace-1" });
+    expect(env.cc.tag).toBe("stylistic:track-change:replace-1");
+    expect(env.cc.title.startsWith(IDENTITY_TITLE_PREFIX)).toBe(true);
+
+    const payload = JSON.parse(env.cc.title.slice(IDENTITY_TITLE_PREFIX.length));
+    expect(payload).toEqual({
+      suggestionId: "replace-1",
+      version: "compound-v2",
+      insertedSideRef: {
+        kind: "content-control",
+        role: "inserted-side",
+        value: "stylistic:track-change:replace-1",
+      },
+      deletedSideRef: {
+        kind: "anchor",
+        role: "deleted-side",
+        value: "texto original",
+      },
+      anchorRef: {
+        kind: "anchor",
+        role: "operational-anchor",
+        value: "Contexto con texto original.",
+      },
+    });
+  });
+
+  it("keeps legacy anchor titles for comment-only suggestions", async () => {
+    const env = installWordContext();
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "comment-1",
+        type: "comment-only",
+        suggestedText: undefined,
+        anchor: "texto original",
+      }),
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "comment-1" });
+    expect(env.cc.title).toBe("texto original");
   });
 });

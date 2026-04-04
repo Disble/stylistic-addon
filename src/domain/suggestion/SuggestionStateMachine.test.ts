@@ -16,6 +16,7 @@ const TERMINAL_STATES: SuggestionState[] = [
   "accepted",
   "rejected",
   "already-resolved",
+  "identity-lost",
 ];
 
 /** Returns an SM already transitioned to the given state. */
@@ -28,6 +29,7 @@ function machineAt(target: SuggestionState): SuggestionStateMachine {
     rejected: ["resolving", "rejected"],
     "already-resolved": ["resolving", "already-resolved"],
     unobservable: ["resolving", "unobservable"],
+    "identity-lost": ["resolving", "identity-lost"],
     error: ["resolving", "error"],
   };
   for (const step of paths[target] ?? []) sm.transition(step);
@@ -97,6 +99,14 @@ describe("SuggestionStateMachine", () => {
       sm.transition("resolving");
       sm.transition("already-resolved");
       expect(sm.state).toBe("already-resolved");
+      expect(sm.isTerminal).toBe(true);
+    });
+
+    it("pending → resolving → identity-lost", () => {
+      const sm = new SuggestionStateMachine();
+      sm.transition("resolving");
+      sm.transition("identity-lost");
+      expect(sm.state).toBe("identity-lost");
       expect(sm.isTerminal).toBe(true);
     });
 
@@ -321,6 +331,7 @@ describe("SuggestionStateMachine", () => {
       "rejected",
       "already-resolved",
       "unobservable",
+      "identity-lost",
       "error",
     ];
 
@@ -374,6 +385,10 @@ describe("SuggestionStateMachine", () => {
 
     it("maps 'unobservable' → 'unobservable'", () => {
       expect(mapResultStatusToState("unobservable")).toBe("unobservable");
+    });
+
+    it("maps 'identity-lost' → 'identity-lost'", () => {
+      expect(mapResultStatusToState("identity-lost")).toBe("identity-lost");
     });
 
     it("maps 'cc-not-found' → 'error'", () => {

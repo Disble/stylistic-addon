@@ -219,6 +219,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "pending-review",
+      feedbackStatus: "sent",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
     });
 
     const doc = createTaskpaneDocument();
@@ -250,6 +256,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "pending-review",
+      feedbackStatus: "sent",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
     });
 
     const doc = createTaskpaneDocument();
@@ -278,6 +290,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "pending-review",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
     });
 
     const doc = createTaskpaneDocument();
@@ -308,6 +326,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: boolean;
       };
       documentState: "pending-review" | "idle" | "ready-to-disable-track-changes";
+      feedbackStatus?: string;
+      taskpaneState?: {
+        documentState: "pending-review" | "idle" | "ready-to-disable-track-changes";
+        showDisableTrackChangesCta: boolean;
+        showCleanupSection: boolean;
+      };
     }>();
     taskpaneMocks.acceptSuggestion.mockReturnValue(firstCall);
 
@@ -332,6 +356,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "pending-review",
+      feedbackStatus: "sent",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
     });
     await flushTaskpaneWork();
 
@@ -352,6 +382,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         },
         documentState: "pending-review",
         error: "timeout",
+        feedbackStatus: "skipped",
+        taskpaneState: {
+          documentState: "pending-review",
+          showDisableTrackChangesCta: false,
+          showCleanupSection: false,
+        },
       })
       .mockResolvedValueOnce({
         status: "accepted",
@@ -363,6 +399,12 @@ describe("taskpane suggestion resolution guardrails", () => {
           trackChangesActive: true,
         },
         documentState: "pending-review",
+        feedbackStatus: "sent",
+        taskpaneState: {
+          documentState: "pending-review",
+          showDisableTrackChangesCta: false,
+          showCleanupSection: false,
+        },
       });
 
     const doc = createTaskpaneDocument();
@@ -394,6 +436,12 @@ describe("taskpane suggestion resolution guardrails", () => {
       },
       documentState: "pending-review",
       error: "El documento está protegido",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
     });
 
     const doc = createTaskpaneDocument();
@@ -427,6 +475,12 @@ describe("taskpane suggestion resolution guardrails", () => {
       documentState: "pending-review",
       error:
         "Word no expuso suficientes tracked changes para confirmar la resolución.",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
     });
 
     const doc = createTaskpaneDocument();
@@ -447,6 +501,43 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });
 
+  it("renders identity-lost as a terminal warning and skips feedback", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "identity-lost",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      error: "La metadata compound-v2 de la sugerencia está incompleta o corrupta.",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
+    });
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-identity-lost" });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
+
+    acceptBtn.click();
+    await flushTaskpaneWork();
+
+    expect(li.classList.contains("result-identity-lost")).toBe(true);
+    expect(li.querySelector(".result-actions")).toBeNull();
+    expect(li.querySelector(".result-identity-lost-note")?.textContent).toBe(
+      "(metadata inconsistente; reanalizá la sugerencia)",
+    );
+    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+  });
+
   it("re-enables buttons when the adapter reports not-found", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "not-found",
@@ -459,6 +550,12 @@ describe("taskpane suggestion resolution guardrails", () => {
       },
       documentState: "pending-review",
       error: "Texto no encontrado",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
     });
 
     const doc = createTaskpaneDocument();
@@ -487,6 +584,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "ready-to-disable-track-changes",
+      feedbackStatus: "sent",
+      taskpaneState: {
+        documentState: "ready-to-disable-track-changes",
+        showDisableTrackChangesCta: true,
+        showCleanupSection: false,
+      },
     });
 
     const doc = createTaskpaneDocument();
@@ -516,6 +619,12 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "ready-to-disable-track-changes",
+      feedbackStatus: "sent",
+      taskpaneState: {
+        documentState: "ready-to-disable-track-changes",
+        showDisableTrackChangesCta: true,
+        showCleanupSection: false,
+      },
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];

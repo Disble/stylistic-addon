@@ -648,6 +648,7 @@ function appendNote(li: HTMLElement, text: string, className: string): void {
  *
  * - `accepted` / `rejected`: removes actions div, adds state class.
  * - `already-resolved`: same + warning note "(ya resuelto)".
+ * - `identity-lost`: terminal warning; remove actions and explain metadata issue.
  * - `unobservable` / `error`: re-enables buttons, shows error/warning in the status bar.
  * - `error`: re-enables buttons, shows error in the status bar.
  * - `pending` / `resolving`: no-op (not terminal — should not be called).
@@ -670,6 +671,21 @@ function applySuggestionCardState(
       li.querySelector(".result-actions")?.remove();
       li.classList.add("result-already-resolved");
       appendNote(li, "(ya resuelto)", "result-already-resolved-note");
+      break;
+
+    case "identity-lost":
+      li.querySelector(".result-actions")?.remove();
+      li.classList.add("result-identity-lost");
+      appendNote(
+        li,
+        "(metadata inconsistente; reanalizá la sugerencia)",
+        "result-identity-lost-note",
+      );
+      showStatus(
+        errorMessage ??
+          "La identidad persistida de la sugerencia quedó inconsistente en Word.",
+        "error",
+      );
       break;
 
     case "unobservable":

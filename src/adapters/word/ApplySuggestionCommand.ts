@@ -22,7 +22,17 @@
  * @module ApplySuggestionCommand
  */
 
-import type { ChangeType, CommandResult, Suggestion } from "../../domain/types";
+import type {
+  ChangeType,
+  CommandResult,
+  ReplaceSuggestionIdentity,
+  Suggestion,
+  WordArtifactRef,
+} from "../../domain/types";
+import {
+  STYLISTIC_IDENTITY_TITLE_PREFIX,
+  STYLISTIC_TAG_PREFIX,
+} from "../../infrastructure/config";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
 
 type IndexedText = {
@@ -52,6 +62,72 @@ type SearchContainer = {
   load(property: "text"): void;
   text: string;
 };
+
+/** Returns the canonical Stylistic tag for one suggestion. */
+function buildSuggestionTag(suggestion: Suggestion): string {
+  return `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
+}
+
+/** Creates one Word artifact reference owned by the apply adapter. */
+function createArtifactRef(
+  kind: WordArtifactRef["kind"],
+  role: WordArtifactRef["role"],
+  value: string,
+): WordArtifactRef {
+  return { kind, role, value };
+}
+
+/**
+ * Serializes versioned replace identity metadata into the Content Control title.
+ */
+function serializeReplaceIdentity(identity: ReplaceSuggestionIdentity): string {
+  return `${STYLISTIC_IDENTITY_TITLE_PREFIX}${JSON.stringify(identity)}`;
+}
+
+/**
+ * Builds compound v2 metadata for replace suggestions.
+ *
+ * The inserted-side Content Control remains an operational reference, not the
+ * whole domain identity. Deleted/original-side and anchor references are stored
+ * explicitly so later observation can distinguish legacy vs v2 behavior.
+ */
+function buildReplaceIdentity(
+  suggestion: Suggestion,
+): ReplaceSuggestionIdentity {
+  return {
+    suggestionId: suggestion.id,
+    version: "compound-v2",
+    insertedSideRef: createArtifactRef(
+      "content-control",
+      "inserted-side",
+      buildSuggestionTag(suggestion),
+    ),
+    deletedSideRef: createArtifactRef(
+      "anchor",
+      "deleted-side",
+      suggestion.anchor,
+    ),
+    anchorRef: createArtifactRef(
+      "anchor",
+      "operational-anchor",
+      suggestion.context,
+    ),
+  };
+}
+
+/**
+ * Chooses the persisted Content Control title payload for one suggestion.
+ */
+function buildContentControlTitle(
+  suggestion: Suggestion,
+  changeType: ChangeType,
+): string {
+  if (suggestion.type === "track-change" && changeType === "replace") {
+    return serializeReplaceIdentity(buildReplaceIdentity(suggestion));
+  }
+
+  return suggestion.anchor;
+}
 
 function removeWhitespaceWithIndices(text: string): IndexedText {
   const indices: number[] = [];
@@ -272,8 +348,8 @@ export class ApplySuggestionCommand {
         );
 
         const cc = insertedRange.insertContentControl();
-        cc.tag = `stylistic:${this.suggestion.type}:${this.suggestion.id}`;
-        cc.title = this.suggestion.anchor;
+        cc.tag = buildSuggestionTag(this.suggestion);
+        cc.title = buildContentControlTitle(this.suggestion, changeType);
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
@@ -357,7 +433,7 @@ export class ApplySuggestionCommand {
         );
 
         const cc = range.insertContentControl();
-        cc.tag = `stylistic:comment-only:${this.suggestion.id}`;
+        cc.tag = buildSuggestionTag(this.suggestion);
         cc.title = this.suggestion.anchor;
         cc.appearance = "Hidden";
         cc.cannotDelete = false;

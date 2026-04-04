@@ -340,6 +340,25 @@ Required direction:
 
 Do **not** let `taskpane.ts` become the long-term owner of review workflow semantics.
 
+### Current replace suggestion identity rule (important)
+
+For native Word **replace** suggestions, the add-in no longer treats a single
+inserted-side `ContentControl` as the whole identity.
+
+Current app state:
+
+- new replace suggestions persist `compound-v2` metadata in `ContentControl.title`
+- `WordAdapter` treats `compound-v2` as the supported replace-resolution path
+- `0 tracked changes observed` must degrade to `unobservable`, never `already-resolved`
+- corrupt/incomplete `compound-v2` metadata must degrade to `identity-lost`
+- feedback must be skipped for both `unobservable` and `identity-lost`
+
+Do NOT reintroduce:
+
+- bare-ID resolution paths for replace suggestions
+- optimistic `already-resolved` from missing observation
+- the idea that `CC == full replace identity`
+
 ---
 
 ## 12. WorkflowInput Shape — Current Backend Contract

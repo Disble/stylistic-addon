@@ -39,6 +39,7 @@ export type ApplyCommandTestContext = {
   };
   cc: {
     tag: string;
+    title: string;
     appearance: string;
     cannotDelete: boolean;
   };
@@ -134,7 +135,7 @@ export function installWordContext(options: {
   const contextText = options.contextText ?? `Contexto con ${anchorText}.`;
   const documentText = options.documentText ?? contextText;
 
-  const cc = { tag: "", appearance: "", cannotDelete: true };
+  const cc = { tag: "", title: "", appearance: "", cannotDelete: true };
   const insertedRange = {
     insertContentControl: vi.fn(() => cc),
     insertComment: vi.fn(),
@@ -192,6 +193,9 @@ export function installWordContext(options: {
       callback(context),
     ),
   });
+
+  anchorRange.insertContentControl = vi.fn(() => cc);
+  bodyRange.insertContentControl = vi.fn(() => cc);
 
   return { context, bodyRange, anchorRange, insertedRange, cc };
 }

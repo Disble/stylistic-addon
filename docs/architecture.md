@@ -175,6 +175,19 @@ The corrected architectural direction is:
 - lack of observable tracked changes must not be upgraded to confirmed
   `already-resolved`.
 
+Current app state:
+
+- Phase A is implemented: ambiguous replace observation degrades to `unobservable`
+  instead of `already-resolved`.
+- Phase B is implemented: new replace suggestions persist `compound-v2`
+  metadata in `ContentControl.title`, and replace resolution uses that model as
+  the supported path.
+- Legacy bare-ID / `legacy-v1` replace-resolution compatibility is intentionally
+  removed.
+- Corrupt/incomplete `compound-v2` metadata degrades to `identity-lost`.
+- `unobservable` and `identity-lost` both suppress feedback instead of being
+  upgraded into misleading terminal success.
+
 See [`replace-suggestion-identity-proposal.md`](./replace-suggestion-identity-proposal.md)
 for the detailed proposal.
 
@@ -193,7 +206,7 @@ for the detailed proposal.
 | **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after OOXML insertions shift document positions. |
 | **Composition Root** | `taskpane/taskpane.ts` | Single wiring point: instantiates adapters, decorators, orchestrator, and state machine. No other module knows the full dependency graph. |
 | **Derived Snapshot + Explicit UI State** | `WordAdapter.ts`, `domain/review/DocumentReviewStateMachine.ts`, `domain/review/ReviewSessionMediator.ts`, `taskpane.ts` | Word remains the source of truth through `DocumentReviewState`, the state machine centralizes review UI semantics, and the mediator coordinates cleanup/CTA/taskpane consequences as one policy surface. |
-| **Compound Identity (proposed)** | `docs/replace-suggestion-identity-proposal.md` | A replace suggestion should be modeled as one domain identity with multiple Word artifact references, instead of treating one inserted-side `ContentControl` as the whole suggestion. |
+| **Compound Identity** | `ApplySuggestionCommand.ts`, `WordAdapter.ts`, `docs/replace-suggestion-identity-proposal.md` | Replace suggestions now persist `compound-v2` metadata so one domain identity can be observed through multiple Word artifact references instead of treating one inserted-side `ContentControl` as the whole suggestion. |
 
 > **Documentation note:** Preserve-and-Restore accurately describes the current code path, but the Track Changes requirement change intentionally moves the desired ownership model away from per-suggestion toggling. Keep that distinction explicit when editing this section in the future.
 

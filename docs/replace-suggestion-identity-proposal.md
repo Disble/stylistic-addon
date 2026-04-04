@@ -220,3 +220,18 @@ Correct model: the constellation is the suggestion; each star is only one ref.
 **Never upgrade observability failure into terminal resolution.**
 
 That is the core rule this proposal records for future implementation.
+
+---
+
+## Rollout note — hard cut to compound-v2 for replace resolution
+
+The adopted direction no longer preserves `legacy-v1` as a supported resolution
+path for replace suggestions.
+
+- new replace suggestions persist `compound-v2` metadata in the Content Control
+  title payload,
+- replace resolution requires compound-v2 metadata instead of bare-ID fallback,
+- if v2 metadata exists but is incomplete/corrupt, the result must be
+  `identity-lost` and feedback must be skipped,
+- artifacts that cannot satisfy compound-v2 resolution requirements are not
+  treated as actionable replace identities.

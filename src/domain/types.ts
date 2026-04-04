@@ -59,6 +59,59 @@ export interface Suggestion {
 }
 
 /**
+ * Observation confidence for a suggestion materialized in Word.
+ *
+ * This is intentionally separate from business resolution status. Word may fail
+ * to expose enough host evidence even when the suggestion still exists.
+ */
+export type SuggestionObservationStatus =
+  | "confirmed-pending"
+  | "confirmed-resolved"
+  | "unobservable"
+  | "identity-lost";
+
+/**
+ * A Word-host reference that helps re-locate one side of a review suggestion.
+ *
+ * `value` is intentionally opaque to the domain. It may contain a Content
+ * Control tag, anchor text, tracked-change token, or another adapter-owned
+ * locator string.
+ */
+export interface WordArtifactRef {
+  /** Kind of Word artifact being referenced. */
+  kind: "content-control" | "tracked-change" | "comment" | "anchor";
+
+  /** Semantic role this artifact plays inside the suggestion identity. */
+  role: "inserted-side" | "deleted-side" | "operational-anchor";
+
+  /** Opaque adapter-owned value used to relocate the artifact in Word. */
+  value: string;
+}
+
+/**
+ * Versioned identity for replace suggestions.
+ *
+ * `compound-v2` records richer Word references without assuming the inserted-
+ * side Content Control is the whole identity.
+ */
+export interface ReplaceSuggestionIdentity {
+  /** Stable frontend/domain suggestion identifier. */
+  suggestionId: string;
+
+  /** Serialized identity version. */
+  version: "compound-v2";
+
+  /** Primary inserted-side Word reference. */
+  insertedSideRef: WordArtifactRef;
+
+  /** Optional deleted/original-side Word reference. */
+  deletedSideRef?: WordArtifactRef;
+
+  /** Optional operational anchor for fallback re-location. */
+  anchorRef?: WordArtifactRef;
+}
+
+/**
  * Machine-readable failure reasons for one suggestion application attempt.
  */
 export type SuggestionApplicationFailureReason =
@@ -513,6 +566,8 @@ export interface PipelineResult {
  *   changes near one operational anchor.
  * - "unobservable": Word did not expose enough evidence to confirm the review
  *   state. Non-terminal — user may retry once the host state becomes visible.
+ * - "identity-lost": Word exposed corrupt or incomplete v2 metadata, so the
+ *   adapter cannot safely continue with compound identity semantics.
  * - "error": Word API call failed. Non-terminal — user may retry.
  */
 export type SuggestionState =
@@ -522,6 +577,7 @@ export type SuggestionState =
   | "rejected"
   | "already-resolved"
   | "unobservable"
+  | "identity-lost"
   | "error";
 
 /**
@@ -534,6 +590,7 @@ export interface SuggestionActionResult {
     | "rejected"
     | "already-resolved"
     | "unobservable"
+    | "identity-lost"
     | "cc-not-found"
     | "not-found"
     | "error";

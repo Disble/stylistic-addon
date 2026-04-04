@@ -14,6 +14,7 @@
  * - `rejected`         → User rejected from taskpane. Terminal.
  * - `already-resolved` → CC found but TCs already gone (resolved via Review pane). Terminal.
  * - `unobservable`     → Word did not expose enough evidence to confirm resolution. Non-terminal.
+ * - `identity-lost`    → Word exposed corrupt/incomplete compound identity metadata. Terminal warning.
  * - `error`            → Word API threw. Non-terminal — user may retry.
  *
  * @module SuggestionStateMachine
@@ -28,12 +29,14 @@ const TRANSITIONS: Record<SuggestionState, SuggestionState[]> = {
     "rejected",
     "already-resolved",
     "unobservable",
+    "identity-lost",
     "error",
   ],
   accepted: [],
   rejected: [],
   "already-resolved": [],
   unobservable: ["resolving"],
+  "identity-lost": [],
   error: ["resolving"],
 };
 
@@ -120,6 +123,8 @@ export function mapResultStatusToState(
       return "already-resolved";
     case "unobservable":
       return "unobservable";
+    case "identity-lost":
+      return "identity-lost";
     case "cc-not-found":
       return "error";
     case "not-found":

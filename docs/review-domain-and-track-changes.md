@@ -572,6 +572,18 @@ Recorded rule:
 
 > Never upgrade observability failure into terminal resolution.
 
+### Compatibility rollout for replace identity
+
+Current rollout policy for replace suggestions:
+
+1. new replace suggestions persist `compound-v2` metadata with inserted-side,
+   deleted-side, and operational-anchor refs,
+2. replace resolution no longer supports legacy bare-ID artifacts as a valid
+   model path,
+3. zero observed tracked changes downgrade to `unobservable`,
+4. corrupt/incomplete v2 metadata maps to `identity-lost`,
+5. neither `unobservable` nor `identity-lost` may emit feedback.
+
 ---
 
 ## 14. What must change in documentation and skills

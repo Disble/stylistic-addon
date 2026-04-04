@@ -44,7 +44,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
     expect(context.sync).toHaveBeenCalledTimes(1);
   });
 
-  it("SR-DG-01: collects texts from both track-change and comment-only stylistic content controls", async () => {
+  it("SR-DG-01: collects comment-only titles and only compound-v2 track-change refs", async () => {
     const rangeTC = { load: vi.fn(), text: "originalText1" };
     const rangeCO = { load: vi.fn(), text: "originalText2" };
     const rangeOther = { load: vi.fn(), text: "should not appear" };
@@ -55,6 +55,8 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
           items: [
             {
               tag: "stylistic:track-change:s1",
+              title:
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"originalText1"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con texto original."}}',
               getRange: vi.fn(() => rangeTC),
             },
             {
@@ -74,12 +76,12 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
     const result = await adapter.getAppliedOriginalTexts();
 
     expect(result).toEqual(new Set(["originalText1", "originalText2"]));
-    expect(rangeTC.load).toHaveBeenCalledWith("text");
+    expect(rangeTC.load).not.toHaveBeenCalledWith("text");
     expect(rangeCO.load).toHaveBeenCalledWith("text");
     expect(context.sync).toHaveBeenCalledTimes(2);
   });
 
-  it("deduplicates texts when multiple stylistic content controls span the same text", async () => {
+  it("deduplicates texts when multiple Stylistic content controls map to the same original text", async () => {
     const range1 = { load: vi.fn(), text: "texto duplicado" };
     const range2 = { load: vi.fn(), text: "texto duplicado" };
     const range3 = { load: vi.fn(), text: "texto único" };
@@ -88,8 +90,18 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
       document: {
         contentControls: {
           items: [
-            { tag: "stylistic:track-change:s1", getRange: vi.fn(() => range1) },
-            { tag: "stylistic:track-change:s2", getRange: vi.fn(() => range2) },
+            {
+              tag: "stylistic:track-change:s1",
+              title:
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto duplicado"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto 1"}}',
+              getRange: vi.fn(() => range1),
+            },
+            {
+              tag: "stylistic:track-change:s2",
+              title:
+                'stylistic-meta-v2:{"suggestionId":"s2","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s2"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto duplicado"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto 2"}}',
+              getRange: vi.fn(() => range2),
+            },
             { tag: "stylistic:comment-only:s3", getRange: vi.fn(() => range3) },
           ],
           load: vi.fn(),
@@ -116,7 +128,8 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
           items: [
             {
               tag: "stylistic:track-change:s1",
-              title: "parece que es la",
+              title:
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"parece que es la"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con parece que es la."}}',
               getRange: vi.fn(() => mutatedReplaceRange),
             },
             {
@@ -140,7 +153,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
     expect(mutatedCommentOnlyRange.load).not.toHaveBeenCalledWith("text");
   });
 
-  it("falls back to range text for legacy Stylistic content controls without persisted title metadata", async () => {
+  it("ignores track-change content controls without compound-v2 metadata", async () => {
     const legacyRange = { load: vi.fn(), text: "texto legado" };
 
     const context = {
@@ -163,8 +176,34 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
 
     const result = await adapter.getAppliedOriginalTexts();
 
-    expect(result).toEqual(new Set(["texto legado"]));
-    expect(legacyRange.load).toHaveBeenCalledWith("text");
+    expect(result).toEqual(new Set());
+    expect(legacyRange.load).not.toHaveBeenCalledWith("text");
+  });
+
+  it("prefers deleted-side refs from compound-v2 metadata when collecting already applied originals", async () => {
+    const context = {
+      document: {
+        contentControls: {
+          items: [
+            {
+              tag: "stylistic:track-change:s1",
+              title:
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto original v2"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con texto original v2."}}',
+              getRange: vi.fn(),
+            },
+          ],
+          load: vi.fn(),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    const result = await adapter.getAppliedOriginalTexts();
+
+    expect(result).toEqual(new Set(["texto original v2"]));
+    expect(context.document.contentControls.items[0].getRange).not.toHaveBeenCalled();
   });
 
   it("propagates Word.run errors", async () => {
