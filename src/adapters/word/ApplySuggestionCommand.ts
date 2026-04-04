@@ -35,6 +35,7 @@ import {
 } from "../../infrastructure/config";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
 import {
+  findFirstAlphanumericOffset,
   findUniqueLocatorSubstring,
   findWhitespaceInsensitiveSlice,
 } from "./WordSearchAdapter";
@@ -193,6 +194,13 @@ export class ApplySuggestionCommand {
 
   /**
    * Resolves a range by scanning text with whitespace-insensitive matching.
+   *
+   * When `findUniqueLocatorSubstring` returns a candidate that starts with
+   * special characters (em-dashes, inverted question marks, etc.), Word may
+   * reject it with `SearchStringInvalidOrTooLong`. In that case, a second
+   * attempt is made with a sub-slice of `rawSlice` that starts at the first
+   * alphanumeric character, sidestepping the problematic leading chars while
+   * still uniquely identifying the same range in the document.
    */
   private async resolveByWhitespaceScan(
     context: Word.RequestContext,
@@ -222,11 +230,39 @@ export class ApplySuggestionCommand {
       fallbackSearchText,
       searchOptions,
     );
-    if (fallbackAttempt.invalid) {
+    if (!fallbackAttempt.invalid) {
+      return fallbackAttempt.results?.items[0] ?? null;
+    }
+
+    // The candidate was rejected by Word (SearchStringInvalidOrTooLong).
+    // This often happens when the rawSlice starts with special characters such
+    // as em-dashes (—) or inverted question marks (¿). Retry from the first
+    // alphanumeric character in rawSlice to produce a Word-safe search string.
+    const alphanumericOffset = findFirstAlphanumericOffset(rawSlice);
+    if (alphanumericOffset <= 0) {
       return null;
     }
 
-    return fallbackAttempt.results?.items[0] ?? null;
+    const alphanumericSlice = rawSlice.slice(alphanumericOffset);
+    const alphanumericCandidate = findUniqueLocatorSubstring(
+      alphanumericSlice,
+      container.text,
+    );
+    if (!alphanumericCandidate) {
+      return null;
+    }
+
+    const retryAttempt = await this.runSearchAttempt(
+      context,
+      container,
+      alphanumericCandidate,
+      searchOptions,
+    );
+    if (retryAttempt.invalid) {
+      return null;
+    }
+
+    return retryAttempt.results?.items[0] ?? null;
   }
 
   /**
@@ -332,9 +368,35 @@ export class ApplySuggestionCommand {
       return null;
     }
 
+    contextRange.load("text");
+    const containingParagraph = contextRange.paragraphs
+      .getFirst()
+      .getRange("Whole");
+    containingParagraph.load("text");
+    await context.sync();
+
+    const matchText = contextRange.text;
+    console.log(
+      `🔬 [ApplySuggestionCommand] "${this.id}": contextMatchLen=${matchText.length}, paragraphLen=${containingParagraph.text.length}, anchorIndexInMatch=${matchText.indexOf(this.suggestion.anchor)}, anchorIndexInParagraph=${containingParagraph.text.indexOf(this.suggestion.anchor)}`,
+    );
+
+    const shouldExpandToParagraph =
+      !matchText.includes(this.suggestion.anchor) &&
+      matchText.length < this.suggestion.context.length - 20;
+
+    const searchContainer = shouldExpandToParagraph
+      ? (containingParagraph as unknown as SearchContainer)
+      : (contextRange as unknown as SearchContainer);
+
+    if (shouldExpandToParagraph) {
+      console.log(
+        `🔬 [ApplySuggestionCommand] "${this.id}": context match (${matchText.length} chars) does not contain anchor — expanding to paragraph (${containingParagraph.text.length} chars)`,
+      );
+    }
+
     return this.searchWithFallback(
       context,
-      contextRange as unknown as SearchContainer,
+      searchContainer,
       this.suggestion.anchor,
     );
   }

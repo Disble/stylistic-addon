@@ -167,3 +167,21 @@ export function findUniqueLocatorSubstring(
 
   return null;
 }
+
+/**
+ * Returns the index of the first alphanumeric character in `text`, or -1 if
+ * none is found.
+ *
+ * Used as a fallback when `Word.search()` rejects a candidate that starts with
+ * special characters (em-dashes, inverted question marks, typographic quotes,
+ * etc.). Skipping to the first letter/digit produces a candidate that Word can
+ * accept without throwing `SearchStringInvalidOrTooLong`.
+ */
+export function findFirstAlphanumericOffset(text: string): number {
+  for (let i = 0; i < text.length; i += 1) {
+    if (/[a-zA-Z0-9\u00C0-\u024F]/.test(text[i])) {
+      return i;
+    }
+  }
+  return -1;
+}
