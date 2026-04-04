@@ -21,10 +21,6 @@ const KNOWN_EXCEPTIONS = new Map([
       reason: "Inherent Word tracked-change resolution complexity",
     },
   ],
-  [
-    "src/taskpane/taskpane.ts",
-    { maxLines: 1000, reason: "Phase 3 refactor pending" },
-  ],
 ]);
 
 /** File patterns exempt from line-count checks (structurally large). */
