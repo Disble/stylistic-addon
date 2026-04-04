@@ -34,27 +34,10 @@ import {
   STYLISTIC_TAG_PREFIX,
 } from "../../infrastructure/config";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
-
-type IndexedText = {
-  text: string;
-  indices: number[];
-};
-
-/**
- * Determines the type of tracked change operation for a suggestion.
- * Strategy pattern: selects insert / delete / replace based on text content.
- *
- * Must only be called for `"track-change"` suggestions where `suggestedText`
- * is defined. Comment-only suggestions are handled by a separate branch in
- * `execute()` and never reach this function.
- */
-function classifyChange(suggestion: Suggestion): ChangeType {
-  const hasOriginal = suggestion.anchor.length > 0;
-  const hasSuggested = (suggestion.suggestedText?.length ?? 0) > 0;
-  if (hasOriginal && !hasSuggested) return "delete";
-  if (!hasOriginal && hasSuggested) return "insert";
-  return "replace";
-}
+import {
+  findUniqueLocatorSubstring,
+  findWhitespaceInsensitiveSlice,
+} from "./WordSearchAdapter";
 
 /** Minimal search surface shared by `Word.Body` and `Word.Range`. */
 type SearchContainer = {
@@ -129,42 +112,37 @@ function buildContentControlTitle(
   return suggestion.anchor;
 }
 
-function removeWhitespaceWithIndices(text: string): IndexedText {
-  const indices: number[] = [];
-  let normalized = "";
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    if (/\s/.test(char)) {
-      continue;
-    }
-
-    normalized += char;
-    indices.push(index);
-  }
-
-  return { text: normalized, indices };
+/**
+ * Determines the type of tracked change operation for a suggestion.
+ * Strategy pattern: selects insert / delete / replace based on text content.
+ *
+ * Must only be called for `"track-change"` suggestions where `suggestedText`
+ * is defined. Comment-only suggestions are handled by a separate branch in
+ * `execute()` and never reach this function.
+ */
+function classifyChange(suggestion: Suggestion): ChangeType {
+  const hasOriginal = suggestion.anchor.length > 0;
+  const hasSuggested = (suggestion.suggestedText?.length ?? 0) > 0;
+  if (hasOriginal && !hasSuggested) return "delete";
+  if (!hasOriginal && hasSuggested) return "insert";
+  return "replace";
 }
 
-function findWhitespaceInsensitiveSlice(
-  searchText: string,
-  documentText: string,
-): string | null {
-  const normalizedSearch = removeWhitespaceWithIndices(searchText).text;
-  if (normalizedSearch.length === 0) {
-    return null;
+/**
+ * Converts unknown error values into a stable, readable log message.
+ */
+function stringifyUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
   }
-
-  const normalizedDocument = removeWhitespaceWithIndices(documentText);
-  const matchIndex = normalizedDocument.text.indexOf(normalizedSearch);
-  if (matchIndex === -1) {
-    return null;
+  if (typeof error === "string") {
+    return error;
   }
-
-  const start = normalizedDocument.indices[matchIndex];
-  const end =
-    normalizedDocument.indices[matchIndex + normalizedSearch.length - 1] + 1;
-  return documentText.slice(start, end);
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return Object.prototype.toString.call(error);
+  }
 }
 
 /**
@@ -182,7 +160,89 @@ export class ApplySuggestionCommand {
   }
 
   /**
+   * Returns true when the error message indicates a Word search API rejection
+   * due to an invalid or too-long search string (e.g. accented characters in
+   * ignorePunct/ignoreSpace mode, or certain special-character combinations).
+   */
+  private static isSearchInvalidError(error: unknown): boolean {
+    const message = stringifyUnknownError(error);
+    return message.includes("SearchStringInvalidOrTooLong");
+  }
+
+  /**
+   * Runs one Word search attempt and normalizes SearchStringInvalidOrTooLong.
+   */
+  private async runSearchAttempt(
+    context: Word.RequestContext,
+    container: SearchContainer,
+    searchText: string,
+    options: Record<string, boolean>,
+  ): Promise<{ invalid: boolean; results?: Word.RangeCollection }> {
+    try {
+      const results = container.search(searchText, options);
+      results.load("items");
+      await context.sync();
+      return { invalid: false, results };
+    } catch (error) {
+      if (ApplySuggestionCommand.isSearchInvalidError(error)) {
+        return { invalid: true };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Resolves a range by scanning text with whitespace-insensitive matching.
+   */
+  private async resolveByWhitespaceScan(
+    context: Word.RequestContext,
+    container: SearchContainer,
+    searchText: string,
+    searchOptions: Record<string, boolean>,
+  ): Promise<Word.Range | null> {
+    container.load("text");
+    await context.sync();
+
+    const rawSlice = findWhitespaceInsensitiveSlice(searchText, container.text);
+    if (!rawSlice) {
+      return null;
+    }
+
+    const fallbackSearchText = findUniqueLocatorSubstring(
+      rawSlice,
+      container.text,
+    );
+    if (!fallbackSearchText) {
+      return null;
+    }
+
+    const fallbackAttempt = await this.runSearchAttempt(
+      context,
+      container,
+      fallbackSearchText,
+      searchOptions,
+    );
+    if (fallbackAttempt.invalid) {
+      return null;
+    }
+
+    return fallbackAttempt.results?.items[0] ?? null;
+  }
+
+  /**
    * Searches a body or range using the standard three-step fallback strategy.
+   *
+   * Step 1 (exact, case-sensitive): direct match — skipped when text > 256 chars.
+   * Step 2 (ignorePunct + ignoreSpace): tolerates minor punctuation/spacing differences.
+   * Step 3 (whitespace-insensitive text scan): reads `.text`, strips whitespace and
+   *         normalizes cross-source chars (e.g. smart quotes) from both the needle and
+   *         the haystack, locates the match, and searches the resulting slice. When the
+   *         slice is longer than Word's 256-char search limit, it is truncated to the
+   *         first 256 characters so the `search()` call can succeed.
+   *
+   * If any `container.search()` call throws `SearchStringInvalidOrTooLong` (Word
+   * rejects strings with certain accented or special characters in some search modes),
+   * the method skips directly to step 3 so the suggestion is still applied.
    */
   private async searchWithFallback(
     context: Word.RequestContext,
@@ -190,46 +250,69 @@ export class ApplySuggestionCommand {
     searchText: string,
   ): Promise<Word.Range | null> {
     const searchOptions = { matchCase: true, matchWholeWord: false };
+    const relaxedOptions = {
+      matchCase: true,
+      matchWholeWord: false,
+      ignorePunct: true,
+      ignoreSpace: true,
+    };
 
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    let results!: Word.RangeCollection;
-    if (searchText.length <= 256) {
-      results = container.search(searchText, searchOptions);
-      results.load("items");
-      await context.sync();
+    const exactMatchAllowed = searchText.length <= 256;
+    let exactResults: Word.RangeCollection | undefined;
+
+    if (exactMatchAllowed) {
+      const exactAttempt = await this.runSearchAttempt(
+        context,
+        container,
+        searchText,
+        searchOptions,
+      );
+      if (exactAttempt.invalid) {
+        return this.resolveByWhitespaceScan(
+          context,
+          container,
+          searchText,
+          searchOptions,
+        );
+      }
+
+      exactResults = exactAttempt.results;
+      if ((exactResults?.items.length ?? 0) > 0) {
+        return exactResults?.items[0] ?? null;
+      }
     }
 
-    if (searchText.length > 256 || results.items.length === 0) {
-      results = container.search(searchText, {
-        matchCase: true,
-        matchWholeWord: false,
-        ignorePunct: true,
-        ignoreSpace: true,
-      });
-      results.load("items");
-      await context.sync();
+    const shouldRunRelaxedSearch =
+      !exactMatchAllowed || (exactResults?.items.length ?? 0) === 0;
+    if (shouldRunRelaxedSearch) {
+      const relaxedAttempt = await this.runSearchAttempt(
+        context,
+        container,
+        searchText,
+        relaxedOptions,
+      );
+      if (relaxedAttempt.invalid) {
+        return this.resolveByWhitespaceScan(
+          context,
+          container,
+          searchText,
+          searchOptions,
+        );
+      }
+
+      if ((relaxedAttempt.results?.items.length ?? 0) > 0) {
+        return relaxedAttempt.results?.items[0] ?? null;
+      }
     }
 
-    if (results.items.length > 0) {
-      return results.items[0];
-    }
-
-    container.load("text");
-    await context.sync();
-
-    const fallbackSearchText = findWhitespaceInsensitiveSlice(
+    // Step 3: whitespace-insensitive text scan — activates when all search()
+    // attempts complete with zero results.
+    return this.resolveByWhitespaceScan(
+      context,
+      container,
       searchText,
-      container.text,
+      searchOptions,
     );
-    if (!fallbackSearchText) {
-      return null;
-    }
-
-    results = container.search(fallbackSearchText, searchOptions);
-    results.load("items");
-    await context.sync();
-
-    return results.items[0] ?? null;
   }
 
   /**
@@ -361,7 +444,7 @@ export class ApplySuggestionCommand {
         return { success: true, commandId: this.id };
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = stringifyUnknownError(error);
       console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": ${message}`);
       return { success: false, commandId: this.id, error: message };
     }
@@ -446,7 +529,7 @@ export class ApplySuggestionCommand {
         return { success: true, commandId: this.id };
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = stringifyUnknownError(error);
       console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": ${message}`);
       return { success: false, commandId: this.id, error: message };
     }
