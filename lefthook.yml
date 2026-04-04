@@ -5,5 +5,7 @@ pre-commit:
       stage_fixed: true
     filenames:
       run: npm run check:filenames
+    complexity:
+      run: npm run check:complexity
     typecheck:
       run: npm run typecheck

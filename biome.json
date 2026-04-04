@@ -43,5 +43,15 @@
         }
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/domain/**", "src/infrastructure/**", "src/taskpane/**"],
+      "plugins": ["./lints/no-word-global.grit"]
+    },
+    {
+      "includes": ["src/domain/**"],
+      "plugins": ["./lints/no-adapter-import-in-domain.grit"]
+    }
+  ]
 }
