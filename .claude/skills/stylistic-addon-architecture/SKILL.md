@@ -390,6 +390,9 @@ interface WorkflowInput {
 | **NEVER** hardcode URLs, IDs, or limits outside `config.ts` | Single source of truth for all constants |
 | **NEVER** await `feedbackPort.sendFeedback()` in the UI | Fire-and-forget by design |
 | **NEVER** let feedback errors surface to the user | Adapters must swallow all errors silently |
+| **NEVER** use `Word` global outside `src/adapters/word/` | GritQL plugin enforces this — use `IDocumentPort` |
+| **NEVER** import from `adapters/` inside `src/domain/` | GritQL plugin enforces this — depend on ports |
+| **NEVER** create a file > 800 lines without an entry in `KNOWN_EXCEPTIONS` | Complexity guard blocks the commit |
 
 ---
 
@@ -423,11 +426,34 @@ The current code may not fully implement these rules yet. Treat this skill as th
 
 ---
 
-## 16. Linting and Naming Enforcement
+## 16. Linting, Naming, and Architectural Guards
 
 - Use **Biome** as the single formatter and linter for this add-in. It replaces `office-addin-lint`, `eslint-plugin-office-addins`, and Prettier in one tool.
 - Enable Biome filename enforcement via `useFilenamingConvention`. Allowed cases: `PascalCase` (class files) and `camelCase` (module/utility files).
-- Biome handles general filename case, but the project architecture enforces additional structural rules via `scripts/check-file-naming.mjs`:
+- Biome handles general filename case, but the project architecture enforces additional structural rules via `scripts/checkFileNaming.mjs`.
+
+### GritQL Boundary Plugins (`lints/`)
+
+Two Biome GritQL plugins enforce architectural boundary violations in the IDE in real time and in pre-commit. Scoped via `biome.json` overrides.
+
+| Plugin | Scope | What it blocks |
+|--------|-------|---------------|
+| `lints/no-word-global.grit` | `src/domain/`, `src/infrastructure/`, `src/taskpane/` | Direct `Word.*` global usage — must go through `IDocumentPort` |
+| `lints/no-adapter-import-in-domain.grit` | `src/domain/` | Imports from `../adapters/` — domain must depend only on ports |
+
+To modify scope: edit `biome.json` → `overrides[].includes`. To add a plugin: create a `.grit` file in `lints/` and reference it in a new override.
+
+### Complexity Guard (`scripts/checkComplexity.mjs`)
+
+Enforces file size across `src/domain/`, `src/adapters/`, `src/infrastructure/`, `src/taskpane/`.
+
+- **Warning** > 500 lines, **Error** > 800 lines
+- Files with justified exceptions are listed in `KNOWN_EXCEPTIONS` inside the script with a `maxLines` cap and a reason. Caps only go DOWN over time.
+- Exempt: `types.ts`, `*.d.ts`
+
+Run: `npm run check:complexity`
+
+If you are about to create a file that will exceed 500 lines, stop and extract responsibilities first.
 
 ### Structural naming rules (enforced in `src/domain/`, `src/adapters/`, `src/infrastructure/`)
 
@@ -464,22 +490,23 @@ A `Mock` prefix is allowed in front of any suffix (e.g. `MockFeedbackAdapter.ts`
 
 - Use **Lefthook** for repository hooks; wiring is in `lefthook.yml`.
 - Hooks are installed automatically on `npm install` via the `prepare` lifecycle script.
-- `pre-commit` runs two fast checks only:
-  1. **`lint:staged`** — Biome checks and auto-fixes staged TypeScript/JavaScript files.
+- `pre-commit` runs four checks in parallel:
+  1. **`lint:staged`** — Biome checks (including GritQL plugins) and auto-fixes staged files.
   2. **`check:filenames`** — validates structural naming conventions across managed folders.
-- `pre-push` runs one slow check:
-  1. **`typecheck`** — full `tsc --noEmit` across the project. Catches type errors before they reach CI.
-- Do NOT add builds or tests to `pre-commit`; slow checks belong in `pre-push`.
+  3. **`check:complexity`** — file size guard (warn >500, error >800 lines).
+  4. **`typecheck`** — full `tsc --noEmit` across the project.
+- Do NOT add builds to pre-commit.
 - If Biome auto-fixes a staged file (`stage_fixed: true`), Lefthook re-stages the fix automatically.
 
 ### Available scripts
 
 ```bash
-npm run lint              # biome check . (full project)
+npm run lint              # biome check . (full project, includes GritQL plugins)
 npm run lint:write        # biome check --write . (full project, auto-fix)
 npm run lint:staged       # biome check --staged --write (pre-commit safe)
 npm run check:filenames   # structural naming validation only
-npm run validate          # lint + check:filenames (full pre-push gate)
+npm run check:complexity  # file size guard only
+npm run validate          # lint + check:filenames + check:complexity
 npm run hooks:install     # re-install lefthook hooks manually
 npm run hooks:pre-commit  # run pre-commit hook locally without committing
 ```

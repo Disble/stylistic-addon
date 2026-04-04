@@ -442,3 +442,92 @@ The system is designed for partial success:
 - If 3/5 chunks succeed → suggestions from those 3 are applied
 - If 25/30 suggestions are found → 25 are applied, 5 reported as "not found"
 - Results panel always shows the complete picture: applied count, failed count, chunk errors
+
+---
+
+## Architectural Guards
+
+Three automated guards prevent god object accumulation and architectural boundary violations. They run on every pre-commit and in the IDE in real time.
+
+### 1. File Complexity Guard (`scripts/checkComplexity.mjs`)
+
+Enforces file size thresholds across all managed source files (`src/domain/`, `src/adapters/`, `src/infrastructure/`, `src/taskpane/`).
+
+| Metric | Threshold | Action |
+|--------|-----------|--------|
+| Lines per file | > 500 | Warning (non-blocking) |
+| Lines per file | > 800 | Error — blocks commit |
+
+**Exempt patterns:** `types.ts`, `*.d.ts` (structurally large by nature)
+
+**Ratcheted exceptions** — files that exceed the threshold for justified reasons. Each exception includes a `maxLines` cap and a `reason`. The cap must DECREASE over time as refactors happen; raising it requires an explicit justification in the source:
+
+```js
+// scripts/checkComplexity.mjs — KNOWN_EXCEPTIONS Map
+[
+  "src/adapters/word/ResolveSuggestionCommand.ts",
+  { maxLines: 1100, reason: "Inherent Word tracked-change resolution complexity" },
+],
+[
+  "src/taskpane/taskpane.ts",
+  { maxLines: 1000, reason: "Phase 3 refactor pending" },
+],
+```
+
+To add a new exception or raise a cap, update the `KNOWN_EXCEPTIONS` Map in `scripts/checkComplexity.mjs` with the reason inline.
+
+Run manually: `npm run check:complexity`
+
+---
+
+### 2. GritQL Boundary Plugins (`lints/`)
+
+Biome 2.x GritQL plugins enforce architectural dependency direction in real time (IDE + pre-commit). They are scoped via `biome.json` overrides — they only apply to the paths where the violation would be architectural.
+
+#### `lints/no-word-global.grit`
+
+**Scope:** `src/domain/**`, `src/infrastructure/**`, `src/taskpane/**`
+
+Blocks any direct use of the `Word` global (e.g., `Word.run()`, `Word.ChangeTrackingMode`) outside `src/adapters/word/`. All document operations must go through `IDocumentPort`.
+
+```gritql
+`Word.$method($args)` where {
+  register_diagnostic(span = $method,
+    message = "Word global must only be used inside src/adapters/word/. Use IDocumentPort instead.",
+    severity = "error")
+}
+```
+
+#### `lints/no-adapter-import-in-domain.grit`
+
+**Scope:** `src/domain/**`
+
+Blocks imports from `src/adapters/` inside the domain layer. The domain must depend only on ports (interfaces), never on concrete adapters (Dependency Inversion Principle).
+
+```gritql
+`import $binding from $path` where {
+  or {
+    $path <: `"../adapters/$_"`,
+    $path <: `"../../adapters/$_"`,
+    $path <: `"../../../adapters/$_"`
+  },
+  register_diagnostic(span = $path,
+    message = "Domain layer must not import from adapters. Depend on ports instead.",
+    severity = "error")
+}
+```
+
+**How to modify scope:** Edit the `overrides[].includes` arrays in `biome.json`.
+
+**How to add a new boundary plugin:** Create a `.grit` file in `lints/` and add it to the appropriate `overrides` entry in `biome.json`.
+
+---
+
+### 3. When to update the guards
+
+| Situation | What to change |
+|-----------|----------------|
+| New file consistently exceeds 500 lines for good reason | Add to `KNOWN_EXCEPTIONS` in `checkComplexity.mjs` with a reason |
+| A ratcheted file shrinks after refactor | Lower its `maxLines` cap |
+| New architectural layer added | Add a new GritQL plugin and a new `overrides` entry |
+| Existing plugin too noisy (false positives) | Narrow the `includes` in `biome.json` or refine the GritQL pattern |
