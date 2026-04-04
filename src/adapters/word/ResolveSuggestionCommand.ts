@@ -337,10 +337,11 @@ export class ResolveSuggestionCommand {
 
         this.applyTrackedChangeResolution(observation.trackedChanges);
 
-        const commentDeleted = await this.deleteLocatedStylisticComment(
-          context,
-          observation.selectedComment,
-        );
+        const commentDeleted =
+          await this.deleteLocatedStylisticCommentAfterResolution(
+            context,
+            observation.selectedComment,
+          );
 
         await this.cleanupResolvedSuggestionAnchor(
           context,
@@ -846,6 +847,36 @@ export class ResolveSuggestionCommand {
       "🔎 [ResolveSuggestionCommand] deleted colocated comment after confirmed resolution",
     );
     return true;
+  }
+
+  /**
+   * Deletes a colocated Stylistic comment after tracked changes have been resolved.
+   *
+   * Reject can legitimately invalidate the Word context (proxies, comment ranges)
+   * as a side effect of rejecting tracked changes. In that case the `context.sync()`
+   * inside the delete throws `GeneralException`. This method tolerates that failure
+   * for reject, because the tracked changes were already successfully resolved in Word
+   * and the comment will be cleaned up by the next CommentCleanup cycle.
+   */
+  private async deleteLocatedStylisticCommentAfterResolution(
+    context: Word.RequestContext,
+    colocatedComment: ColocatedCommentContext | null,
+  ): Promise<boolean> {
+    try {
+      return await this.deleteLocatedStylisticComment(
+        context,
+        colocatedComment,
+      );
+    } catch (deleteError) {
+      if (this.action === "accept") {
+        throw deleteError;
+      }
+
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] "${this.suggestion.id}": reject comment cleanup failed after successful resolution (will be cleaned up by CommentCleanup): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+      );
+      return false;
+    }
   }
 
   // -------------------------------------------------------------------------
