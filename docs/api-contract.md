@@ -13,13 +13,13 @@ This document specifies what the Stylistic frontend (Word add-in) expects from t
 ### Workflow ID
 
 ```
-editorial-workflow
+stylistic-workflow
 ```
 
 The frontend calls this workflow via:
 
 ```typescript
-const workflow = client.getWorkflow("editorial-workflow");
+const workflow = client.getWorkflow("stylistic-workflow");
 const run = await workflow.createRun();
 await run.start({ inputData: { ... } });
 const { runId } = run;
@@ -47,11 +47,11 @@ interface WorkflowInput {
   /** Text to analyze (up to ~100K characters). */
   text: string;
 
-  /** Analysis profile: "general", "formal", or "academic". */
-  profile: string;
+  /** Editorial genre for analysis style. */
+  genero: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
 
-  /** ISO 639-1 language code of the text (e.g., "es", "en"). */
-  language: string;
+  /** Author slug for personalization and author tracking. */
+  autorSlug: string;
 }
 ```
 
@@ -60,16 +60,16 @@ interface WorkflowInput {
 ```json
 {
   "text": "Básicamente, es completamente necesario utilizar este periodo de tiempo con el objetivo de realizar la tarea.",
-  "profile": "formal",
-  "language": "es"
+  "genero": "general",
+  "autorSlug": "Disble"
 }
 ```
 
 ### Notes on Input Fields
 
 - **`text`** — The frontend chunks large documents at paragraph boundaries and sends each chunk as a separate workflow execution. The backend receives plain text and should not assume anything about document structure.
-- **`profile`** — Determines the editorial analysis style. If the backend doesn't differentiate between profiles, it can ignore the field — the frontend handles this gracefully.
-- **`language`** — The text's language. Currently the frontend always sends `"es"` (Spanish). The backend should use this to select the appropriate editorial rules and justification language.
+- **`genero`** — Determines the editorial analysis style. Supported values: `narrativa-literaria`, `ensayo-academico`, `periodismo-cultural`, `general`.
+- **`autorSlug`** — Author identifier for personalization and author tracking. Currently defaults to `"Disble"`. Backend can use this to maintain author-specific writing profiles.
 
 ## Output Format
 
@@ -79,11 +79,14 @@ When polling returns `status: "success"`, `result.result` must conform to:
 interface WorkflowOutput {
   /** Array of editorial suggestions for the analyzed text. */
   suggestions: Array<{
-    /** EXACT substring from the input text (case-sensitive). */
-    originalText: string;
+    /** Paragraph-level context used to locate the suggestion in the document. */
+    context: string;
 
-    /** Replacement text. */
-    suggestedText: string;
+    /** Exact substring within `context` targeted by the suggestion. */
+    anchor: string;
+
+    /** Replacement text. Required for "track-change", optional for "comment-only". */
+    suggestedText?: string;
 
     /** Human-readable justification shown to the user. */
     justification: string;
@@ -93,6 +96,9 @@ interface WorkflowOutput {
 
     /** How critical the suggestion is. */
     severity: "high" | "medium" | "low";
+
+    /** Suggestion type. Defaults to "track-change" if not specified. */
+    type?: "track-change" | "comment-only";
   }>;
 
   /** Optional warnings from the backend (e.g., "text too short for meaningful analysis"). */
@@ -106,39 +112,40 @@ interface WorkflowOutput {
 {
   "suggestions": [
     {
-      "originalText": "Básicamente, ",
+      "context": "Básicamente, es completamente necesario utilizar este periodo de tiempo.",
+      "anchor": "Básicamente, ",
       "suggestedText": "",
       "justification": "Muletilla que debilita la afirmación.",
       "category": "Muletilla",
-      "severity": "medium"
+      "severity": "medium",
+      "type": "track-change"
     },
     {
-      "originalText": "completamente necesario",
+      "context": "Era completamente necesario terminarlo hoy.",
+      "anchor": "completamente necesario",
       "suggestedText": "necesario",
       "justification": "\"Necesario\" ya implica completitud.",
       "category": "Redundancia",
-      "severity": "high"
+      "severity": "high",
+      "type": "track-change"
     },
     {
-      "originalText": "utilizar",
-      "suggestedText": "usar",
-      "justification": "\"Usar\" es más simple y directo.",
-      "category": "Elección de palabra",
-      "severity": "low"
-    },
-    {
-      "originalText": "periodo de tiempo",
+      "context": "El periodo de tiempo era necesario.",
+      "anchor": "periodo de tiempo",
       "suggestedText": "periodo",
       "justification": "\"Periodo\" ya denota tiempo.",
       "category": "Redundancia",
-      "severity": "high"
+      "severity": "high",
+      "type": "track-change"
     },
     {
-      "originalText": "con el objetivo de",
+      "context": "Utilizar este periodo de tiempo con el objetivo de realizar la tarea.",
+      "anchor": "con el objetivo de",
       "suggestedText": "para",
       "justification": "\"Para\" es más directo.",
       "category": "Elección de palabra",
-      "severity": "medium"
+      "severity": "medium",
+      "type": "track-change"
     }
   ]
 }
@@ -152,31 +159,33 @@ interface WorkflowOutput {
 | `medium` | Stylistic improvements, filler words | "Básicamente, " → "" |
 | `low` | Minor preferences, optional simplifications | "utilizar" → "usar" |
 
-## Critical Constraint: Exact Substring Matching
+## Critical Constraint: context.includes(anchor)
 
-The `originalText` in every suggestion **must** be an exact, character-for-character substring of the input `text`. The frontend uses Word's `body.search()` API with `matchCase: true` to locate the text. If the substring doesn't match exactly:
+The `anchor` in every suggestion **must** be an exact, character-for-character substring of the `context`. The frontend uses Word's `body.search()` API with `matchCase: true` to locate the context, then searches for the anchor within that context. If the anchor doesn't match exactly:
 
 - The suggestion will silently fail (reported as "not found")
 - No tracked change will be inserted for that suggestion
 
 **Do:**
 - Return `"completamente necesario"` (exact match from input)
+- Ensure `context.includes(anchor)` is true
 - Include trailing punctuation/spaces if they're part of the replacement (e.g., `"Básicamente, "` to remove the comma and space)
 
 **Don't:**
 - Return `"Completamente necesario"` (wrong capitalization)
 - Return `"completamente  necesario"` (extra space)
-- Return approximate or paraphrased text
+- Return an anchor that is not contained in context
 
-## Profile Behavior
+## Genre (genero) Behavior
 
-The `profile` field tells the workflow what analysis style to apply:
+The `genero` field tells the workflow what analysis style to apply:
 
-| Profile | Description | Aggressiveness |
-|---|---|---|
-| `general` | Everyday writing improvements | Moderate |
-| `formal` | Business and professional tone | Conservative |
-| `academic` | Academic and technical writing | Conservative, respects domain terms |
+| Genre | Description |
+|---|---|
+| `general` | Everyday writing improvements |
+| `narrativa-literaria` | Literary narrative style |
+| `ensayo-academico` | Academic essay style |
+| `periodismo-cultural` | Cultural journalism style |
 
 ## Error Handling
 
@@ -204,7 +213,3 @@ The frontend splits documents into chunks of up to 100,000 characters. The backe
 | 30K–100K chars | 5K–16K words | 30–120s |
 
 The backend should be able to handle 100K characters in a single workflow execution without timing out. If the backend's AI model has a smaller context window, the workflow should handle internal sub-chunking transparently.
-
-## Language
-
-The `language` field indicates the text's language as an ISO 639-1 code. Currently the frontend sends `"es"` (Spanish). Justification messages should match the text language (Spanish justifications for Spanish text).

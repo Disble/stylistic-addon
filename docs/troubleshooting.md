@@ -58,6 +58,8 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 - **URL mismatch:** In production builds, update the `urlProd` variable in `webpack.config.js` from `https://www.contoso.com/` to your actual deployment URL.
 - **Requirement set version:** The manifest requires WordApi 1.6. If testing on an older version of Word, this will fail at load time (not validation time).
 
+**Note:** For manifest-specific validation, run `npm run manifest:validate`. The `npm run validate` command runs lint + filename checks + complexity checks.
+
 ---
 
 ### Build fails with TypeScript errors after adding new files
@@ -80,12 +82,12 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Symptom:** Clicking "Analizar y sugerir" shows this error immediately.
 
-**Cause:** The Mastra server is not running or the `editorial-workflow` is not registered.
+**Cause:** The Mastra server is not running or the `stylistic-workflow` is not registered.
 
 **Fix:**
 
-1. Verify the Mastra server is running at the URL configured in `src/lib/config.ts` (default: `http://localhost:4111`).
-2. Check that the `editorial-workflow` is registered in the Mastra configuration.
+1. Verify the Mastra server is running at the URL configured in `src/infrastructure/config.ts` (default: `http://localhost:4111`).
+2. Check that the `stylistic-workflow` is registered in the Mastra configuration.
 3. Verify CORS is enabled for `https://localhost:3000` on the Mastra server.
 4. Check the browser console (F12) for CORS or network errors.
 
@@ -100,7 +102,7 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 **Fix:**
 
 1. Check the Mastra server logs for errors or slow responses.
-2. Reduce `DEFAULT_MAX_CHUNK_SIZE` in `src/lib/config.ts` to send smaller chunks.
+2. Reduce `DEFAULT_MAX_CHUNK_SIZE` in `src/infrastructure/config.ts` to send smaller chunks.
 3. Ensure the backend model has sufficient resources for processing.
 
 ---
@@ -134,7 +136,7 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 **Possible causes:**
 
 1. **Track Changes display is off.** Go to **Review** > **All Markup** (ensure it's not set to "No Markup" or "Original").
-2. **The suggestion matched and replaced identical text.** If `originalText` and `suggestedText` are the same after casing, Word won't show a change.
+2. **The suggestion matched and replaced identical text.** If `anchor` and `suggestedText` are the same after casing, Word won't show a change.
 3. **The tracking mode was already `TrackAll`.** The changes were made and are there — check the Review pane (**Review** > **Reviewing Pane**).
 
 ---
@@ -145,7 +147,7 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Cause:** The backend workflow didn't find any editorial issues in the text.
 
-**Expected behavior.** This is a valid result — the text may already be well-written for the selected profile.
+**Expected behavior.** This is a valid result — the text may already be well-written for the selected genre.
 
 ---
 
@@ -156,7 +158,7 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 **Possible causes:**
 
 1. **The text was already replaced** by a previous suggestion. Since each suggestion is applied in its own `Word.run`, earlier replacements may remove text that later suggestions target.
-2. **Backend returned non-exact matches.** The `originalText` from the workflow must be an exact, case-sensitive substring of the document text. See [api-contract.md](api-contract.md) for details.
+2. **Backend returned non-exact matches.** The `anchor` from the workflow must be an exact, case-sensitive substring of the document text. See [api-contract.md](api-contract.md) for details.
 3. **Hidden characters.** The document may contain non-breaking spaces, soft hyphens, or other invisible characters that break the match.
 
 ---
@@ -212,7 +214,8 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 If your issue isn't listed here:
 
 1. Check the browser console (F12) for JavaScript errors.
-2. Run `npm run validate` to check the manifest.
+2. Run `npm run manifest:validate` to check the manifest.
+3. Run `npm run validate` to run lint + filename checks + complexity checks.
 3. Try `npm stop && npm start` for a clean restart.
 4. Verify the Mastra server is running and responsive.
 5. Open an issue in the repository with:

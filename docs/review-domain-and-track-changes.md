@@ -12,9 +12,9 @@ We started from a concrete bug-shaped product problem:
 
 - the add-in receives style suggestions from the backend,
 - the frontend applies them as native Word tracked changes,
-- the current implementation toggles `changeTrackingMode` per suggestion,
+- the **historical** implementation toggled `changeTrackingMode` per suggestion,
 - Track Changes are global at the document level,
-- Word UI flickers across instances because the mode is turned on/off repeatedly.
+- Word UI flickered across instances because the mode was turned on/off repeatedly.
 
 That problem exposed a deeper issue: the project had patterns, adapters, state machines, and ports, but it **did not yet have an explicit, shared domain definition for the frontend add-in itself**.
 
@@ -272,19 +272,19 @@ The frontend should be understood as:
 
 ## 8. Requirement change: Track Changes lifecycle
 
-### 8.1 The problem
+### 8.1 The problem (historical)
 
-Current behavior (at the time of this document):
+Previously (before implementation of this requirement), each suggestion application:
 
-- each suggestion application loads the document’s current `changeTrackingMode`,
-- sets it to `trackAll`,
-- applies one suggestion,
-- restores the previous mode in a `finally` block,
-- repeats this per suggestion.
+- loaded the document's current `changeTrackingMode`,
+- set it to `trackAll`,
+- applied one suggestion,
+- restored the previous mode in a `finally` block,
+- repeated this per suggestion.
 
-This happens inside `ApplySuggestionCommand.ts`.
+This happened inside `ApplySuggestionCommand.ts`.
 
-### Why this is a problem
+### Why this was a problem
 
 Because `changeTrackingMode` is global at the document level.
 

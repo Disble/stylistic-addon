@@ -5,7 +5,7 @@ Editorial rules are defined **server-side** in the Mastra workflow, not in the f
 ## How It Works
 
 1. The Word add-in reads the document text.
-2. The text is chunked and sent to the Mastra `editorial-workflow`.
+2. The text is chunked and sent to the Mastra `stylistic-workflow`.
 3. The workflow (AI-powered) analyzes the text and returns suggestions with severity levels.
 4. The add-in applies suggestions as Track Changes with justification comments.
 

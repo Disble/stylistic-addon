@@ -43,12 +43,9 @@ Stylistic follows a **Hexagonal Architecture** (also known as Ports & Adapters),
 ├────────────────────────┬────────────────────────────────────────┤
 │  ADAPTER: Word         │  ADAPTER: Mastra                       │
 │  adapters/word/        │  adapters/mastra/ + RetryDecorator     │
-│  (implements           │  (implements                           │
-│   IDocumentPort)       │   IAnalysisPort)                       │
+│  (implements          │  (implements                           │
+│   IDocumentPort)      │   IAnalysisPort)                       │
 ├────────────────────────┴────────────────────────────────────────┤
-│  INFRASTRUCTURE (infrastructure/)                               │
-│  config.ts — constants         chunker.ts — pure text splitting │
-└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Why Hexagonal?
@@ -57,7 +54,7 @@ Stylistic follows a **Hexagonal Architecture** (also known as Ports & Adapters),
 |------|----------------------------------|
 | **Testability** | The pipeline depends only on `IDocumentPort` and `IAnalysisPort`. Mock implementations can replace `WordAdapter` and `MastraAdapter` without Office.js or a real backend. |
 | **Extensibility** | Swapping the backend (e.g., from Mastra to a direct LLM API) requires only a new `IAnalysisPort` adapter. Swapping the document host (e.g., Google Docs) requires only a new `IDocumentPort` adapter. |
-| **Maintainability** | `wordApi.ts` (579 lines, 4 responsibilities) is replaced by three focused files: `WordAdapter.ts`, `OoxmlPackageBuilder.ts`, `CommentCleanup.ts`. |
+| **Maintainability** | `wordApi.ts` (579 lines, 4 responsibilities) is replaced by focused files: `WordAdapter.ts`, `ApplySuggestionCommand.ts`, `CommentCleanup.ts`. |
 | **Scalability** | New analysis phases are added as a new `PipelineHandler` in the chain. No modifications to existing handlers or the orchestrator. |
 
 ---
@@ -89,9 +86,7 @@ src/
 ├── adapters/
 │   ├── word/
 │   │   ├── WordAdapter.ts          ← implements IDocumentPort
-│   │   ├── ApplySuggestionCommand.ts ← Command pattern
-│   │   ├── ooxml/
-│   │   │   └── OoxmlPackageBuilder.ts ← Builder pattern
+│   │   ├── ApplySuggestionCommand.ts ← Command pattern for suggestion application
 │   │   └── cleanup/
 │   │       └── CommentCleanup.ts   ← Range Colocation pattern
 │   ├── mastra/
@@ -120,15 +115,15 @@ src/
 | **Command** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | Each suggestion is encapsulated as a `DocumentCommand` with an `execute()` method. Enables future `undo()` support without restructuring. |
 | **Observer** | Behavioral | `domain/pipeline/PipelineEvents.ts` | `PipelineEventEmitter` notifies registered `PipelineObserver` instances of phase starts, progress, completion, and aborts. The UI registers one observer; future analytics can register another without touching the pipeline. |
 | **Mediator** | Behavioral | `domain/review/ReviewSessionMediator.ts` | Centralizes coordination between resolution workflow, document review state machine, cleanup visibility, and taskpane-facing review semantics. Prevents `taskpane.ts` from orchestrating cross-layer policy manually. |
-| **State** | Behavioral | `domain/pipeline/PipelineStateMachine.ts` | Explicit state transitions (`idle → reading → connecting → chunking → analyzing → applying → done/error`) prevent concurrent runs and make lifecycle visible in code. |
+| **State** | Behavioral | `domain/pipeline/PipelineStateMachine.ts` | Initial state transition (`idle → reading`) prevents concurrent runs and makes lifecycle visible in code. |
 | **State** | Behavioral | `domain/review/DocumentReviewStateMachine.ts` | Translates the authoritative `DocumentReviewState` snapshot into explicit document-review UI states (`idle`, `pending-review`, `ready-to-disable-track-changes`) so Track Changes CTA rules stop living in scattered booleans. |
 | **Strategy** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` selects `insert`, `delete`, or `replace` tracked-change type based on suggestion content. |
-| **Template Method** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `execute()` has a fixed algorithm skeleton: search → extract format → disable tracking → build OOXML → insert → restore tracking. |
+| **Template Method** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `execute()` has a fixed algorithm skeleton: search → insert text/comment/content control. Track Changes lifecycle is handled by the orchestrator layer, not per suggestion. |
 | **Iterator** | Behavioral | `handlers/AnalyzeChunksHandler.ts`, `adapters/word/WordAdapter.ts` | Sequential iteration over chunks and suggestions via `for...of`. |
 | **Singleton** | Creational | `adapters/mastra/MastraAdapter.ts` | Single `MastraClient` instance reused across all workflow calls. |
-| **Builder** | Creational | `adapters/word/ooxml/OoxmlPackageBuilder.ts` | Fluent API for constructing flat OPC OOXML packages: `.withDeletion().withInsertion().withComment().build()`. Replaces 120-line string concatenation. |
-| **Factory Method** | Creational | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` acts as a factory for `ChangeType` values used in OOXML construction. |
-| **Facade** | Structural | `adapters/word/WordAdapter.ts` | Exposes a clean `IDocumentPort` interface hiding the complexity of `Word.run`, `context.sync`, and OOXML package structure. |
+| **Builder** | Creational | `adapters/word/ApplySuggestionCommand.ts` | Suggestion application logic is embedded in the command execution flow. Replaces 120-line string concatenation. |
+| **Factory Method** | Creational | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` acts as a factory for `ChangeType` values used in suggestion application. |
+| **Facade** | Structural | `adapters/word/WordAdapter.ts` | Exposes a clean `IDocumentPort` interface hiding the complexity of `Word.run`, `context.sync`, and document mutation operations. |
 | **Decorator** | Structural | `adapters/RetryAnalysisDecorator.ts` | Wraps `IAnalysisPort` transparently to add retry-with-exponential-backoff without modifying `MastraAdapter`. |
 
 ### Ports & Adapters (Hexagonal Architecture)
@@ -140,18 +135,14 @@ src/
 
 ### Important ownership note: Track Changes lifecycle
 
-The historical implementation uses a preserve-and-restore pattern inside `ApplySuggestionCommand.ts` to toggle `changeTrackingMode` per suggestion. That explains the current behavior, but it should **not** be treated as the desired long-term architectural ownership model.
+The **current** implementation delegates Track Changes lifecycle to `BatchApplyOrchestrator`:
 
-The corrected target direction is:
+- Track Changes is enabled **lazily** — once, when the first `track-change` suggestion is applied
+- `ApplySuggestionCommand` does NOT toggle `changeTrackingMode` per suggestion
+- `ReviewSessionMediator` coordinates review UI state
+- `DocumentReviewStateMachine` derives UI state from document
 
-- per-suggestion commands mutate one suggestion,
-- workflow/application layers own Track Changes lifecycle policy,
-- `ReviewSessionMediator` is the explicit coordinator for taskpane-facing review policy,
-- document-derived pending review state determines whether Track Changes should remain enabled,
-- `DocumentReviewStateMachine` is the explicit application model that converts that document snapshot into taskpane-visible review states,
-- the UI offers a final CTA when zero pending Stylistic artifacts remain.
-
-See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md) for the full requirement decisions and future-aligned architecture.
+See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md) for the full requirement decisions and architecture.
 
 ### Important ownership note: replace suggestion identity
 
@@ -195,7 +186,6 @@ for the detailed proposal.
 
 | Pattern | Location | Description |
 |---------|----------|-------------|
-| **Preserve-and-Restore** | `ApplySuggestionCommand.ts` | `changeTrackingMode` saved before modification, restored in `finally` even on error. |
 | **Guard Clause** | `GuardAppliedHandler.ts` | Filters suggestions already applied as tracked changes. Prevents duplicates when user re-runs analysis. |
 | **Partial Success** | `AnalyzeChunksHandler.ts`, `WordAdapter.ts` | Chunk failures and suggestion failures are collected, not fatal. User gets maximum possible value. |
 | **Fail-Fast Gate** | `CheckConnectionHandler.ts` | Verifies backend connectivity before starting analysis. Aborts immediately if unavailable. |
@@ -203,12 +193,12 @@ for the detailed proposal.
 | **Transparent Fallback** | `WordAdapter.getTextToAnalyze()` | Returns selection if active, full document otherwise. Caller receives `{ text, isSelection }` without knowing how it was resolved. |
 | **Null Return on Error** | `MastraAdapter.analyzeChunk()` | Never throws; always returns `ChunkResult` (with empty suggestions on failure). Enables partial success. |
 | **Retry + Exponential Backoff** | `RetryAnalysisDecorator.ts` | `delay = baseMs * 2^attempt` between retries. 3 max attempts. Separated from `MastraAdapter` via Decorator. |
-| **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after OOXML insertions shift document positions. |
+| **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after text insertions shift document positions. |
 | **Composition Root** | `taskpane/taskpane.ts` | Single wiring point: instantiates adapters, decorators, orchestrator, and state machine. No other module knows the full dependency graph. |
 | **Derived Snapshot + Explicit UI State** | `WordAdapter.ts`, `domain/review/DocumentReviewStateMachine.ts`, `domain/review/ReviewSessionMediator.ts`, `taskpane.ts` | Word remains the source of truth through `DocumentReviewState`, the state machine centralizes review UI semantics, and the mediator coordinates cleanup/CTA/taskpane consequences as one policy surface. |
 | **Compound Identity** | `ApplySuggestionCommand.ts`, `WordAdapter.ts`, `docs/replace-suggestion-identity-proposal.md` | Replace suggestions now persist `compound-v2` metadata so one domain identity can be observed through multiple Word artifact references instead of treating one inserted-side `ContentControl` as the whole suggestion. |
 
-> **Documentation note:** Preserve-and-Restore accurately describes the current code path, but the Track Changes requirement change intentionally moves the desired ownership model away from per-suggestion toggling. Keep that distinction explicit when editing this section in the future.
+> **Historical note:** The Preserve-and-Restore pattern was used in earlier implementations. Current code delegates Track Changes lifecycle to `BatchApplyOrchestrator` (lazy enablement per batch).
 
 ---
 
@@ -221,7 +211,7 @@ User clicks "Analizar y sugerir"
         │
         ▼
 taskpane.ts: handleAnalyze()
-  - Creates PipelineContext { documentPort, analysisPort, emitter, profile }
+  - Creates PipelineContext { documentPort, analysisPort, emitter, genero, maxChunkSize }
   - Registers UI PipelineObserver on emitter
   - stateMachine.transition("reading")
         │
@@ -241,7 +231,8 @@ PipelineOrchestrator.run(ctx)
         │
         ├──► AnalyzeChunksHandler
         │       └── For each chunk (sequential):
-        │             analysisPort.analyzeChunk(chunk, profile, "es") → suggestions
+        │             analysisPort.submitChunkAnalysis(chunk, genero)
+        │             analysisPort.pollChunkAnalysis(chunk.index, runId)
         │       └── Collects ctx.rawSuggestions, ctx.chunkErrors
         │       └── Abort if zero suggestions
         │
@@ -258,13 +249,13 @@ PipelineOrchestrator.run(ctx)
         └──► ApplySuggestionsHandler
                 └── documentPort.applySuggestions(pending, onProgress)
                       └── For each suggestion: new ApplySuggestionCommand(s).execute()
-                            └── Word.run: search → extract format → build OOXML → insert
+                            └── Word.run: search → insert text/comment/content control
                 └── emitter.emitComplete(suggestions, result, errors, isSelection)
                 └── Sets ctx.result
 
 taskpane.ts: PipelineObserver.onComplete()
   └── renderResults() → updates DOM
-  └── Rehydrates `DocumentReviewStateMachine` from `result.pendingAfter`
+  └── Document state is rehydrated via ReviewSessionMediator
   └── Applies cleanup/CTA visibility from explicit review state
 
 ### Document Review State Flow
@@ -346,32 +337,6 @@ taskpane.ts: handleCleanup()
 
 ---
 
-## OOXML Strategy
-
-All changes are applied via flat OPC OOXML packages built by `OoxmlPackageBuilder`. Each package contains 4 parts:
-
-1. **`/_rels/.rels`** — Package relationships (points to document.xml)
-2. **`/word/_rels/document.xml.rels`** — Document relationships (points to comments.xml)
-3. **`/word/document.xml`** — Tracked change markup (`<w:del>` + `<w:ins>`) with comment anchors
-4. **`/word/comments.xml`** — Formatted justification (bold category + justification text)
-
-Builder usage:
-```typescript
-const ooxml = new OoxmlPackageBuilder()
-  .withRunProperties(runPropsXml)          // preserve original formatting
-  .withChange(original, replacement, type, "Stylistic", isoDate)
-  .withComment(category, justification, "Stylistic", isoDate)
-  .build();
-```
-
-This approach ensures:
-- Tracked change blue card shows `w:author="Stylistic"` cleanly
-- Comment appears as a margin balloon with bold category + justification
-- Original text formatting (`<w:rPr>`) is preserved
-- No double-tracking: `changeTrackingMode` is disabled during insertion (Preserve-and-Restore)
-
----
-
 ## Four Pillars Evaluation
 
 | Pillar | Status | Evidence |
@@ -410,11 +375,11 @@ The `isRunning` boolean check (`btn.disabled`) was implicit state. `PipelineStat
 
 ### Why one Word.run per suggestion?
 
-After an OOXML insertion replaces a range, all subsequent ranges in the document may shift. A fresh `Word.run` per suggestion means each search starts from a clean document state. A failure in suggestion N doesn't affect suggestions 1..(N-1). This is the Per-Resource Isolation pattern.
+After a text insertion replaces a range, all subsequent ranges in the document may shift. A fresh `Word.run` per suggestion means each search starts from a clean document state. A failure in suggestion N doesn't affect suggestions 1..(N-1). This is the Per-Resource Isolation pattern.
 
-### Why Builder for OOXML?
+### Why native Office.js APIs in ApplySuggestionCommand?
 
-`buildTrackedChangeOoxml()` was 120 lines of string concatenation, opaque and hard to extend. `OoxmlPackageBuilder` provides a fluent API that makes intent clear and extension easy: adding a new OOXML part (e.g., footnotes, format-only changes) is additive, not invasive.
+Direct text insertion and content control wrapping replaced 120 lines of opaque string concatenation. The current approach uses native Office.js APIs (`insertText`, `insertComment`, `insertContentControl`) making intent clear and extension easy.
 
 ### Why Range Colocation for comment cleanup?
 
@@ -431,7 +396,7 @@ Errors are handled at four levels:
 
 | Level | Location | Strategy |
 |-------|----------|---------|
-| **Word API** | `ApplySuggestionCommand.ts` | `try/finally` ensures `changeTrackingMode` is always restored. Each command is independent. |
+| **Word API** | `ApplySuggestionCommand.ts` | Each command runs in its own `Word.run` context. Track Changes lifecycle is handled by `BatchApplyOrchestrator` (lazy enablement), not per-suggestion restore. |
 | **Backend** | `RetryAnalysisDecorator.ts` | Retry with exponential backoff (3 attempts). Never throws — returns empty result. |
 | **Pipeline** | `handlers/` | Handlers set `ctx.aborted = true` for graceful abort. `emitter.emitAbort(reason)` notifies observers. |
 | **UI** | `taskpane.ts` | `try/catch/finally` around `orchestrator.run()`. `setAnalyzeLoading(false)` always runs in `finally`. |
