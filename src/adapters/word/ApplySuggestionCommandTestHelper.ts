@@ -15,6 +15,9 @@ export type MockRange = {
   insertComment: ReturnType<typeof vi.fn>;
   insertContentControl: ReturnType<typeof vi.fn>;
   parentContentControlOrNullObject: ParentCC;
+  paragraphs: {
+    getFirst: ReturnType<typeof vi.fn>;
+  };
 };
 
 type RangeCollection = {
@@ -45,16 +48,10 @@ export type ApplyCommandTestContext = {
   };
 };
 
-/**
- * Builds a deterministic Office.js range collection mock.
- */
 function createRangeCollection(items: MockRange[]): RangeCollection {
   return { items, load: vi.fn() };
 }
 
-/**
- * Creates a search mock whose responses follow a fixed call sequence.
- */
 export function createSearchMock(
   sequence: MockRange[][],
 ): ReturnType<typeof vi.fn> {
@@ -62,14 +59,12 @@ export function createSearchMock(
   return vi.fn(() => createRangeCollection(sequence[index++] ?? []));
 }
 
-/**
- * Creates a reusable range fixture with configurable nested search behavior.
- */
 export function createRange(options: {
   text: string;
   searchSequence?: MockRange[][];
   insertTextImpl?: () => unknown;
   parentCC?: Partial<ParentCC>;
+  paragraphText?: string;
 }): MockRange {
   const parentCC: ParentCC = {
     tag: "",
@@ -85,6 +80,16 @@ export function createRange(options: {
     insertComment: vi.fn(),
   };
 
+  const paragraphRange = {
+    text: options.paragraphText ?? options.text,
+    load: vi.fn(),
+    search: createSearchMock(options.searchSequence ?? [[]]),
+  };
+
+  const paragraph = {
+    getRange: vi.fn(() => paragraphRange),
+  };
+
   return {
     text: options.text,
     load: vi.fn(),
@@ -93,12 +98,12 @@ export function createRange(options: {
     insertComment: vi.fn(),
     insertContentControl: vi.fn(() => defaultCC),
     parentContentControlOrNullObject: parentCC,
+    paragraphs: {
+      getFirst: vi.fn(() => paragraph),
+    },
   };
 }
 
-/**
- * Builds a canonical suggestion fixture for command tests.
- */
 export function makeSuggestion(
   overrides: Partial<Suggestion> = {},
 ): Suggestion {
@@ -116,20 +121,25 @@ export function makeSuggestion(
   };
 }
 
-/**
- * Installs a strict `Word.run` harness for `ApplySuggestionCommand` tests.
- */
 export function installWordContext(options: {
   documentText?: string;
   contextText?: string;
   anchorText?: string;
   contextSearchSequence?: MockRange[][];
   anchorSearchSequence?: MockRange[][];
+  paragraphSearchSequence?: MockRange[][];
   initialTrackingMode?: string;
   insertError?: Error;
   contextRangeParentCC?: Partial<ParentCC>;
   anchorRangeParentCC?: Partial<ParentCC>;
   onSync?: (count: number) => void | Promise<void>;
+  setupParagraphSearch?: (
+    ctx: ApplyCommandTestContext,
+    contextRange: MockRange,
+    paragraphRangeRef: { current: MockRange | null },
+    anchorRangeRef: { current: MockRange | null },
+  ) => void;
+  anchorRangeRef?: { current: MockRange | null };
 } = {}): ApplyCommandTestContext {
   const anchorText = options.anchorText ?? "texto original";
   const contextText = options.contextText ?? `Contexto con ${anchorText}.`;
@@ -152,11 +162,20 @@ export function installWordContext(options: {
     },
   });
 
+  const anchorSearchSequence = options.anchorSearchSequence ?? [[anchorRange]];
   const bodyRange = createRange({
     text: contextText,
-    searchSequence: options.anchorSearchSequence ?? [[anchorRange]],
+    searchSequence: anchorSearchSequence,
     parentCC: options.contextRangeParentCC,
   });
+
+  const paragraphSearchSeq =
+    options.paragraphSearchSequence ?? anchorSearchSequence;
+  const paragraphSearchMock = createSearchMock(paragraphSearchSeq);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (bodyRange.paragraphs as any).getFirst().getRange("Whole").search =
+    paragraphSearchMock;
 
   const body = {
     ...createRange({
@@ -197,5 +216,20 @@ export function installWordContext(options: {
   anchorRange.insertContentControl = vi.fn(() => cc);
   bodyRange.insertContentControl = vi.fn(() => cc);
 
-  return { context, bodyRange, anchorRange, insertedRange, cc };
+  const testContext: ApplyCommandTestContext = {
+    context,
+    bodyRange,
+    anchorRange,
+    insertedRange,
+    cc,
+  };
+
+  options.setupParagraphSearch?.(
+    testContext,
+    bodyRange,
+    { current: null },
+    options.anchorRangeRef ?? { current: null },
+  );
+
+  return testContext;
 }
