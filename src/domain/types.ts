@@ -507,7 +507,12 @@ export interface PipelineResult {
  * - "resolving": User clicked; async Word API call in-flight. Buttons disabled.
  * - "accepted": User accepted from the taskpane. Terminal.
  * - "rejected": User rejected from the taskpane. Terminal.
- * - "already-resolved": CC found but TCs already gone (resolved via Word Review pane). Terminal.
+ * - "already-resolved": currently used when the adapter concludes the review
+ *   artifact was already resolved in Word. Architectural warning: this status
+ *   must represent confirmed resolution, not mere failure to observe tracked
+ *   changes near one operational anchor.
+ * - "unobservable": Word did not expose enough evidence to confirm the review
+ *   state. Non-terminal — user may retry once the host state becomes visible.
  * - "error": Word API call failed. Non-terminal — user may retry.
  */
 export type SuggestionState =
@@ -516,6 +521,7 @@ export type SuggestionState =
   | "accepted"
   | "rejected"
   | "already-resolved"
+  | "unobservable"
   | "error";
 
 /**
@@ -527,6 +533,7 @@ export interface SuggestionActionResult {
     | "accepted"
     | "rejected"
     | "already-resolved"
+    | "unobservable"
     | "cc-not-found"
     | "not-found"
     | "error";

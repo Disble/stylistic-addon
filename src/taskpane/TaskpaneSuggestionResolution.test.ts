@@ -414,6 +414,39 @@ describe("taskpane suggestion resolution guardrails", () => {
     );
   });
 
+  it("re-enables buttons and does not mark terminal state on unobservable", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "unobservable",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      error:
+        "Word no expuso suficientes tracked changes para confirmar la resolución.",
+    });
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-1" });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
+
+    acceptBtn.click();
+    await flushTaskpaneWork();
+
+    expect(acceptBtn.disabled).toBe(false);
+    expect(getRequiredChild(li, '[data-action="reject"]').disabled).toBe(false);
+    expect(li.classList.contains("result-already-resolved")).toBe(false);
+    expect(doc.getElementById("status-bar")?.textContent).toBe(
+      "Word no expuso suficientes tracked changes para confirmar la resolución.",
+    );
+    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+  });
+
   it("re-enables buttons when the adapter reports not-found", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "not-found",

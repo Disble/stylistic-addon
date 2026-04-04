@@ -43,7 +43,11 @@ import { isStylisticComment } from "./StylisticCommentBuilder";
 
 const STYLISTIC_TAG_PREFIX = "stylistic:";
 
-type ResolutionStatus = "accepted" | "rejected" | "already-resolved";
+type ResolutionStatus =
+  | "accepted"
+  | "rejected"
+  | "already-resolved"
+  | "unobservable";
 
 type ParagraphSnapshot = {
   text?: string;
@@ -784,15 +788,14 @@ export class WordAdapter implements IDocumentPort {
           await this.collectTrackedChangesForContentControl(context, cc);
 
         if (trackedChanges.length === 0) {
-          cc.delete(true);
-          await context.sync();
           const pendingAfter = await this.inspectDocumentReviewState(context);
           return this.buildResolutionResult(
-            "already-resolved",
+            "unobservable",
             0,
             commentDeleted,
             pendingBefore,
             pendingAfter,
+            "Word no expuso suficientes tracked changes para confirmar la resolución.",
           );
         }
 

@@ -547,6 +547,31 @@ This document does not finalize the exact identity serialization yet, but it doe
 
 > One suggestion = one domain identity. Word artifact handles are references, not competing identities.
 
+### Important extension for replace suggestions
+
+The project now has a stronger architectural conclusion for native Word replace
+suggestions:
+
+- a replace suggestion is a **composed review unit**, not a single inserted-side
+  artifact,
+- the inserted-side `ContentControl` is an operational reference, not the full
+  identity,
+- the deleted/original side is semantically part of the same suggestion even if
+  Word exposes it asymmetrically,
+- therefore, failing to observe tracked changes around the inserted-side anchor
+  is **not enough** to conclude `already-resolved`.
+
+This matters because repeated regressions have shown that host observability may
+be incomplete even while the suggestion is still pending in Word.
+
+The stronger proposal is documented here:
+
+- [`replace-suggestion-identity-proposal.md`](./replace-suggestion-identity-proposal.md)
+
+Recorded rule:
+
+> Never upgrade observability failure into terminal resolution.
+
 ---
 
 ## 14. What must change in documentation and skills

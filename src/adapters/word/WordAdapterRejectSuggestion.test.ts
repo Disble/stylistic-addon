@@ -129,6 +129,28 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(context._cc.delete).toHaveBeenCalledWith(true);
   });
 
+  it("returns unobservable when reject cannot observe any tracked changes for the CC", async () => {
+    const suggestion = makeSuggestion({
+      anchor: "texto original",
+      context: "Contexto con texto original.",
+    });
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      spanTCItems: [],
+      bodyTCItems: [],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("unobservable");
+    expect(result.trackedChangesAffected).toBe(0);
+    expect(result.error).toContain("Word no expuso suficientes tracked changes");
+    expect(context._cc.delete).not.toHaveBeenCalled();
+  });
+
   it("rejects overlapping body tracked changes when the CC-scoped collection misses one side", async () => {
     const suggestion = makeSuggestion({
       anchor: "quién",

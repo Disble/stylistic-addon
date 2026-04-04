@@ -153,6 +153,31 @@ The corrected target direction is:
 
 See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md) for the full requirement decisions and future-aligned architecture.
 
+### Important ownership note: replace suggestion identity
+
+The project has now identified a deeper architectural risk behind recurrent
+`already-resolved` regressions in real Word:
+
+- a native replace suggestion is semantically composed of an inserted side and a
+  deleted side,
+- but the current operational handle (`ContentControl` on `insertedRange`) is
+  only attached to one side,
+- and later resolution tries to reconstruct the whole replace by spatial
+  inference.
+
+That means the current code path must **not** be interpreted as a reliable long-
+term identity model.
+
+The corrected architectural direction is:
+
+- one replace suggestion = one domain identity,
+- multiple Word artifacts may reference that identity,
+- lack of observable tracked changes must not be upgraded to confirmed
+  `already-resolved`.
+
+See [`replace-suggestion-identity-proposal.md`](./replace-suggestion-identity-proposal.md)
+for the detailed proposal.
+
 ### Domain Patterns (Non-GoF)
 
 | Pattern | Location | Description |
@@ -168,6 +193,7 @@ See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md)
 | **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after OOXML insertions shift document positions. |
 | **Composition Root** | `taskpane/taskpane.ts` | Single wiring point: instantiates adapters, decorators, orchestrator, and state machine. No other module knows the full dependency graph. |
 | **Derived Snapshot + Explicit UI State** | `WordAdapter.ts`, `domain/review/DocumentReviewStateMachine.ts`, `domain/review/ReviewSessionMediator.ts`, `taskpane.ts` | Word remains the source of truth through `DocumentReviewState`, the state machine centralizes review UI semantics, and the mediator coordinates cleanup/CTA/taskpane consequences as one policy surface. |
+| **Compound Identity (proposed)** | `docs/replace-suggestion-identity-proposal.md` | A replace suggestion should be modeled as one domain identity with multiple Word artifact references, instead of treating one inserted-side `ContentControl` as the whole suggestion. |
 
 > **Documentation note:** Preserve-and-Restore accurately describes the current code path, but the Track Changes requirement change intentionally moves the desired ownership model away from per-suggestion toggling. Keep that distinction explicit when editing this section in the future.
 
@@ -252,6 +278,23 @@ Word document (authoritative host state)
         │
         └──► taskpane.ts
                 └── renders from mediator output instead of cross-layer glue logic
+```
+
+### Replace Suggestion Identity Risk
+
+```text
+Logical replace suggestion
+        │
+        ├── inserted-side Word artifact
+        ├── deleted-side Word artifact
+        └── operational anchor(s)
+
+Current risk:
+taskpane/workflow may receive "already-resolved"
+from an observation strategy that only proved
+"no tracked changes were observed near the inserted-side CC".
+
+That is not sufficient proof of semantic resolution.
 ```
 
 ### Why this state machine was added

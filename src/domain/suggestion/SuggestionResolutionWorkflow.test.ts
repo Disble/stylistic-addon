@@ -129,6 +129,23 @@ describe("SuggestionResolutionWorkflow", () => {
     expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
   });
 
+  it("skips feedback for unobservable results", async () => {
+    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+      makeActionResult({
+        status: "unobservable",
+        trackedChangesAffected: 0,
+        commentDeleted: false,
+        error:
+          "Word no expuso suficientes tracked changes para confirmar la resolución.",
+      }),
+    );
+
+    const result = await workflow.acceptSuggestion(makeSuggestion());
+
+    expect(result.feedbackStatus).toBe("skipped");
+    expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
+  });
+
   it("returns failed feedback status when the feedback port throws synchronously", async () => {
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
       makeActionResult({ status: "accepted" }),

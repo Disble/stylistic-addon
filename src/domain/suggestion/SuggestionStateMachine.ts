@@ -13,6 +13,7 @@
  * - `accepted`         → User accepted from taskpane. Terminal.
  * - `rejected`         → User rejected from taskpane. Terminal.
  * - `already-resolved` → CC found but TCs already gone (resolved via Review pane). Terminal.
+ * - `unobservable`     → Word did not expose enough evidence to confirm resolution. Non-terminal.
  * - `error`            → Word API threw. Non-terminal — user may retry.
  *
  * @module SuggestionStateMachine
@@ -22,10 +23,17 @@ import type { SuggestionActionResult, SuggestionState } from "../types";
 
 const TRANSITIONS: Record<SuggestionState, SuggestionState[]> = {
   pending: ["resolving"],
-  resolving: ["accepted", "rejected", "already-resolved", "error"],
+  resolving: [
+    "accepted",
+    "rejected",
+    "already-resolved",
+    "unobservable",
+    "error",
+  ],
   accepted: [],
   rejected: [],
   "already-resolved": [],
+  unobservable: ["resolving"],
   error: ["resolving"],
 };
 
@@ -110,6 +118,8 @@ export function mapResultStatusToState(
       return "rejected";
     case "already-resolved":
       return "already-resolved";
+    case "unobservable":
+      return "unobservable";
     case "cc-not-found":
       return "error";
     case "not-found":

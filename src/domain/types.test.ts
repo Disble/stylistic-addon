@@ -18,12 +18,14 @@ const _state1: SuggestionState = "pending";
 const _state2: SuggestionState = "accepted";
 const _state3: SuggestionState = "rejected";
 const _state4: SuggestionState = "already-resolved";
+const _state5: SuggestionState = "unobservable";
 
 // Suppress unused variable warnings
 void _state1;
 void _state2;
 void _state3;
 void _state4;
+void _state5;
 
 // ---------------------------------------------------------------------------
 // SuggestionActionResult — shape checks

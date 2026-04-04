@@ -95,7 +95,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.commentDeleted).toBe(false);
   });
 
-  it("returns already-resolved when the CC remains but no tracked changes are found", async () => {
+  it("returns unobservable when the CC remains but no tracked changes can be observed", async () => {
     const suggestion = makeSuggestion({
       anchor: "texto original",
       context: "Contexto con texto original.",
@@ -109,9 +109,10 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     const result = await adapter.acceptSuggestion(suggestion);
 
-    expect(result.status).toBe("already-resolved");
+    expect(result.status).toBe("unobservable");
     expect(result.trackedChangesAffected).toBe(0);
-    expect(context._cc.delete).toHaveBeenCalledWith(true);
+    expect(result.error).toContain("Word no expuso suficientes tracked changes");
+    expect(context._cc.delete).not.toHaveBeenCalled();
   });
 
   it("accepts tracked changes even when the associated comment is already gone", async () => {

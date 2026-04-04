@@ -27,6 +27,7 @@ function machineAt(target: SuggestionState): SuggestionStateMachine {
     accepted: ["resolving", "accepted"],
     rejected: ["resolving", "rejected"],
     "already-resolved": ["resolving", "already-resolved"],
+    unobservable: ["resolving", "unobservable"],
     error: ["resolving", "error"],
   };
   for (const step of paths[target] ?? []) sm.transition(step);
@@ -108,6 +109,15 @@ describe("SuggestionStateMachine", () => {
       expect(sm.canTransition("resolving")).toBe(true);
     });
 
+    it("pending → resolving → unobservable (non-terminal, retry allowed)", () => {
+      const sm = new SuggestionStateMachine();
+      sm.transition("resolving");
+      sm.transition("unobservable");
+      expect(sm.state).toBe("unobservable");
+      expect(sm.isTerminal).toBe(false);
+      expect(sm.canTransition("resolving")).toBe(true);
+    });
+
     it("error → resolving → accepted (retry cycle)", () => {
       const sm = machineAt("error");
       sm.transition("resolving");
@@ -138,6 +148,10 @@ describe("SuggestionStateMachine", () => {
 
     it("isTerminal is false for 'error'", () => {
       expect(machineAt("error").isTerminal).toBe(false);
+    });
+
+    it("isTerminal is false for 'unobservable'", () => {
+      expect(machineAt("unobservable").isTerminal).toBe(false);
     });
   });
 
@@ -306,6 +320,7 @@ describe("SuggestionStateMachine", () => {
       "accepted",
       "rejected",
       "already-resolved",
+      "unobservable",
       "error",
     ];
 
@@ -355,6 +370,10 @@ describe("SuggestionStateMachine", () => {
       expect(mapResultStatusToState("already-resolved")).toBe(
         "already-resolved",
       );
+    });
+
+    it("maps 'unobservable' → 'unobservable'", () => {
+      expect(mapResultStatusToState("unobservable")).toBe("unobservable");
     });
 
     it("maps 'cc-not-found' → 'error'", () => {

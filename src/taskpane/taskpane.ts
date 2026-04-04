@@ -648,6 +648,7 @@ function appendNote(li: HTMLElement, text: string, className: string): void {
  *
  * - `accepted` / `rejected`: removes actions div, adds state class.
  * - `already-resolved`: same + warning note "(ya resuelto)".
+ * - `unobservable` / `error`: re-enables buttons, shows error/warning in the status bar.
  * - `error`: re-enables buttons, shows error in the status bar.
  * - `pending` / `resolving`: no-op (not terminal — should not be called).
  */
@@ -669,6 +670,16 @@ function applySuggestionCardState(
       li.querySelector(".result-actions")?.remove();
       li.classList.add("result-already-resolved");
       appendNote(li, "(ya resuelto)", "result-already-resolved-note");
+      break;
+
+    case "unobservable":
+      if (acceptBtn) acceptBtn.disabled = false;
+      if (rejectBtn) rejectBtn.disabled = false;
+      showStatus(
+        errorMessage ??
+          "No se pudo confirmar el estado de la sugerencia en Word. Reintentá.",
+        "error",
+      );
       break;
 
     case "error":
