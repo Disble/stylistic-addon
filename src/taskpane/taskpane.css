@@ -226,7 +226,11 @@ body {
   border-radius: 6px;
   padding: 10px 12px;
   margin-bottom: 8px;
-  transition: box-shadow 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.5s ease,
+    opacity 0.5s ease;
+  will-change: transform;
 }
 
 .suggestion-card:hover {

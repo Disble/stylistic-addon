@@ -38,6 +38,19 @@ async function flushTaskpaneWork(times = 8) {
   }
 }
 
+/** Returns the rendered card order as seen by the user in the list. */
+function getRenderedSuggestionOrder(doc: ReturnType<typeof createTaskpaneDocument>) {
+  const resultsList = getRequiredElement(doc, "results-list");
+  return resultsList.children.map((child) => {
+    const original = child.querySelector(".result-original");
+    if (original) {
+      return original.textContent;
+    }
+
+    return getRequiredChild(child, ".result-failed").textContent;
+  });
+}
+
 describe("taskpane suggestion resolution guardrails", () => {
   const taskpaneMocks = getTaskpaneMocks();
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -151,6 +164,81 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(
       getRequiredElement(doc, "disable-track-changes-section").style.display,
     ).toBe("none");
+  });
+
+  it("moves a processed suggestion to the end so the next active one takes first place", async () => {
+    const doc = createTaskpaneDocument();
+    const firstSuggestion = makeSuggestion({
+      id: "s-1",
+      anchor: "primer texto",
+      suggestedText: "primer cambio",
+    });
+    const secondSuggestion = makeSuggestion({
+      id: "s-2",
+      anchor: "segundo texto",
+      suggestedText: "segundo cambio",
+    });
+
+    const liItems = await renderViaEmitter(doc, [firstSuggestion, secondSuggestion]);
+    const acceptBtn = getRequiredChild(liItems[0], '[data-action="accept"]');
+
+    expect(getRenderedSuggestionOrder(doc)).toEqual([
+      "primer texto",
+      "segundo texto",
+    ]);
+
+    acceptBtn.click();
+    await flushTaskpaneWork();
+
+    expect(getRenderedSuggestionOrder(doc)).toEqual([
+      "segundo texto",
+      "primer texto",
+    ]);
+    expect(
+      getRequiredElement(doc, "results-list").children[1].classList.contains(
+        "result-accepted",
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps "No encontrado" cards at the absolute bottom even after processing another card', async () => {
+    const doc = createTaskpaneDocument();
+    const firstSuggestion = makeSuggestion({
+      id: "s-1",
+      anchor: "primer texto",
+      suggestedText: "primer cambio",
+    });
+    const secondSuggestion = makeSuggestion({
+      id: "s-2",
+      anchor: "segundo texto",
+      suggestedText: "segundo cambio",
+    });
+    const missingSuggestion = makeSuggestion({
+      id: "s-missing",
+      anchor: "texto faltante",
+      suggestedText: "cambio faltante",
+    });
+
+    const liItems = await renderViaEmitter(
+      doc,
+      [firstSuggestion, missingSuggestion, secondSuggestion],
+      ["s-missing"],
+    );
+
+    expect(getRenderedSuggestionOrder(doc)).toEqual([
+      "primer texto",
+      "segundo texto",
+      'No encontrado: "texto faltante"',
+    ]);
+
+    getRequiredChild(liItems[0], '[data-action="accept"]').click();
+    await flushTaskpaneWork();
+
+    expect(getRenderedSuggestionOrder(doc)).toEqual([
+      "segundo texto",
+      "primer texto",
+      'No encontrado: "texto faltante"',
+    ]);
   });
 
   it("clicking Reject applies terminal rejected UI and removes buttons", async () => {
@@ -460,6 +548,48 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(doc.getElementById("status-bar")?.textContent).toBe(
       "El documento está protegido",
     );
+  });
+
+  it("keeps the card order unchanged when resolution stays retryable", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "error",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 2,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      error: "timeout",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
+    });
+
+    const doc = createTaskpaneDocument();
+    const firstSuggestion = makeSuggestion({
+      id: "s-1",
+      anchor: "primer texto",
+      suggestedText: "primer cambio",
+    });
+    const secondSuggestion = makeSuggestion({
+      id: "s-2",
+      anchor: "segundo texto",
+      suggestedText: "segundo cambio",
+    });
+
+    const liItems = await renderViaEmitter(doc, [firstSuggestion, secondSuggestion]);
+    getRequiredChild(liItems[0], '[data-action="accept"]').click();
+    await flushTaskpaneWork();
+
+    expect(getRenderedSuggestionOrder(doc)).toEqual([
+      "primer texto",
+      "segundo texto",
+    ]);
   });
 
   it("re-enables buttons and does not mark terminal state on unobservable", async () => {

@@ -84,4 +84,27 @@ describe("taskpane suggestion presentation", () => {
 
     expect(taskpaneMocks.navigateToText).toHaveBeenCalledWith(suggestion);
   });
+
+  it('renders "No encontrado" cards after actionable suggestions on initial paint', async () => {
+    const doc = createTaskpaneDocument();
+    const firstSuggestion = makeSuggestion({ id: "s-1", anchor: "primero" });
+    const missingSuggestion = makeSuggestion({ id: "s-missing", anchor: "faltante" });
+    const secondSuggestion = makeSuggestion({ id: "s-2", anchor: "segundo" });
+
+    const liItems = await renderViaEmitter(
+      doc,
+      [firstSuggestion, missingSuggestion, secondSuggestion],
+      ["s-missing"],
+    );
+
+    expect(
+      (liItems[0].querySelector(".result-original") as FakeElement).textContent,
+    ).toBe("primero");
+    expect(
+      (liItems[1].querySelector(".result-original") as FakeElement).textContent,
+    ).toBe("segundo");
+    expect((liItems[2].querySelector(".result-failed") as FakeElement).textContent).toBe(
+      'No encontrado: "faltante"',
+    );
+  });
 });

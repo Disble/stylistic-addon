@@ -1,3 +1,5 @@
+import { vi } from "vitest";
+
 import type {
   ApplySuggestionsResult,
   Suggestion,
@@ -252,8 +254,38 @@ export class FakeElement {
   }
 
   appendChild(child: FakeElement): FakeElement {
+    if (child.parentElement) {
+      const previousIndex = child.parentElement.children.indexOf(child);
+      if (previousIndex !== -1) {
+        child.parentElement.children.splice(previousIndex, 1);
+      }
+    }
+
     child.parentElement = this;
     this.children.push(child);
+    return child;
+  }
+
+  /** Inserts a child before the given reference node, matching DOM semantics. */
+  insertBefore(child: FakeElement, referenceNode: FakeElement | null): FakeElement {
+    if (referenceNode === null) {
+      return this.appendChild(child);
+    }
+
+    if (child.parentElement) {
+      const previousIndex = child.parentElement.children.indexOf(child);
+      if (previousIndex !== -1) {
+        child.parentElement.children.splice(previousIndex, 1);
+      }
+    }
+
+    const referenceIndex = this.children.indexOf(referenceNode);
+    if (referenceIndex === -1) {
+      throw new Error("Reference node is not a child of this element");
+    }
+
+    child.parentElement = this;
+    this.children.splice(referenceIndex, 0, child);
     return child;
   }
 

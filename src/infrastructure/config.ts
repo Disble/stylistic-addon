@@ -58,6 +58,9 @@ export const RETRY_BASE_DELAY_MS = 1_000;
 /** Delay (ms) between round-robin polling passes while chunks are still running. */
 export const POLL_INTERVAL_MS = 1_000;
 
+/** Duration (ms) of the taskpane card reorder animation. */
+export const SUGGESTION_CARD_REORDER_ANIMATION_MS = 500;
+
 // ---------------------------------------------------------------------------
 // Word Artifact Identity
 // ---------------------------------------------------------------------------

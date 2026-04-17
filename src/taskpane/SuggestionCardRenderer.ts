@@ -23,6 +23,7 @@ import type {
   SuggestionResolutionMediatorResult,
   SuggestionState,
 } from "../domain/types";
+import { SUGGESTION_CARD_REORDER_ANIMATION_MS } from "../infrastructure/config";
 import {
   appendNote,
   getRequiredElement,
@@ -273,30 +274,145 @@ function appendActionableCardContent(
 function createSuggestionCard(
   suggestion: Suggestion,
   failedSuggestions: SuggestionApplicationFailure[],
-): { li: HTMLLIElement; isFailed: boolean } {
+): {
+  li: HTMLLIElement;
+  isFailed: boolean;
+  isNotFoundFailure: boolean;
+  suggestion: Suggestion;
+} {
   const failure = failedSuggestions.find(
     (f) => f.suggestion.id === suggestion.id,
   );
   const isFailed = Boolean(failure);
+  const isNotFoundFailure = failure?.reason === "not-found";
   const isCommentOnly = suggestion.type === "comment-only";
 
   const li = document.createElement("li");
   li.className = "suggestion-card";
   li.dataset.severity = suggestion.severity;
+  li.dataset.cardGroup = isNotFoundFailure ? "not-found" : "active";
   li.appendChild(createSuggestionMetaRow(suggestion, isFailed, isCommentOnly));
 
   if (failure) {
     appendFailedCardContent(li, failure);
-    return { li, isFailed: true };
+    return { li, isFailed: true, isNotFoundFailure, suggestion };
   }
 
   appendActionableCardContent(li, suggestion, isCommentOnly);
-  return { li, isFailed: false };
+  return { li, isFailed: false, isNotFoundFailure: false, suggestion };
 }
 
 // ---------------------------------------------------------------------------
 // Card state management
 // ---------------------------------------------------------------------------
+
+/**
+ * Runs a FLIP-style animation for suggestion-list reordering when the host DOM
+ * provides layout APIs. Falls back to an immediate reorder in test/fake DOM.
+ */
+function animateSuggestionListReorder(
+  parent: HTMLElement,
+  reorder: () => void,
+): void {
+  const cardsBefore = Array.from(parent.children) as HTMLElement[];
+  const canAnimate =
+    typeof globalThis.requestAnimationFrame === "function" &&
+    cardsBefore.every(
+      (card) => typeof card.getBoundingClientRect === "function",
+    );
+
+  if (!canAnimate) {
+    reorder();
+    return;
+  }
+
+  const firstRects = new Map(
+    cardsBefore.map((card) => [card, card.getBoundingClientRect()]),
+  );
+
+  reorder();
+
+  const cardsAfter = Array.from(parent.children) as HTMLElement[];
+  for (const card of cardsAfter) {
+    const firstRect = firstRects.get(card);
+    if (!firstRect) {
+      continue;
+    }
+
+    const lastRect = card.getBoundingClientRect();
+    const deltaY = firstRect.top - lastRect.top;
+    if (deltaY === 0) {
+      continue;
+    }
+
+    card.style.transition = "none";
+    card.style.transform = `translateY(${deltaY}px)`;
+  }
+
+  globalThis.requestAnimationFrame(() => {
+    for (const card of cardsAfter) {
+      const firstRect = firstRects.get(card);
+      if (!firstRect) {
+        continue;
+      }
+
+      const lastRect = card.getBoundingClientRect();
+      const deltaY = firstRect.top - lastRect.top;
+      if (deltaY === 0) {
+        continue;
+      }
+
+      card.style.transition = `transform ${SUGGESTION_CARD_REORDER_ANIMATION_MS}ms ease`;
+      card.style.transform = "";
+    }
+
+    globalThis.setTimeout(() => {
+      for (const card of cardsAfter) {
+        card.style.transition = "";
+        card.style.transform = "";
+      }
+    }, SUGGESTION_CARD_REORDER_ANIMATION_MS);
+  });
+}
+
+/**
+ * Returns the first card that represents a not-found failure.
+ *
+ * Those cards must remain grouped at the very bottom of the list.
+ */
+function getFirstNotFoundCard(parent: HTMLElement): HTMLElement | null {
+  return (
+    (Array.from(parent.children) as HTMLElement[]).find(
+      (card) => card.dataset.cardGroup === "not-found",
+    ) ?? null
+  );
+}
+
+/**
+ * Moves a terminally processed suggestion card to the end of the actionable
+ * zone while keeping all "No encontrado" cards at the absolute bottom.
+ *
+ * This keeps the first visible slot reserved for the next actionable card,
+ * matching the desired "stack" workflow in the taskpane.
+ */
+function moveSuggestionCardToEnd(li: HTMLElement): void {
+  const parent = li.parentElement;
+  if (!parent) {
+    return;
+  }
+
+  li.dataset.cardGroup = "processed";
+
+  animateSuggestionListReorder(parent, () => {
+    const firstNotFoundCard = getFirstNotFoundCard(parent);
+    if (firstNotFoundCard && firstNotFoundCard !== li) {
+      parent.insertBefore(li, firstNotFoundCard);
+      return;
+    }
+
+    parent.appendChild(li);
+  });
+}
 
 /**
  * Updates the DOM for a suggestion card based on the SM's terminal state.
@@ -313,12 +429,14 @@ function applySuggestionCardState(
     case "rejected":
       li.querySelector(".result-actions")?.remove();
       li.classList.add(`result-${state}`);
+      moveSuggestionCardToEnd(li);
       break;
 
     case "already-resolved":
       li.querySelector(".result-actions")?.remove();
       li.classList.add("result-already-resolved");
       appendNote(li, "(ya resuelto)", "result-already-resolved-note");
+      moveSuggestionCardToEnd(li);
       break;
 
     case "identity-lost":
@@ -334,6 +452,7 @@ function applySuggestionCardState(
           "La identidad persistida de la sugerencia quedó inconsistente en Word.",
         "error",
       );
+      moveSuggestionCardToEnd(li);
       break;
 
     case "unobservable":
@@ -414,6 +533,7 @@ async function handleAcceptSuggestion(
     li.querySelector(".result-actions")?.remove();
     li.classList.add("result-cc-not-found");
     appendNote(li, "(aplicación falló)", "result-cc-not-found-note");
+    moveSuggestionCardToEnd(li);
     return;
   }
 
@@ -447,6 +567,7 @@ async function handleRejectSuggestion(
     li.querySelector(".result-actions")?.remove();
     li.classList.add("result-cc-not-found");
     appendNote(li, "(aplicación falló)", "result-cc-not-found-note");
+    moveSuggestionCardToEnd(li);
     return;
   }
 
@@ -551,12 +672,19 @@ export function renderResultsPanel(
   );
 
   list.innerHTML = "";
-  for (const suggestion of suggestions) {
-    const card = createSuggestionCard(suggestion, result.failedSuggestions);
+  const cards = suggestions.map((suggestion) =>
+    createSuggestionCard(suggestion, result.failedSuggestions),
+  );
+
+  for (const card of cards.filter((entry) => !entry.isNotFoundFailure)) {
     list.appendChild(card.li);
     if (!card.isFailed) {
-      wireSuggestionCardInteractions(card.li, suggestion, deps);
+      wireSuggestionCardInteractions(card.li, card.suggestion, deps);
     }
+  }
+
+  for (const card of cards.filter((entry) => entry.isNotFoundFailure)) {
+    list.appendChild(card.li);
   }
 
   panel.style.display = "block";
