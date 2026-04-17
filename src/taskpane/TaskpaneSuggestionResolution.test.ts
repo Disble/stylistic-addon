@@ -160,6 +160,9 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.classList.contains("result-accepted")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
+    expect(getRequiredElement(doc, "results-summary").textContent).toBe(
+      "Ya no te quedan sugerencias aplicadas por revisar. 1 ya resuelta.",
+    );
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
     expect(
       getRequiredElement(doc, "disable-track-changes-section").style.display,
@@ -258,6 +261,9 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(taskpaneMocks.rejectSuggestion).toHaveBeenCalledWith(suggestion);
     expect(li.classList.contains("result-rejected")).toBe(true);
     expect(li.querySelector('[data-action="accept"]')).toBeNull();
+    expect(getRequiredElement(doc, "results-summary").textContent).toBe(
+      "Ya no te quedan sugerencias aplicadas por revisar. 1 ya resuelta.",
+    );
     expect(li.querySelector('[data-action="reject"]')).toBeNull();
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
     expect(
@@ -328,8 +334,15 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(
       li.querySelector(".result-already-resolved-note")?.textContent,
     ).toBe("(ya resuelto)");
+    expect(getRequiredElement(doc, "results-summary").textContent).toBe(
+      "Ya no te quedan sugerencias aplicadas por revisar. 1 ya resuelta.",
+    );
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({ rating: "positive", originalText: suggestion.anchor }),
+      expect.objectContaining({
+        action: "accept",
+        context: suggestion.context,
+        anchor: suggestion.anchor,
+      }),
     );
   });
 
@@ -363,7 +376,11 @@ describe("taskpane suggestion resolution guardrails", () => {
 
     expect(li.classList.contains("result-already-resolved")).toBe(true);
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({ rating: "negative", originalText: suggestion.anchor }),
+      expect.objectContaining({
+        action: "reject",
+        context: suggestion.context,
+        anchor: suggestion.anchor,
+      }),
     );
   });
 
@@ -625,6 +642,9 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(acceptBtn.disabled).toBe(false);
     expect(getRequiredChild(li, '[data-action="reject"]').disabled).toBe(false);
     expect(li.classList.contains("result-already-resolved")).toBe(false);
+    expect(getRequiredElement(doc, "results-summary").textContent).toBe(
+      "Te faltan 1 de 1 sugerencia aplicada por revisar. Todavía no resolviste ninguna.",
+    );
     expect(doc.getElementById("status-bar")?.textContent).toBe(
       "Word no expuso suficientes tracked changes para confirmar la resolución.",
     );
@@ -664,6 +684,9 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.querySelector(".result-actions")).toBeNull();
     expect(li.querySelector(".result-identity-lost-note")?.textContent).toBe(
       "(metadata inconsistente; reanalizá la sugerencia)",
+    );
+    expect(getRequiredElement(doc, "results-summary").textContent).toBe(
+      "Ya no te quedan sugerencias aplicadas por revisar. 1 requiere(n) revisión manual.",
     );
     expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });

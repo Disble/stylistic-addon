@@ -17,6 +17,12 @@
 // Suggestion & Insertion
 // ---------------------------------------------------------------------------
 
+/** Supported editorial severity levels across suggestions and feedback. */
+export type SuggestionSeverity = "high" | "medium" | "low";
+
+/** Supported suggestion materialization modes in Word. */
+export type SuggestionType = "track-change" | "comment-only";
+
 /**
  * A single editorial suggestion, either received from the Mastra workflow
  * or prepared for insertion into the Word document.
@@ -45,7 +51,7 @@ export interface Suggestion {
   category: string;
 
   /** How critical the suggestion is. */
-  severity: "high" | "medium" | "low";
+  severity: SuggestionSeverity;
 
   /**
    * Determines how the suggestion is applied to the document.
@@ -55,7 +61,7 @@ export interface Suggestion {
    * - `"comment-only"` — inserts only a Word comment at the `anchor`
    *   location with no tracked change. `suggestedText` is undefined.
    */
-  type: "track-change" | "comment-only";
+  type: SuggestionType;
 }
 
 /**
@@ -262,13 +268,13 @@ export interface WorkflowSuggestion {
   category: string;
 
   /** How critical the suggestion is. */
-  severity: "high" | "medium" | "low";
+  severity: SuggestionSeverity;
 
   /**
    * Suggestion kind as declared by the backend.
    * Defaults to `"track-change"` if absent (backwards compatibility).
    */
-  type?: "track-change" | "comment-only";
+  type?: SuggestionType;
 }
 
 /**
@@ -419,14 +425,20 @@ export interface TextSource {
  * Payload sent to the Mastra feedback workflow when a user accepts or rejects
  * a suggestion. Fire-and-forget — never awaited in the UI.
  *
- * No user or session identifiers are included by design.
+ * Carries the target author profile slug but no user or session identifiers.
  */
 export interface FeedbackPayload {
+  /** Author profile slug that should receive the feedback update. */
+  autorSlug: string;
+
   /** Editorial category label (e.g., "Redundancia"). */
   category: string;
 
-  /** Exact original text fragment from the suggestion. */
-  originalText: string;
+  /** Paragraph-level context used to interpret the feedback safely. */
+  context: string;
+
+  /** Exact substring within `context` targeted by the original suggestion. */
+  anchor: string;
 
   /**
    * The replacement text that was suggested.
@@ -437,11 +449,14 @@ export interface FeedbackPayload {
   /** Human-readable justification shown to the user. */
   justification: string;
 
-  /** Whether the user accepted or rejected the suggestion. */
-  rating: "positive" | "negative";
+  /** Explicit user action taken on the suggestion. */
+  action: "accept" | "reject";
 
   /** How critical the suggestion is (from the original suggestion). */
-  severity: string;
+  severity: SuggestionSeverity;
+
+  /** Suggestion materialization kind used by the backend for interpretation. */
+  suggestionType: SuggestionType;
 
   /** Optional free-text comment from the user (textarea). Only present when non-empty. */
   comment?: string;

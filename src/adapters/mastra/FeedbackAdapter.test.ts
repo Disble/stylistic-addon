@@ -32,12 +32,15 @@ function makePayload(
   overrides: Partial<FeedbackPayload> = {},
 ): FeedbackPayload {
   return {
+    autorSlug: "disble",
     category: "Redundancia",
-    originalText: "completamente necesario",
+    context: "Frase con completamente necesario.",
+    anchor: "completamente necesario",
     suggestedText: "necesario",
     justification: "Ya implica completitud.",
-    rating: "positive",
+    action: "accept",
     severity: "high",
+    suggestionType: "track-change",
     ...overrides,
   };
 }
@@ -67,7 +70,7 @@ describe("FeedbackAdapter", () => {
   it("calls createRun() then run.start() with the payload as inputData", async () => {
     const adapter = new FeedbackAdapter();
     const payload = makePayload({
-      rating: "negative",
+      action: "reject",
       comment: "test comment",
     });
     await adapter.sendFeedback(payload);

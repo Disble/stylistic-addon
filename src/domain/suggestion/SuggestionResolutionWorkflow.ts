@@ -10,6 +10,7 @@
  * The document remains the source of truth for pending Stylistic artifacts.
  */
 
+import { DEFAULT_AUTHOR_SLUG } from "../../infrastructure/config";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
 import type {
   FeedbackDispatchStatus,
@@ -119,14 +120,17 @@ export class SuggestionResolutionWorkflow {
     const trimmedComment = comment?.trim();
 
     return {
+      autorSlug: DEFAULT_AUTHOR_SLUG,
       category: suggestion.category,
-      originalText: suggestion.anchor,
+      context: suggestion.context,
+      anchor: suggestion.anchor,
       ...(suggestion.suggestedText === undefined
         ? {}
         : { suggestedText: suggestion.suggestedText }),
       justification: suggestion.justification,
-      rating: action === "accept" ? "positive" : "negative",
+      action,
       severity: suggestion.severity,
+      suggestionType: suggestion.type,
       ...(trimmedComment ? { comment: trimmedComment } : {}),
     };
   }

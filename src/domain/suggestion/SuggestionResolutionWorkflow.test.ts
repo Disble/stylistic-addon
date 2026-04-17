@@ -4,6 +4,7 @@ import type {
   IDocumentPort,
 } from "../ports";
 import type { Suggestion, SuggestionActionResult } from "../types";
+import { DEFAULT_AUTHOR_SLUG } from "../../infrastructure/config";
 import { SuggestionResolutionWorkflow } from "./SuggestionResolutionWorkflow";
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
@@ -74,8 +75,11 @@ describe("SuggestionResolutionWorkflow", () => {
     expect(result.feedbackStatus).toBe("sent");
     expect(feedbackPort.sendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
-        originalText: suggestion.anchor,
-        rating: "positive",
+        autorSlug: DEFAULT_AUTHOR_SLUG,
+        context: suggestion.context,
+        anchor: suggestion.anchor,
+        action: "accept",
+        suggestionType: suggestion.type,
         comment: "Muy buen cambio",
       }),
     );
@@ -92,8 +96,11 @@ describe("SuggestionResolutionWorkflow", () => {
     expect(result.feedbackStatus).toBe("sent");
     expect(feedbackPort.sendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
-        originalText: suggestion.anchor,
-        rating: "negative",
+        autorSlug: DEFAULT_AUTHOR_SLUG,
+        context: suggestion.context,
+        anchor: suggestion.anchor,
+        action: "reject",
+        suggestionType: suggestion.type,
       }),
     );
   });

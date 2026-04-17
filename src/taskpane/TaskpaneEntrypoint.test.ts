@@ -194,7 +194,7 @@ describe("taskpane entrypoint", () => {
       "Analizando fragmentos...",
     );
     expect(doc.getElementById("results-summary")?.textContent).toBe(
-      "Sobre selección — 1 de 1 sugerencias aplicadas como Track Changes.",
+      "Sobre selección — Te faltan 1 de 1 sugerencia aplicada por revisar. Todavía no resolviste ninguna.",
     );
     expect(doc.getElementById("results-list")?.children).toHaveLength(1);
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");

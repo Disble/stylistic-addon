@@ -16,6 +16,13 @@ async function flushTaskpaneWork(times = 8) {
   }
 }
 
+/** Returns a taskpane element that a test requires to exist. */
+function requireElement(container: FakeElement, selector: string): FakeElement {
+  const element = container.querySelector(selector);
+  expect(element).not.toBeNull();
+  return element;
+}
+
 describe("taskpane feedback controls", () => {
   const taskpaneMocks = getTaskpaneMocks();
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -64,8 +71,8 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const feedbackBtn = li.querySelector('[data-action="feedback"]') as FakeElement;
-    const accordion = li.querySelector(".feedback-accordion") as FakeElement;
+    const feedbackBtn = requireElement(li, '[data-action="feedback"]');
+    const accordion = requireElement(li, ".feedback-accordion");
 
     expect(accordion.classList.contains("feedback-accordion--open")).toBe(false);
     feedbackBtn.click();
@@ -87,19 +94,21 @@ describe("taskpane feedback controls", () => {
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    (li.querySelector('[data-action="accept"]') as FakeElement).click();
+  requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
-        rating: "positive",
+        action: "accept",
+        context: "Frase con completamente necesario.",
         category: "Redundancia",
-        originalText: "completamente necesario",
+        anchor: "completamente necesario",
         suggestedText: "necesario",
         justification: "Ya implica completitud.",
         severity: "high",
+        suggestionType: "track-change",
       }),
     );
   });
@@ -117,19 +126,21 @@ describe("taskpane feedback controls", () => {
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    (li.querySelector('[data-action="reject"]') as FakeElement).click();
+  requireElement(li, '[data-action="reject"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
     expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
-        rating: "negative",
+        action: "reject",
+        context: "Frase con básicamente.",
         category: "Muletilla",
-        originalText: "básicamente",
+        anchor: "básicamente",
         suggestedText: "",
         justification: "Frase de relleno.",
         severity: "medium",
+        suggestionType: "track-change",
       }),
     );
   });
@@ -160,7 +171,7 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-feedback" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    (li.querySelector('[data-action="accept"]') as FakeElement).click();
+  requireElement(li, '[data-action="accept"]').click();
     await flushTaskpaneWork();
 
     expect(li.classList.contains("result-accepted")).toBe(true);
@@ -190,7 +201,7 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-identity-lost" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    (li.querySelector('[data-action="accept"]') as FakeElement).click();
+  requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -203,8 +214,8 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    (li.querySelector(".feedback-textarea") as FakeElement).value = "";
-    (li.querySelector('[data-action="accept"]') as FakeElement).click();
+  requireElement(li, ".feedback-textarea").value = "";
+  requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -219,8 +230,8 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-1", justification: "Es más claro" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    (li.querySelector(".feedback-textarea") as FakeElement).value = "Muy buen cambio";
-    (li.querySelector('[data-action="accept"]') as FakeElement).click();
+  requireElement(li, ".feedback-textarea").value = "Muy buen cambio";
+  requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();

@@ -23,6 +23,12 @@ export const WORKFLOW_ID = "stylistic-workflow";
 /** Identifier of the feedback workflow registered in Mastra. */
 export const FEEDBACK_WORKFLOW_ID = "feedback-workflow";
 
+/**
+ * Temporary author profile slug used until the add-in exposes explicit author
+ * selection and propagates it through the frontend flow.
+ */
+export const DEFAULT_AUTHOR_SLUG = "disble";
+
 // ---------------------------------------------------------------------------
 // Text Chunking
 // ---------------------------------------------------------------------------

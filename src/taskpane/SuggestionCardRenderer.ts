@@ -25,6 +25,12 @@ import type {
 } from "../domain/types";
 import { SUGGESTION_CARD_REORDER_ANIMATION_MS } from "../infrastructure/config";
 import {
+  applySuggestionProgressOutcome,
+  buildSuggestionProgressSummaryText,
+  createSuggestionProgressSummaryModel,
+  type SuggestionProgressSummaryModel,
+} from "./SuggestionProgressSummary";
+import {
   appendNote,
   getRequiredElement,
   setDisableTrackChangesCtaVisible,
@@ -48,6 +54,19 @@ export type ResultsPanelDeps = {
   ) => Promise<SuggestionResolutionMediatorResult>;
 };
 
+/** Shared UI state required while resolving one rendered suggestion card. */
+type SuggestionResolutionUiContext = {
+  summaryModel: SuggestionProgressSummaryModel;
+  summaryElement: HTMLElement;
+  isSelection: boolean;
+};
+
+/** The pair of action buttons owned by one suggestion card. */
+type SuggestionActionButtons = {
+  acceptBtn: HTMLButtonElement | null;
+  rejectBtn: HTMLButtonElement | null;
+};
+
 // ---------------------------------------------------------------------------
 // Pure summary builders
 // ---------------------------------------------------------------------------
@@ -59,27 +78,10 @@ export function buildResultsSummary(
   chunkErrors: string[],
   isSelection: boolean,
 ): string {
-  const total = suggestions.length;
-  const applied = result.successCount;
-  const failed = result.failedSuggestions.length;
-  const notFound = result.failedSuggestions.filter(
-    (failure) => failure.reason === "not-found",
-  ).length;
-  const failedOther = failed - notFound;
-  const scopePrefix = isSelection ? "Sobre selección — " : "";
-
-  let summaryText = `${scopePrefix}${applied} de ${total} sugerencias aplicadas como Track Changes.`;
-  if (notFound > 0) {
-    summaryText += ` ${notFound} no encontrada(s) en el texto.`;
-  }
-  if (failedOther > 0) {
-    summaryText += ` ${failedOther} no pudo/pudieron aplicarse.`;
-  }
-  if (chunkErrors.length > 0) {
-    summaryText += ` ${chunkErrors.length} fragmento(s) con error.`;
-  }
-
-  return summaryText;
+  return buildSuggestionProgressSummaryText(
+    createSuggestionProgressSummaryModel(suggestions, result, chunkErrors),
+    isSelection,
+  );
 }
 
 /** Builds a natural status-bar message for mixed apply outcomes. */
@@ -406,7 +408,7 @@ function moveSuggestionCardToEnd(li: HTMLElement): void {
   animateSuggestionListReorder(parent, () => {
     const firstNotFoundCard = getFirstNotFoundCard(parent);
     if (firstNotFoundCard && firstNotFoundCard !== li) {
-      parent.insertBefore(li, firstNotFoundCard);
+      firstNotFoundCard.before(li);
       return;
     }
 
@@ -505,6 +507,21 @@ function applyResolutionWorkflowUi(
   }
 }
 
+/** Updates the live summary text after one suggestion resolution outcome. */
+function updateResultsSummaryAfterResolution(
+  summaryModel: SuggestionProgressSummaryModel,
+  summaryElement: HTMLElement,
+  suggestionId: string,
+  result: SuggestionResolutionMediatorResult,
+  isSelection: boolean,
+): void {
+  applySuggestionProgressOutcome(summaryModel, suggestionId, result.status);
+  summaryElement.textContent = buildSuggestionProgressSummaryText(
+    summaryModel,
+    isSelection,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Accept / Reject handlers
 // ---------------------------------------------------------------------------
@@ -512,16 +529,16 @@ function applyResolutionWorkflowUi(
 async function handleAcceptSuggestion(
   suggestion: Suggestion,
   li: HTMLElement,
-  acceptBtn: HTMLButtonElement | null,
-  rejectBtn: HTMLButtonElement | null,
+  buttons: SuggestionActionButtons,
   sm: SuggestionStateMachine,
   deps: ResultsPanelDeps,
+  uiContext: SuggestionResolutionUiContext,
 ): Promise<void> {
   if (!sm.canTransition("resolving")) return;
 
   sm.transition("resolving");
-  if (acceptBtn) acceptBtn.disabled = true;
-  if (rejectBtn) rejectBtn.disabled = true;
+  if (buttons.acceptBtn) buttons.acceptBtn.disabled = true;
+  if (buttons.rejectBtn) buttons.rejectBtn.disabled = true;
 
   const result = await deps.acceptSuggestion(
     suggestion,
@@ -539,23 +556,36 @@ async function handleAcceptSuggestion(
 
   const targetState = mapResultStatusToState(result.status);
   sm.transition(targetState);
-  applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
+  applySuggestionCardState(
+    li,
+    sm.state,
+    buttons.acceptBtn,
+    buttons.rejectBtn,
+    result.error,
+  );
   applyResolutionWorkflowUi(result);
+  updateResultsSummaryAfterResolution(
+    uiContext.summaryModel,
+    uiContext.summaryElement,
+    suggestion.id,
+    result,
+    uiContext.isSelection,
+  );
 }
 
 async function handleRejectSuggestion(
   suggestion: Suggestion,
   li: HTMLElement,
-  acceptBtn: HTMLButtonElement | null,
-  rejectBtn: HTMLButtonElement | null,
+  buttons: SuggestionActionButtons,
   sm: SuggestionStateMachine,
   deps: ResultsPanelDeps,
+  uiContext: SuggestionResolutionUiContext,
 ): Promise<void> {
   if (!sm.canTransition("resolving")) return;
 
   sm.transition("resolving");
-  if (acceptBtn) acceptBtn.disabled = true;
-  if (rejectBtn) rejectBtn.disabled = true;
+  if (buttons.acceptBtn) buttons.acceptBtn.disabled = true;
+  if (buttons.rejectBtn) buttons.rejectBtn.disabled = true;
 
   const result = await deps.rejectSuggestion(
     suggestion,
@@ -573,8 +603,21 @@ async function handleRejectSuggestion(
 
   const targetState = mapResultStatusToState(result.status);
   sm.transition(targetState);
-  applySuggestionCardState(li, sm.state, acceptBtn, rejectBtn, result.error);
+  applySuggestionCardState(
+    li,
+    sm.state,
+    buttons.acceptBtn,
+    buttons.rejectBtn,
+    result.error,
+  );
   applyResolutionWorkflowUi(result);
+  updateResultsSummaryAfterResolution(
+    uiContext.summaryModel,
+    uiContext.summaryElement,
+    suggestion.id,
+    result,
+    uiContext.isSelection,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -586,6 +629,7 @@ function wireSuggestionCardInteractions(
   li: HTMLLIElement,
   suggestion: Suggestion,
   deps: ResultsPanelDeps,
+  uiContext: SuggestionResolutionUiContext,
 ): void {
   const clickableEl = li.querySelector(
     ".card-clickable-area",
@@ -616,28 +660,19 @@ function wireSuggestionCardInteractions(
   }
 
   const sm = new SuggestionStateMachine();
+  const buttons: SuggestionActionButtons = {
+    acceptBtn: acceptBtnEl,
+    rejectBtn: rejectBtnEl,
+  };
+
   if (acceptBtnEl) {
     acceptBtnEl.addEventListener("click", () =>
-      handleAcceptSuggestion(
-        suggestion,
-        li,
-        acceptBtnEl,
-        rejectBtnEl,
-        sm,
-        deps,
-      ),
+      handleAcceptSuggestion(suggestion, li, buttons, sm, deps, uiContext),
     );
   }
   if (rejectBtnEl) {
     rejectBtnEl.addEventListener("click", () =>
-      handleRejectSuggestion(
-        suggestion,
-        li,
-        acceptBtnEl,
-        rejectBtnEl,
-        sm,
-        deps,
-      ),
+      handleRejectSuggestion(suggestion, li, buttons, sm, deps, uiContext),
     );
   }
 }
@@ -663,13 +698,21 @@ export function renderResultsPanel(
   const panel = getRequiredElement("results-panel");
   const summary = getRequiredElement("results-summary");
   const list = getRequiredElement("results-list");
-
-  summary.textContent = buildResultsSummary(
+  const summaryModel = createSuggestionProgressSummaryModel(
     suggestions,
     result,
     chunkErrors,
+  );
+
+  summary.textContent = buildSuggestionProgressSummaryText(
+    summaryModel,
     isSelection,
   );
+  const uiContext: SuggestionResolutionUiContext = {
+    summaryModel,
+    summaryElement: summary,
+    isSelection,
+  };
 
   list.innerHTML = "";
   const cards = suggestions.map((suggestion) =>
@@ -679,7 +722,7 @@ export function renderResultsPanel(
   for (const card of cards.filter((entry) => !entry.isNotFoundFailure)) {
     list.appendChild(card.li);
     if (!card.isFailed) {
-      wireSuggestionCardInteractions(card.li, card.suggestion, deps);
+      wireSuggestionCardInteractions(card.li, card.suggestion, deps, uiContext);
     }
   }
 

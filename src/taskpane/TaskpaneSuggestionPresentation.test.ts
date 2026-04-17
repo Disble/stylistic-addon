@@ -8,6 +8,14 @@ import {
   resetTaskpaneHarness,
   teardownTaskpaneHarness,
 } from "./TaskpaneTestHelper";
+import { buildResultsSummary } from "./SuggestionCardRenderer";
+
+/** Returns a fake DOM element that the test requires to exist. */
+function requireElement(container: FakeElement, selector: string): FakeElement {
+  const element = container.querySelector(selector);
+  expect(element).not.toBeNull();
+  return element;
+}
 
 describe("taskpane suggestion presentation", () => {
   const taskpaneMocks = getTaskpaneMocks();
@@ -27,6 +35,38 @@ describe("taskpane suggestion presentation", () => {
     warnSpy.mockRestore();
     errorSpy.mockRestore();
     teardownTaskpaneHarness();
+  });
+
+  it("builds a live-friendly summary with resolved and remaining counts", () => {
+    const firstSuggestion = makeSuggestion({ id: "s-1" });
+    const secondSuggestion = makeSuggestion({ id: "s-2" });
+
+    expect(
+      buildResultsSummary(
+        [firstSuggestion, secondSuggestion],
+        {
+          successCount: 1,
+          failedSuggestions: [
+            {
+              suggestion: secondSuggestion,
+              reason: "not-found",
+              message: "Anchor no encontrado",
+            },
+          ],
+          pendingAfter: {
+            pendingStylisticArtifacts: 1,
+            hasPendingStylisticArtifacts: true,
+            trackChangesActive: true,
+          },
+          documentState: "pending-review",
+          trackChangesActivatedForBatch: true,
+        },
+        [],
+        true,
+      ),
+    ).toBe(
+      "Sobre selección — Te faltan 1 de 1 sugerencia aplicada por revisar. Todavía no resolviste ninguna. 1 no encontrada(s) en el texto.",
+    );
   });
 
   it("renders comment-only suggestions without diff blocks and with text action labels", async () => {
@@ -75,9 +115,9 @@ describe("taskpane suggestion presentation", () => {
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const clickable = li.querySelector(".card-clickable-area") as FakeElement;
+    const clickable = requireElement(li, ".card-clickable-area");
 
-    expect((li.querySelector(".result-original") as FakeElement).textContent).toBe(
+    expect(requireElement(li, ".result-original").textContent).toBe(
       "fragmento exacto",
     );
     clickable.click();
@@ -97,13 +137,13 @@ describe("taskpane suggestion presentation", () => {
       ["s-missing"],
     );
 
-    expect(
-      (liItems[0].querySelector(".result-original") as FakeElement).textContent,
-    ).toBe("primero");
-    expect(
-      (liItems[1].querySelector(".result-original") as FakeElement).textContent,
-    ).toBe("segundo");
-    expect((liItems[2].querySelector(".result-failed") as FakeElement).textContent).toBe(
+    expect(requireElement(liItems[0], ".result-original").textContent).toBe(
+      "primero",
+    );
+    expect(requireElement(liItems[1], ".result-original").textContent).toBe(
+      "segundo",
+    );
+    expect(requireElement(liItems[2], ".result-failed").textContent).toBe(
       'No encontrado: "faltante"',
     );
   });

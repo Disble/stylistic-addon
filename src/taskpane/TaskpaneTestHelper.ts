@@ -289,6 +289,15 @@ export class FakeElement {
     return child;
   }
 
+  /** Inserts this node immediately before a sibling, matching Element.before(). */
+  before(node: FakeElement): void {
+    if (!this.parentElement) {
+      return;
+    }
+
+    this.parentElement.insertBefore(node, this);
+  }
+
   addEventListener(event: string, handler: (ev: any) => void) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
