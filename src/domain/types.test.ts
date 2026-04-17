@@ -1,7 +1,9 @@
-import type { IDocumentPort } from "./ports";
+import { describe, expectTypeOf, it } from "vitest";
+import type { IDocumentPort, IFeedbackPort } from "./ports";
 import type {
   ApplySuggestionsResult,
   DocumentReviewState,
+  FeedbackPayload,
   ReplaceSuggestionIdentity,
   Suggestion,
   SuggestionActionResult,
@@ -13,274 +15,199 @@ import type {
 } from "./types";
 import type { DocumentReviewUiState } from "./review/DocumentReviewStateMachine";
 
-// ---------------------------------------------------------------------------
-// SuggestionState — compile-time assignability checks
-// ---------------------------------------------------------------------------
-
-const _state1: SuggestionState = "pending";
-const _state2: SuggestionState = "accepted";
-const _state3: SuggestionState = "rejected";
-const _state4: SuggestionState = "already-resolved";
-const _state5: SuggestionState = "unobservable";
-const _state6: SuggestionState = "identity-lost";
-
-// Suppress unused variable warnings
-void _state1;
-void _state2;
-void _state3;
-void _state4;
-void _state5;
-void _state6;
-
-const _observation1: SuggestionObservationStatus = "confirmed-pending";
-const _observation2: SuggestionObservationStatus = "confirmed-resolved";
-const _observation3: SuggestionObservationStatus = "unobservable";
-const _observation4: SuggestionObservationStatus = "identity-lost";
-
-void _observation1;
-void _observation2;
-void _observation3;
-void _observation4;
-
-const _artifactRef: WordArtifactRef = {
-  kind: "content-control",
-  role: "inserted-side",
-  value: "stylistic:track-change:s1",
-};
-
-const _replaceIdentity: ReplaceSuggestionIdentity = {
-  suggestionId: "s1",
-  version: "compound-v2",
-  insertedSideRef: _artifactRef,
-  deletedSideRef: {
-    kind: "anchor",
-    role: "deleted-side",
-    value: "texto original",
-  },
-  anchorRef: {
-    kind: "anchor",
-    role: "operational-anchor",
-    value: "Contexto con texto original.",
-  },
-};
-
-void _artifactRef;
-void _replaceIdentity;
-
-// ---------------------------------------------------------------------------
-// SuggestionActionResult — shape checks
-// ---------------------------------------------------------------------------
-
-const _result: SuggestionActionResult = {
-  status: "accepted",
-  trackedChangesAffected: 2,
-  commentDeleted: true,
-  pendingAfter: {
-    pendingStylisticArtifacts: 1,
-    hasPendingStylisticArtifacts: true,
-    trackChangesActive: true,
-  },
-  documentState: "pending-review",
-};
-
-const _resultWithError: SuggestionActionResult = {
-  status: "error",
-  trackedChangesAffected: 0,
-  commentDeleted: false,
-  pendingAfter: {
-    pendingStylisticArtifacts: 0,
-    hasPendingStylisticArtifacts: false,
-    trackChangesActive: false,
-  },
-  documentState: "idle",
-  error: "something went wrong",
-};
-
-const _documentUiState: DocumentReviewUiState = "ready-to-disable-track-changes";
-
-const _reviewState: DocumentReviewState = {
-  pendingStylisticArtifacts: 1,
-  hasPendingStylisticArtifacts: true,
-  trackChangesActive: true,
-};
-
-const _applyResult: ApplySuggestionsResult = {
-  successCount: 1,
-  failedSuggestions: [],
-  pendingAfter: _reviewState,
-  documentState: "pending-review",
-  trackChangesActivatedForBatch: true,
-};
-
-const _workflowResult: SuggestionResolutionWorkflowResult = {
-  status: "accepted",
-  trackedChangesAffected: 1,
-  commentDeleted: true,
-  pendingAfter: _reviewState,
-  documentState: "pending-review",
-  feedbackStatus: "sent",
-};
-
-const _suggestion: Suggestion = {
-  id: "s1",
-  context: "El texto original aparece dentro de este contexto.",
-  anchor: "texto original",
-  suggestedText: "texto mejorado",
-  justification: "Mejora la claridad",
-  category: "Claridad",
-  severity: "medium",
-  type: "track-change",
-};
-
-const _workflowSuggestion: WorkflowSuggestion = {
-  context: "El texto original aparece dentro de este contexto.",
-  anchor: "texto original",
-  suggestedText: "texto mejorado",
-  justification: "Mejora la claridad",
-  category: "Claridad",
-  severity: "medium",
-};
-
-void _result;
-void _resultWithError;
-void _suggestion;
-void _workflowSuggestion;
-void _reviewState;
-void _documentUiState;
-void _applyResult;
-void _workflowResult;
-
-type _SuggestionHasOriginalText = Suggestion extends { originalText: string }
-  ? true
-  : false;
-type _WorkflowSuggestionHasOriginalText = WorkflowSuggestion extends {
-  originalText: string;
-}
-  ? true
-  : false;
-const _checkSuggestionOriginalTextRemoved: _SuggestionHasOriginalText = false;
-const _checkWorkflowOriginalTextRemoved: _WorkflowSuggestionHasOriginalText =
-  false;
-
-void _checkSuggestionOriginalTextRemoved;
-void _checkWorkflowOriginalTextRemoved;
-
-// ---------------------------------------------------------------------------
-// IDocumentPort — acceptSuggestion and rejectSuggestion method presence
-// ---------------------------------------------------------------------------
-
-type _HasAccept = IDocumentPort extends {
-  acceptSuggestion(s: Suggestion): Promise<SuggestionActionResult>;
-}
-  ? true
-  : false;
-type _HasReject = IDocumentPort extends {
-  rejectSuggestion(s: Suggestion): Promise<SuggestionActionResult>;
-}
-  ? true
-  : false;
-type _HasReviewState = IDocumentPort extends {
-  getDocumentReviewState(): Promise<DocumentReviewState>;
-}
-  ? true
-  : false;
-type _HasDisableTrackChanges = IDocumentPort extends {
-  disableTrackChanges(): Promise<void>;
-}
-  ? true
-  : false;
-const _checkAccept: _HasAccept = true;
-const _checkReject: _HasReject = true;
-const _checkReviewState: _HasReviewState = true;
-const _checkDisableTrackChanges: _HasDisableTrackChanges = true;
-
-void _checkAccept;
-void _checkReject;
-void _checkReviewState;
-void _checkDisableTrackChanges;
-
-// ---------------------------------------------------------------------------
-// Runtime no-op test so Vitest registers the file
-// ---------------------------------------------------------------------------
-
-import { describe, it } from "vitest";
-
 describe("domain types (compile-time checks)", () => {
-  it("passes if the file compiles without errors", () => {
-    // All checks are compile-time — if this file compiles, the types are correct.
+  it("accepts the supported suggestion states", () => {
+    expectTypeOf<SuggestionState>().toEqualTypeOf<
+      | "pending"
+      | "resolving"
+      | "accepted"
+      | "rejected"
+      | "already-resolved"
+      | "unobservable"
+      | "identity-lost"
+      | "error"
+    >();
+  });
+
+  it("accepts the supported observation statuses", () => {
+    expectTypeOf<SuggestionObservationStatus>().toEqualTypeOf<
+      | "confirmed-pending"
+      | "confirmed-resolved"
+      | "unobservable"
+      | "identity-lost"
+    >();
+  });
+
+  it("supports the persisted replace suggestion identity shape", () => {
+    const artifactRef: WordArtifactRef = {
+      kind: "content-control",
+      role: "inserted-side",
+      value: "stylistic:track-change:s1",
+    };
+
+    const replaceIdentity: ReplaceSuggestionIdentity = {
+      suggestionId: "s1",
+      version: "compound-v2",
+      insertedSideRef: artifactRef,
+      deletedSideRef: {
+        kind: "anchor",
+        role: "deleted-side",
+        value: "texto original",
+      },
+      anchorRef: {
+        kind: "anchor",
+        role: "operational-anchor",
+        value: "Contexto con texto original.",
+      },
+    };
+
+    expectTypeOf(artifactRef).toEqualTypeOf<WordArtifactRef>();
+    expectTypeOf(replaceIdentity).toEqualTypeOf<ReplaceSuggestionIdentity>();
+  });
+
+  it("preserves the document result contracts", () => {
+    const reviewState: DocumentReviewState = {
+      pendingStylisticArtifacts: 1,
+      hasPendingStylisticArtifacts: true,
+      trackChangesActive: true,
+    };
+    const documentUiState: DocumentReviewUiState =
+      "ready-to-disable-track-changes";
+    const actionResult: SuggestionActionResult = {
+      status: "accepted",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
+      pendingAfter: reviewState,
+      documentState: "pending-review",
+    };
+    const actionErrorResult: SuggestionActionResult = {
+      status: "error",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: false,
+      },
+      documentState: "idle",
+      error: "something went wrong",
+    };
+    const applyResult: ApplySuggestionsResult = {
+      successCount: 1,
+      failedSuggestions: [],
+      pendingAfter: reviewState,
+      documentState: "pending-review",
+      trackChangesActivatedForBatch: true,
+    };
+    const workflowResult: SuggestionResolutionWorkflowResult = {
+      status: "accepted",
+      trackedChangesAffected: 1,
+      commentDeleted: true,
+      pendingAfter: reviewState,
+      documentState: "pending-review",
+      feedbackStatus: "sent",
+    };
+
+    expectTypeOf(reviewState).toEqualTypeOf<DocumentReviewState>();
+    expectTypeOf(documentUiState).toMatchTypeOf<DocumentReviewUiState>();
+    expectTypeOf(actionResult).toEqualTypeOf<SuggestionActionResult>();
+    expectTypeOf(actionErrorResult).toEqualTypeOf<SuggestionActionResult>();
+    expectTypeOf(applyResult).toEqualTypeOf<ApplySuggestionsResult>();
+    expectTypeOf(workflowResult).toEqualTypeOf<SuggestionResolutionWorkflowResult>();
+  });
+
+  it("keeps suggestion contracts free of originalText", () => {
+    type SuggestionHasOriginalText = "originalText" extends keyof Suggestion
+      ? true
+      : false;
+    type WorkflowSuggestionHasOriginalText =
+      "originalText" extends keyof WorkflowSuggestion ? true : false;
+
+    expectTypeOf<SuggestionHasOriginalText>().toEqualTypeOf<false>();
+    expectTypeOf<WorkflowSuggestionHasOriginalText>().toEqualTypeOf<false>();
+  });
+
+  it("preserves the suggestion payload shapes", () => {
+    const suggestion: Suggestion = {
+      id: "s1",
+      context: "El texto original aparece dentro de este contexto.",
+      anchor: "texto original",
+      suggestedText: "texto mejorado",
+      justification: "Mejora la claridad",
+      category: "Claridad",
+      severity: "medium",
+      type: "track-change",
+    };
+    const workflowSuggestion: WorkflowSuggestion = {
+      context: "El texto original aparece dentro de este contexto.",
+      anchor: "texto original",
+      suggestedText: "texto mejorado",
+      justification: "Mejora la claridad",
+      category: "Claridad",
+      severity: "medium",
+    };
+
+    expectTypeOf(suggestion).toEqualTypeOf<Suggestion>();
+    expectTypeOf(workflowSuggestion).toEqualTypeOf<WorkflowSuggestion>();
+  });
+
+  it("exposes the expected review methods on IDocumentPort", () => {
+    expectTypeOf<IDocumentPort["acceptSuggestion"]>().toEqualTypeOf<
+      (suggestion: Suggestion) => Promise<SuggestionActionResult>
+    >();
+    expectTypeOf<IDocumentPort["rejectSuggestion"]>().toEqualTypeOf<
+      (suggestion: Suggestion) => Promise<SuggestionActionResult>
+    >();
+    expectTypeOf<IDocumentPort["getDocumentReviewState"]>().toEqualTypeOf<
+      () => Promise<DocumentReviewState>
+    >();
+    expectTypeOf<IDocumentPort["disableTrackChanges"]>().toEqualTypeOf<
+      () => Promise<void>
+    >();
   });
 });
 
-// ---------------------------------------------------------------------------
-// FeedbackPayload — compile-time shape checks
-// ---------------------------------------------------------------------------
-
-import type { FeedbackPayload } from "./types";
-
-const _feedbackMinimal: FeedbackPayload = {
-  category: "Redundancia",
-  originalText: "completamente necesario",
-  suggestedText: "necesario",
-  justification: "Ya implica completitud.",
-  rating: "positive",
-  severity: "high",
-};
-
-const _feedbackWithComment: FeedbackPayload = {
-  category: "Muletilla",
-  originalText: "básicamente",
-  suggestedText: "",
-  justification: "Filler word.",
-  rating: "negative",
-  severity: "medium",
-  comment: "Estoy de acuerdo",
-};
-
-void _feedbackMinimal;
-void _feedbackWithComment;
-
-// FeedbackPayload must have a justification field
-type _HasJustification = FeedbackPayload extends { justification: string }
-  ? true
-  : false;
-const _checkJustification: _HasJustification = true;
-void _checkJustification;
-
-// rating must be exactly "positive" | "negative"
-type _RatingPositive = "positive" extends FeedbackPayload["rating"]
-  ? true
-  : false;
-type _RatingNegative = "negative" extends FeedbackPayload["rating"]
-  ? true
-  : false;
-const _r1: _RatingPositive = true;
-const _r2: _RatingNegative = true;
-void _r1;
-void _r2;
-
-// comment must be optional (can construct without it — already verified by _feedbackMinimal above)
-// Just verify comment field IS optional by checking it's not in the Required<> keys contract
-type _WithComment = Required<FeedbackPayload>;
-const _checkOptional: _WithComment["comment"] = "test";
-void _checkOptional;
-
-// ---------------------------------------------------------------------------
-// IFeedbackPort — compile-time checks
-// ---------------------------------------------------------------------------
-
-import type { IFeedbackPort } from "./ports";
-
-// IFeedbackPort must have sendFeedback(payload: FeedbackPayload): Promise<void>
-type _HasSendFeedback = IFeedbackPort extends {
-  sendFeedback(payload: FeedbackPayload): Promise<void>;
-}
-  ? true
-  : false;
-const _checkSendFeedback: _HasSendFeedback = true;
-void _checkSendFeedback;
-
 describe("IFeedbackPort (compile-time checks)", () => {
+  it("preserves the feedback payload shape", () => {
+    const feedbackMinimal: FeedbackPayload = {
+      autorSlug: "disble",
+      category: "Redundancia",
+      context: "Frase con completamente necesario.",
+      anchor: "completamente necesario",
+      suggestedText: "necesario",
+      justification: "Ya implica completitud.",
+      action: "accept",
+      severity: "high",
+      suggestionType: "track-change",
+    };
+    const feedbackWithComment: FeedbackPayload = {
+      autorSlug: "disble",
+      category: "Muletilla",
+      context: "Frase con básicamente.",
+      anchor: "básicamente",
+      suggestedText: "",
+      justification: "Filler word.",
+      action: "reject",
+      severity: "medium",
+      suggestionType: "track-change",
+      comment: "Estoy de acuerdo",
+    };
+
+    expectTypeOf(feedbackMinimal).toEqualTypeOf<FeedbackPayload>();
+    expectTypeOf(feedbackWithComment).toEqualTypeOf<FeedbackPayload>();
+    expectTypeOf<FeedbackPayload["justification"]>().toEqualTypeOf<string>();
+    expectTypeOf<FeedbackPayload["action"]>().toEqualTypeOf<"accept" | "reject">();
+
+    type HasOptionalComment = {} extends Pick<FeedbackPayload, "comment">
+      ? true
+      : false;
+
+    expectTypeOf<HasOptionalComment>().toEqualTypeOf<true>();
+  });
+
   it("declares sendFeedback(payload: FeedbackPayload): Promise<void>", () => {
-    // Checked above
+    expectTypeOf<IFeedbackPort["sendFeedback"]>().toEqualTypeOf<
+      (payload: FeedbackPayload) => Promise<void>
+    >();
   });
 });

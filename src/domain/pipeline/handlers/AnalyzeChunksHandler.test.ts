@@ -2,6 +2,7 @@ import type { IAnalysisPort, IDocumentPort } from "../../ports";
 import type { ChunkPollResult, Suggestion, TextChunk } from "../../types";
 import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";
+import { DEFAULT_AUTHOR_SLUG } from "../../../infrastructure/config";
 import { AnalyzeChunksHandler } from "./AnalyzeChunksHandler";
 
 // ---------------------------------------------------------------------------
@@ -136,13 +137,13 @@ describe("AnalyzeChunksHandler", () => {
         1,
         chunks[0],
         "general",
-        "Disble",
+        DEFAULT_AUTHOR_SLUG,
       );
       expect(ctx.analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(
         2,
         chunks[1],
         "general",
-        "Disble",
+        DEFAULT_AUTHOR_SLUG,
       );
       expect(ctx.analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(
         0,
@@ -207,7 +208,7 @@ describe("AnalyzeChunksHandler", () => {
       expect(ctx.analysisPort.submitChunkAnalysis).toHaveBeenCalledWith(
         expect.any(Object),
         "narrativa-literaria",
-        "Disble",
+        DEFAULT_AUTHOR_SLUG,
       );
     });
   });
