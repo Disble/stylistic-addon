@@ -198,7 +198,9 @@ export function makeResolveSuggestionContext({
   operationalAnchorText?: string;
   operationalAnchorRangeTCItems?: MockTrackedChange[];
 }): ResolveSuggestionContext {
-  const inferredSuggestionId = ccTag.split(":").at(-1) ?? "s-1";
+  const ccTagParts = ccTag.split(":");
+  const inferredSuggestionId =
+    ccTagParts[ccTagParts.length - 1] ?? "s-1";
   const spanTCCollection = { items: spanTCItems, load: vi.fn() };
   const rangeTCCollection = { items: rangeTCItems, load: vi.fn() };
   const bodyTCCollection = { items: bodyTCItems, load: vi.fn() };

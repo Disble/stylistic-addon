@@ -66,7 +66,7 @@ describe("taskpane suggestion presentation", () => {
     expect(li.querySelector('[data-action="reject"]')?.textContent).toBe("✗");
   });
 
-  it("uses the anchor text for clickable diff display and navigation", async () => {
+  it("uses the suggestion identity for clickable navigation", async () => {
     const doc = createTaskpaneDocument();
     const suggestion = makeSuggestion({
       id: "s-nav",
@@ -82,6 +82,6 @@ describe("taskpane suggestion presentation", () => {
     );
     clickable.click();
 
-    expect(taskpaneMocks.navigateToText).toHaveBeenCalledWith("fragmento exacto");
+    expect(taskpaneMocks.navigateToText).toHaveBeenCalledWith(suggestion);
   });
 });

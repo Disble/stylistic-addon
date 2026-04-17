@@ -3,6 +3,7 @@ import { WordAdapter } from "./WordAdapter";
 import {
   installRejectingWord,
   installWordWithContext,
+  makeSuggestion,
 } from "./WordAdapterTestHelper";
 
 describe("WordAdapter.navigateToText", () => {
@@ -15,6 +16,121 @@ describe("WordAdapter.navigateToText", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("selects the suggestion content control range when the real artifact exists", async () => {
+    const select = vi.fn();
+    const selectedRange = { select };
+    const ccResult = {
+      items: [
+        {
+          tag: "stylistic:track-change:s-1",
+          title: '{"version":"compound-v2","suggestionId":"s-1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s-1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"fragmento exacto"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con fragmento exacto."}}',
+          getRange: vi.fn(() => selectedRange),
+        },
+      ],
+      load: vi.fn(),
+    };
+    const context = {
+      document: {
+        contentControls: {
+          getByTag: vi.fn(() => ccResult),
+        },
+        body: {
+          search: vi.fn(),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    await expect(
+      adapter.navigateToText(
+        makeSuggestion({
+          anchor: "fragmento exacto",
+          context: "Contexto con fragmento exacto.",
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(context.document.contentControls.getByTag).toHaveBeenCalledWith(
+      "stylistic:track-change:s-1",
+    );
+    expect(select).toHaveBeenCalledOnce();
+    expect(context.document.body.search).not.toHaveBeenCalled();
+  });
+
+  it("falls back to contextual anchor search when the content control is missing", async () => {
+    const paragraphRange = {
+      load: vi.fn(),
+      text: "Contexto con fragmento exacto.",
+      search: vi.fn(() => ({ items: [{ select: vi.fn() }], load: vi.fn() })),
+    };
+    const contextRange: {
+      load: ReturnType<typeof vi.fn>;
+      text: string;
+      search: ReturnType<typeof vi.fn>;
+      paragraphs: {
+        getFirst: ReturnType<typeof vi.fn>;
+      };
+    } = {
+      load: vi.fn(),
+      text: "Contexto con fragmento exacto.",
+      search: vi.fn(),
+      paragraphs: {
+        getFirst: vi.fn(() => ({ getRange: vi.fn(() => paragraphRange) })),
+      },
+    };
+    const contextSearchResults = {
+      items: [contextRange],
+      load: vi.fn(),
+    };
+    const anchorSelect = vi.fn();
+    const anchorSearchResults = {
+      items: [{ select: anchorSelect }],
+      load: vi.fn(),
+    };
+    const ccResult = {
+      items: [],
+      load: vi.fn(),
+    };
+    const body = {
+      text: "Contexto con fragmento exacto.",
+      load: vi.fn(),
+      search: vi.fn().mockReturnValueOnce(contextSearchResults),
+    };
+    contextRange.search = vi.fn(() => anchorSearchResults);
+    const context = {
+      document: {
+        contentControls: {
+          getByTag: vi.fn(() => ccResult),
+        },
+        body,
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    await expect(
+      adapter.navigateToText(
+        makeSuggestion({
+          anchor: "fragmento exacto",
+          context: "Contexto con fragmento exacto.",
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(body.search).toHaveBeenCalledWith("Contexto con fragmento exacto.", {
+      matchCase: true,
+      matchWholeWord: false,
+    });
+    expect(contextRange.search).toHaveBeenCalledWith("fragmento exacto", {
+      matchCase: true,
+      matchWholeWord: false,
+    });
+    expect(anchorSelect).toHaveBeenCalledOnce();
   });
 
   it("selects the first matching range when Word finds the text", async () => {
@@ -53,6 +169,8 @@ describe("WordAdapter.navigateToText", () => {
     const context = {
       document: {
         body: {
+          load: vi.fn(),
+          text: "",
           search: vi.fn(() => results),
         },
       },
@@ -64,7 +182,8 @@ describe("WordAdapter.navigateToText", () => {
     await expect(adapter.navigateToText("ausente")).resolves.toBeUndefined();
 
     expect(results.load).toHaveBeenCalledWith("items");
-    expect(context.sync).toHaveBeenCalledTimes(1);
+    expect(context.document.body.load).toHaveBeenCalledWith("text");
+    expect(context.sync).toHaveBeenCalledTimes(3);
   });
 
   it("swallows Word host failures because navigation is best-effort", async () => {

@@ -115,11 +115,12 @@ export interface IDocumentPort {
   disableTrackChanges(): Promise<void>;
 
   /**
-   * Navigates the document view to the first occurrence of the given text.
-   * Selects the matching range so Word scrolls to it automatically.
-   * Never throws — silently no-ops if the text is not found.
+   * Navigates the document view to the real Word artifact for one suggestion.
+   * Prefers persisted Stylistic identity and falls back to text search only when
+   * the artifact can no longer be re-located directly.
+   * Never throws — silently no-ops if the target is not found.
    */
-  navigateToText(text: string): Promise<void>;
+  navigateToText(target: Suggestion | string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

@@ -98,7 +98,7 @@ const stateMachine = new PipelineStateMachine();
 
 /** Deps injected into the card renderer — closures over module-level ports. */
 const cardRendererDeps: ResultsPanelDeps = {
-  navigateToText: (text) => documentPort.navigateToText(text),
+  navigateToText: (target) => documentPort.navigateToText(target),
   acceptSuggestion: (s, comment) =>
     reviewSessionMediator.acceptSuggestion(s, comment),
   rejectSuggestion: (s, comment) =>

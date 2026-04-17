@@ -41,15 +41,28 @@ import {
   getCleanupPreview,
 } from "./cleanup/CommentCleanup";
 import {
+  isValidCompoundReplaceIdentity,
   parseReplaceIdentityTitle,
   ResolveSuggestionCommand,
 } from "./ResolveSuggestionCommand";
+import {
+  findFirstAlphanumericOffset,
+  findUniqueLocatorSubstring,
+  findWhitespaceInsensitiveSlice,
+} from "./WordSearchAdapter";
 
 type ParagraphSnapshot = {
   text?: string;
   styleBuiltIn?: string;
   firstLineIndent?: number;
   leftIndent?: number;
+};
+
+/** Minimal Word search surface shared by body and range containers. */
+type SearchContainer = {
+  search(text: string, options: Record<string, boolean>): Word.RangeCollection;
+  load(property: "text"): void;
+  text: string;
 };
 
 const PARAGRAPH_LOAD_FIELDS =
@@ -90,7 +103,18 @@ function buildStructuredParagraphText(paragraphs: ParagraphSnapshot[]): string {
     .join("\n\n");
 }
 
+/** Returns the canonical Stylistic tag for one suggestion. */
+function buildSuggestionTag(suggestion: Suggestion): string {
+  return `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
+}
+
 export class WordAdapter implements IDocumentPort {
+  /** Normalizes Word search rejections triggered by unsupported search strings. */
+  private static isSearchInvalidError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes("SearchStringInvalidOrTooLong");
+  }
+
   /**
    * Creates a normalized document-review snapshot.
    */
@@ -112,6 +136,220 @@ export class WordAdapter implements IDocumentPort {
     reviewState: DocumentReviewState,
   ): DocumentReviewUiState {
     return DocumentReviewStateMachine.deriveState(reviewState);
+  }
+
+  /** Chooses the best navigation CC candidate when multiple artifacts share a tag. */
+  private selectNavigationContentControl(
+    ccs: Word.ContentControl[],
+    suggestion: Suggestion,
+  ): Word.ContentControl | null {
+    if (ccs.length === 0) {
+      return null;
+    }
+
+    const v2Candidate = ccs.find((cc) => {
+      const identity = parseReplaceIdentityTitle(cc.title);
+      return isValidCompoundReplaceIdentity(identity, suggestion);
+    });
+
+    return v2Candidate ?? ccs[0] ?? null;
+  }
+
+  /** Runs one Word search attempt and normalizes invalid-search host failures. */
+  private async runSearchAttempt(
+    context: Word.RequestContext,
+    container: SearchContainer,
+    searchText: string,
+    options: Record<string, boolean>,
+  ): Promise<{ invalid: boolean; results?: Word.RangeCollection }> {
+    try {
+      const results = container.search(searchText, options);
+      results.load("items");
+      await context.sync();
+      return { invalid: false, results };
+    } catch (error) {
+      if (WordAdapter.isSearchInvalidError(error)) {
+        return { invalid: true };
+      }
+      throw error;
+    }
+  }
+
+  /** Resolves a range by scanning container text with whitespace-insensitive matching. */
+  private async resolveByWhitespaceScan(
+    context: Word.RequestContext,
+    container: SearchContainer,
+    searchText: string,
+    searchOptions: Record<string, boolean>,
+  ): Promise<Word.Range | null> {
+    container.load("text");
+    await context.sync();
+
+    const rawSlice = findWhitespaceInsensitiveSlice(searchText, container.text);
+    if (!rawSlice) {
+      return null;
+    }
+
+    const fallbackSearchText = findUniqueLocatorSubstring(
+      rawSlice,
+      container.text,
+    );
+    if (!fallbackSearchText) {
+      return null;
+    }
+
+    const fallbackAttempt = await this.runSearchAttempt(
+      context,
+      container,
+      fallbackSearchText,
+      searchOptions,
+    );
+    if (!fallbackAttempt.invalid) {
+      return fallbackAttempt.results?.items[0] ?? null;
+    }
+
+    const alphanumericOffset = findFirstAlphanumericOffset(rawSlice);
+    if (alphanumericOffset <= 0) {
+      return null;
+    }
+
+    const alphanumericSlice = rawSlice.slice(alphanumericOffset);
+    const alphanumericCandidate = findUniqueLocatorSubstring(
+      alphanumericSlice,
+      container.text,
+    );
+    if (!alphanumericCandidate) {
+      return null;
+    }
+
+    const retryAttempt = await this.runSearchAttempt(
+      context,
+      container,
+      alphanumericCandidate,
+      searchOptions,
+    );
+    if (retryAttempt.invalid) {
+      return null;
+    }
+
+    return retryAttempt.results?.items[0] ?? null;
+  }
+
+  /** Searches a body or range using the same resilient fallback strategy as apply/resolve. */
+  private async searchWithFallback(
+    context: Word.RequestContext,
+    container: SearchContainer,
+    searchText: string,
+  ): Promise<Word.Range | null> {
+    const searchOptions = { matchCase: true, matchWholeWord: false };
+    const relaxedOptions = {
+      matchCase: true,
+      matchWholeWord: false,
+      ignorePunct: true,
+      ignoreSpace: true,
+    };
+
+    const exactMatchAllowed = searchText.length <= 256;
+    let exactResults: Word.RangeCollection | undefined;
+
+    if (exactMatchAllowed) {
+      const exactAttempt = await this.runSearchAttempt(
+        context,
+        container,
+        searchText,
+        searchOptions,
+      );
+      if (exactAttempt.invalid) {
+        return this.resolveByWhitespaceScan(
+          context,
+          container,
+          searchText,
+          searchOptions,
+        );
+      }
+
+      exactResults = exactAttempt.results;
+      if ((exactResults?.items.length ?? 0) > 0) {
+        return exactResults?.items[0] ?? null;
+      }
+    }
+
+    const shouldRunRelaxedSearch =
+      !exactMatchAllowed || (exactResults?.items.length ?? 0) === 0;
+    if (shouldRunRelaxedSearch) {
+      const relaxedAttempt = await this.runSearchAttempt(
+        context,
+        container,
+        searchText,
+        relaxedOptions,
+      );
+      if (relaxedAttempt.invalid) {
+        return this.resolveByWhitespaceScan(
+          context,
+          container,
+          searchText,
+          searchOptions,
+        );
+      }
+
+      if ((relaxedAttempt.results?.items.length ?? 0) > 0) {
+        return relaxedAttempt.results?.items[0] ?? null;
+      }
+    }
+
+    return this.resolveByWhitespaceScan(
+      context,
+      container,
+      searchText,
+      searchOptions,
+    );
+  }
+
+  /** Re-locates a suggestion by its contextual anchor when direct artifact lookup fails. */
+  private async resolveSuggestionFallbackRange(
+    context: Word.RequestContext,
+    suggestion: Suggestion,
+  ): Promise<Word.Range | null> {
+    const body = context.document.body as unknown as SearchContainer;
+    const contextRange = await this.searchWithFallback(
+      context,
+      body,
+      suggestion.context,
+    );
+
+    if (!contextRange) {
+      return this.searchWithFallback(context, body, suggestion.anchor);
+    }
+
+    contextRange.load("text");
+    const containingParagraph = contextRange.paragraphs
+      .getFirst()
+      .getRange("Whole");
+    containingParagraph.load("text");
+    await context.sync();
+
+    const shouldExpandToParagraph =
+      !contextRange.text.includes(suggestion.anchor) &&
+      contextRange.text.length < suggestion.context.length - 20;
+
+    const searchContainer = shouldExpandToParagraph
+      ? (containingParagraph as unknown as SearchContainer)
+      : (contextRange as unknown as SearchContainer);
+
+    return this.searchWithFallback(context, searchContainer, suggestion.anchor);
+  }
+
+  /** Selects a range if present so Word scrolls the viewport to it. */
+  private async selectRange(
+    context: Word.RequestContext,
+    range: Word.Range | null,
+  ): Promise<void> {
+    if (!range) {
+      return;
+    }
+
+    range.select();
+    await context.sync();
   }
 
   /**
@@ -359,23 +597,44 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /**
-   * Navigates the Word document to the first occurrence of `text` by selecting
-   * the matching range (Word scrolls to the selection automatically).
-   * Never throws — silently no-ops when text is not found or on any error.
+   * Navigates to the real suggestion artifact when available.
+   * Falls back to resilient text/context search only when direct artifact lookup
+   * can no longer re-locate the suggestion.
    */
-  async navigateToText(text: string): Promise<void> {
+  async navigateToText(target: Suggestion | string): Promise<void> {
     try {
       await Word.run(async (context) => {
-        const results = context.document.body.search(text, {
-          matchCase: true,
-          matchWholeWord: false,
-        });
-        results.load("items");
-        await context.sync();
-        if (results.items.length > 0) {
-          results.items[0].select();
+        if (typeof target !== "string") {
+          const ccResult = context.document.contentControls.getByTag(
+            buildSuggestionTag(target),
+          );
+          ccResult.load("items/tag,items/title");
           await context.sync();
+
+          const selectedCc = this.selectNavigationContentControl(
+            ccResult.items,
+            target,
+          );
+          if (selectedCc) {
+            await this.selectRange(context, selectedCc.getRange());
+            return;
+          }
+
+          await this.selectRange(
+            context,
+            await this.resolveSuggestionFallbackRange(context, target),
+          );
+          return;
         }
+
+        await this.selectRange(
+          context,
+          await this.searchWithFallback(
+            context,
+            context.document.body as unknown as SearchContainer,
+            target,
+          ),
+        );
       });
     } catch {
       // Navigation is best-effort — silently ignore all failures

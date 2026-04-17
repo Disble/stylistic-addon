@@ -22,7 +22,7 @@ const hoistedTaskpaneMocks = vi.hoisted(() => ({
   acceptSuggestion: vi.fn(),
   rejectSuggestion: vi.fn(),
   disableTrackChanges: vi.fn<() => Promise<void>>(),
-  navigateToText: vi.fn<(text: string) => Promise<void>>(),
+  navigateToText: vi.fn<(target: Suggestion | string) => Promise<void>>(),
   mastraAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
   feedbackSendFeedback: vi.fn<(payload: any) => Promise<void>>(),
@@ -65,8 +65,8 @@ vi.mock("../adapters/word/WordAdapter", () => ({
       return hoistedTaskpaneMocks.disableTrackChanges();
     }
 
-    navigateToText(text: string) {
-      return hoistedTaskpaneMocks.navigateToText(text);
+    navigateToText(target: Suggestion | string) {
+      return hoistedTaskpaneMocks.navigateToText(target);
     }
   },
 }));

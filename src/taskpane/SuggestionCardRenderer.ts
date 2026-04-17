@@ -36,7 +36,7 @@ import {
 
 /** Business-layer capabilities needed to render and interact with cards. */
 export type ResultsPanelDeps = {
-  navigateToText: (text: string) => Promise<void>;
+  navigateToText: (target: Suggestion | string) => Promise<void>;
   acceptSuggestion: (
     suggestion: Suggestion,
     comment?: string,
@@ -471,7 +471,7 @@ function wireSuggestionCardInteractions(
   ) as HTMLElement | null;
   if (clickableEl) {
     clickableEl.addEventListener("click", () => {
-      void deps.navigateToText(suggestion.anchor);
+      void deps.navigateToText(suggestion);
     });
   }
 
