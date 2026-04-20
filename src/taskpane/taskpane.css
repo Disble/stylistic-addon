@@ -287,8 +287,12 @@ body {
 }
 
 .card-diff {
-  margin: 6px 0;
-  line-height: 1.5;
+  margin: 4px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13.5px;
+  line-height: 1.45;
 }
 
 .card-footer {
@@ -352,18 +356,15 @@ body {
 /* ─── Diff ──────────────────────────────────────────────────────────────── */
 
 .result-original {
-  text-decoration: line-through;
   color: #a80000;
-}
-
-.result-arrow {
-  color: #605e5c;
-  margin: 0 4px;
+  opacity: 0.7;
+  font-size: 12px;
 }
 
 .result-suggested {
   color: #107c10;
   font-weight: 600;
+  font-size: 13.5px;
 }
 
 .suggestion-card.result-rejected .result-suggested {
@@ -377,7 +378,7 @@ body {
   color: #605e5c;
   font-size: 11px;
   line-height: 1.4;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .result-failed {

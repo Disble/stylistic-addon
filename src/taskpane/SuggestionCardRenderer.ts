@@ -226,11 +226,6 @@ function appendActionableCardContent(
     origSpan.textContent = suggestion.anchor;
     diff.appendChild(origSpan);
 
-    const arrowSpan = document.createElement("span");
-    arrowSpan.className = "result-arrow";
-    arrowSpan.textContent = " -> ";
-    diff.appendChild(arrowSpan);
-
     const sugSpan = document.createElement("span");
     sugSpan.className = "result-suggested";
     sugSpan.textContent = suggestion.suggestedText ?? "";
