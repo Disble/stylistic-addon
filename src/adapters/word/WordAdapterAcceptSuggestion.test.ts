@@ -823,6 +823,59 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(deletedAcceptSpy).toHaveBeenCalledOnce();
   });
 
+  it("accepts cross-sentence replace suggestions when the operational anchor exposes a missing deleted fragment", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-1",
+      anchor: "multitud. Así que",
+      suggestedText: "multitud, así que",
+      context:
+        "pero el flujo era muy bajo para considerarse una multitud. Así que Xia y Shu no tenían que dar explicaciones",
+    });
+    const addedAcceptSpy = vi.fn();
+    const deletedTailAcceptSpy = vi.fn();
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-1",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-1",
+        insertedTag: "stylistic:track-change:chunk0-1",
+        deletedValue: "multitud. Así que",
+        anchorValue:
+          "pero el flujo era muy bajo para considerarse una multitud. Así que Xia y Shu no tenían que dar explicaciones",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-added",
+          type: "Added",
+          accept: addedAcceptSpy,
+          reject: vi.fn(),
+        },
+      ],
+      rangeTCItems: [],
+      bodyTCItems: [],
+      operationalAnchorText:
+        "pero el flujo era muy bajo para considerarse una multitud. Así que Xia y Shu no tenían que dar explicaciones",
+      operationalAnchorRangeTCItems: [
+        {
+          id: "tc-deleted-tail",
+          type: "Deleted",
+          accept: deletedTailAcceptSpy,
+          reject: vi.fn(),
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(addedAcceptSpy).toHaveBeenCalledOnce();
+    expect(deletedTailAcceptSpy).toHaveBeenCalledOnce();
+  });
+
   it("returns error without throwing when Word.run fails", async () => {
     const suggestion = makeSuggestion({
       anchor: "texto original",

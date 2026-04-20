@@ -137,6 +137,34 @@ export class SuggestionResolutionObserver {
     });
   }
 
+  /** Merges tracked-change evidence from multiple sources without duplicating logical changes. */
+  private mergeTrackedChanges(
+    ...collections: Array<Word.TrackedChange[]>
+  ): Word.TrackedChange[] {
+    const trackedChangesById = new Map<string, Word.TrackedChange>();
+    const trackedChangesWithoutId: Word.TrackedChange[] = [];
+
+    for (const collection of collections) {
+      for (const trackedChange of collection) {
+        const id = String((trackedChange as { id?: string | number }).id ?? "");
+
+        if (id.length > 0) {
+          trackedChangesById.set(id, trackedChange);
+          continue;
+        }
+
+        if (!trackedChangesWithoutId.includes(trackedChange)) {
+          trackedChangesWithoutId.push(trackedChange);
+        }
+      }
+    }
+
+    return [
+      ...Array.from(trackedChangesById.values()),
+      ...trackedChangesWithoutId,
+    ];
+  }
+
   /** Observes replace suggestion evidence through compound-v2 metadata only. */
   private async observeReplaceSuggestion(
     context: Word.RequestContext,
@@ -159,19 +187,10 @@ export class SuggestionResolutionObserver {
         };
       }
 
-      const trackedChanges = await this.collectTrackedChangesForContentControl(
-        context,
-        cc,
-      );
+      const contentControlTrackedChanges =
+        await this.collectTrackedChangesForContentControl(context, cc);
 
-      if (trackedChanges.length > 0) {
-        return {
-          identity: parsedIdentity,
-          trackedChanges,
-          observationStatus: "confirmed-pending",
-        };
-      }
-
+      let operationalAnchorTrackedChanges: Word.TrackedChange[] = [];
       const operationalAnchorRange = await this.resolveOperationalAnchorRange(
         context,
         parsedIdentity,
@@ -181,29 +200,30 @@ export class SuggestionResolutionObserver {
         const anchorTrackedChanges = operationalAnchorRange.getTrackedChanges();
         anchorTrackedChanges.load({ select: "type,id" });
         await context.sync();
-
-        if (anchorTrackedChanges.items.length > 0) {
-          return {
-            identity: parsedIdentity,
-            trackedChanges: anchorTrackedChanges.items,
-            observationStatus: "confirmed-pending",
-          };
-        }
+        operationalAnchorTrackedChanges = anchorTrackedChanges.items;
       }
 
+      let commentTrackedChanges: Word.TrackedChange[] = [];
       if (colocatedComment) {
-        const commentTrackedChanges =
+        const commentRangeTrackedChanges =
           colocatedComment.range.getTrackedChanges();
-        commentTrackedChanges.load({ select: "type,id" });
+        commentRangeTrackedChanges.load({ select: "type,id" });
         await context.sync();
+        commentTrackedChanges = commentRangeTrackedChanges.items;
+      }
 
-        if (commentTrackedChanges.items.length > 0) {
-          return {
-            identity: parsedIdentity,
-            trackedChanges: commentTrackedChanges.items,
-            observationStatus: "confirmed-pending",
-          };
-        }
+      const trackedChanges = this.mergeTrackedChanges(
+        contentControlTrackedChanges,
+        operationalAnchorTrackedChanges,
+        commentTrackedChanges,
+      );
+
+      if (trackedChanges.length > 0) {
+        return {
+          identity: parsedIdentity,
+          trackedChanges,
+          observationStatus: "confirmed-pending",
+        };
       }
 
       return {

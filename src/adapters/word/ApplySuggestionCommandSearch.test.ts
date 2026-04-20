@@ -523,4 +523,207 @@ describe("ApplySuggestionCommand search behavior", () => {
       "Replace",
     );
   });
+
+  it("recovers when a previous nearby replacement mutates the backend context but the anchor text still exists in the paragraph", async () => {
+    const backendContext =
+      "pero el flujo era muy bajo para considerarse una multitud, así queAsí que Xia y Shu";
+    const documentParagraph =
+      "pero la afluencia era muy baja para considerarse una multitud, así queAsí que Xia y Shu";
+    const anchorText = "así queAsí que";
+
+    const shortMutatedMatch = createRange({
+      text: "así queAsí que Xia y Shu",
+      paragraphText: documentParagraph,
+      searchSequence: [[], [], []],
+    });
+
+    const env = installWordContext({
+      documentText: documentParagraph,
+      contextText: documentParagraph,
+      anchorText,
+      contextSearchSequence: [[shortMutatedMatch]],
+      anchorSearchSequence: [[], [], []],
+    });
+
+    const paragraphRange = (
+      shortMutatedMatch as MockRange & {
+        paragraphs: { getFirst: () => { getRange: () => MockRange } };
+      }
+    ).paragraphs.getFirst().getRange("Whole") as MockRange;
+    paragraphRange.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [env.anchorRange], load: vi.fn() });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        context: backendContext,
+        anchor: anchorText,
+        suggestedText: "así que",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'contextMatchLen=24, paragraphLen=87, anchorIndexInMatch=0, anchorIndexInParagraph=63',
+      ),
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'anchor not found inside partial context match (24 chars) — retrying in paragraph (87 chars)',
+      ),
+    );
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
+      "así que",
+      "Replace",
+    );
+  });
+
+  it("recovers 'el flujo era muy bajo' when a later nearby replacement mutates the backend context", async () => {
+    const backendContext =
+      "pero el flujo era muy bajo para considerarse una multitud, así queAsí que Xia y Shu";
+    const documentParagraph =
+      "pero el flujo era muy bajo para considerarse una multitud, así que Xia y Shu";
+    const anchorText = "el flujo era muy bajo";
+
+    const shortMutatedMatch = createRange({
+      text: "así que Xia y Shu",
+      paragraphText: documentParagraph,
+      searchSequence: [[], [], []],
+    });
+
+    const env = installWordContext({
+      documentText: documentParagraph,
+      contextText: documentParagraph,
+      anchorText,
+      contextSearchSequence: [[shortMutatedMatch]],
+      anchorSearchSequence: [[], [], []],
+    });
+
+    const paragraphRange = (
+      shortMutatedMatch as MockRange & {
+        paragraphs: { getFirst: () => { getRange: () => MockRange } };
+      }
+    ).paragraphs.getFirst().getRange("Whole") as MockRange;
+    paragraphRange.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [env.anchorRange], load: vi.fn() });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        context: backendContext,
+        anchor: anchorText,
+        suggestedText: "la afluencia era muy baja",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("does not contain anchor — expanding to paragraph"),
+    );
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
+      "la afluencia era muy baja",
+      "Replace",
+    );
+  });
+
+  it("recovers 'opciones. Desde' after a later same-paragraph replacement mutates the backend context", async () => {
+    const backendContext =
+      "Al mismo tiempo, Xia estaba considerando varias opciones. Desde que Anning les hubiera mentido hasta que WEPO no haya querido dejar registro de Mei.";
+    const documentParagraph =
+      "Al mismo tiempo, Xia estaba considerando varias opciones. Desde que Anning les hubiera mentido hasta que WEPO no hubiera querido dejar registro de Mei.";
+    const anchorText = "opciones. Desde";
+
+    const shortMutatedMatch = createRange({
+      text: "opciones. Desde que Anning les hubiera mentido hasta que WEPO no ",
+      paragraphText: documentParagraph,
+      searchSequence: [[], [], []],
+    });
+
+    const env = installWordContext({
+      documentText: documentParagraph,
+      contextText: documentParagraph,
+      anchorText,
+      contextSearchSequence: [[shortMutatedMatch]],
+      anchorSearchSequence: [[], [], []],
+    });
+
+    const paragraphRange = (
+      shortMutatedMatch as MockRange & {
+        paragraphs: { getFirst: () => { getRange: () => MockRange } };
+      }
+    ).paragraphs.getFirst().getRange("Whole") as MockRange;
+    paragraphRange.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [env.anchorRange], load: vi.fn() });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        context: backendContext,
+        anchor: anchorText,
+        suggestedText: "opciones: desde",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("anchor not found inside partial context match"),
+    );
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
+      "opciones: desde",
+      "Replace",
+    );
+  });
+
+  it("recovers 'engranajes de su cabeza' after a later same-sentence replacement mutates the backend context", async () => {
+    const backendContext =
+      "Intentó forzar los engranajes de su cabeza, pero la falta de sueño y cansancio físico había hecho suficiente mella para bloquearlos.";
+    const documentParagraph =
+      "Intentó forzar los engranajes de su cabeza, pero la falta de sueño y cansancio físico habían hecho suficiente mella para bloquearlos.";
+    const anchorText = "engranajes de su cabeza";
+
+    const shortMutatedMatch = createRange({
+      text: "engranajes de su cabeza, pero la falta de sueño y cansancio físico ",
+      paragraphText: documentParagraph,
+      searchSequence: [[], [], []],
+    });
+
+    const env = installWordContext({
+      documentText: documentParagraph,
+      contextText: documentParagraph,
+      anchorText,
+      contextSearchSequence: [[shortMutatedMatch]],
+      anchorSearchSequence: [[], [], []],
+    });
+
+    const paragraphRange = (
+      shortMutatedMatch as MockRange & {
+        paragraphs: { getFirst: () => { getRange: () => MockRange } };
+      }
+    ).paragraphs.getFirst().getRange("Whole") as MockRange;
+    paragraphRange.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [env.anchorRange], load: vi.fn() });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        context: backendContext,
+        anchor: anchorText,
+        suggestedText: "engranajes de su mente",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("anchor not found inside partial context match"),
+    );
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
+      "engranajes de su mente",
+      "Replace",
+    );
+  });
 });

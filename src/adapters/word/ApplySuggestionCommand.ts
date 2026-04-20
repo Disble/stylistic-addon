@@ -187,6 +187,10 @@ export class ApplySuggestionCommand {
     const shouldExpandToParagraph =
       !matchText.includes(this.suggestion.anchor) &&
       matchText.length < this.suggestion.context.length - 20;
+    const shouldRetryInParagraphAfterMiss =
+      !shouldExpandToParagraph &&
+      matchText.length < this.suggestion.context.length - 20 &&
+      containingParagraph.text.length > matchText.length;
 
     const searchContainer = shouldExpandToParagraph
       ? (containingParagraph as unknown as WordSearchContainer)
@@ -198,9 +202,23 @@ export class ApplySuggestionCommand {
       );
     }
 
-    return this.textLocator.locate({
+    const anchorRange = await this.textLocator.locate({
       context,
       container: searchContainer,
+      searchText: this.suggestion.anchor,
+    });
+
+    if (anchorRange || !shouldRetryInParagraphAfterMiss) {
+      return anchorRange;
+    }
+
+    console.log(
+      `🔬 [ApplySuggestionCommand] "${this.id}": anchor not found inside partial context match (${matchText.length} chars) — retrying in paragraph (${containingParagraph.text.length} chars)`,
+    );
+
+    return this.textLocator.locate({
+      context,
+      container: containingParagraph as unknown as WordSearchContainer,
       searchText: this.suggestion.anchor,
     });
   }
