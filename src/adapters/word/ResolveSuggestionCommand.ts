@@ -75,15 +75,17 @@ export function isValidCompoundReplaceIdentity(
     return false;
   }
 
+  const expectedTag = `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
+
   return (
     identity.suggestionId === suggestion.id &&
     identity.insertedSideRef?.kind === "content-control" &&
     identity.insertedSideRef.role === "inserted-side" &&
-    identity.insertedSideRef.value.length > 0 &&
+    identity.insertedSideRef.value === expectedTag &&
     identity.deletedSideRef?.role === "deleted-side" &&
-    identity.deletedSideRef.value.length > 0 &&
+    identity.deletedSideRef.value === suggestion.anchor &&
     identity.anchorRef?.role === "operational-anchor" &&
-    identity.anchorRef.value.length > 0
+    identity.anchorRef.value === suggestion.context
   );
 }
 

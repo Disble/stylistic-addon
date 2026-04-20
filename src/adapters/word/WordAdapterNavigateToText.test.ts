@@ -3,8 +3,9 @@ import { WordAdapter } from "./WordAdapter";
 import {
   installRejectingWord,
   installWordWithContext,
+  makeCompoundV2Title,
   makeSuggestion,
-} from "./WordAdapterTestHelper";
+} from "./WordAdapterActionTestHelper";
 
 describe("WordAdapter.navigateToText", () => {
   let adapter: WordAdapter;
@@ -131,6 +132,63 @@ describe("WordAdapter.navigateToText", () => {
       matchWholeWord: false,
     });
     expect(anchorSelect).toHaveBeenCalledOnce();
+  });
+
+  it("prefers the compound-v2 CC whose full identity matches the current suggestion", async () => {
+    const staleSelect = vi.fn();
+    const currentSelect = vi.fn();
+    const ccResult = {
+      items: [
+        {
+          tag: "stylistic:track-change:chunk0-0",
+          title: makeCompoundV2Title({
+            suggestionId: "chunk0-0",
+            insertedTag: "stylistic:track-change:chunk0-0",
+            deletedValue: "anchor viejo",
+            anchorValue: "Contexto viejo.",
+          }),
+          getRange: vi.fn(() => ({ select: staleSelect })),
+        },
+        {
+          tag: "stylistic:track-change:chunk0-0",
+          title: makeCompoundV2Title({
+            suggestionId: "chunk0-0",
+            insertedTag: "stylistic:track-change:chunk0-0",
+            deletedValue: "fragmento actual",
+            anchorValue: "Contexto con fragmento actual.",
+          }),
+          getRange: vi.fn(() => ({ select: currentSelect })),
+        },
+      ],
+      load: vi.fn(),
+    };
+    const context = {
+      document: {
+        contentControls: {
+          getByTag: vi.fn(() => ccResult),
+        },
+        body: {
+          search: vi.fn(),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    await expect(
+      adapter.navigateToText(
+        makeSuggestion({
+          id: "chunk0-0",
+          anchor: "fragmento actual",
+          context: "Contexto con fragmento actual.",
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(currentSelect).toHaveBeenCalledOnce();
+    expect(staleSelect).not.toHaveBeenCalled();
+    expect(context.document.body.search).not.toHaveBeenCalled();
   });
 
   it("selects the first matching range when Word finds the text", async () => {

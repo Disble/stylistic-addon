@@ -224,6 +224,10 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        deletedValue: "quién",
+        anchorValue: "Contexto con quién.",
+      }),
       spanTCItems: ccScopedTrackedChanges,
       bodyTCItems: bodyTrackedChanges,
       bodyTCRelations: ["Equal", "OverlapsBefore"],
@@ -270,6 +274,10 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        deletedValue: "cuál",
+        anchorValue: "Contexto con cuál.",
+      }),
       spanTCItems: ccScopedTrackedChanges,
       bodyTCItems: bodyTrackedChanges,
       bodyTCRelations: ["Equal", "AdjacentBefore"],
@@ -296,6 +304,10 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        deletedValue: "quién",
+        anchorValue: "Contexto con quién.",
+      }),
       spanTCItems: [],
       rangeTCItems: [
         {
@@ -549,6 +561,10 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        deletedValue: "con la Jing",
+        anchorValue: "Contexto con la Jing.",
+      }),
       spanTCItems: [],
       comments: [],
     });

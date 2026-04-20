@@ -403,6 +403,10 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        deletedValue: "quién",
+        anchorValue: "Contexto con quién.",
+      }),
       spanTCItems: ccScopedTrackedChanges,
       bodyTCItems: bodyTrackedChanges,
       bodyTCRelations: ["Equal", "OverlapsBefore"],
@@ -449,6 +453,10 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        deletedValue: "cuál",
+        anchorValue: "Contexto con cuál.",
+      }),
       spanTCItems: ccScopedTrackedChanges,
       bodyTCItems: bodyTrackedChanges,
       bodyTCRelations: ["Equal", "AdjacentBefore"],
@@ -475,6 +483,10 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        deletedValue: "quién",
+        anchorValue: "Contexto con quién.",
+      }),
       spanTCItems: [],
       rangeTCItems: [
         {
@@ -668,6 +680,67 @@ describe("WordAdapter.acceptSuggestion", () => {
           title: makeCompoundV2Title({
             suggestionId: "chunk0-0",
             insertedTag: "stylistic:track-change:chunk0-0",
+          }),
+          spanTCItems: [
+            {
+              id: "tc-added",
+              type: "Added",
+              accept: addedAcceptSpy,
+              reject: vi.fn(),
+            },
+            {
+              id: "tc-deleted",
+              type: "Deleted",
+              accept: deletedAcceptSpy,
+              reject: vi.fn(),
+            },
+          ],
+          rangeTCItems: [],
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(addedAcceptSpy).toHaveBeenCalledOnce();
+    expect(deletedAcceptSpy).toHaveBeenCalledOnce();
+  });
+
+  it("ignores stale compound-v2 CCs whose anchor metadata belongs to an earlier run", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-0",
+      anchor: "fragmento actual",
+      context: "Contexto con fragmento actual.",
+    });
+    const addedAcceptSpy = vi.fn();
+    const deletedAcceptSpy = vi.fn();
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-0",
+      ccItems: [
+        {
+          tag: "stylistic:track-change:chunk0-0",
+          title: makeCompoundV2Title({
+            suggestionId: "chunk0-0",
+            insertedTag: "stylistic:track-change:chunk0-0",
+            deletedValue: "anchor viejo",
+            anchorValue: "Contexto viejo.",
+          }),
+          spanTCItems: [],
+          rangeTCItems: [],
+        },
+        {
+          tag: "stylistic:track-change:chunk0-0",
+          title: makeCompoundV2Title({
+            suggestionId: "chunk0-0",
+            insertedTag: "stylistic:track-change:chunk0-0",
+            deletedValue: "fragmento actual",
+            anchorValue: "Contexto con fragmento actual.",
           }),
           spanTCItems: [
             {

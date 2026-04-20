@@ -253,6 +253,34 @@ the same tag, the first one is legacy/non-v2, and a later one has valid
 `compound-v2` metadata plus actionable tracked changes. The adapter must choose
 the valid v2 candidate instead of `items[0]`.
 
+#### Verified repo lesson: `compound-v2` fixtures must match the real suggestion identity
+
+Another escaped regression showed that tests can still lie even when they use a
+`compound-v2` title, if that metadata does not actually match the suggestion
+under test.
+
+The concrete failure mode was:
+
+- the test suggestion used one `anchor` / `context`,
+- the helper-generated `compound-v2` title kept a default `deletedSideRef.value`
+  and `anchorRef.value` from another scenario,
+- stricter identity validation then returned `identity-lost`,
+- and the suite revealed it had been certifying inconsistent fixtures rather
+  than real replace identity.
+
+That means:
+
+- `compound-v2` presence alone is not enough for a trustworthy test,
+- fixture metadata must be semantically aligned with `suggestion.id`, tag,
+  `suggestion.anchor`, and `suggestion.context`,
+- helper defaults are dangerous once the scenario stops using the default
+  anchor/context pair.
+
+**Testing rule**: whenever a test uses a non-default replace suggestion, pass an
+explicit `ccTitle` / `makeCompoundV2Title(...)` whose `insertedTag`,
+`deletedValue`, and `anchorValue` match the exact suggestion fixture. Otherwise
+the test is permissive noise, not confidence.
+
 #### Verified repo lesson: reject can succeed in Word before later cleanup/state reads fail
 
 Another real-host correction showed that `rejectSuggestion` can complete the

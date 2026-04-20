@@ -126,10 +126,10 @@ export function makeCompoundV2Title(options: {
 /**
  * Installs a `Word.run` mock that executes the callback with the provided context.
  */
-export function installWordWithContext(context: ResolveSuggestionContext) {
-  const run: MockWordGlobal["run"] = async <T>(
-    callback: (ctx: ResolveSuggestionContext) => Promise<T> | T
-  ) => callback(context);
+export function installWordWithContext<TContext>(context: TContext) {
+  const run = vi.fn(async <T>(
+    callback: (ctx: TContext) => Promise<T> | T
+  ) => callback(context));
   vi.stubGlobal("Word", {
     run,
     ChangeTrackingMode: {
@@ -145,9 +145,9 @@ export function installWordWithContext(context: ResolveSuggestionContext) {
  * Installs a rejecting `Word.run` mock for sad-path adapter tests.
  */
 export function installRejectingWord(error: Error) {
-  const run: MockWordGlobal["run"] = async () => {
+  const run = vi.fn(async () => {
     throw error;
-  };
+  });
   vi.stubGlobal("Word", {
     run,
     ChangeTrackingMode: {
