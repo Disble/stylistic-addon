@@ -191,7 +191,6 @@ function mapActionStatusToProgressState(
   switch (status) {
     case "accepted":
     case "rejected":
-    case "already-resolved":
       return "resolved";
     case "identity-lost":
     case "cc-not-found":

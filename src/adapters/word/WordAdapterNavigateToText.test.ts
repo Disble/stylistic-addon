@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "./WordAdapter";
+import type { TextLocator } from "./WordTextLocatorContext";
 import {
   installRejectingWord,
   installWordWithContext,
@@ -217,6 +218,97 @@ describe("WordAdapter.navigateToText", () => {
     expect(results.load).toHaveBeenCalledWith("items");
     expect(select).toHaveBeenCalledOnce();
     expect(context.sync).toHaveBeenCalledTimes(2);
+  });
+
+  it("delegates plain-string navigation to the injected text locator", async () => {
+    const select = vi.fn();
+    const locatedRange = { select } as unknown as Word.Range;
+    const locate = vi.fn(async () => locatedRange);
+    const textLocator: TextLocator = { locate };
+    const body = {
+      search: vi.fn(),
+      load: vi.fn(),
+      text: "fragmento exacto",
+    };
+    const context = {
+      document: { body },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+    adapter = new WordAdapter(textLocator);
+
+    await expect(adapter.navigateToText("fragmento exacto")).resolves.toBeUndefined();
+
+    expect(locate).toHaveBeenCalledOnce();
+    expect(locate).toHaveBeenCalledWith({
+      context,
+      container: body,
+      searchText: "fragmento exacto",
+    });
+    expect(select).toHaveBeenCalledOnce();
+    expect(body.search).not.toHaveBeenCalled();
+  });
+
+  it("delegates suggestion fallback navigation to the injected text locator", async () => {
+    const anchorSelect = vi.fn();
+    const anchorRange = { select: anchorSelect } as unknown as Word.Range;
+    const contextRange = {
+      load: vi.fn(),
+      text: "Contexto con fragmento exacto.",
+      paragraphs: {
+        getFirst: vi.fn(() => ({
+          getRange: vi.fn(() => ({ load: vi.fn(), text: "unused" })),
+        })),
+      },
+    } as unknown as Word.Range;
+    const locate = vi
+      .fn<NonNullable<TextLocator["locate"]>>()
+      .mockResolvedValueOnce(contextRange)
+      .mockResolvedValueOnce(anchorRange);
+    const textLocator: TextLocator = { locate };
+    const ccResult = {
+      items: [],
+      load: vi.fn(),
+    };
+    const body = {
+      search: vi.fn(),
+      load: vi.fn(),
+      text: "Contexto con fragmento exacto.",
+    };
+    const context = {
+      document: {
+        contentControls: {
+          getByTag: vi.fn(() => ccResult),
+        },
+        body,
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+    adapter = new WordAdapter(textLocator);
+
+    const suggestion = makeSuggestion({
+      anchor: "fragmento exacto",
+      context: "Contexto con fragmento exacto.",
+    });
+
+    await expect(adapter.navigateToText(suggestion)).resolves.toBeUndefined();
+
+    expect(locate).toHaveBeenCalledTimes(2);
+    expect(locate).toHaveBeenNthCalledWith(1, {
+      context,
+      container: body,
+      searchText: suggestion.context,
+    });
+    expect(locate).toHaveBeenNthCalledWith(2, {
+      context,
+      container: contextRange,
+      searchText: suggestion.anchor,
+    });
+    expect(anchorSelect).toHaveBeenCalledOnce();
+    expect(body.search).not.toHaveBeenCalled();
   });
 
   it("does nothing when the search returns no matches", async () => {

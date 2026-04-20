@@ -1,0 +1,10 @@
+`function $name($args): $returnType { $body }` where {
+  or {
+    $name <: `findWhitespaceInsensitiveSlice`,
+    $name <: `findUniqueLocatorSubstring`,
+    $name <: `findFirstAlphanumericOffset`,
+    $name <: `removeWhitespaceWithIndices`,
+    $name <: `normalizeChar`
+  },
+  register_diagnostic(span=$name, message="Canonical text-search primitives must live only in the approved text-search core module.", severity="error")
+}

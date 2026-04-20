@@ -575,10 +575,6 @@ export interface PipelineResult {
  * - "resolving": User clicked; async Word API call in-flight. Buttons disabled.
  * - "accepted": User accepted from the taskpane. Terminal.
  * - "rejected": User rejected from the taskpane. Terminal.
- * - "already-resolved": currently used when the adapter concludes the review
- *   artifact was already resolved in Word. Architectural warning: this status
- *   must represent confirmed resolution, not mere failure to observe tracked
- *   changes near one operational anchor.
  * - "unobservable": Word did not expose enough evidence to confirm the review
  *   state. Non-terminal — user may retry once the host state becomes visible.
  * - "identity-lost": Word exposed corrupt or incomplete v2 metadata, so the
@@ -590,7 +586,6 @@ export type SuggestionState =
   | "resolving"
   | "accepted"
   | "rejected"
-  | "already-resolved"
   | "unobservable"
   | "identity-lost"
   | "error";
@@ -603,7 +598,6 @@ export interface SuggestionActionResult {
   status:
     | "accepted"
     | "rejected"
-    | "already-resolved"
     | "unobservable"
     | "identity-lost"
     | "cc-not-found"

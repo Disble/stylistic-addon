@@ -52,6 +52,26 @@
     {
       "includes": ["src/domain/**"],
       "plugins": ["./lints/no-adapter-import-in-domain.grit"]
+    },
+    {
+      "includes": [
+        "src/adapters/word/**",
+        "!src/adapters/word/WordTextLocatorAdapter.ts",
+        "!src/adapters/word/WordTextLocatorContext.ts"
+      ],
+      "plugins": ["./lints/no-concrete-text-search-import.grit"]
+    },
+    {
+      "includes": [
+        "src/**",
+        "!src/domain/text-search/**",
+        "!src/core/text-search/**"
+      ],
+      "plugins": ["./lints/no-search-primitive-redefinition.grit"]
+    },
+    {
+      "includes": ["src/domain/**", "src/taskpane/**"],
+      "plugins": ["./lints/no-search-internals-in-taskpane.grit"]
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
+import { WordTextLocatorAdapter } from "./WordTextLocatorAdapter";
 import {
   createRange,
   installWordContext,
@@ -8,6 +9,7 @@ import {
 } from "./ApplySuggestionCommandTestHelper";
 
 const IDENTITY_TITLE_PREFIX = "stylistic-meta-v2:";
+const textLocator = new WordTextLocatorAdapter();
 
 describe("ApplySuggestionCommand content-control recovery", () => {
   beforeEach(() => {
@@ -25,6 +27,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
 
     const result = await new ApplySuggestionCommand(
       makeSuggestion({ type: "comment-only", suggestedText: undefined }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -59,7 +62,10 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       contextSearchSequence: [[coveredContext], [freshContext]],
     });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
@@ -92,7 +98,10 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       contextSearchSequence: [[coveredContext], [freshContext]],
     });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
@@ -110,6 +119,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         context: "Contexto con texto original.",
         type: "track-change",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "replace-1" });
@@ -148,6 +158,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         suggestedText: undefined,
         anchor: "texto original",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "comment-1" });

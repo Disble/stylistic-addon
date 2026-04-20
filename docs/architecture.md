@@ -1,498 +1,855 @@
 # Architecture
 
-This document describes the architecture of Stylistic, the design patterns used, the data flow, and the rationale behind every key decision.
+This document is the authoritative architectural reference for `stylistic-addon`.
+It describes the current system, the architectural mismatch that explains the
+recent Word text-search bugs, and the approved target architecture for the next
+refactor cycle.
 
-> **Important correction:** this document explains the current architecture and its patterns, but the authoritative clarification of the addon's frontend domain and the new Track Changes lifecycle policy now lives in [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md).
+This is not a changelog appendix. It is a consolidated, deliberate rewrite of
+the project architecture so that implementation, testing, linting, and future
+refactors all speak the same language.
+
+Complementary documents:
+
+- [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md)
+  defines the frontend domain and the Track Changes lifecycle policy.
+- [`replace-suggestion-identity-proposal.md`](./replace-suggestion-identity-proposal.md)
+  records the compound identity correction for replace suggestions.
 
 ---
 
-## Frontend Domain Clarification
+## 1. Frontend domain and architectural intent
 
-The `stylistic-addon` frontend domain is:
+The frontend domain of the add-in is:
 
 > **Presentar al usuario sugerencias de estilo provenientes del backend y permitirle aceptarlas, rechazarlas o debatirlas dentro de Word.**
 
-This clarification matters because several implementation mechanisms are important but are **not** the full frontend domain on their own:
+That definition matters because it keeps the project from collapsing into the
+wrong abstractions. The add-in is not just a transport shell for a backend, and
+it is not just a thin wrapper over Office.js. It owns workflow, consistency,
+artifact lifecycle, and user-facing review behavior inside Word.
 
-- `DocumentReviewState` is an important internal support concept, but not the whole domain.
-- `PipelineStateMachine` and the analysis pipeline are workflow mechanisms, not the domain definition.
-- `changeTrackingMode` and Word content controls are infrastructure/host concerns, not domain language.
+Several implementation mechanisms are important, but they are not the domain by
+themselves:
 
-The current documentation should therefore be read with this distinction in mind:
+- `PipelineStateMachine` is workflow state, not domain identity.
+- `DocumentReviewState` is an authoritative document-derived snapshot, not the
+  whole frontend domain.
+- `changeTrackingMode`, content controls, comments, and `Word.search()` are host
+  concerns that must remain behind adapters.
 
-- **domain goal** → user interaction with style suggestions in Word,
-- **supporting state** → `DocumentReviewState`, pending/resolved review artifacts,
-- **workflow state** → `PipelineStateMachine`, future resolution workflow state,
-- **infrastructure** → Office.js, tags, comments, polling, `changeTrackingMode`.
-
----
-
-## Architectural Pattern: Hexagonal Architecture (Ports & Adapters)
-
-Stylistic follows a **Hexagonal Architecture** (also known as Ports & Adapters), adapted for a TypeScript browser add-in. The dependency rule is strict: outer layers depend on inner layers; inner layers never depend on outer layers.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  PRESENTATION (taskpane/)                                       │
-│  taskpane.ts — event binding, observer registration, render     │
-├─────────────────────────────────────────────────────────────────┤
-│  APPLICATION / DOMAIN (domain/)                                 │
-│  pipeline/ — Chain of Responsibility orchestrator + 7 handlers  │
-│  ports.ts  — IDocumentPort, IAnalysisPort (the port contracts)  │
-│  types.ts  — Shared interfaces (zero runtime code)             │
-├────────────────────────┬────────────────────────────────────────┤
-│  ADAPTER: Word         │  ADAPTER: Mastra                       │
-│  adapters/word/        │  adapters/mastra/ + RetryDecorator     │
-│  (implements          │  (implements                           │
-│   IDocumentPort)      │   IAnalysisPort)                       │
-├────────────────────────┴────────────────────────────────────────┤
-```
-
-### Why Hexagonal?
-
-| Goal | How the architecture achieves it |
-|------|----------------------------------|
-| **Testability** | The pipeline depends only on `IDocumentPort` and `IAnalysisPort`. Mock implementations can replace `WordAdapter` and `MastraAdapter` without Office.js or a real backend. |
-| **Extensibility** | Swapping the backend (e.g., from Mastra to a direct LLM API) requires only a new `IAnalysisPort` adapter. Swapping the document host (e.g., Google Docs) requires only a new `IDocumentPort` adapter. |
-| **Maintainability** | `wordApi.ts` (579 lines, 4 responsibilities) is replaced by focused files: `WordAdapter.ts`, `ApplySuggestionCommand.ts`, `CommentCleanup.ts`. |
-| **Scalability** | New analysis phases are added as a new `PipelineHandler` in the chain. No modifications to existing handlers or the orchestrator. |
+The architectural target therefore remains hexagonal, but with sharper internal
+boundaries inside the Word adapter side. The recent bugs did not come from the
+hexagonal direction being wrong; they came from a capability that grew without a
+clear internal module boundary.
 
 ---
 
-## Module Map
+## 2. Architectural principles
 
+### 2.1 Ports and adapters remain the top-level rule
+
+The dependency rule is strict: outer layers depend on inner layers; inner layers
+never depend on outer layers. The presentation layer depends on domain ports and
+workflow abstractions. Adapters implement those ports. Infrastructure provides
+constants and pure helpers, but never becomes an alternate application layer.
+
+### 2.2 The document is the source of truth
+
+The taskpane is not the source of truth for pending review work. The Word
+document is. `DocumentReviewState` is derived from document artifacts, and
+`DocumentReviewStateMachine` interprets that snapshot into explicit UI semantics.
+This rule remains unchanged.
+
+### 2.3 Search is a technical capability, not a business domain module
+
+The project needs a reusable text-location capability, but it should not be
+mis-modeled as pure editorial domain logic. The correct split is:
+
+- a **pure text-search core** containing normalization, matching, and locator
+  policies,
+- a **host adapter** that executes those policies through Office.js,
+- consuming workflows and commands that depend on the capability instead of
+  reimplementing search details.
+
+This distinction is essential. If Office.js details leak into the core, the
+boundary becomes fake. If the core remains pure, it becomes reusable and
+testable.
+
+### 2.4 Resolution is a workflow, not a giant command body
+
+`ResolveSuggestionCommand` may remain the entry point for accept/reject, but it
+must stop owning location, observation, cleanup, and result mapping in one file.
+The command should orchestrate collaborators. The collaborators should own the
+real responsibilities.
+
+---
+
+## 3. Current system overview
+
+The current architecture already has several strong decisions in place:
+
+- analysis is modeled as a Chain of Responsibility pipeline,
+- Word document operations are hidden behind `IDocumentPort`,
+- Track Changes lifecycle is owned by `BatchApplyOrchestrator`, not by each
+  apply command,
+- replace suggestions use `compound-v2` metadata to avoid false terminal
+  certainty from weak observation,
+- ambiguous resolution states degrade to `unobservable` or `identity-lost`
+  instead of pretending certainty.
+
+The main problem is not the overall direction. The problem is the uneven maturity
+of the search and resolution sub-architecture inside the Word side of the
+system.
+
+### 3.1 Current component diagram
+
+```mermaid
+flowchart LR
+  subgraph PRESENTATION["Presentation"]
+    TP["taskpane.ts\nComposition Root + DOM rendering"]
+    SCR["SuggestionCardRenderer"]
+  end
+
+  subgraph DOMAIN["Domain / Application"]
+    PORTS["ports.ts\nIDocumentPort / IAnalysisPort / IFeedbackPort"]
+    PIPE["PipelineOrchestrator"]
+    HANDLERS["Read / Check / Chunk / Analyze / Guard / Apply Handlers"]
+    MED["ReviewSessionMediator"]
+    WF["SuggestionResolutionWorkflow"]
+    SM["DocumentReviewStateMachine"]
+  end
+
+  subgraph WORD["Adapters / Word"]
+    WA["WordAdapter\nFacade"]
+    BAO["BatchApplyOrchestrator"]
+    ASC["ApplySuggestionCommand"]
+    RSC["ResolveSuggestionCommand\nCurrent hotspot"]
+    WTLA["WordTextLocatorAdapter\nOffice.js search adapter"]
+    TSC["TextSearchCore\nPure text-search capability"]
+    CLEAN["CommentCleanup"]
+  end
+
+  subgraph BACKEND["Adapters / Backend"]
+    MA["MastraAdapter"]
+    RETRY["RetryAnalysisDecorator"]
+    FB["FeedbackAdapter / MockFeedbackAdapter"]
+  end
+
+  subgraph HOST["Word Host Artifacts"]
+    DOC["Word Document"]
+    CCC["Content Controls"]
+    TC["Tracked Changes"]
+    COM["Comments"]
+  end
+
+  TP --> PIPE
+  PIPE --> HANDLERS
+  HANDLERS --> PORTS
+  HANDLERS --> WA
+  HANDLERS --> RETRY
+  RETRY --> MA
+
+  TP --> MED
+  SCR --> MED
+  MED --> WF
+  MED --> SM
+  WF --> WA
+  WF --> FB
+
+  WA --> BAO
+  BAO --> ASC
+  ASC --> WTLA
+  WTLA --> TSC
+  WA --> RSC
+  WA --> WTLA
+  WA --> CLEAN
+
+  ASC --> DOC
+  RSC --> DOC
+  CLEAN --> DOC
+  DOC --> CCC
+  DOC --> TC
+  DOC --> COM
 ```
+
+### 3.2 Current file map
+
+```text
 src/
-├── domain/                         ← Zero framework dependencies
-│   ├── types.ts                    ← Shared interfaces (no runtime code)
-│   ├── ports.ts                    ← IDocumentPort, IAnalysisPort
+├── domain/
+│   ├── types.ts
+│   ├── ports.ts
+│   ├── pipeline/
+│   │   ├── PipelineContext.ts
+│   │   ├── PipelineStateMachine.ts
+│   │   ├── PipelineEvents.ts
+│   │   ├── PipelineOrchestrator.ts
+│   │   └── handlers/
+│   │       ├── ReadTextHandler.ts
+│   │       ├── CheckConnectionHandler.ts
+│   │       ├── ChunkTextHandler.ts
+│   │       ├── AnalyzeChunksHandler.ts
+│   │       ├── DeduplicateHandler.ts
+│   │       ├── GuardAppliedHandler.ts
+│   │       └── ApplySuggestionsHandler.ts
 │   ├── review/
-│   │   ├── DocumentReviewStateMachine.ts ← explicit document-review UI semantics
-│   │   └── ReviewSessionMediator.ts      ← coordinates resolution + taskpane review state
-│   └── pipeline/
-│       ├── PipelineContext.ts      ← Shared state between handlers
-│       ├── PipelineStateMachine.ts ← State machine (State pattern)
-│       ├── PipelineEvents.ts       ← Event emitter (Observer pattern)
-│       ├── PipelineOrchestrator.ts ← Chain of Responsibility runner
-│       └── handlers/
-│           ├── ReadTextHandler.ts
-│           ├── CheckConnectionHandler.ts
-│           ├── ChunkTextHandler.ts
-│           ├── AnalyzeChunksHandler.ts
-│           ├── DeduplicateHandler.ts
-│           ├── GuardAppliedHandler.ts
-│           └── ApplySuggestionsHandler.ts
-│
+│   │   ├── DocumentReviewStateMachine.ts
+│   │   └── ReviewSessionMediator.ts
+│   └── suggestion/
+│       └── SuggestionResolutionWorkflow.ts
 ├── adapters/
 │   ├── word/
-│   │   ├── WordAdapter.ts          ← implements IDocumentPort
-│   │   ├── ApplySuggestionCommand.ts ← Command pattern for suggestion application
+│   │   ├── WordAdapter.ts
+│   │   ├── ApplySuggestionCommand.ts
+│   │   ├── ResolveSuggestionCommand.ts
+│   │   ├── WordTextLocatorAdapter.ts
+│   │   ├── WordTextLocatorContext.ts
+│   │   ├── resolution/
+│   │   │   ├── ResolutionContext.ts
+│   │   │   ├── DocumentReviewStateInspector.ts
+│   │   │   ├── SuggestionLocator.ts
+│   │   │   ├── SuggestionResolutionObserver.ts
+│   │   │   ├── SuggestionResolutionCleanup.ts
+│   │   │   ├── TrackedChangeResolutionExecutor.ts
+│   │   │   ├── CommentOnlySuggestionResolver.ts
+│   │   │   └── ResolveSuggestionResultFactory.ts
+│   │   ├── StylisticCommentBuilder.ts
 │   │   └── cleanup/
-│   │       └── CommentCleanup.ts   ← Range Colocation pattern
+│   │       └── CommentCleanup.ts
 │   ├── mastra/
-│   │   └── MastraAdapter.ts        ← implements IAnalysisPort
-│   └── RetryAnalysisDecorator.ts   ← Decorator pattern
-│
+│   │   ├── MastraAdapter.ts
+│   │   ├── FeedbackAdapter.ts
+│   │   └── MockFeedbackAdapter.ts
+│   └── RetryAnalysisDecorator.ts
 ├── infrastructure/
-│   ├── config.ts                   ← Constants (URLs, retry policy)
-│   └── chunker.ts                  ← Pure text splitting function
-│
+│   ├── config.ts
+│   └── chunker.ts
 └── taskpane/
-    ├── taskpane.ts                 ← UI only: events, observers, render
+    ├── taskpane.ts
+    ├── SuggestionCardRenderer.ts
     ├── taskpane.html
     └── taskpane.css
 ```
 
----
+### 3.3 Real boundary rule for the Word host
 
-## Design Patterns
+The real boundary today is:
 
-### GoF Patterns — Currently Used
+> The `Word` global may only appear inside `src/adapters/word/**`.
 
-| Pattern | Category | Location | Description |
-|---------|----------|----------|-------------|
-| **Chain of Responsibility** | Behavioral | `domain/pipeline/handlers/` | Each of the 7 analysis phases is an independent handler. The orchestrator runs them in sequence; any handler can abort the chain by setting `ctx.aborted = true`. |
-| **Command** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | Each suggestion is encapsulated as a `DocumentCommand` with an `execute()` method. Enables future `undo()` support without restructuring. |
-| **Observer** | Behavioral | `domain/pipeline/PipelineEvents.ts` | `PipelineEventEmitter` notifies registered `PipelineObserver` instances of phase starts, progress, completion, and aborts. The UI registers one observer; future analytics can register another without touching the pipeline. |
-| **Mediator** | Behavioral | `domain/review/ReviewSessionMediator.ts` | Centralizes coordination between resolution workflow, document review state machine, cleanup visibility, and taskpane-facing review semantics. Prevents `taskpane.ts` from orchestrating cross-layer policy manually. |
-| **State** | Behavioral | `domain/pipeline/PipelineStateMachine.ts` | Initial state transition (`idle → reading`) prevents concurrent runs and makes lifecycle visible in code. |
-| **State** | Behavioral | `domain/review/DocumentReviewStateMachine.ts` | Translates the authoritative `DocumentReviewState` snapshot into explicit document-review UI states (`idle`, `pending-review`, `ready-to-disable-track-changes`) so Track Changes CTA rules stop living in scattered booleans. |
-| **Strategy** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` selects `insert`, `delete`, or `replace` tracked-change type based on suggestion content. |
-| **Template Method** | Behavioral | `adapters/word/ApplySuggestionCommand.ts` | `execute()` has a fixed algorithm skeleton: search → insert text/comment/content control. Track Changes lifecycle is handled by the orchestrator layer, not per suggestion. |
-| **Iterator** | Behavioral | `handlers/AnalyzeChunksHandler.ts`, `adapters/word/WordAdapter.ts` | Sequential iteration over chunks and suggestions via `for...of`. |
-| **Singleton** | Creational | `adapters/mastra/MastraAdapter.ts` | Single `MastraClient` instance reused across all workflow calls. |
-| **Builder** | Creational | `adapters/word/ApplySuggestionCommand.ts` | Suggestion application logic is embedded in the command execution flow. Replaces 120-line string concatenation. |
-| **Factory Method** | Creational | `adapters/word/ApplySuggestionCommand.ts` | `classifyChange()` acts as a factory for `ChangeType` values used in suggestion application. |
-| **Facade** | Structural | `adapters/word/WordAdapter.ts` | Exposes a clean `IDocumentPort` interface hiding the complexity of `Word.run`, `context.sync`, and document mutation operations. |
-| **Decorator** | Structural | `adapters/RetryAnalysisDecorator.ts` | Wraps `IAnalysisPort` transparently to add retry-with-exponential-backoff without modifying `MastraAdapter`. |
-
-### Ports & Adapters (Hexagonal Architecture)
-
-| Port | Interface | Adapters |
-|------|-----------|---------|
-| Document Port | `IDocumentPort` | `WordAdapter` (Office.js) |
-| Analysis Port | `IAnalysisPort` | `RetryAnalysisDecorator` → `MastraAdapter` (@mastra/client-js) |
-
-### Important ownership note: Track Changes lifecycle
-
-The **current** implementation delegates Track Changes lifecycle to `BatchApplyOrchestrator`:
-
-- Track Changes is enabled **lazily** — once, when the first `track-change` suggestion is applied
-- `ApplySuggestionCommand` does NOT toggle `changeTrackingMode` per suggestion
-- `ReviewSessionMediator` coordinates review UI state
-- `DocumentReviewStateMachine` derives UI state from document
-
-See [`review-domain-and-track-changes.md`](./review-domain-and-track-changes.md) for the full requirement decisions and architecture.
-
-### Important ownership note: replace suggestion identity
-
-The project has now identified a deeper architectural risk behind recurrent
-`already-resolved` regressions in real Word:
-
-- a native replace suggestion is semantically composed of an inserted side and a
-  deleted side,
-- but the current operational handle (`ContentControl` on `insertedRange`) is
-  only attached to one side,
-- and later resolution tries to reconstruct the whole replace by spatial
-  inference.
-
-That means the current code path must **not** be interpreted as a reliable long-
-term identity model.
-
-The corrected architectural direction is:
-
-- one replace suggestion = one domain identity,
-- multiple Word artifacts may reference that identity,
-- lack of observable tracked changes must not be upgraded to confirmed
-  `already-resolved`.
-
-Current app state:
-
-- Phase A is implemented: ambiguous replace observation degrades to `unobservable`
-  instead of `already-resolved`.
-- Phase B is implemented: new replace suggestions persist `compound-v2`
-  metadata in `ContentControl.title`, and replace resolution uses that model as
-  the supported path.
-- Legacy bare-ID / `legacy-v1` replace-resolution compatibility is intentionally
-  removed.
-- Corrupt/incomplete `compound-v2` metadata degrades to `identity-lost`.
-- `unobservable` and `identity-lost` both suppress feedback instead of being
-  upgraded into misleading terminal success.
-
-See [`replace-suggestion-identity-proposal.md`](./replace-suggestion-identity-proposal.md)
-for the detailed proposal.
-
-### Domain Patterns (Non-GoF)
-
-| Pattern | Location | Description |
-|---------|----------|-------------|
-| **Guard Clause** | `GuardAppliedHandler.ts` | Filters suggestions already applied as tracked changes. Prevents duplicates when user re-runs analysis. |
-| **Partial Success** | `AnalyzeChunksHandler.ts`, `WordAdapter.ts` | Chunk failures and suggestion failures are collected, not fatal. User gets maximum possible value. |
-| **Fail-Fast Gate** | `CheckConnectionHandler.ts` | Verifies backend connectivity before starting analysis. Aborts immediately if unavailable. |
-| **Range Colocation** | `CommentCleanup.ts` | Uses `Range.compareLocationWith()` to detect orphaned comments. Document is the source of truth — no in-memory registry. |
-| **Transparent Fallback** | `WordAdapter.getTextToAnalyze()` | Returns selection if active, full document otherwise. Caller receives `{ text, isSelection }` without knowing how it was resolved. |
-| **Null Return on Error** | `MastraAdapter.analyzeChunk()` | Never throws; always returns `ChunkResult` (with empty suggestions on failure). Enables partial success. |
-| **Retry + Exponential Backoff** | `RetryAnalysisDecorator.ts` | `delay = baseMs * 2^attempt` between retries. 3 max attempts. Separated from `MastraAdapter` via Decorator. |
-| **Per-Resource Isolation** | `ApplySuggestionCommand.ts` | Each suggestion runs in its own `Word.run` context to avoid stale ranges after text insertions shift document positions. |
-| **Composition Root** | `taskpane/taskpane.ts` | Single wiring point: instantiates adapters, decorators, orchestrator, and state machine. No other module knows the full dependency graph. |
-| **Derived Snapshot + Explicit UI State** | `WordAdapter.ts`, `domain/review/DocumentReviewStateMachine.ts`, `domain/review/ReviewSessionMediator.ts`, `taskpane.ts` | Word remains the source of truth through `DocumentReviewState`, the state machine centralizes review UI semantics, and the mediator coordinates cleanup/CTA/taskpane consequences as one policy surface. |
-| **Compound Identity** | `ApplySuggestionCommand.ts`, `WordAdapter.ts`, `docs/replace-suggestion-identity-proposal.md` | Replace suggestions now persist `compound-v2` metadata so one domain identity can be observed through multiple Word artifact references instead of treating one inserted-side `ContentControl` as the whole suggestion. |
-
-> **Historical note:** The Preserve-and-Restore pattern was used in earlier implementations. Current code delegates Track Changes lifecycle to `BatchApplyOrchestrator` (lazy enablement per batch).
+That is the actual implemented rule and the actual linter scope. It is more
+accurate than the older wording that implied only `WordAdapter.ts` touched the
+Word host. In reality, `ApplySuggestionCommand.ts`, `ResolveSuggestionCommand.ts`
+and `BatchApplyOrchestrator.ts` also use `Word` directly, which is acceptable as
+long as the dependency stays inside the Word adapter boundary.
 
 ---
 
-## Data Flow
+## 4. Why some features were robust and others were fragile
 
-### Analysis Pipeline (Chain of Responsibility)
+The recent bug pattern was not “Word search is bad” in the abstract. The real
+issue was an internal asymmetry:
 
-```
-User clicks "Analizar y sugerir"
-        │
-        ▼
-taskpane.ts: handleAnalyze()
-  - Creates PipelineContext { documentPort, analysisPort, emitter, genero, maxChunkSize }
-  - Registers UI PipelineObserver on emitter
-  - stateMachine.transition("reading")
-        │
-        ▼
-PipelineOrchestrator.run(ctx)
-        │
-        ├──► ReadTextHandler
-        │       └── documentPort.getTextToAnalyze() → ctx.text, ctx.isSelection
-        │       └── Abort if text is empty
-        │
-        ├──► CheckConnectionHandler
-        │       └── analysisPort.checkConnection() → fail-fast gate
-        │       └── Abort if backend unreachable
-        │
-        ├──► ChunkTextHandler
-        │       └── splitText(ctx.text, maxChunkSize) → ctx.chunks
-        │
-        ├──► AnalyzeChunksHandler
-        │       └── For each chunk (sequential):
-        │             analysisPort.submitChunkAnalysis(chunk, genero)
-        │             analysisPort.pollChunkAnalysis(chunk.index, runId)
-        │       └── Collects ctx.rawSuggestions, ctx.chunkErrors
-        │       └── Abort if zero suggestions
-        │
-        ├──► DeduplicateHandler
-        │       └── Removes cross-chunk duplicates (case-insensitive)
-        │       └── Sets ctx.uniqueSuggestions
-        │
-        ├──► GuardAppliedHandler
-        │       └── documentPort.getAppliedOriginalTexts() → Set<string>
-        │       └── Filters already-applied suggestions
-        │       └── Sets ctx.pendingSuggestions
-        │       └── Abort if nothing pending
-        │
-        └──► ApplySuggestionsHandler
-                └── documentPort.applySuggestions(pending, onProgress)
-                      └── For each suggestion: new ApplySuggestionCommand(s).execute()
-                            └── Word.run: search → insert text/comment/content control
-                └── emitter.emitComplete(suggestions, result, errors, isSelection)
-                └── Sets ctx.result
+- **apply** used a robust search fallback,
+- **navigate** preferred persisted artifacts before text search,
+- **resolve** reimplemented a weaker fallback and concentrated too many
+  responsibilities in one place.
 
-taskpane.ts: PipelineObserver.onComplete()
-  └── renderResults() → updates DOM
-  └── Document state is rehydrated via ReviewSessionMediator
-  └── Applies cleanup/CTA visibility from explicit review state
+### 4.1 Robust path: apply
 
-### Document Review State Flow
+`ApplySuggestionCommand` applies suggestions with a stronger search strategy. It
+uses `WordTextLocatorAdapter`, backed by `TextSearchCore`, to tolerate:
 
-```
-Word document (authoritative host state)
-        │
-        ├──► WordAdapter.inspectDocumentReviewState()
-        │       └── derives DocumentReviewState {
-        │             pendingStylisticArtifacts,
-        │             hasPendingStylisticArtifacts,
-        │             trackChangesActive
-        │           }
-        │
-        ├──► DocumentReviewStateMachine.deriveState()
-        │       └── maps snapshot to one explicit UI state:
-        │             - idle
-        │             - pending-review
-        │             - ready-to-disable-track-changes
-        │
-        ├──► ReviewSessionMediator
-        │       └── combines document review state + cleanup preview +
-        │           resolution workflow result into one taskpane-facing state
-        │
-        └──► taskpane.ts
-                └── renders from mediator output instead of cross-layer glue logic
+- smart quotes versus straight quotes,
+- diacritic differences,
+- field-code control characters,
+- whitespace drift between backend text and `Word.body.text`,
+- the `Word.search()` 256-character limit,
+- locator shortening when the exact slice is too long for Word.
+
+That is why apply was comparatively resilient in real documents.
+
+### 4.2 Robust path: navigation
+
+`WordAdapter.navigateToText()` first tries to relocate the real Word artifact
+through persisted identity (`ContentControl` tag plus `compound-v2` title
+metadata). Only if artifact lookup fails does it fall back to text search. That
+artifact-first, search-second behavior makes navigation more robust than raw text
+matching.
+
+### 4.3 Historically fragile path: resolution
+
+`ResolveSuggestionCommand` used to do too much and used a weaker local search
+fallback. It mixed:
+
+- content control selection,
+- candidate ranking,
+- identity validation,
+- tracked change observation,
+- comment lookup,
+- comment cleanup,
+- anchor cleanup,
+- post-resolution state inspection,
+- final result shaping.
+
+That asymmetry is now removed. Resolution search goes through the same shared
+locator capability used by apply and navigation.
+
+### 4.4 Diagnostic diagram: current asymmetry
+
+```mermaid
+flowchart TB
+  subgraph APPLY["Apply path"]
+    A1["ApplySuggestionCommand"] --> A2["WordTextLocatorAdapter"]
+    A2 --> A3["exact search"]
+    A2 --> A4["ignorePunct + ignoreSpace"]
+    A2 --> A5["TextSearchCore fallback"]
+    A5 --> A6["whitespace-insensitive slice"]
+    A5 --> A7["unique locator <= 256"]
+    A5 --> A8["fallback to first alphanumeric"]
+  end
+
+  subgraph NAV["Navigation path"]
+    N1["WordAdapter.navigateToText"] --> N2["artifact lookup by tag/title"]
+    N2 --> N3["valid compound-v2 candidate preferred"]
+    N3 --> N4["fallback via WordTextLocatorAdapter"]
+  end
+
+  subgraph RESOLVE["Resolution path"]
+    R1["ResolveSuggestionCommand"] --> R2["SuggestionResolutionObserver"]
+    R2 --> R3["WordTextLocatorAdapter"]
+    R3 --> R4["TextSearchCore"]
+    R1 --> R5["split collaborators by responsibility"]
+  end
 ```
 
-### Replace Suggestion Identity Risk
+This asymmetry explains why some features behaved well while resolution remained
+the hotspot.
+
+---
+
+## 5. Current data flows
+
+### 5.1 Analysis pipeline flow
+
+```mermaid
+flowchart TD
+  U["User clicks Analizar y sugerir"] --> T["taskpane.ts"]
+  T --> P["PipelineOrchestrator"]
+  P --> H1["ReadTextHandler"]
+  H1 --> H2["CheckConnectionHandler"]
+  H2 --> H3["ChunkTextHandler"]
+  H3 --> H4["AnalyzeChunksHandler"]
+  H4 --> H5["DeduplicateHandler"]
+  H5 --> H6["GuardAppliedHandler"]
+  H6 --> H7["ApplySuggestionsHandler"]
+  H7 --> WA["WordAdapter.applySuggestions"]
+  WA --> BAO["BatchApplyOrchestrator"]
+  BAO --> ASC["ApplySuggestionCommand"]
+```
+
+This flow is already well aligned with the project architecture. Each phase owns
+one concern, partial success is intentional, and the apply boundary is explicit.
+
+### 5.2 Resolution flow
+
+```mermaid
+flowchart TD
+  U["User clicks Accept / Reject"] --> SCR["SuggestionCardRenderer"]
+  SCR --> MED["ReviewSessionMediator"]
+  MED --> WF["SuggestionResolutionWorkflow"]
+  WF --> WA["WordAdapter.acceptSuggestion / rejectSuggestion"]
+  WA --> RSC["ResolveSuggestionCommand"]
+  RSC --> DOC["Word artifacts + tracked changes + comments"]
+  WF --> FB["FeedbackAdapter (non-blocking)"]
+  MED --> SM["DocumentReviewStateMachine"]
+```
+
+This flow is conceptually correct at the outer layers. The weak spot is the
+internal decomposition of `ResolveSuggestionCommand`, not the mediator/workflow
+relationship.
+
+### 5.3 Document review state flow
+
+```mermaid
+flowchart TD
+  DOC["Word document"] --> SNAP["DocumentReviewState snapshot"]
+  SNAP --> DSM["DocumentReviewStateMachine"]
+  SNAP --> MED["ReviewSessionMediator"]
+  DSM --> TP["taskpane.ts rendering decisions"]
+  MED --> TP
+```
+
+This remains the correct source-of-truth model. No future refactor should move
+pending-state authority into taskpane-local state.
+
+---
+
+## 6. Design patterns in the current system
+
+The project already uses several patterns well. The upcoming refactor should
+strengthen them instead of replacing them with ad-hoc glue.
+
+| Pattern | Location | Why it matters |
+|---------|----------|----------------|
+| Chain of Responsibility | `domain/pipeline/handlers/` | Keeps analysis phases isolated and composable. |
+| Mediator | `domain/review/ReviewSessionMediator.ts` | Prevents taskpane logic from becoming workflow glue. |
+| State | `PipelineStateMachine.ts`, `DocumentReviewStateMachine.ts` | Makes workflow and review UI semantics explicit. |
+| Command | `ApplySuggestionCommand.ts`, `ResolveSuggestionCommand.ts` | Gives explicit mutation entry points for apply and resolve. |
+| Facade | `WordAdapter.ts` | Preserves the `IDocumentPort` boundary for the rest of the app. |
+| Decorator | `RetryAnalysisDecorator.ts` | Keeps retry behavior outside the backend transport adapter. |
+| Compound Identity | `ApplySuggestionCommand.ts` + replace identity docs | Corrects the false assumption that one inserted-side content control equals the whole replace suggestion. |
+| Partial Success | pipeline and Word operations | Maximizes user value even when some chunks or suggestions fail. |
+
+The refactor approved for the next cycle introduces additional intentional
+pattern usage:
+
+- **Strategy / policy objects** for text-search fallback behavior,
+- **Orchestrator + collaborators** for resolution,
+- **Result factory** for consistent `SuggestionActionResult` shaping,
+- **Dedicated locator and observer services** inside the Word adapter boundary.
+
+---
+
+## 7. Target architecture for text search and resolution
+
+The next architectural step is to treat text location as a first-class technical
+capability with a clear internal boundary. The goal is not to move Word behavior
+into the domain. The goal is to separate pure matching logic from Office.js
+execution and then make all consumers depend on the same capability.
+
+### 7.1 Target component diagram
+
+```mermaid
+flowchart LR
+  subgraph PRESENTATION["Presentation / Workflow"]
+    SCR["SuggestionCardRenderer"]
+    MED["ReviewSessionMediator"]
+    WF["SuggestionResolutionWorkflow"]
+  end
+
+  subgraph PORTS["Port boundary"]
+    IDOC["IDocumentPort"]
+  end
+
+  subgraph WORD["Adapters / Word target"]
+    WA["WordAdapter"]
+    RSC["ResolveSuggestionCommand\nThin orchestrator"]
+    LOC["SuggestionLocator"]
+    OBS["SuggestionResolutionObserver"]
+    EXEC["TrackedChangeResolutionExecutor"]
+    CLEAN["SuggestionResolutionCleanup"]
+    STATE["DocumentReviewStateInspector"]
+    TPORT["ITextLocatorPort"]
+    WTLA["WordTextLocatorAdapter"]
+    CORE["TextSearchCore"]
+    IDP["ReplaceIdentityParser"]
+    RESULT["ResolveSuggestionResultFactory"]
+  end
+
+  subgraph HOST["Word Host"]
+    DOC["Word document"]
+    CCC["Content Controls"]
+    TC["Tracked Changes"]
+    COM["Comments"]
+  end
+
+  SCR --> MED
+  MED --> WF
+  WF --> IDOC
+  IDOC --> WA
+  WA --> RSC
+
+  RSC --> LOC
+  RSC --> OBS
+  RSC --> EXEC
+  RSC --> CLEAN
+  RSC --> STATE
+  RSC --> RESULT
+
+  LOC --> IDP
+  LOC --> TPORT
+  OBS --> IDP
+  OBS --> TPORT
+  WTLA --> TPORT
+  WTLA --> CORE
+
+  OBS --> CCC
+  OBS --> TC
+  OBS --> COM
+  CLEAN --> CCC
+  CLEAN --> COM
+  STATE --> DOC
+```
+
+### 7.2 Target file diagram
 
 ```text
-Logical replace suggestion
-        │
-        ├── inserted-side Word artifact
-        ├── deleted-side Word artifact
-        └── operational anchor(s)
-
-Current risk:
-taskpane/workflow may receive "already-resolved"
-from an observation strategy that only proved
-"no tracked changes were observed near the inserted-side CC".
-
-That is not sufficient proof of semantic resolution.
+src/
+├── domain/
+│   ├── ports.ts
+│   ├── types.ts
+│   └── text-search/
+│       ├── types.ts
+│       ├── ports.ts
+│       └── TextSearchCore.ts
+├── adapters/
+│   └── word/
+│       ├── WordAdapter.ts
+│       ├── ApplySuggestionCommand.ts
+│       ├── ResolveSuggestionCommand.ts
+│       ├── WordTextLocatorAdapter.ts
+│       ├── ReplaceIdentityParser.ts
+│       └── resolution/
+│           ├── types.ts
+│           ├── SuggestionLocator.ts
+│           ├── SuggestionResolutionObserver.ts
+│           ├── SuggestionResolutionCleanup.ts
+│           ├── TrackedChangeResolutionExecutor.ts
+│           ├── DocumentReviewStateInspector.ts
+│           ├── CommentOnlySuggestionResolver.ts
+│           └── ResolveSuggestionResultFactory.ts
+└── taskpane/
+    └── taskpane.ts
 ```
 
-### Why this state machine was added
+The exact folder name for the pure capability may be `domain/text-search/` or
+`core/text-search/`. The architectural decision is the important part: the pure
+matching policy must be isolated from Office.js execution. If the team prefers a
+`core/` directory to make the technical nature explicit, that is acceptable as
+long as the dependency direction remains inward and the module stays pure.
 
-Originally, document-review UI semantics were inferred in multiple places with
-booleans like:
+### 7.3 Target responsibility split
 
-- `hasPendingStylisticArtifacts`
-- `trackChangesActive`
-- `showDisableTrackChangesCta`
+#### `TextSearchCore`
 
-That approach made the code vulnerable to UI inconsistency because the same rule
-could be reinterpreted differently by the adapter, workflow, and taskpane.
+Owns pure, testable logic:
 
-The current correction keeps the architectural distinction explicit:
+- character normalization,
+- whitespace-insensitive matching,
+- locator substring shortening,
+- fallback candidate derivation,
+- search policy helpers that do not know Office.js.
 
-- `DocumentReviewState` = authoritative snapshot read from Word
-- `DocumentReviewStateMachine` = explicit frontend state model derived from that snapshot
-- `taskpane.ts` = renders from the state model, not from ad-hoc boolean combinations
-```
+This module is the single allowed home for canonical search primitives.
 
-### Comment Cleanup Flow (Direct port call, no pipeline)
+Current extraction status:
 
-```
-User clicks "Limpiar comentarios resueltos"
-        │
-        ▼
-taskpane.ts: handleCleanup()
-        └── documentPort.cleanupResolvedComments()
-              └── CommentCleanup.cleanupResolvedComments()
-                    ├── Sync 1: Load Stylistic comments and tracked changes
-                    ├── Sync 2: Get document ranges for each
-                    ├── Sync 3: Compare every comment range vs every TC range
-                    └── Sync 4: Delete orphaned comments, keep colocated ones
-```
+- `src/core/text-search/TextSearchCore.ts` now owns `normalizeChar`,
+  `removeWhitespaceWithIndices`, `findWhitespaceInsensitiveSlice`,
+  `findUniqueLocatorSubstring`, and `findFirstAlphanumericOffset`.
+- `src/core/text-search/TextSearchCore.ts` remains the only home of the
+  canonical search primitives.
+- The transitional `src/adapters/word/WordSearchAdapter.ts` compatibility file
+  has been removed. Word-facing consumers now depend directly on
+  `WordTextLocatorAdapter` or `TextSearchCore`, depending on responsibility.
+
+#### `WordTextLocatorAdapter`
+
+Owns Office.js execution details:
+
+- `container.search(...)`,
+- `context.sync()`,
+- `SearchStringInvalidOrTooLong` handling,
+- Word-specific search options,
+- turning the pure core output into real `Word.Range` lookups.
+
+This module is the only place that should know how Word executes search.
+
+Current implementation status:
+
+- `WordTextLocatorAdapter.ts` already exists and owns the approved three-step
+  location strategy.
+- `ApplySuggestionCommand.ts` now consumes the narrow `TextLocator` contract by
+  injection instead of owning its own fallback search implementation.
+- `BatchApplyOrchestrator.ts` currently composes the default locator for apply
+  flows through `WordTextLocatorContext.ts`.
+- `WordAdapter.ts` now routes navigation fallback search through the same
+  locator, leaving only higher-level fallback orchestration in the adapter.
+- `ResolveSuggestionCommand.ts` now also depends on the same locator capability
+  through `SuggestionResolutionObserver`, so apply, navigation, and resolution
+  share one Word-facing search path.
+- `WordTextLocatorContext.ts` is still a real boundary file, not a barrel: it
+  owns the shared types plus the currently authorized default-locator wiring.
+
+#### `SuggestionLocator`
+
+Owns artifact lookup and candidate ranking:
+
+- find content controls by canonical tag,
+- rank candidates with valid `compound-v2` identity first,
+- find colocated stylistic comments when required,
+- return one located artifact bundle to the resolution workflow.
+
+Current Phase 4 status:
+
+- `SuggestionLocator.ts` now exists and owns content-control lookup, candidate
+  ranking, and colocated comment discovery.
+- `ResolveSuggestionCommand.ts` no longer performs tag lookup or duplicate-tag
+  ranking itself.
+
+#### `SuggestionResolutionObserver`
+
+Owns evidence gathering:
+
+- validate compound identity,
+- collect tracked changes from CC, CC range, body overlap, operational anchor,
+  and colocated comment range,
+- downgrade ambiguity to `unobservable`,
+- downgrade corrupt metadata to `identity-lost`.
+
+This module owns epistemology: what can be proved, what cannot be proved, and
+what must remain conservative.
+
+Current Phase 4 status:
+
+- `SuggestionResolutionObserver.ts` now exists and owns tracked-change evidence
+  gathering.
+- Resolution search now routes through the shared `TextLocator` contract,
+  eliminating the weaker fallback path that used to live inside
+  `ResolveSuggestionCommand.ts`.
+
+#### `SuggestionResolutionCleanup`
+
+Owns cleanup policy after a confirmed resolution:
+
+- delete the colocated comment when safe,
+- delete the resolved anchor content control when safe,
+- tolerate reject-side invalidation where that is expected,
+- keep cleanup semantics separate from observation semantics.
+
+Current Phase 4 status:
+
+- `SuggestionResolutionCleanup.ts` now owns comment and anchor cleanup policy.
+- `TrackedChangeResolutionExecutor.ts` now owns the terminal tracked-change
+  mutation step.
+
+#### `DocumentReviewStateInspector`
+
+Owns the document-derived snapshot before and after resolution. The logic already
+exists in function form; the refactor makes the responsibility explicit and
+reusable.
+
+Current Phase 4 status:
+
+- `DocumentReviewStateInspector.ts` now owns snapshot construction, empty-state
+  fallback, and reject-tolerant post-resolution inspection.
+
+#### `ResolveSuggestionResultFactory`
+
+Owns consistent result shaping, status mapping, and transition derivation. This
+keeps the orchestration layer from rebuilding response semantics ad hoc.
+
+Current Phase 4 status:
+
+- `ResolveSuggestionResultFactory.ts` now owns terminal result shaping for
+  success, observation failure, and outer-catch error flows.
+
+#### `ResolveSuggestionCommand`
+
+Remains as the workflow entry point, but only as a thin orchestrator. It should
+coordinate collaborators, branch between `comment-only` and tracked-change
+resolution, and return `SuggestionActionResult`. It must stop being the place
+where all Word-specific detail accumulates.
+
+Current Phase 4 status:
+
+- `ResolveSuggestionCommand.ts` is now a thin orchestrator (~200 lines) that
+  wires `SuggestionLocator`, `SuggestionResolutionObserver`,
+  `SuggestionResolutionCleanup`, `TrackedChangeResolutionExecutor`,
+  `DocumentReviewStateInspector`, `ResolveSuggestionResultFactory`, and
+  `CommentOnlySuggestionResolver`.
+- Accept/reject regression suites stay green after the split, including the
+  `cc-not-found` branch that briefly regressed during extraction and was fixed.
 
 ---
 
-## Four Pillars Evaluation
+## 8. Approved architectural constraints for the refactor
 
-| Pillar | Status | Evidence |
-|--------|--------|---------|
-| **Maintainability** | ✅ Good | Each module has one responsibility. `wordApi.ts` (579 lines, 4 concerns) replaced by 3 focused files. `taskpane.ts` now only handles DOM events and rendering. |
-| **Testability** | ✅ Good | Pipeline depends only on `IDocumentPort` and `IAnalysisPort` interfaces. Mock adapters enable unit tests with no Office.js or Mastra dependency. `chunker.ts` and `deduplicateByOriginalText` (inside `DeduplicateHandler`) are pure functions. |
-| **Scalability** | ✅ Good | Chunking handles 200K+ word documents. Partial success philosophy maximizes results on large documents. New analysis phases are added as a new handler — O(1) change regardless of pipeline size. |
-| **Extensibility** | ✅ Good | New backend → new `IAnalysisPort` adapter (zero pipeline changes). New document host → new `IDocumentPort` adapter (zero pipeline changes). New analysis phase → new `PipelineHandler` inserted into orchestrator array. New cross-cutting concern → new `Decorator` wrapping a port. |
+The following constraints are now part of the architecture and must guide the
+implementation phases.
 
----
+### 8.1 No big-bang refactor
 
-## Key Design Decisions
+The new architecture must be introduced in bounded phases. `ApplySuggestionCommand`,
+`WordAdapter.navigateToText()`, and `ResolveSuggestionCommand` will not all be
+rewritten in one large change. Each phase should move one boundary at a time and
+leave the system testable.
 
-### Why Chain of Responsibility for the pipeline?
+### 8.2 Validations come before the refactor
 
-`handleAnalyze()` was a monolithic 160-line function with 7 phases. Chain of Responsibility makes each phase an independent, testable, replaceable handler. Adding a new phase (e.g., terminology verification, spellcheck pre-filter) requires creating one new file and inserting it into the handler array — no modifications to existing handlers or the orchestrator.
+The first implementation step is not business logic. It is architectural guard
+work. The project must first add the new validations that prevent boundary drift.
+Those validations are allowed to fail against the current codebase, because a
+failing validation is evidence that the guard is catching the problem it was
+created to detect.
 
-### Why Command for suggestion application?
+### 8.3 TDD is mandatory for each bounded SDD
 
-Each suggestion is encapsulated as a `DocumentCommand` with `execute()`. This enables:
-- Clear single responsibility: one command = one document mutation
-- Future `undo()` support without restructuring
-- Per-command result tracking (`CommandResult`)
+Each implementation phase must be test-first, behavior-focused, and limited to a
+coherent architectural increment. The project should not open a speculative,
+multi-week branch that attempts to finish the whole target architecture in one
+shot.
 
-### Why Decorator for retry?
+### 8.4 Documentation must move with code
 
-The original `mastraClient.ts` mixed retry logic with Mastra communication. The Decorator separates concerns: `MastraAdapter` only handles the HTTP protocol; `RetryAnalysisDecorator` only handles retry semantics. Tests can inject the bare adapter without retry overhead. Future concerns (circuit breaker, caching) can be added as additional decorators.
-
-### Why Observer for progress?
-
-The `ProgressCallback` was a single listener. `PipelineEventEmitter` supports multiple simultaneous observers. The UI subscribes one observer; future analytics or structured logging can subscribe additional observers without touching the pipeline.
-
-### Why State Machine for pipeline lifecycle?
-
-The `isRunning` boolean check (`btn.disabled`) was implicit state. `PipelineStateMachine` makes valid transitions explicit and validated. Concurrent pipeline runs are prevented at the state level — impossible to go from `idle` to `applying` without passing through all intermediate states.
-
-### Why one Word.run per suggestion?
-
-After a text insertion replaces a range, all subsequent ranges in the document may shift. A fresh `Word.run` per suggestion means each search starts from a clean document state. A failure in suggestion N doesn't affect suggestions 1..(N-1). This is the Per-Resource Isolation pattern.
-
-### Why native Office.js APIs in ApplySuggestionCommand?
-
-Direct text insertion and content control wrapping replaced 120 lines of opaque string concatenation. The current approach uses native Office.js APIs (`insertText`, `insertComment`, `insertContentControl`) making intent clear and extension easy.
-
-### Why Range Colocation for comment cleanup?
-
-Comments and tracked changes have no direct link in the Word API. Using `Comment.getRange()` and `TrackedChange.getRange()` with `Range.compareLocationWith()` to determine colocation:
-- Uses the document as the source of truth (no in-memory registry)
-- Works across sessions (no state to persist)
-- Never deletes comments it can't positively identify as orphaned
+When a bounded phase is implemented, documentation comments in code, diagrams,
+and this architecture document must be updated together. The project already paid
+the price of architectural drift once. We are not repeating that mistake.
 
 ---
 
-## Error Handling
+## 9. Architectural guards
 
-Errors are handled at four levels:
+### 9.1 Guards already in place
 
-| Level | Location | Strategy |
-|-------|----------|---------|
-| **Word API** | `ApplySuggestionCommand.ts` | Each command runs in its own `Word.run` context. Track Changes lifecycle is handled by `BatchApplyOrchestrator` (lazy enablement), not per-suggestion restore. |
-| **Backend** | `RetryAnalysisDecorator.ts` | Retry with exponential backoff (3 attempts). Never throws — returns empty result. |
-| **Pipeline** | `handlers/` | Handlers set `ctx.aborted = true` for graceful abort. `emitter.emitAbort(reason)` notifies observers. |
-| **UI** | `taskpane.ts` | `try/catch/finally` around `orchestrator.run()`. `setAnalyzeLoading(false)` always runs in `finally`. |
+The project already enforces several healthy boundaries:
 
-### Partial Success Philosophy
+- `lints/no-word-global.grit` prevents direct `Word` usage outside the Word
+  adapter boundary.
+- `lints/no-adapter-import-in-domain.grit` prevents domain code from importing
+  concrete adapters.
+- `scripts/checkComplexity.mjs` prevents silent growth of god objects.
 
-The system is designed for partial success:
-- If 3/5 chunks succeed → suggestions from those 3 are applied
-- If 25/30 suggestions are found → 25 are applied, 5 reported as "not found"
-- Results panel always shows the complete picture: applied count, failed count, chunk errors
+These guards remain valid and should stay active.
 
----
+### 9.2 Additional guards approved for the next phase
 
-## Architectural Guards
+The next refactor cycle adds three more categories of protection.
 
-Three automated guards prevent god object accumulation and architectural boundary violations. They run on every pre-commit and in the IDE in real time.
+#### A. Concrete text-search implementation guard
 
-### 1. File Complexity Guard (`scripts/checkComplexity.mjs`)
+Goal: prevent arbitrary consumers from importing concrete text-search
+implementations directly when they should depend on a port or on an authorized
+orchestrator.
 
-Enforces file size thresholds across all managed source files (`src/domain/`, `src/adapters/`, `src/infrastructure/`, `src/taskpane/`).
+Architectural intent:
 
-| Metric | Threshold | Action |
-|--------|-----------|--------|
-| Lines per file | > 500 | Warning (non-blocking) |
-| Lines per file | > 800 | Error — blocks commit |
+- domain and taskpane code must not import `WordTextLocatorAdapter`,
+- resolution collaborators should depend on `ITextLocatorPort`,
+- only authorized composition points may wire the concrete adapter.
 
-**Exempt patterns:** `types.ts`, `*.d.ts` (structurally large by nature)
+### 9.2.1 Structural naming guard alignment
 
-**Ratcheted exceptions** — files that exceed the threshold for justified reasons. Each exception includes a `maxLines` cap and a `reason`. The cap must DECREASE over time as refactors happen; raising it requires an explicit justification in the source:
+The file naming guard must evolve with the approved collaborator model. The
+target resolution split already names collaborators like:
 
-```js
-// scripts/checkComplexity.mjs — KNOWN_EXCEPTIONS Map
-[
-  "src/adapters/word/ResolveSuggestionCommand.ts",
-  { maxLines: 1100, reason: "Inherent Word tracked-change resolution complexity" },
-],
-[
-  "src/taskpane/taskpane.ts",
-  { maxLines: 1000, reason: "Phase 3 refactor pending" },
-],
+- `ReplaceIdentityParser.ts`
+- `DocumentReviewStateInspector.ts`
+- `SuggestionLocator.ts`
+- `SuggestionResolutionObserver.ts`
+- `TrackedChangeResolutionExecutor.ts`
+- `CommentOnlySuggestionResolver.ts`
+- `ResolveSuggestionResultFactory.ts`
+
+If the guard only allows legacy suffixes, the architecture document would be
+lying and the refactor would be blocked by policy instead of guided by it.
+
+For that reason, the allowed adapter suffix set now includes the collaborator
+roles required by the split:
+
+```text
+Adapter · Decorator · Command · Builder · Cleanup · Factory · Inspector · Locator · Observer · Parser · Resolver · Executor · Machine · Events · Context · Orchestrator
 ```
 
-To add a new exception or raise a cap, update the `KNOWN_EXCEPTIONS` Map in `scripts/checkComplexity.mjs` with the reason inline.
+This is not a relaxation toward generic filenames. It is the opposite: a more
+explicit architectural vocabulary so future files describe their responsibility
+instead of hiding behind vague names.
 
-Run manually: `npm run check:complexity`
+#### B. Canonical search primitives guard
 
----
+Goal: prevent duplication of canonical primitives such as
+`findWhitespaceInsensitiveSlice`, `findUniqueLocatorSubstring`,
+`findFirstAlphanumericOffset`, or equivalent named helpers outside the approved
+text-search core.
 
-### 2. GritQL Boundary Plugins (`lints/`)
+Architectural intent:
 
-Biome 2.x GritQL plugins enforce architectural dependency direction in real time (IDE + pre-commit). They are scoped via `biome.json` overrides — they only apply to the paths where the violation would be architectural.
+- there must be one canonical place for normalization and locator policies,
+- resolution code must reuse the shared capability instead of reimplementing a
+  weakened version,
+- future contributors should hit a validation failure before copying helper logic
+  into a command file.
 
-#### `lints/no-word-global.grit`
+This guard cannot prove semantic equivalence of arbitrary code, but it can block
+structural duplication of the canonical API and helper names. That is a useful
+and realistic boundary.
 
-**Scope:** `src/domain/**`, `src/infrastructure/**`, `src/taskpane/**`
+#### C. Taskpane and workflow consumption guard
 
-Blocks any direct use of the `Word` global (e.g., `Word.run()`, `Word.ChangeTrackingMode`) outside `src/adapters/word/`. All document operations must go through `IDocumentPort`.
+Goal: prevent the presentation layer from importing concrete search engines or
+Word-specific location helpers.
 
-```gritql
-`Word.$method($args)` where {
-  register_diagnostic(span = $method,
-    message = "Word global must only be used inside src/adapters/word/. Use IDocumentPort instead.",
-    severity = "error")
-}
-```
+Architectural intent:
 
-#### `lints/no-adapter-import-in-domain.grit`
+- taskpane should consume ports, mediator workflows, or document services,
+- taskpane should not know the concrete search capability internals,
+- future UI work must remain insulated from Word-specific search mechanics.
 
-**Scope:** `src/domain/**`
+### 9.3 Complexity ratchet implications
 
-Blocks imports from `src/adapters/` inside the domain layer. The domain must depend only on ports (interfaces), never on concrete adapters (Dependency Inversion Principle).
-
-```gritql
-`import $binding from $path` where {
-  or {
-    $path <: `"../adapters/$_"`,
-    $path <: `"../../adapters/$_"`,
-    $path <: `"../../../adapters/$_"`
-  },
-  register_diagnostic(span = $path,
-    message = "Domain layer must not import from adapters. Depend on ports instead.",
-    severity = "error")
-}
-```
-
-**How to modify scope:** Edit the `overrides[].includes` arrays in `biome.json`.
-
-**How to add a new boundary plugin:** Create a `.grit` file in `lints/` and add it to the appropriate `overrides` entry in `biome.json`.
+The current `ResolveSuggestionCommand.ts` exception exists because the file is
+already too large. The refactor should lower the exception cap after the split.
+Architectural guards are not just about catching new violations; they are also a
+ratchet to force the system toward smaller, clearer modules over time.
 
 ---
 
-### 3. When to update the guards
+## 10. Testing strategy implied by the architecture
 
-| Situation | What to change |
-|-----------|----------------|
-| New file consistently exceeds 500 lines for good reason | Add to `KNOWN_EXCEPTIONS` in `checkComplexity.mjs` with a reason |
-| A ratcheted file shrinks after refactor | Lower its `maxLines` cap |
-| New architectural layer added | Add a new GritQL plugin and a new `overrides` entry |
-| Existing plugin too noisy (false positives) | Narrow the `includes` in `biome.json` or refine the GritQL pattern |
+The architecture is only real if the tests match it.
+
+### 10.1 Pure capability tests
+
+`TextSearchCore` must be covered with pure tests that exercise:
+
+- smart quotes normalization,
+- diacritic-insensitive matching,
+- field-code skipping,
+- whitespace-insensitive matching,
+- locator shortening,
+- first-alphanumeric fallback derivation.
+
+These tests must not require Office.js mocks because the module is intentionally
+pure.
+
+### 10.2 Adapter contract tests
+
+`WordTextLocatorAdapter` should have focused tests proving how it translates the
+pure capability into Office.js search behavior, including the 256-character limit
+and retry/fallback behavior.
+
+### 10.3 Resolution collaborator tests
+
+The split resolution modules should be tested by responsibility:
+
+- `SuggestionLocator` tests for artifact selection and ranking,
+- `SuggestionResolutionObserver` tests for evidence classification,
+- `SuggestionResolutionCleanup` tests for reject-side cleanup tolerance,
+- `ResolveSuggestionResultFactory` tests for status/result shaping.
+
+### 10.4 Workflow tests remain essential
+
+Even after the split, `SuggestionResolutionWorkflow`, `ReviewSessionMediator`,
+and taskpane-facing tests remain necessary to prove that ambiguous states skip
+feedback and render the correct UX.
+
+---
+
+## 11. Key decisions recorded by this update
+
+1. The Word search bug pattern was caused by architectural asymmetry, not by the
+   overall hexagonal model.
+2. Text search becomes a first-class technical capability with a pure core and a
+   Word-specific adapter.
+3. `ResolveSuggestionCommand` stays as an entry point but must become a thin
+   orchestrator with dedicated collaborators.
+4. New lint and structural validations are implemented before the main refactor.
+5. The refactor will be executed in bounded SDD increments and verified through
+   TDD.
+6. Documentation and code comments are part of the change, not follow-up chores.
+
+These decisions are approved architectural direction. Future implementation work
+should refine the file names and exact APIs, but it should not reverse these
+boundaries without an explicit architectural discussion.

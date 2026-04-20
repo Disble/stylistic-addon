@@ -20,6 +20,13 @@ const knownAdapterSuffixes = new Set([
   "Command",
   "Builder",
   "Cleanup",
+  "Factory",
+  "Inspector",
+  "Locator",
+  "Observer",
+  "Parser",
+  "Resolver",
+  "Executor",
   "Machine",
   "Events",
   "Context",
@@ -169,7 +176,7 @@ async function main() {
 
       if (!hasSuffix) {
         errors.push(
-          `${path.relative(rootDirectory, filePath)}: adapter files must end with a known architectural suffix (Adapter, Decorator, Command, Builder, Cleanup, Machine, Events, Context, Orchestrator). Found: ${baseName}`,
+          `${path.relative(rootDirectory, filePath)}: adapter files must end with a known architectural suffix (Adapter, Decorator, Command, Builder, Cleanup, Factory, Inspector, Locator, Observer, Parser, Resolver, Executor, Machine, Events, Context, Orchestrator). Found: ${baseName}`,
         );
       }
     }

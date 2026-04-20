@@ -559,7 +559,7 @@ suggestions:
 - the deleted/original side is semantically part of the same suggestion even if
   Word exposes it asymmetrically,
 - therefore, failing to observe tracked changes around the inserted-side anchor
-  is **not enough** to conclude `already-resolved`.
+  is **not enough** to conclude terminal resolution.
 
 This matters because repeated regressions have shown that host observability may
 be incomplete even while the suggestion is still pending in Word.

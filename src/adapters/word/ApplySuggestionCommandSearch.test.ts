@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
+import { WordTextLocatorAdapter } from "./WordTextLocatorAdapter";
 import {
   createRange,
   installWordContext,
   makeSuggestion,
   type MockRange,
 } from "./ApplySuggestionCommandTestHelper";
+
+const textLocator = new WordTextLocatorAdapter();
 
 describe("ApplySuggestionCommand search behavior", () => {
   beforeEach(() => {
@@ -21,7 +24,10 @@ describe("ApplySuggestionCommand search behavior", () => {
   it("returns a distinct error when context is not found", async () => {
     installWordContext({ contextSearchSequence: [[], [], []] });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({
       success: false,
@@ -38,7 +44,10 @@ describe("ApplySuggestionCommand search behavior", () => {
       anchorSearchSequence: [[], [], []],
     });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({
       success: false,
@@ -50,7 +59,10 @@ describe("ApplySuggestionCommand search behavior", () => {
   it("uses two-step search: body finds context, then context range finds anchor", async () => {
     const env = installWordContext();
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(env.context.document.body.search).toHaveBeenCalledWith(
@@ -74,7 +86,10 @@ describe("ApplySuggestionCommand search behavior", () => {
       .mockReturnValueOnce({ items: [], load: vi.fn() })
       .mockReturnValueOnce({ items: [env.anchorRange], load: vi.fn() });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(env.bodyRange.search).toHaveBeenNthCalledWith(1, "texto original", {
@@ -98,6 +113,7 @@ describe("ApplySuggestionCommand search behavior", () => {
 
     const result = await new ApplySuggestionCommand(
       makeSuggestion({ context: longContext }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -117,7 +133,10 @@ describe("ApplySuggestionCommand search behavior", () => {
       anchorSearchSequence: [[], [], [fallbackAnchor]],
     });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(env.bodyRange.load).toHaveBeenCalledWith("text");
@@ -161,6 +180,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: anchorWithAccents,
         suggestedText: "lo que me dijo",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -195,6 +215,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: anchorText,
         suggestedText: "no tenía",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -234,6 +255,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: anchorText,
         suggestedText: "Eso también significaba",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -292,6 +314,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: anchorText,
         suggestedText: "lo que me dijo",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -335,6 +358,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: anchorText,
         suggestedText: "lo que me dijo",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -379,6 +403,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: anchorText,
         suggestedText: "lo que me dijo",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
@@ -425,6 +450,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: "lo qué me dijo",
         suggestedText: "lo que me dijo",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({
@@ -480,6 +506,7 @@ describe("ApplySuggestionCommand search behavior", () => {
         anchor: "lo qué me dijo",
         suggestedText: "lo que me dijo",
       }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });

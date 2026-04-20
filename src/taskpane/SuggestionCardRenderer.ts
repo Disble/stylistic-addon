@@ -429,13 +429,6 @@ function applySuggestionCardState(
       moveSuggestionCardToEnd(li);
       break;
 
-    case "already-resolved":
-      li.querySelector(".result-actions")?.remove();
-      li.classList.add("result-already-resolved");
-      appendNote(li, "(ya resuelto)", "result-already-resolved-note");
-      moveSuggestionCardToEnd(li);
-      break;
-
     case "identity-lost":
       li.querySelector(".result-actions")?.remove();
       li.classList.add("result-identity-lost");

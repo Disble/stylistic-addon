@@ -467,7 +467,7 @@ If you are about to create a file that will exceed 500 lines, stop and extract r
 ### Known adapter suffixes
 
 ```text
-Adapter · Decorator · Command · Builder · Cleanup · Machine · Events · Context · Orchestrator
+Adapter · Decorator · Command · Builder · Cleanup · Factory · Inspector · Locator · Observer · Parser · Resolver · Executor · Machine · Events · Context · Orchestrator
 ```
 
 A `Mock` prefix is allowed in front of any suffix (e.g. `MockFeedbackAdapter.ts`).
@@ -481,6 +481,13 @@ A `Mock` prefix is allowed in front of any suffix (e.g. `MockFeedbackAdapter.ts`
 | `*Command.ts` | Encapsulates one document mutation; enables future undo | `ApplySuggestionCommand.ts` |
 | `*Builder.ts` | Fluent construction API for a complex object | `OoxmlPackageBuilder.ts` |
 | `*Cleanup.ts` | Range-colocation or document-cleanup operation | `CommentCleanup.ts` |
+| `*Factory.ts` | Creates result objects or value aggregates from adapter workflows | `ResolveSuggestionResultFactory.ts` |
+| `*Inspector.ts` | Reads and normalizes host/document state without mutating it | `DocumentReviewStateInspector.ts` |
+| `*Locator.ts` | Finds the right Word artifact or range for a higher-level workflow | `SuggestionLocator.ts` |
+| `*Observer.ts` | Collects and classifies evidence from the host without mutating it | `SuggestionResolutionObserver.ts` |
+| `*Parser.ts` | Parses and validates structured adapter-owned payloads | `ReplaceIdentityParser.ts` |
+| `*Resolver.ts` | Owns one focused resolution branch or specialization | `CommentOnlySuggestionResolver.ts` |
+| `*Executor.ts` | Applies a prepared host mutation against already-selected targets | `TrackedChangeResolutionExecutor.ts` |
 | `*Handler.ts` | One phase in the Chain of Responsibility pipeline | `ReadTextHandler.ts` |
 | `Mock*.ts` | Test double; same interface, no side effects | `MockFeedbackAdapter.ts` |
 

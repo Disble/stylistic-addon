@@ -302,88 +302,6 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.textContent).not.toContain("(aplicación falló)");
   });
 
-  it("marks already-resolved accept as terminal and sends positive feedback", async () => {
-    taskpaneMocks.acceptSuggestion.mockResolvedValue({
-      status: "already-resolved",
-      trackedChangesAffected: 0,
-      commentDeleted: false,
-      pendingAfter: {
-        pendingStylisticArtifacts: 1,
-        hasPendingStylisticArtifacts: true,
-        trackChangesActive: true,
-      },
-      documentState: "pending-review",
-      feedbackStatus: "sent",
-      taskpaneState: {
-        documentState: "pending-review",
-        showDisableTrackChangesCta: false,
-        showCleanupSection: false,
-      },
-    });
-
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-1" });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
-
-    acceptBtn.click();
-    await flushTaskpaneWork();
-
-    expect(li.classList.contains("result-already-resolved")).toBe(true);
-    expect(
-      li.querySelector(".result-already-resolved-note")?.textContent,
-    ).toBe("(ya resuelto)");
-    expect(getRequiredElement(doc, "results-summary").textContent).toBe(
-      "Ya no te quedan sugerencias aplicadas por revisar. 1 ya resuelta.",
-    );
-    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "accept",
-        context: suggestion.context,
-        anchor: suggestion.anchor,
-      }),
-    );
-  });
-
-  it("marks already-resolved reject as terminal and sends negative feedback", async () => {
-    taskpaneMocks.rejectSuggestion.mockResolvedValue({
-      status: "already-resolved",
-      trackedChangesAffected: 0,
-      commentDeleted: false,
-      pendingAfter: {
-        pendingStylisticArtifacts: 1,
-        hasPendingStylisticArtifacts: true,
-        trackChangesActive: true,
-      },
-      documentState: "pending-review",
-      feedbackStatus: "sent",
-      taskpaneState: {
-        documentState: "pending-review",
-        showDisableTrackChangesCta: false,
-        showCleanupSection: false,
-      },
-    });
-
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-1" });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
-
-    rejectBtn.click();
-    await flushTaskpaneWork();
-
-    expect(li.classList.contains("result-already-resolved")).toBe(true);
-    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "reject",
-        context: suggestion.context,
-        anchor: suggestion.anchor,
-      }),
-    );
-  });
-
   it("treats cc-not-found as terminal amber UI without sending feedback", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "cc-not-found",
@@ -641,7 +559,7 @@ describe("taskpane suggestion resolution guardrails", () => {
 
     expect(acceptBtn.disabled).toBe(false);
     expect(getRequiredChild(li, '[data-action="reject"]').disabled).toBe(false);
-    expect(li.classList.contains("result-already-resolved")).toBe(false);
+    expect(li.classList.contains("result-accepted")).toBe(false);
     expect(getRequiredElement(doc, "results-summary").textContent).toBe(
       "Te faltan 1 de 1 sugerencia aplicada por revisar. Todavía no resolviste ninguna.",
     );

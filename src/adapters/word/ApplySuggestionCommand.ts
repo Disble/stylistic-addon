@@ -34,18 +34,10 @@ import {
   STYLISTIC_TAG_PREFIX,
 } from "../../infrastructure/config";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
-import {
-  findFirstAlphanumericOffset,
-  findUniqueLocatorSubstring,
-  findWhitespaceInsensitiveSlice,
-} from "./WordSearchAdapter";
-
-/** Minimal search surface shared by `Word.Body` and `Word.Range`. */
-type SearchContainer = {
-  search(text: string, options: Record<string, boolean>): Word.RangeCollection;
-  load(property: "text"): void;
-  text: string;
-};
+import type {
+  TextLocator,
+  WordSearchContainer,
+} from "./WordTextLocatorContext";
 
 /** Returns the canonical Stylistic tag for one suggestion. */
 function buildSuggestionTag(suggestion: Suggestion): string {
@@ -155,200 +147,12 @@ export class ApplySuggestionCommand {
   readonly id: string;
   readonly description: string;
 
-  constructor(private readonly suggestion: Suggestion) {
+  constructor(
+    private readonly suggestion: Suggestion,
+    private readonly textLocator: TextLocator,
+  ) {
     this.id = suggestion.id;
     this.description = `Apply suggestion [${suggestion.type}]: "${suggestion.anchor.substring(0, 40)}" → "${(suggestion.suggestedText ?? "").substring(0, 40)}"`;
-  }
-
-  /**
-   * Returns true when the error message indicates a Word search API rejection
-   * due to an invalid or too-long search string (e.g. accented characters in
-   * ignorePunct/ignoreSpace mode, or certain special-character combinations).
-   */
-  private static isSearchInvalidError(error: unknown): boolean {
-    const message = stringifyUnknownError(error);
-    return message.includes("SearchStringInvalidOrTooLong");
-  }
-
-  /**
-   * Runs one Word search attempt and normalizes SearchStringInvalidOrTooLong.
-   */
-  private async runSearchAttempt(
-    context: Word.RequestContext,
-    container: SearchContainer,
-    searchText: string,
-    options: Record<string, boolean>,
-  ): Promise<{ invalid: boolean; results?: Word.RangeCollection }> {
-    try {
-      const results = container.search(searchText, options);
-      results.load("items");
-      await context.sync();
-      return { invalid: false, results };
-    } catch (error) {
-      if (ApplySuggestionCommand.isSearchInvalidError(error)) {
-        return { invalid: true };
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Resolves a range by scanning text with whitespace-insensitive matching.
-   *
-   * When `findUniqueLocatorSubstring` returns a candidate that starts with
-   * special characters (em-dashes, inverted question marks, etc.), Word may
-   * reject it with `SearchStringInvalidOrTooLong`. In that case, a second
-   * attempt is made with a sub-slice of `rawSlice` that starts at the first
-   * alphanumeric character, sidestepping the problematic leading chars while
-   * still uniquely identifying the same range in the document.
-   */
-  private async resolveByWhitespaceScan(
-    context: Word.RequestContext,
-    container: SearchContainer,
-    searchText: string,
-    searchOptions: Record<string, boolean>,
-  ): Promise<Word.Range | null> {
-    container.load("text");
-    await context.sync();
-
-    const rawSlice = findWhitespaceInsensitiveSlice(searchText, container.text);
-    if (!rawSlice) {
-      return null;
-    }
-
-    const fallbackSearchText = findUniqueLocatorSubstring(
-      rawSlice,
-      container.text,
-    );
-    if (!fallbackSearchText) {
-      return null;
-    }
-
-    const fallbackAttempt = await this.runSearchAttempt(
-      context,
-      container,
-      fallbackSearchText,
-      searchOptions,
-    );
-    if (!fallbackAttempt.invalid) {
-      return fallbackAttempt.results?.items[0] ?? null;
-    }
-
-    // The candidate was rejected by Word (SearchStringInvalidOrTooLong).
-    // This often happens when the rawSlice starts with special characters such
-    // as em-dashes (—) or inverted question marks (¿). Retry from the first
-    // alphanumeric character in rawSlice to produce a Word-safe search string.
-    const alphanumericOffset = findFirstAlphanumericOffset(rawSlice);
-    if (alphanumericOffset <= 0) {
-      return null;
-    }
-
-    const alphanumericSlice = rawSlice.slice(alphanumericOffset);
-    const alphanumericCandidate = findUniqueLocatorSubstring(
-      alphanumericSlice,
-      container.text,
-    );
-    if (!alphanumericCandidate) {
-      return null;
-    }
-
-    const retryAttempt = await this.runSearchAttempt(
-      context,
-      container,
-      alphanumericCandidate,
-      searchOptions,
-    );
-    if (retryAttempt.invalid) {
-      return null;
-    }
-
-    return retryAttempt.results?.items[0] ?? null;
-  }
-
-  /**
-   * Searches a body or range using the standard three-step fallback strategy.
-   *
-   * Step 1 (exact, case-sensitive): direct match — skipped when text > 256 chars.
-   * Step 2 (ignorePunct + ignoreSpace): tolerates minor punctuation/spacing differences.
-   * Step 3 (whitespace-insensitive text scan): reads `.text`, strips whitespace and
-   *         normalizes cross-source chars (e.g. smart quotes) from both the needle and
-   *         the haystack, locates the match, and searches the resulting slice. When the
-   *         slice is longer than Word's 256-char search limit, it is truncated to the
-   *         first 256 characters so the `search()` call can succeed.
-   *
-   * If any `container.search()` call throws `SearchStringInvalidOrTooLong` (Word
-   * rejects strings with certain accented or special characters in some search modes),
-   * the method skips directly to step 3 so the suggestion is still applied.
-   */
-  private async searchWithFallback(
-    context: Word.RequestContext,
-    container: SearchContainer,
-    searchText: string,
-  ): Promise<Word.Range | null> {
-    const searchOptions = { matchCase: true, matchWholeWord: false };
-    const relaxedOptions = {
-      matchCase: true,
-      matchWholeWord: false,
-      ignorePunct: true,
-      ignoreSpace: true,
-    };
-
-    const exactMatchAllowed = searchText.length <= 256;
-    let exactResults: Word.RangeCollection | undefined;
-
-    if (exactMatchAllowed) {
-      const exactAttempt = await this.runSearchAttempt(
-        context,
-        container,
-        searchText,
-        searchOptions,
-      );
-      if (exactAttempt.invalid) {
-        return this.resolveByWhitespaceScan(
-          context,
-          container,
-          searchText,
-          searchOptions,
-        );
-      }
-
-      exactResults = exactAttempt.results;
-      if ((exactResults?.items.length ?? 0) > 0) {
-        return exactResults?.items[0] ?? null;
-      }
-    }
-
-    const shouldRunRelaxedSearch =
-      !exactMatchAllowed || (exactResults?.items.length ?? 0) === 0;
-    if (shouldRunRelaxedSearch) {
-      const relaxedAttempt = await this.runSearchAttempt(
-        context,
-        container,
-        searchText,
-        relaxedOptions,
-      );
-      if (relaxedAttempt.invalid) {
-        return this.resolveByWhitespaceScan(
-          context,
-          container,
-          searchText,
-          searchOptions,
-        );
-      }
-
-      if ((relaxedAttempt.results?.items.length ?? 0) > 0) {
-        return relaxedAttempt.results?.items[0] ?? null;
-      }
-    }
-
-    // Step 3: whitespace-insensitive text scan — activates when all search()
-    // attempts complete with zero results.
-    return this.resolveByWhitespaceScan(
-      context,
-      container,
-      searchText,
-      searchOptions,
-    );
   }
 
   /**
@@ -359,11 +163,11 @@ export class ApplySuggestionCommand {
     context: Word.RequestContext,
     body: Word.Body,
   ): Promise<Word.Range | null> {
-    const contextRange = await this.searchWithFallback(
+    const contextRange = await this.textLocator.locate({
       context,
-      body as SearchContainer,
-      this.suggestion.context,
-    );
+      container: body as WordSearchContainer,
+      searchText: this.suggestion.context,
+    });
     if (!contextRange) {
       return null;
     }
@@ -385,8 +189,8 @@ export class ApplySuggestionCommand {
       matchText.length < this.suggestion.context.length - 20;
 
     const searchContainer = shouldExpandToParagraph
-      ? (containingParagraph as unknown as SearchContainer)
-      : (contextRange as unknown as SearchContainer);
+      ? (containingParagraph as unknown as WordSearchContainer)
+      : (contextRange as unknown as WordSearchContainer);
 
     if (shouldExpandToParagraph) {
       console.log(
@@ -394,11 +198,11 @@ export class ApplySuggestionCommand {
       );
     }
 
-    return this.searchWithFallback(
+    return this.textLocator.locate({
       context,
-      searchContainer,
-      this.suggestion.anchor,
-    );
+      container: searchContainer,
+      searchText: this.suggestion.anchor,
+    });
   }
 
   /**

@@ -84,7 +84,6 @@ export interface IDocumentPort {
    * Returns a result object — never throws.
    *
    * Result contract:
-   * - `already-resolved` requires positive evidence of prior resolution
    * - `unobservable` means Word could not prove the suggestion state yet
    * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
    */
@@ -96,7 +95,6 @@ export interface IDocumentPort {
    * Returns a result object — never throws.
    *
    * Result contract:
-   * - `already-resolved` requires positive evidence of prior resolution
    * - `unobservable` means Word could not prove the suggestion state yet
    * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
    */

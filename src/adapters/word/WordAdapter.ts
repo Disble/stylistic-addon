@@ -43,26 +43,19 @@ import {
 import {
   isValidCompoundReplaceIdentity,
   parseReplaceIdentityTitle,
-  ResolveSuggestionCommand,
-} from "./ResolveSuggestionCommand";
+} from "./ReplaceIdentityParser";
+import { ResolveSuggestionCommand } from "./ResolveSuggestionCommand";
 import {
-  findFirstAlphanumericOffset,
-  findUniqueLocatorSubstring,
-  findWhitespaceInsensitiveSlice,
-} from "./WordSearchAdapter";
+  getDefaultTextLocator,
+  type TextLocator,
+  type WordSearchContainer,
+} from "./WordTextLocatorContext";
 
 type ParagraphSnapshot = {
   text?: string;
   styleBuiltIn?: string;
   firstLineIndent?: number;
   leftIndent?: number;
-};
-
-/** Minimal Word search surface shared by body and range containers. */
-type SearchContainer = {
-  search(text: string, options: Record<string, boolean>): Word.RangeCollection;
-  load(property: "text"): void;
-  text: string;
 };
 
 const PARAGRAPH_LOAD_FIELDS =
@@ -109,11 +102,9 @@ function buildSuggestionTag(suggestion: Suggestion): string {
 }
 
 export class WordAdapter implements IDocumentPort {
-  /** Normalizes Word search rejections triggered by unsupported search strings. */
-  private static isSearchInvalidError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return message.includes("SearchStringInvalidOrTooLong");
-  }
+  constructor(
+    private readonly textLocator: TextLocator = getDefaultTextLocator(),
+  ) {}
 
   /**
    * Creates a normalized document-review snapshot.
@@ -155,154 +146,13 @@ export class WordAdapter implements IDocumentPort {
     return v2Candidate ?? ccs[0] ?? null;
   }
 
-  /** Runs one Word search attempt and normalizes invalid-search host failures. */
-  private async runSearchAttempt(
-    context: Word.RequestContext,
-    container: SearchContainer,
-    searchText: string,
-    options: Record<string, boolean>,
-  ): Promise<{ invalid: boolean; results?: Word.RangeCollection }> {
-    try {
-      const results = container.search(searchText, options);
-      results.load("items");
-      await context.sync();
-      return { invalid: false, results };
-    } catch (error) {
-      if (WordAdapter.isSearchInvalidError(error)) {
-        return { invalid: true };
-      }
-      throw error;
-    }
-  }
-
-  /** Resolves a range by scanning container text with whitespace-insensitive matching. */
-  private async resolveByWhitespaceScan(
-    context: Word.RequestContext,
-    container: SearchContainer,
-    searchText: string,
-    searchOptions: Record<string, boolean>,
-  ): Promise<Word.Range | null> {
-    container.load("text");
-    await context.sync();
-
-    const rawSlice = findWhitespaceInsensitiveSlice(searchText, container.text);
-    if (!rawSlice) {
-      return null;
-    }
-
-    const fallbackSearchText = findUniqueLocatorSubstring(
-      rawSlice,
-      container.text,
-    );
-    if (!fallbackSearchText) {
-      return null;
-    }
-
-    const fallbackAttempt = await this.runSearchAttempt(
-      context,
-      container,
-      fallbackSearchText,
-      searchOptions,
-    );
-    if (!fallbackAttempt.invalid) {
-      return fallbackAttempt.results?.items[0] ?? null;
-    }
-
-    const alphanumericOffset = findFirstAlphanumericOffset(rawSlice);
-    if (alphanumericOffset <= 0) {
-      return null;
-    }
-
-    const alphanumericSlice = rawSlice.slice(alphanumericOffset);
-    const alphanumericCandidate = findUniqueLocatorSubstring(
-      alphanumericSlice,
-      container.text,
-    );
-    if (!alphanumericCandidate) {
-      return null;
-    }
-
-    const retryAttempt = await this.runSearchAttempt(
-      context,
-      container,
-      alphanumericCandidate,
-      searchOptions,
-    );
-    if (retryAttempt.invalid) {
-      return null;
-    }
-
-    return retryAttempt.results?.items[0] ?? null;
-  }
-
-  /** Searches a body or range using the same resilient fallback strategy as apply/resolve. */
+  /** Searches a body or range through the shared Word text locator. */
   private async searchWithFallback(
     context: Word.RequestContext,
-    container: SearchContainer,
+    container: WordSearchContainer,
     searchText: string,
   ): Promise<Word.Range | null> {
-    const searchOptions = { matchCase: true, matchWholeWord: false };
-    const relaxedOptions = {
-      matchCase: true,
-      matchWholeWord: false,
-      ignorePunct: true,
-      ignoreSpace: true,
-    };
-
-    const exactMatchAllowed = searchText.length <= 256;
-    let exactResults: Word.RangeCollection | undefined;
-
-    if (exactMatchAllowed) {
-      const exactAttempt = await this.runSearchAttempt(
-        context,
-        container,
-        searchText,
-        searchOptions,
-      );
-      if (exactAttempt.invalid) {
-        return this.resolveByWhitespaceScan(
-          context,
-          container,
-          searchText,
-          searchOptions,
-        );
-      }
-
-      exactResults = exactAttempt.results;
-      if ((exactResults?.items.length ?? 0) > 0) {
-        return exactResults?.items[0] ?? null;
-      }
-    }
-
-    const shouldRunRelaxedSearch =
-      !exactMatchAllowed || (exactResults?.items.length ?? 0) === 0;
-    if (shouldRunRelaxedSearch) {
-      const relaxedAttempt = await this.runSearchAttempt(
-        context,
-        container,
-        searchText,
-        relaxedOptions,
-      );
-      if (relaxedAttempt.invalid) {
-        return this.resolveByWhitespaceScan(
-          context,
-          container,
-          searchText,
-          searchOptions,
-        );
-      }
-
-      if ((relaxedAttempt.results?.items.length ?? 0) > 0) {
-        return relaxedAttempt.results?.items[0] ?? null;
-      }
-    }
-
-    return this.resolveByWhitespaceScan(
-      context,
-      container,
-      searchText,
-      searchOptions,
-    );
+    return this.textLocator.locate({ context, container, searchText });
   }
 
   /** Re-locates a suggestion by its contextual anchor when direct artifact lookup fails. */
@@ -310,7 +160,7 @@ export class WordAdapter implements IDocumentPort {
     context: Word.RequestContext,
     suggestion: Suggestion,
   ): Promise<Word.Range | null> {
-    const body = context.document.body as unknown as SearchContainer;
+    const body = context.document.body as unknown as WordSearchContainer;
     const contextRange = await this.searchWithFallback(
       context,
       body,
@@ -333,8 +183,8 @@ export class WordAdapter implements IDocumentPort {
       contextRange.text.length < suggestion.context.length - 20;
 
     const searchContainer = shouldExpandToParagraph
-      ? (containingParagraph as unknown as SearchContainer)
-      : (contextRange as unknown as SearchContainer);
+      ? (containingParagraph as unknown as WordSearchContainer)
+      : (contextRange as unknown as WordSearchContainer);
 
     return this.searchWithFallback(context, searchContainer, suggestion.anchor);
   }
@@ -631,7 +481,7 @@ export class WordAdapter implements IDocumentPort {
           context,
           await this.searchWithFallback(
             context,
-            context.document.body as unknown as SearchContainer,
+            context.document.body as unknown as WordSearchContainer,
             target,
           ),
         );

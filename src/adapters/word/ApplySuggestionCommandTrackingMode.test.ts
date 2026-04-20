@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
+import { WordTextLocatorAdapter } from "./WordTextLocatorAdapter";
 import {
   installWordContext,
   makeSuggestion,
 } from "./ApplySuggestionCommandTestHelper";
+
+const textLocator = new WordTextLocatorAdapter();
 
 describe("ApplySuggestionCommand tracking-mode guards", () => {
   beforeEach(() => {
@@ -21,6 +24,7 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
 
     const result = await new ApplySuggestionCommand(
       makeSuggestion({ anchor: "", context: "", suggestedText: "texto sugerido" }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({
@@ -37,7 +41,10 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
       insertError: new Error("insert failed"),
     });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({
       success: false,
@@ -53,7 +60,10 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
   it("does not load or read changeTrackingMode for track-change suggestions", async () => {
     const env = installWordContext({ initialTrackingMode: "trackMine" });
 
-    const result = await new ApplySuggestionCommand(makeSuggestion()).execute();
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion(),
+      textLocator,
+    ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });
     expect(env.context.document.load).not.toHaveBeenCalledWith(
@@ -67,6 +77,7 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
 
     const result = await new ApplySuggestionCommand(
       makeSuggestion({ type: "comment-only", suggestedText: undefined }),
+      textLocator,
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "s1" });

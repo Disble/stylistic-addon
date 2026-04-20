@@ -17,8 +17,8 @@ const KNOWN_EXCEPTIONS = new Map([
   [
     "src/adapters/word/ResolveSuggestionCommand.ts",
     {
-      maxLines: 1100,
-      reason: "Inherent Word tracked-change resolution complexity",
+      maxLines: 1030,
+      reason: "Temporary exception until the approved resolution split lands",
     },
   ],
 ]);

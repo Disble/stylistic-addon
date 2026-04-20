@@ -22,7 +22,6 @@ describe("domain types (compile-time checks)", () => {
       | "resolving"
       | "accepted"
       | "rejected"
-      | "already-resolved"
       | "unobservable"
       | "identity-lost"
       | "error"

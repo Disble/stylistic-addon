@@ -27,6 +27,9 @@ import type {
   SuggestionApplicationFailureReason,
 } from "../../domain/types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
+import { getDefaultTextLocator } from "./WordTextLocatorContext";
+
+const textLocator = getDefaultTextLocator();
 
 /** Injected capabilities required by the orchestrator. */
 type BatchApplyDependencies = {
@@ -157,7 +160,7 @@ export class BatchApplyOrchestrator {
   private async executeSuggestionCommand(
     suggestion: Suggestion,
   ): Promise<CommandResult> {
-    const command = new ApplySuggestionCommand(suggestion);
+    const command = new ApplySuggestionCommand(suggestion, textLocator);
 
     try {
       return await command.execute();

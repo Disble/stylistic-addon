@@ -15,7 +15,6 @@ import {
 const TERMINAL_STATES: SuggestionState[] = [
   "accepted",
   "rejected",
-  "already-resolved",
   "identity-lost",
 ];
 
@@ -27,7 +26,6 @@ function machineAt(target: SuggestionState): SuggestionStateMachine {
     resolving: ["resolving"],
     accepted: ["resolving", "accepted"],
     rejected: ["resolving", "rejected"],
-    "already-resolved": ["resolving", "already-resolved"],
     unobservable: ["resolving", "unobservable"],
     "identity-lost": ["resolving", "identity-lost"],
     error: ["resolving", "error"],
@@ -91,14 +89,6 @@ describe("SuggestionStateMachine", () => {
       sm.transition("resolving");
       sm.transition("rejected");
       expect(sm.state).toBe("rejected");
-      expect(sm.isTerminal).toBe(true);
-    });
-
-    it("pending → resolving → already-resolved", () => {
-      const sm = new SuggestionStateMachine();
-      sm.transition("resolving");
-      sm.transition("already-resolved");
-      expect(sm.state).toBe("already-resolved");
       expect(sm.isTerminal).toBe(true);
     });
 
@@ -329,7 +319,6 @@ describe("SuggestionStateMachine", () => {
       "resolving",
       "accepted",
       "rejected",
-      "already-resolved",
       "unobservable",
       "identity-lost",
       "error",
@@ -375,12 +364,6 @@ describe("SuggestionStateMachine", () => {
 
     it("maps 'rejected' → 'rejected'", () => {
       expect(mapResultStatusToState("rejected")).toBe("rejected");
-    });
-
-    it("maps 'already-resolved' → 'already-resolved'", () => {
-      expect(mapResultStatusToState("already-resolved")).toBe(
-        "already-resolved",
-      );
     });
 
     it("maps 'unobservable' → 'unobservable'", () => {

@@ -102,11 +102,7 @@ export class SuggestionResolutionWorkflow {
    * must never emit feedback.
    */
   private shouldSendFeedback(result: SuggestionActionResult): boolean {
-    return (
-      result.status === "accepted" ||
-      result.status === "rejected" ||
-      result.status === "already-resolved"
-    );
+    return result.status === "accepted" || result.status === "rejected";
   }
 
   /**

@@ -164,7 +164,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(context._cc.delete).not.toHaveBeenCalled();
   });
 
-  it("treats compound-v2 replace suggestions without visible tracked changes as unobservable, not already-resolved", async () => {
+  it("treats compound-v2 replace suggestions without visible tracked changes as unobservable", async () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const context = makeResolveSuggestionContext({
@@ -179,7 +179,6 @@ describe("WordAdapter.acceptSuggestion", () => {
     const result = await adapter.acceptSuggestion(suggestion);
 
     expect(result.status).toBe("unobservable");
-    expect(result.status).not.toBe("already-resolved");
   });
 
   it("does not resolve bare-id artifacts once compound-v2 becomes mandatory", async () => {
