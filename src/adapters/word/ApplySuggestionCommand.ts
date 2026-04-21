@@ -169,7 +169,14 @@ export class ApplySuggestionCommand {
       searchText: this.suggestion.context,
     });
     if (!contextRange) {
-      return null;
+      console.log(
+        `🔬 [ApplySuggestionCommand] "${this.id}": context not found — retrying anchor search in full body`,
+      );
+      return this.textLocator.locate({
+        context,
+        container: body as WordSearchContainer,
+        searchText: this.suggestion.anchor,
+      });
     }
 
     contextRange.load("text");

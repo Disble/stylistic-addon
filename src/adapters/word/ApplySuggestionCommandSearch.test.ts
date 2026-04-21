@@ -726,4 +726,92 @@ describe("ApplySuggestionCommand search behavior", () => {
       "Replace",
     );
   });
+
+  it("recovers 'sola. Sin' after a nearby same-context replacement mutates the trailing fragment", async () => {
+    const backendContext =
+      "Pasó mucho tiempo pensando lo tranquilizador que sería comer alguna vez sola. Sin nadie gritando, ni preocupada de verse envuelta en algún problema";
+    const documentParagraph =
+      "Pasó mucho tiempo pensando lo tranquilizador que sería comer alguna vez sola. Sin nadie que gritara, ni preocupada de verse envuelta en algún problema";
+    const anchorText = "sola. Sin";
+
+    const shortMutatedMatch = createRange({
+      text: "Sin nadie que gritara, ni preocupada de verse envuelta en algún problema",
+      paragraphText: documentParagraph,
+      searchSequence: [[], [], []],
+    });
+
+    const env = installWordContext({
+      documentText: documentParagraph,
+      contextText: documentParagraph,
+      anchorText,
+      contextSearchSequence: [[shortMutatedMatch]],
+      anchorSearchSequence: [[], [], []],
+    });
+
+    const paragraphRange = (
+      shortMutatedMatch as MockRange & {
+        paragraphs: { getFirst: () => { getRange: () => MockRange } };
+      }
+    ).paragraphs.getFirst().getRange("Whole") as MockRange;
+    paragraphRange.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [env.anchorRange], load: vi.fn() });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        context: backendContext,
+        anchor: anchorText,
+        suggestedText: "sola, sin",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("does not contain anchor — expanding to paragraph"),
+    );
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
+      "sola, sin",
+      "Replace",
+    );
+  });
+
+  it("recovers 'sola. Sin' when the full backend context is no longer locatable after a nearby replacement", async () => {
+    const backendContext =
+      "Pasó mucho tiempo pensando lo tranquilizador que sería comer alguna vez sola. Sin nadie gritando, ni preocupada de verse envuelta en algún problema";
+    const documentParagraph =
+      "Pasó mucho tiempo pensando lo tranquilizador que sería comer alguna vez sola. Sin nadie que gritara, ni preocupada de verse envuelta en algún problema";
+    const anchorText = "sola. Sin";
+
+    const env = installWordContext({
+      documentText: documentParagraph,
+      contextText: documentParagraph,
+      anchorText,
+      contextSearchSequence: [[], [], []],
+    });
+    env.context.document.body.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [], load: vi.fn() })
+      .mockReturnValueOnce({ items: [], load: vi.fn() })
+      .mockReturnValueOnce({ items: [], load: vi.fn() })
+      .mockReturnValueOnce({ items: [env.anchorRange], load: vi.fn() });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        context: backendContext,
+        anchor: anchorText,
+        suggestedText: "sola, sin",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("context not found — retrying anchor search in full body"),
+    );
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
+      "sola, sin",
+      "Replace",
+    );
+  });
 });
