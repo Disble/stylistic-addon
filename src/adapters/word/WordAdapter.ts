@@ -25,6 +25,7 @@ import {
 } from "../../domain/review/DocumentReviewStateMachine";
 import type {
   ApplySuggestionsResult,
+  CommandResult,
   DocumentReviewState,
   ProgressCallback,
   Suggestion,
@@ -391,8 +392,66 @@ export class WordAdapter implements IDocumentPort {
         Word.run((ctx) => this.ensureTrackChangesActive(ctx)),
       getDocumentReviewState: () => this.getDocumentReviewState(),
       deriveDocumentState: (state) => this.deriveDocumentState(state),
+      rereadSuggestionPositionHint: (suggestion, patch) =>
+        this.rereadSuggestionPositionHint(suggestion, patch),
     });
     return orchestrator.run(suggestions, onProgress);
+  }
+
+  /** Rebuilds one snapshot hint from real Word after local patch reseed stops being trustworthy. */
+  private async rereadSuggestionPositionHint(
+    suggestion: Suggestion,
+    patch: NonNullable<CommandResult["mutationPatch"]>,
+  ): Promise<Suggestion["positionHint"] | undefined> {
+    return Word.run(async (context) => {
+      const body = context.document.body as unknown as WordSearchContainer;
+      const localizedRange = await this.searchWithFallback(
+        context,
+        body,
+        patch.updatedText,
+      );
+      if (!localizedRange) {
+        return undefined;
+      }
+
+      localizedRange.load("text");
+      const containingParagraph = localizedRange.paragraphs
+        .getFirst()
+        .getRange("Whole");
+      containingParagraph.load("text");
+      await context.sync();
+
+      const anchorRange =
+        (await this.searchWithFallback(
+          context,
+          localizedRange as unknown as WordSearchContainer,
+          suggestion.anchor,
+        )) ??
+        (await this.searchWithFallback(
+          context,
+          containingParagraph as unknown as WordSearchContainer,
+          suggestion.anchor,
+        ));
+
+      if (!anchorRange) {
+        return undefined;
+      }
+
+      const localizedStart = localizedRange.text.indexOf(suggestion.anchor);
+      const paragraphStart = containingParagraph.text.indexOf(
+        suggestion.anchor,
+      );
+      const start = localizedStart >= 0 ? localizedStart : paragraphStart;
+      if (start < 0) {
+        return undefined;
+      }
+
+      return {
+        start,
+        end: start + suggestion.anchor.length,
+        source: "snapshot",
+      };
+    });
   }
 
   /**

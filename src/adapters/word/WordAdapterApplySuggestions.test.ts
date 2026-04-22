@@ -5,6 +5,7 @@ import {
   makeSuggestion,
 } from "./WordAdapterTestHelper";
 import { WordAdapter } from "./WordAdapter";
+import type { CommandResult, Suggestion } from "../../domain/types";
 
 describe("WordAdapter.applySuggestions", () => {
   const commandMocks = getCommandMocks();
@@ -283,5 +284,102 @@ describe("WordAdapter.applySuggestions", () => {
     expect(result.trackChangesActivatedForBatch).toBe(true);
     expect(context.document.changeTrackingMode).toBe("trackAll");
     expect(result.pendingAfter.trackChangesActive).toBe(true);
+  });
+
+  it("wires a localized reread strategy into the batch orchestrator", async () => {
+    installWordWithContext({
+      document: {
+        contentControls: { load: vi.fn(), items: [] },
+        load: vi.fn(),
+        changeTrackingMode: "trackAll",
+        body: {
+          search: vi.fn().mockReturnValue({ items: [], load: vi.fn() }),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const adapter = new WordAdapter();
+    commandMocks.execute.mockResolvedValueOnce({ success: true, commandId: "s-1" });
+
+    const result = await adapter.applySuggestions([makeSuggestion({ id: "s-1" })]);
+
+    expect(result).toEqual({
+      successCount: 1,
+      failedSuggestions: [],
+      pendingAfter: {
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      },
+      documentState: "ready-to-disable-track-changes",
+      trackChangesActivatedForBatch: false,
+    });
+    expect(commandMocks.constructor).toHaveBeenCalledOnce();
+    expect(commandMocks.execute).toHaveBeenCalledOnce();
+  });
+
+  it("rebuilds a snapshot hint from Word when the batch requests a localized reread", async () => {
+    const paragraphRange = {
+      text: "prefijo overlap-anchor sufijo",
+      load: vi.fn(),
+    };
+    const localizedRange = {
+      text: "prefijo overlap-anchor sufijo",
+      load: vi.fn(),
+      paragraphs: {
+        getFirst: () => ({
+          getRange: () => paragraphRange,
+        }),
+      },
+      search: vi.fn().mockReturnValue({
+        items: [{ text: "overlap-anchor", load: vi.fn() }],
+        load: vi.fn(),
+      }),
+    };
+    const bodySearch = vi
+      .fn()
+      .mockReturnValueOnce({
+        items: [localizedRange],
+        load: vi.fn(),
+      })
+      .mockReturnValue({ items: [], load: vi.fn() });
+
+    const context = {
+      document: {
+        contentControls: { load: vi.fn(), items: [] },
+        load: vi.fn(),
+        changeTrackingMode: "trackAll",
+        body: { search: bodySearch },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+    installWordWithContext(context);
+
+    const adapter = new WordAdapter();
+    const rereadHint = await (
+      adapter as unknown as {
+        rereadSuggestionPositionHint: (
+          suggestion: Suggestion,
+          patch: NonNullable<CommandResult["mutationPatch"]>,
+        ) => Promise<Suggestion["positionHint"] | undefined>;
+      }
+    ).rereadSuggestionPositionHint(
+      makeSuggestion({ id: "s-overlap", anchor: "overlap-anchor" }),
+      {
+        suggestionId: "s-legacy",
+        originalText: "texto viejo",
+        updatedText: "prefijo overlap-anchor sufijo",
+        deltaLength: -7,
+        affectedStart: 20,
+        affectedEnd: 30,
+      },
+    );
+
+    expect(rereadHint).toEqual({
+      start: 8,
+      end: 22,
+      source: "snapshot",
+    });
   });
 });

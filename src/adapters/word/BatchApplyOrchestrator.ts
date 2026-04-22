@@ -39,6 +39,11 @@ type BatchApplyDependencies = {
   getDocumentReviewState: () => Promise<DocumentReviewState>;
   /** Derives the explicit UI state from a review snapshot. */
   deriveDocumentState: (state: DocumentReviewState) => DocumentReviewUiState;
+  /** Optionally refreshes one snapshot hint when local patch reseed is insufficient. */
+  rereadSuggestionPositionHint?: (
+    suggestion: Suggestion,
+    patch: NonNullable<CommandResult["mutationPatch"]>,
+  ) => Promise<Suggestion["positionHint"] | undefined>;
 };
 
 /**
@@ -81,8 +86,14 @@ export class BatchApplyOrchestrator {
     let successCount = 0;
     let trackChangesPrepared = false;
     let trackChangesActivatedForBatch = false;
+    let latestMutationPatch: CommandResult["mutationPatch"];
 
     for (const suggestion of sortedSuggestions) {
+      await this.reseedSuggestionHintFromLatestPatch(
+        suggestion,
+        latestMutationPatch,
+      );
+
       const trackChangesState = await this.prepareTrackChangesForSuggestion(
         suggestion,
         trackChangesPrepared,
@@ -105,6 +116,10 @@ export class BatchApplyOrchestrator {
         suggestion.id,
         commandResult,
       );
+
+      if (commandResult.success && commandResult.mutationPatch) {
+        latestMutationPatch = commandResult.mutationPatch;
+      }
 
       this.reportApplyProgress(
         onProgress,
@@ -316,5 +331,52 @@ export class BatchApplyOrchestrator {
         };
       }
     }
+  }
+
+  /** Reseeds one reread-required snapshot hint from the latest localized patch when possible. */
+  private async reseedSuggestionHintFromLatestPatch(
+    suggestion: Suggestion,
+    patch: CommandResult["mutationPatch"],
+  ): Promise<void> {
+    const hint = suggestion.positionHint;
+    if (
+      !hint ||
+      hint.source !== "snapshot" ||
+      hint.requiresLocalReread !== true
+    ) {
+      return;
+    }
+
+    if (!patch) {
+      return;
+    }
+
+    const reseededStart = patch.updatedText.indexOf(suggestion.anchor);
+    if (reseededStart < 0) {
+      if (!this.deps.rereadSuggestionPositionHint) {
+        return;
+      }
+
+      const refreshedHint = await this.deps.rereadSuggestionPositionHint(
+        suggestion,
+        patch,
+      );
+      if (!refreshedHint) {
+        return;
+      }
+
+      suggestion.positionHint = {
+        ...refreshedHint,
+        requiresLocalReread: false,
+      };
+      return;
+    }
+
+    suggestion.positionHint = {
+      ...hint,
+      start: reseededStart,
+      end: reseededStart + suggestion.anchor.length,
+      requiresLocalReread: false,
+    };
   }
 }

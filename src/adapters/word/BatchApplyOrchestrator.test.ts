@@ -173,6 +173,148 @@ describe("BatchApplyOrchestrator", () => {
       },
     });
   });
+
+  it("reseeds a reread-required hint from the latest mutation patch before executing it", async () => {
+    const orchestrator = new BatchApplyOrchestrator({
+      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
+      getDocumentReviewState: vi.fn().mockResolvedValue({
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      }),
+      deriveDocumentState: vi.fn().mockReturnValue("idle"),
+    });
+
+    const overlapAnchor = "overlap-anchor";
+    const overlappingHint: Suggestion = {
+      id: "s-overlap-reseed",
+      anchor: overlapAnchor,
+      context: "context-s-overlap-reseed",
+      suggestedText: "replacement-s-overlap-reseed",
+      justification: "justification",
+      category: "category",
+      severity: "medium",
+      type: "track-change",
+      positionHint: {
+        start: 24,
+        end: 38,
+        source: "snapshot",
+      },
+    };
+    const safeLaterHint = makeSuggestion("s-safe-2", 100, 110);
+    const legacyFirst = makeLegacySuggestion("s-legacy-first-2");
+
+    hoistedCommandMocks.execute
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-legacy-first-2",
+        mutationPatch: {
+          suggestionId: "s-legacy-first-2",
+          originalText: "012345678901234567890123overlap-anchor tail",
+          updatedText: "01234567890123456overlap-anchor tail",
+          deltaLength: -7,
+          affectedStart: 20,
+          affectedEnd: 30,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-safe-2",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-overlap-reseed",
+      });
+
+    await orchestrator.run([overlappingHint, safeLaterHint, legacyFirst]);
+
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
+      ...overlappingHint,
+      positionHint: {
+        start: 17,
+        end: 31,
+        source: "snapshot",
+        requiresLocalReread: false,
+      },
+    });
+  });
+
+  it("asks the localized reread dependency for a fresh hint when local patch reseed cannot recover the anchor", async () => {
+    const rereadSuggestionPositionHint = vi.fn().mockResolvedValue({
+      start: 210,
+      end: 224,
+      source: "snapshot",
+    });
+    const orchestrator = new BatchApplyOrchestrator({
+      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
+      getDocumentReviewState: vi.fn().mockResolvedValue({
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      }),
+      deriveDocumentState: vi.fn().mockReturnValue("idle"),
+      rereadSuggestionPositionHint,
+    });
+
+    const overlappingHint: Suggestion = {
+      id: "s-overlap-reread",
+      anchor: "anchor-missing-from-patch",
+      context: "context-s-overlap-reread",
+      suggestedText: "replacement-s-overlap-reread",
+      justification: "justification",
+      category: "category",
+      severity: "medium",
+      type: "track-change",
+      positionHint: {
+        start: 24,
+        end: 49,
+        source: "snapshot",
+      },
+    };
+    const safeLaterHint = makeSuggestion("s-safe-3", 100, 110);
+    const legacyFirst = makeLegacySuggestion("s-legacy-first-3");
+
+    const latestPatch = {
+      suggestionId: "s-legacy-first-3",
+      originalText: "012345678901234567890123unchanged tail",
+      updatedText: "01234567890123456unchanged tail",
+      deltaLength: -7,
+      affectedStart: 20,
+      affectedEnd: 30,
+    };
+
+    hoistedCommandMocks.execute
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-legacy-first-3",
+        mutationPatch: latestPatch,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-safe-3",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-overlap-reread",
+      });
+
+    await orchestrator.run([overlappingHint, safeLaterHint, legacyFirst]);
+
+    expect(rereadSuggestionPositionHint).toHaveBeenCalledOnce();
+    expect(rereadSuggestionPositionHint).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "s-overlap-reread" }),
+      latestPatch,
+    );
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
+      ...overlappingHint,
+      positionHint: {
+        start: 210,
+        end: 224,
+        source: "snapshot",
+        requiresLocalReread: false,
+      },
+    });
+  });
 });
 
 /** Builds a suggestion fixture with explicit snapshot-position hints. */
