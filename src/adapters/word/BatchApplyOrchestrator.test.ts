@@ -305,13 +305,84 @@ describe("BatchApplyOrchestrator", () => {
       expect.objectContaining({ id: "s-overlap-reread" }),
       latestPatch,
     );
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
       ...overlappingHint,
       positionHint: {
         start: 210,
         end: 224,
         source: "snapshot",
         requiresLocalReread: false,
+      },
+    });
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
+      ...safeLaterHint,
+      positionHint: {
+        start: 93,
+        end: 103,
+        source: "snapshot",
+      },
+    });
+  });
+
+  it("re-ranks the remaining queue after one snapshot-ranked suggestion becomes reread-required", async () => {
+    const orchestrator = new BatchApplyOrchestrator({
+      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
+      getDocumentReviewState: vi.fn().mockResolvedValue({
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      }),
+      deriveDocumentState: vi.fn().mockReturnValue("idle"),
+    });
+
+    const appliedFirst = makeSuggestion("s-applied-first", 200, 210);
+    const overlappingHint = makeSuggestion("s-overlap-rerank", 140, 150);
+    const safeMiddleHint = makeSuggestion("s-safe-middle", 110, 120);
+
+    hoistedCommandMocks.execute
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-applied-first",
+        mutationPatch: {
+          suggestionId: "s-applied-first",
+          originalText: "abcdefghij",
+          updatedText: "abc",
+          deltaLength: -7,
+          affectedStart: 145,
+          affectedEnd: 155,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-safe-later",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-safe-middle",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-overlap-rerank",
+      });
+
+    await orchestrator.run([overlappingHint, safeMiddleHint, appliedFirst]);
+
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, appliedFirst);
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
+      ...safeMiddleHint,
+      positionHint: {
+        start: 110,
+        end: 120,
+        source: "snapshot",
+      },
+    });
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
+      ...overlappingHint,
+      positionHint: {
+        start: 140,
+        end: 150,
+        source: "snapshot",
+        requiresLocalReread: true,
       },
     });
   });

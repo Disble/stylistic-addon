@@ -80,7 +80,7 @@ export class BatchApplyOrchestrator {
       };
     }
 
-    const sortedSuggestions = this.sortByDocumentPosition(suggestions);
+    let pendingSuggestions = this.sortByDocumentPosition([...suggestions]);
 
     const failedSuggestions: SuggestionApplicationFailure[] = [];
     let successCount = 0;
@@ -88,11 +88,26 @@ export class BatchApplyOrchestrator {
     let trackChangesActivatedForBatch = false;
     let latestMutationPatch: CommandResult["mutationPatch"];
 
-    for (const suggestion of sortedSuggestions) {
-      await this.reseedSuggestionHintFromLatestPatch(
-        suggestion,
-        latestMutationPatch,
-      );
+    while (pendingSuggestions.length > 0) {
+      for (const suggestion of pendingSuggestions) {
+        await this.reseedSuggestionHintFromLatestPatch(
+          suggestion,
+          latestMutationPatch,
+        );
+      }
+
+      if (
+        pendingSuggestions.every(
+          (pendingSuggestion) =>
+            pendingSuggestion.positionHint?.source === "snapshot",
+        )
+      ) {
+        pendingSuggestions = this.sortByDocumentPosition(pendingSuggestions);
+      }
+      const suggestion = pendingSuggestions.shift();
+      if (!suggestion) {
+        break;
+      }
 
       const trackChangesState = await this.prepareTrackChangesForSuggestion(
         suggestion,
@@ -112,7 +127,7 @@ export class BatchApplyOrchestrator {
       );
 
       this.rebasePendingSnapshotHints(
-        sortedSuggestions,
+        pendingSuggestions,
         suggestion.id,
         commandResult,
       );
