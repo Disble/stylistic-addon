@@ -145,6 +145,15 @@ export class BatchApplyOrchestrator {
 
     if (allHavePositionHints) {
       return [...suggestions].sort((left, right) => {
+        const leftRequiresReread =
+          left.positionHint?.requiresLocalReread === true;
+        const rightRequiresReread =
+          right.positionHint?.requiresLocalReread === true;
+
+        if (leftRequiresReread !== rightRequiresReread) {
+          return leftRequiresReread ? 1 : -1;
+        }
+
         const endDifference =
           (right.positionHint?.end ?? 0) - (left.positionHint?.end ?? 0);
 
@@ -288,6 +297,14 @@ export class BatchApplyOrchestrator {
 
       const hint = suggestion.positionHint;
       if (!hint || hint.source !== "snapshot") {
+        continue;
+      }
+
+      if (hint.end > patch.affectedStart && hint.start < patch.affectedEnd) {
+        suggestion.positionHint = {
+          ...hint,
+          requiresLocalReread: true,
+        };
         continue;
       }
 

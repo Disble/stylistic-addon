@@ -114,6 +114,65 @@ describe("BatchApplyOrchestrator", () => {
       },
     });
   });
+
+  it("marks overlapping snapshot hints for local reread and lets safe hinted suggestions run first", async () => {
+    const orchestrator = new BatchApplyOrchestrator({
+      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
+      getDocumentReviewState: vi.fn().mockResolvedValue({
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      }),
+      deriveDocumentState: vi.fn().mockReturnValue("idle"),
+    });
+
+    const overlappingHint = makeSuggestion("s-overlap", 24, 34);
+    const safeLaterHint = makeSuggestion("s-safe", 100, 110);
+    const legacyFirst = makeLegacySuggestion("s-legacy-first");
+
+    hoistedCommandMocks.execute
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-legacy-first",
+        mutationPatch: {
+          suggestionId: "s-legacy-first",
+          originalText: "abcdefghij",
+          updatedText: "abc",
+          deltaLength: -7,
+          affectedStart: 20,
+          affectedEnd: 30,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-safe",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-overlap",
+      });
+
+    await orchestrator.run([overlappingHint, safeLaterHint, legacyFirst]);
+
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, legacyFirst);
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
+      ...safeLaterHint,
+      positionHint: {
+        start: 93,
+        end: 103,
+        source: "snapshot",
+      },
+    });
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
+      ...overlappingHint,
+      positionHint: {
+        start: 24,
+        end: 34,
+        source: "snapshot",
+        requiresLocalReread: true,
+      },
+    });
+  });
 });
 
 /** Builds a suggestion fixture with explicit snapshot-position hints. */

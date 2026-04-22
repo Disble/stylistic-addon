@@ -38,6 +38,9 @@ export interface SuggestionBatchPositionHint {
 
   /** Identifies the ranking source that produced this hint. */
   source: "snapshot";
+
+  /** Indicates the current hint must be revalidated with a localized reread. */
+  requiresLocalReread?: boolean;
 }
 
 /**
