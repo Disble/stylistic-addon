@@ -1,3 +1,4 @@
+import type { SuggestionResolutionWarning } from "../../../domain/types";
 import type { ColocatedCommentContext } from "./ResolutionContext";
 
 /** Owns cleanup policy after tracked changes were already resolved. */
@@ -25,21 +26,30 @@ export class SuggestionResolutionCleanup {
   async deleteLocatedStylisticCommentAfterResolution(
     context: Word.RequestContext,
     colocatedComment: ColocatedCommentContext | null,
-  ): Promise<boolean> {
+  ): Promise<{ deleted: boolean; warning?: SuggestionResolutionWarning }> {
     try {
-      return await this.deleteLocatedStylisticComment(
+      const deleted = await this.deleteLocatedStylisticComment(
         context,
         colocatedComment,
       );
+      return { deleted };
     } catch (deleteError) {
-      if (this.action === "accept") {
-        throw deleteError;
-      }
+      const message =
+        deleteError instanceof Error
+          ? deleteError.message
+          : String(deleteError);
 
       console.warn(
-        `⚠️ [SuggestionResolutionCleanup] "${this.suggestionId}": reject comment cleanup failed after successful resolution (will be cleaned up by CommentCleanup): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+        `⚠️ [SuggestionResolutionCleanup] "${this.suggestionId}": ${this.action} comment cleanup failed after semantic resolution (will be cleaned up later): ${message}`,
       );
-      return false;
+      return {
+        deleted: false,
+        warning: {
+          code: "cleanup-failed",
+          phase: "cleanup",
+          message,
+        },
+      };
     }
   }
 
@@ -47,18 +57,24 @@ export class SuggestionResolutionCleanup {
   async cleanupResolvedSuggestionAnchor(
     context: Word.RequestContext,
     cc: Word.ContentControl,
-  ): Promise<void> {
+  ): Promise<SuggestionResolutionWarning | undefined> {
     try {
       cc.delete(true);
       await context.sync();
     } catch (cleanupError) {
-      if (this.action === "accept") {
-        throw cleanupError;
-      }
+      const message =
+        cleanupError instanceof Error
+          ? cleanupError.message
+          : String(cleanupError);
 
       console.warn(
-        `⚠️ [SuggestionResolutionCleanup] "${this.suggestionId}": reject cleanup skipped after successful resolution: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+        `⚠️ [SuggestionResolutionCleanup] "${this.suggestionId}": ${this.action} anchor cleanup skipped after semantic resolution: ${message}`,
       );
+      return {
+        code: "cleanup-failed",
+        phase: "cleanup",
+        message,
+      };
     }
   }
 }

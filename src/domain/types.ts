@@ -590,6 +590,61 @@ export type SuggestionState =
   | "identity-lost"
   | "error";
 
+/** Ordered phases emitted by the resolution workflow for observability. */
+export type ResolutionPhase =
+  | "observe-before"
+  | "execute"
+  | "reconcile"
+  | "cleanup"
+  | "inspect-after";
+
+/** Stable warning codes surfaced after semantic success with degraded housekeeping. */
+export type SuggestionResolutionWarningCode =
+  | "cleanup-failed"
+  | "inspection-failed"
+  | "reconciled-after-error"
+  | "telemetry-failed";
+
+/** Warning attached to a terminal resolution that completed with degraded visibility. */
+export interface SuggestionResolutionWarning {
+  /** Stable code used by UI and telemetry. */
+  code: SuggestionResolutionWarningCode;
+  /** Workflow phase that emitted the warning. */
+  phase: ResolutionPhase;
+  /** Human-readable detail for logs and UI notes. */
+  message: string;
+}
+
+/** Execution summary for tracked-change resolution attempts. */
+export interface ResolutionExecutionReport {
+  /** Number of tracked changes the executor attempted in this workflow run. */
+  attempted: number;
+  /** Number of tracked changes completed before the workflow moved on or failed. */
+  completed: number;
+  /** Number of tracked changes still unresolved when execution stopped. */
+  remaining: number;
+  /** Index of the tracked change that failed, when applicable. */
+  failureIndex?: number;
+  /** Human-readable execution error captured at the mutation boundary. */
+  error?: string;
+}
+
+/** Structured telemetry event emitted by resolution workflows. */
+export interface ResolutionTelemetryEvent {
+  /** Correlation id shared by all events in one workflow attempt. */
+  workflowAttemptId: string;
+  /** Stable suggestion id being resolved. */
+  suggestionId: string;
+  /** User action requested by the taskpane. */
+  action: "accept" | "reject";
+  /** Resolution phase being observed. */
+  phase: ResolutionPhase;
+  /** Phase outcome used for later diagnostics. */
+  outcome: "started" | "succeeded" | "failed" | "warning" | "reconciled";
+  /** Optional structured metadata for future telemetry sinks. */
+  metadata?: Record<string, string | number | boolean | null>;
+}
+
 /**
  * Result returned by `IDocumentPort.acceptSuggestion` and `IDocumentPort.rejectSuggestion`.
  */
@@ -613,6 +668,10 @@ export interface SuggestionActionResult {
   documentState: import("./review/DocumentReviewStateMachine").DocumentReviewUiState;
   /** Human-readable error message when status is "error" or "not-found". */
   error?: string;
+  /** Best-effort warnings captured after semantic success or degraded visibility. */
+  warnings?: SuggestionResolutionWarning[];
+  /** Execution summary emitted by tracked-change resolution, when available. */
+  executionReport?: ResolutionExecutionReport;
 }
 
 /** Fire-and-forget feedback dispatch semantics exposed by the resolution workflow. */

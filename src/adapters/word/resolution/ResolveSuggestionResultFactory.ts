@@ -1,7 +1,9 @@
 import { DocumentReviewStateMachine } from "../../../domain/review/DocumentReviewStateMachine";
 import type {
   DocumentReviewState,
+  ResolutionExecutionReport,
   SuggestionActionResult,
+  SuggestionResolutionWarning,
 } from "../../../domain/types";
 import type { ResolutionStatus } from "./ResolutionContext";
 
@@ -32,6 +34,8 @@ export class ResolveSuggestionResultFactory {
     pendingBefore: DocumentReviewState,
     pendingAfter: DocumentReviewState,
     error?: string,
+    warnings?: SuggestionResolutionWarning[],
+    executionReport?: ResolutionExecutionReport,
   ): SuggestionActionResult {
     const transition = DocumentReviewStateMachine.evaluateTransition(
       pendingBefore,
@@ -45,6 +49,8 @@ export class ResolveSuggestionResultFactory {
       pendingAfter,
       documentState: transition.to,
       ...(error ? { error } : {}),
+      ...(warnings && warnings.length > 0 ? { warnings } : {}),
+      ...(executionReport ? { executionReport } : {}),
     };
   }
 
@@ -74,14 +80,18 @@ export class ResolveSuggestionResultFactory {
   buildErrorResult(
     error: string,
     pendingAfter: DocumentReviewState,
+    warnings?: SuggestionResolutionWarning[],
+    executionReport?: ResolutionExecutionReport,
   ): SuggestionActionResult {
     return {
       status: "error",
-      trackedChangesAffected: 0,
+      trackedChangesAffected: executionReport?.completed ?? 0,
       commentDeleted: false,
       pendingAfter,
       documentState: this.stateInspector.deriveDocumentState(pendingAfter),
       error,
+      ...(warnings && warnings.length > 0 ? { warnings } : {}),
+      ...(executionReport ? { executionReport } : {}),
     };
   }
 }

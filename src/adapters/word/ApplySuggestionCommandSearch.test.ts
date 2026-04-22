@@ -814,4 +814,53 @@ describe("ApplySuggestionCommand search behavior", () => {
       "Replace",
     );
   });
+
+  it("does not misapply an ambiguous full-body anchor fallback to an earlier heading match", async () => {
+    const backendContext =
+      "A Mei le gustaba pedir un sánduche en la cafetería después de clase.";
+    const documentText =
+      "SANDWICHSÁNDUCHE\nA Mei le gustaba pedir un sánduche en la cafetería luego de clase.";
+    const headingRange = createRange({ text: "sánduche", paragraphText: "SANDWICHSÁNDUCHE" });
+    const bodySentenceRange = createRange({
+      text: "sánduche",
+      paragraphText:
+        "A Mei le gustaba pedir un sánduche en la cafetería luego de clase.",
+    });
+
+    const env = installWordContext({
+      documentText,
+      contextText: documentText,
+      anchorText: "sánduche",
+      contextSearchSequence: [[], [], []],
+    });
+
+    env.context.document.body.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [], load: vi.fn() })
+      .mockReturnValueOnce({ items: [], load: vi.fn() })
+      .mockReturnValueOnce({ items: [], load: vi.fn() })
+      .mockReturnValueOnce({
+        items: [headingRange, bodySentenceRange],
+        load: vi.fn(),
+      });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        context: backendContext,
+        anchor: "sánduche",
+        suggestedText: "sánguche",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("context not found — retrying anchor search in full body"),
+    );
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("disambiguated full-body fallback with contextual score"),
+    );
+    expect(headingRange.insertText).not.toHaveBeenCalled();
+    expect(bodySentenceRange.insertText).toHaveBeenCalledWith("sánguche", "Replace");
+  });
 });

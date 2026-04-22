@@ -38,6 +38,13 @@ describe("DocumentReviewStateInspector", () => {
       "s-1",
     );
 
-    expect(result).toBe(pendingBefore);
+    expect(result).toEqual({
+      pendingAfter: pendingBefore,
+      warning: {
+        code: "inspection-failed",
+        phase: "inspect-after",
+        message: "GeneralException",
+      },
+    });
   });
 });

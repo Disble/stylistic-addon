@@ -23,6 +23,7 @@ import type {
   DocumentReviewState,
   FeedbackPayload,
   ProgressCallback,
+  ResolutionTelemetryEvent,
   Suggestion,
   SuggestionActionResult,
   TextChunk,
@@ -175,4 +176,20 @@ export interface IFeedbackPort {
    * Must execute asynchronously; errors must be swallowed silently.
    */
   sendFeedback(payload: FeedbackPayload): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Telemetry Port
+// ---------------------------------------------------------------------------
+
+/**
+ * Contract for best-effort observability events emitted by workflow phases.
+ *
+ * Telemetry must NEVER alter semantic document outcomes. Adapters are expected
+ * to swallow transport/storage failures internally or let callers degrade them
+ * to warnings.
+ */
+export interface ITelemetryPort {
+  /** Emits one structured telemetry event for later debugging or analysis. */
+  emit(event: ResolutionTelemetryEvent): Promise<void>;
 }

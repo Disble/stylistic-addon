@@ -138,6 +138,58 @@ function stringifyUnknownError(error: unknown): string {
   }
 }
 
+/** Detects Word's invalid/too-long search failures. */
+function isSearchInvalidError(error: unknown): boolean {
+  return stringifyUnknownError(error).includes("SearchStringInvalidOrTooLong");
+}
+
+/** Normalizes one character for local paragraph-context scoring. */
+function normalizeContextScoreChar(char: string): string {
+  if (char === "\u201C" || char === "\u201D") {
+    return '"';
+  }
+
+  if (char === "\u2018" || char === "\u2019") {
+    return "'";
+  }
+
+  if (char >= "\u0013" && char <= "\u0015") {
+    return "";
+  }
+
+  return char.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Normalizes text for paragraph-context similarity scoring. */
+function normalizeForContextScore(text: string): string {
+  return Array.from(text.toLowerCase())
+    .map((char) => normalizeContextScoreChar(char))
+    .join("")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Scores how well one paragraph aligns with the original backend context. */
+function scoreParagraphAgainstContext(
+  paragraphText: string,
+  contextText: string,
+): number {
+  const paragraphTokens = new Set(
+    normalizeForContextScore(paragraphText)
+      .split(" ")
+      .filter((token) => token.length >= 3),
+  );
+  const contextTokens = normalizeForContextScore(contextText)
+    .split(" ")
+    .filter((token) => token.length >= 3);
+
+  return contextTokens.reduce(
+    (score, token) => score + (paragraphTokens.has(token) ? 1 : 0),
+    0,
+  );
+}
+
 /**
  * A Command that applies one `Suggestion` as a tracked change in Word.
  *
@@ -172,11 +224,7 @@ export class ApplySuggestionCommand {
       console.log(
         `🔬 [ApplySuggestionCommand] "${this.id}": context not found — retrying anchor search in full body`,
       );
-      return this.textLocator.locate({
-        context,
-        container: body as WordSearchContainer,
-        searchText: this.suggestion.anchor,
-      });
+      return this.resolveBestBodyAnchorFallback(context, body);
     }
 
     contextRange.load("text");
@@ -228,6 +276,114 @@ export class ApplySuggestionCommand {
       container: containingParagraph as unknown as WordSearchContainer,
       searchText: this.suggestion.anchor,
     });
+  }
+
+  /** Selects the best full-body anchor candidate when context re-location fails. */
+  private async resolveBestBodyAnchorFallback(
+    context: Word.RequestContext,
+    body: Word.Body,
+  ): Promise<Word.Range | null> {
+    const searchOptions = { matchCase: true, matchWholeWord: false };
+    const relaxedOptions = {
+      matchCase: true,
+      matchWholeWord: false,
+      ignorePunct: true,
+      ignoreSpace: true,
+    };
+
+    try {
+      const exactResults = body.search(this.suggestion.anchor, searchOptions);
+      exactResults.load("items");
+      await context.sync();
+
+      if (exactResults.items.length === 1) {
+        return exactResults.items[0] ?? null;
+      }
+
+      if (exactResults.items.length > 1) {
+        return this.selectBestAnchorCandidateByContext(
+          context,
+          exactResults.items,
+        );
+      }
+
+      const relaxedResults = body.search(
+        this.suggestion.anchor,
+        relaxedOptions,
+      );
+      relaxedResults.load("items");
+      await context.sync();
+
+      if (relaxedResults.items.length === 1) {
+        return relaxedResults.items[0] ?? null;
+      }
+
+      if (relaxedResults.items.length > 1) {
+        return this.selectBestAnchorCandidateByContext(
+          context,
+          relaxedResults.items,
+        );
+      }
+    } catch (error) {
+      if (!isSearchInvalidError(error)) {
+        throw error;
+      }
+    }
+
+    return this.textLocator.locate({
+      context,
+      container: body as WordSearchContainer,
+      searchText: this.suggestion.anchor,
+    });
+  }
+
+  /** Chooses the anchor whose paragraph best matches the stale backend context. */
+  private async selectBestAnchorCandidateByContext(
+    context: Word.RequestContext,
+    candidates: Word.Range[],
+  ): Promise<Word.Range | null> {
+    const paragraphs = candidates.map((candidate) => ({
+      candidate,
+      paragraph: candidate.paragraphs.getFirst().getRange("Whole"),
+    }));
+
+    for (const entry of paragraphs) {
+      entry.paragraph.load("text");
+    }
+    await context.sync();
+
+    const scored = paragraphs
+      .map(({ candidate, paragraph }) => ({
+        candidate,
+        score: scoreParagraphAgainstContext(
+          paragraph.text,
+          this.suggestion.context,
+        ),
+      }))
+      .sort((left, right) => right.score - left.score);
+
+    const best = scored[0];
+    const secondBest = scored[1];
+
+    if (!best || best.score <= 0) {
+      console.log(
+        `🔬 [ApplySuggestionCommand] "${this.id}": ambiguous full-body anchor fallback without contextual winner`,
+      );
+      return null;
+    }
+
+    if (secondBest && secondBest.score === best.score) {
+      console.log(
+        `🔬 [ApplySuggestionCommand] "${this.id}": ambiguous full-body anchor fallback tie (${best.score})`,
+      );
+      return null;
+    }
+
+    console.log(
+      `🔬 [ApplySuggestionCommand] "${this.id}": disambiguated full-body fallback with contextual score ${best.score}`,
+    );
+
+    return best.candidate;
   }
 
   /**

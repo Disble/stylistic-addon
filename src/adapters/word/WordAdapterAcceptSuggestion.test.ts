@@ -950,4 +950,144 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.pendingAfter.pendingStylisticArtifacts).toBe(0);
     expect(result.documentState).toBe("ready-to-disable-track-changes");
   });
+
+  it("returns accepted with warnings when a second accept click completes semantic resolution before late ItemNotFound cleanup failure", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-4",
+      anchor: "sándwich o sánduche",
+      suggestedText: "sándwich o sánguche",
+      context: "Quería debatir si debía decir sándwich o sánduche antes de hacer el pedido.",
+    });
+
+    let resolutionPhase = 0;
+    let cleanupAttemptedAfterFullResolution = false;
+    let shouldThrowOnDeletedAccept = true;
+
+    const addedAcceptSpy = vi.fn(() => {
+      resolutionPhase = Math.max(resolutionPhase, 1);
+    });
+    const deletedAcceptSpy = vi.fn(() => {
+      if (shouldThrowOnDeletedAccept) {
+        shouldThrowOnDeletedAccept = false;
+        throw new Error("ItemNotFound");
+      }
+
+      resolutionPhase = 2;
+    });
+    const commentDeleteSpy = vi.fn(() => {
+      cleanupAttemptedAfterFullResolution = true;
+    });
+
+    const commentRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+    };
+    const comment = {
+      authorName: "Usuario de prueba",
+      content: "[Claridad]\nMas claro",
+      getRange: vi.fn(() => commentRange),
+      delete: commentDeleteSpy,
+    };
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-4",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-4",
+        insertedTag: "stylistic:track-change:chunk0-4",
+        deletedValue: "sándwich o sánduche",
+        anchorValue:
+          "Quería debatir si debía decir sándwich o sánduche antes de hacer el pedido.",
+      }),
+      comments: [comment],
+    });
+
+    const buildTrackedChanges = () => {
+      if (resolutionPhase === 0) {
+        return [
+          {
+            id: "tc-added",
+            type: "Added",
+            accept: addedAcceptSpy,
+            reject: vi.fn(),
+          },
+          {
+            id: "tc-deleted",
+            type: "Deleted",
+            accept: deletedAcceptSpy,
+            reject: vi.fn(),
+          },
+        ];
+      }
+
+      if (resolutionPhase === 1) {
+        return [
+          {
+            id: "tc-deleted",
+            type: "Deleted",
+            accept: deletedAcceptSpy,
+            reject: vi.fn(),
+          },
+        ];
+      }
+
+      return [];
+    };
+
+    context._cc.getTrackedChanges.mockImplementation(() => ({
+      items: buildTrackedChanges(),
+      load: vi.fn(),
+    }));
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    context.sync.mockImplementation(() => {
+      if (cleanupAttemptedAfterFullResolution) {
+        return Promise.reject(new Error("ItemNotFound"));
+      }
+      return Promise.resolve();
+    });
+
+    installWordWithContext(context);
+
+    const firstResult = await adapter.acceptSuggestion(suggestion);
+    const secondResult = await adapter.acceptSuggestion(suggestion);
+
+    expect(firstResult.status).toBe("error");
+    expect(firstResult.error).toContain("ItemNotFound");
+    expect(secondResult.status).toBe("accepted");
+    expect(secondResult.trackedChangesAffected).toBe(1);
+    expect(secondResult.commentDeleted).toBe(false);
+    expect(secondResult.executionReport).toEqual({
+      attempted: 1,
+      completed: 1,
+      remaining: 0,
+    });
+    expect(secondResult.warnings).toHaveLength(3);
+    expect(secondResult.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "cleanup-failed",
+          phase: "cleanup",
+        }),
+        expect.objectContaining({
+          code: "inspection-failed",
+          phase: "inspect-after",
+        }),
+      ]),
+    );
+    expect(addedAcceptSpy).toHaveBeenCalledOnce();
+    expect(deletedAcceptSpy).toHaveBeenCalledTimes(2);
+    expect(commentDeleteSpy).toHaveBeenCalledOnce();
+    expect(context._cc.delete).toHaveBeenCalledWith(true);
+  });
 });

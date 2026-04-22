@@ -2,7 +2,10 @@ import {
   DocumentReviewStateMachine,
   type DocumentReviewUiState,
 } from "../../../domain/review/DocumentReviewStateMachine";
-import type { DocumentReviewState } from "../../../domain/types";
+import type {
+  DocumentReviewState,
+  SuggestionResolutionWarning,
+} from "../../../domain/types";
 import { STYLISTIC_TAG_PREFIX } from "../../../infrastructure/config";
 
 /** Creates document-derived review snapshots and reuses them safely. */
@@ -54,18 +57,26 @@ export class DocumentReviewStateInspector {
     pendingBefore: DocumentReviewState,
     action: "accept" | "reject",
     suggestionId: string,
-  ): Promise<DocumentReviewState> {
+  ): Promise<{
+    pendingAfter: DocumentReviewState;
+    warning?: SuggestionResolutionWarning;
+  }> {
     try {
-      return await this.inspect(context);
+      return { pendingAfter: await this.inspect(context) };
     } catch (error) {
-      if (action === "accept") {
-        throw error;
-      }
+      const message = error instanceof Error ? error.message : String(error);
 
       console.warn(
-        `⚠️ [DocumentReviewStateInspector] "${suggestionId}": reject post-resolution state inspection failed, falling back to pendingBefore snapshot: ${error instanceof Error ? error.message : String(error)}`,
+        `⚠️ [DocumentReviewStateInspector] "${suggestionId}": ${action} post-resolution state inspection failed, falling back to pendingBefore snapshot: ${message}`,
       );
-      return pendingBefore;
+      return {
+        pendingAfter: pendingBefore,
+        warning: {
+          code: "inspection-failed",
+          phase: "inspect-after",
+          message,
+        },
+      };
     }
   }
 }

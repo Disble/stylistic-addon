@@ -17,7 +17,12 @@
  * @module ResolveSuggestionCommand
  */
 
-import type { Suggestion, SuggestionActionResult } from "../../domain/types";
+import type {
+  ResolutionExecutionReport,
+  Suggestion,
+  SuggestionActionResult,
+  SuggestionResolutionWarning,
+} from "../../domain/types";
 import { CommentOnlySuggestionResolver } from "./resolution/CommentOnlySuggestionResolver";
 import { DocumentReviewStateInspector } from "./resolution/DocumentReviewStateInspector";
 import { ResolveSuggestionResultFactory } from "./resolution/ResolveSuggestionResultFactory";
@@ -50,6 +55,7 @@ export class ResolveSuggestionCommand {
   private readonly resultFactory: ResolveSuggestionResultFactory;
   private readonly commentOnlyResolver: CommentOnlySuggestionResolver;
   private readonly observer: SuggestionResolutionObserver;
+  private lastExecutionReport?: ResolutionExecutionReport;
 
   constructor(
     private readonly suggestion: Suggestion,
@@ -83,6 +89,7 @@ export class ResolveSuggestionCommand {
   async execute(): Promise<SuggestionActionResult> {
     try {
       return await Word.run(async (context) => {
+        this.lastExecutionReport = undefined;
         console.log(
           `🎯 [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" type=${this.suggestion.type}`,
         );
@@ -154,32 +161,51 @@ export class ResolveSuggestionCommand {
           );
         }
 
-        this.executor.apply(observation.trackedChanges);
+        const executionReport = this.executor.apply(observation.trackedChanges);
+        this.lastExecutionReport = executionReport;
 
-        const commentDeleted =
+        if (executionReport.error) {
+          throw new Error(executionReport.error);
+        }
+
+        const warnings: SuggestionResolutionWarning[] = [];
+        const commentCleanup =
           await this.cleanup.deleteLocatedStylisticCommentAfterResolution(
             context,
             observation.selectedComment,
           );
+        if (commentCleanup.warning) {
+          warnings.push(commentCleanup.warning);
+        }
 
-        await this.cleanup.cleanupResolvedSuggestionAnchor(
-          context,
-          observation.selectedCc,
-        );
+        const anchorCleanupWarning =
+          await this.cleanup.cleanupResolvedSuggestionAnchor(
+            context,
+            observation.selectedCc,
+          );
+        if (anchorCleanupWarning) {
+          warnings.push(anchorCleanupWarning);
+        }
 
-        const pendingAfter = await this.stateInspector.inspectAfterResolution(
+        const inspectAfter = await this.stateInspector.inspectAfterResolution(
           context,
           pendingBefore,
           this.action,
           this.suggestion.id,
         );
+        if (inspectAfter.warning) {
+          warnings.push(inspectAfter.warning);
+        }
 
         return this.resultFactory.buildResolutionResult(
           this.resultFactory.toResolutionStatus(),
-          observation.trackedChanges.length,
-          commentDeleted,
+          executionReport.completed,
+          commentCleanup.deleted,
           pendingBefore,
-          pendingAfter,
+          inspectAfter.pendingAfter,
+          undefined,
+          warnings,
+          executionReport,
         );
       });
     } catch (error) {
@@ -190,7 +216,53 @@ export class ResolveSuggestionCommand {
       const pendingAfter = await Word.run((ctx) =>
         this.stateInspector.inspect(ctx),
       ).catch(() => this.stateInspector.buildEmptyState());
-      return this.resultFactory.buildErrorResult(message, pendingAfter);
+
+      const reconciliation = await this.tryBuildSemanticReconciliationResult(
+        pendingAfter,
+        message,
+      );
+      if (reconciliation) {
+        return reconciliation;
+      }
+
+      return this.resultFactory.buildErrorResult(
+        message,
+        pendingAfter,
+        undefined,
+        this.lastExecutionReport,
+      );
     }
+  }
+
+  /** Reconciles late failures against the semantic execution report. */
+  private async tryBuildSemanticReconciliationResult(
+    pendingAfter: import("../../domain/types").DocumentReviewState,
+    message: string,
+  ): Promise<SuggestionActionResult | null> {
+    if (!this.lastExecutionReport || this.lastExecutionReport.remaining > 0) {
+      return null;
+    }
+
+    return this.resultFactory.buildResolutionResult(
+      this.resultFactory.toResolutionStatus(),
+      this.lastExecutionReport.completed,
+      false,
+      pendingAfter,
+      pendingAfter,
+      undefined,
+      [
+        {
+          code: "cleanup-failed",
+          phase: "cleanup",
+          message,
+        },
+        {
+          code: "reconciled-after-error",
+          phase: "reconcile",
+          message,
+        },
+      ],
+      this.lastExecutionReport,
+    );
   }
 }

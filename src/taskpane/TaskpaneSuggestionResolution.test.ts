@@ -302,6 +302,51 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.textContent).not.toContain("(aplicación falló)");
   });
 
+  it("keeps terminal accepted UI when semantic reconciliation returns accepted with warnings", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "accepted",
+      trackedChangesAffected: 1,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      warnings: [
+        {
+          code: "cleanup-failed",
+          phase: "cleanup",
+          message: "ItemNotFound after semantic accept",
+        },
+      ],
+      feedbackStatus: "sent",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
+    });
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({
+      id: "s-accept-warning",
+      anchor: "sándwich o sánduche",
+      suggestedText: "sándwich o sánguche",
+    });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
+
+    acceptBtn.click();
+    await flushTaskpaneWork();
+
+    expect(li.classList.contains("result-accepted")).toBe(true);
+    expect(li.querySelector(".result-actions")).toBeNull();
+    expect(li.textContent).not.toContain("(aplicación falló)");
+    expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledWith(suggestion);
+  });
+
   it("treats cc-not-found as terminal amber UI without sending feedback", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "cc-not-found",
