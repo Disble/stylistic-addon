@@ -18,6 +18,7 @@
 import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
 import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
+import { ConsoleTelemetryAdapter } from "../adapters/telemetry/ConsoleTelemetryAdapter";
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
 import { ApplySuggestionsHandler } from "../domain/pipeline/handlers/ApplySuggestionsHandler";
@@ -71,7 +72,8 @@ type DocumentLike = Pick<Document, "getElementById">;
 // Infrastructure — built once, reused across pipeline runs
 // ---------------------------------------------------------------------------
 
-const documentPort = new WordAdapter();
+const telemetryPort = new ConsoleTelemetryAdapter();
+const documentPort = new WordAdapter(undefined, telemetryPort);
 const analysisPort = new RetryAnalysisDecorator(
   new MastraAdapter(),
   MAX_RETRIES,

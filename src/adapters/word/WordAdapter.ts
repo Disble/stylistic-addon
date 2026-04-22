@@ -18,7 +18,7 @@
  * @module WordAdapter
  */
 
-import type { IDocumentPort } from "../../domain/ports";
+import type { IDocumentPort, ITelemetryPort } from "../../domain/ports";
 import {
   DocumentReviewStateMachine,
   type DocumentReviewUiState,
@@ -104,6 +104,9 @@ function buildSuggestionTag(suggestion: Suggestion): string {
 export class WordAdapter implements IDocumentPort {
   constructor(
     private readonly textLocator: TextLocator = getDefaultTextLocator(),
+    private readonly telemetryPort: ITelemetryPort = {
+      emit: async () => undefined,
+    },
   ) {}
 
   /**
@@ -422,7 +425,12 @@ export class WordAdapter implements IDocumentPort {
   async acceptSuggestion(
     suggestion: Suggestion,
   ): Promise<SuggestionActionResult> {
-    return new ResolveSuggestionCommand(suggestion, "accept").execute();
+    return new ResolveSuggestionCommand(
+      suggestion,
+      "accept",
+      this.textLocator,
+      this.telemetryPort,
+    ).execute();
   }
 
   /**
@@ -433,7 +441,12 @@ export class WordAdapter implements IDocumentPort {
   async rejectSuggestion(
     suggestion: Suggestion,
   ): Promise<SuggestionActionResult> {
-    return new ResolveSuggestionCommand(suggestion, "reject").execute();
+    return new ResolveSuggestionCommand(
+      suggestion,
+      "reject",
+      this.textLocator,
+      this.telemetryPort,
+    ).execute();
   }
 
   /**

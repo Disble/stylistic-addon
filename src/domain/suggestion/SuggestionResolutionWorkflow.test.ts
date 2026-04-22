@@ -85,6 +85,27 @@ describe("SuggestionResolutionWorkflow", () => {
     );
   });
 
+  it("still dispatches feedback when accepted results include warnings", async () => {
+    const suggestion = makeSuggestion();
+    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+      makeActionResult({
+        status: "accepted",
+        warnings: [
+          {
+            code: "telemetry-failed",
+            phase: "execute",
+            message: "telemetry sink offline",
+          },
+        ],
+      }),
+    );
+
+    const result = await workflow.acceptSuggestion(suggestion);
+
+    expect(result.feedbackStatus).toBe("sent");
+    expect(feedbackPort.sendFeedback).toHaveBeenCalledOnce();
+  });
+
   it("returns sent feedback status for rejected suggestions and dispatches negative feedback", async () => {
     const suggestion = makeSuggestion();
     vi.mocked(documentPort.rejectSuggestion).mockResolvedValue(

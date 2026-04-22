@@ -106,6 +106,35 @@ describe("ReviewSessionMediator", () => {
     });
   });
 
+  it("preserves workflow warnings while enriching taskpane state", async () => {
+    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+      makeActionResult({
+        warnings: [
+          {
+            code: "cleanup-failed",
+            phase: "cleanup",
+            message: "late ItemNotFound",
+          },
+        ],
+      }),
+    );
+
+    const result = await mediator.acceptSuggestion(makeSuggestion());
+
+    expect(result.warnings).toEqual([
+      {
+        code: "cleanup-failed",
+        phase: "cleanup",
+        message: "late ItemNotFound",
+      },
+    ]);
+    expect(result.taskpaneState).toEqual({
+      documentState: "pending-review",
+      showDisableTrackChangesCta: false,
+      showCleanupSection: false,
+    });
+  });
+
   it("delegates explicit Track Changes deactivation and returns updated taskpane state", async () => {
     vi.mocked(documentPort.getCleanupPreview).mockResolvedValueOnce({
       deletable: 0,

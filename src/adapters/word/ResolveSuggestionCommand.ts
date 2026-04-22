@@ -17,8 +17,11 @@
  * @module ResolveSuggestionCommand
  */
 
+import type { ITelemetryPort } from "../../domain/ports";
 import type {
   ResolutionExecutionReport,
+  ResolutionPhase,
+  ResolutionTelemetryEvent,
   Suggestion,
   SuggestionActionResult,
   SuggestionResolutionWarning,
@@ -29,6 +32,7 @@ import { ResolveSuggestionResultFactory } from "./resolution/ResolveSuggestionRe
 import { SuggestionLocator } from "./resolution/SuggestionLocator";
 import { SuggestionResolutionCleanup } from "./resolution/SuggestionResolutionCleanup";
 import { SuggestionResolutionObserver } from "./resolution/SuggestionResolutionObserver";
+import { SuggestionResolutionResolver } from "./resolution/SuggestionResolutionResolver";
 import { TrackedChangeResolutionExecutor } from "./resolution/TrackedChangeResolutionExecutor";
 import {
   getDefaultTextLocator,
@@ -55,12 +59,18 @@ export class ResolveSuggestionCommand {
   private readonly resultFactory: ResolveSuggestionResultFactory;
   private readonly commentOnlyResolver: CommentOnlySuggestionResolver;
   private readonly observer: SuggestionResolutionObserver;
+  private readonly resolver: SuggestionResolutionResolver;
   private lastExecutionReport?: ResolutionExecutionReport;
+  private workflowAttemptId = "";
+  private telemetryWarnings: SuggestionResolutionWarning[] = [];
 
   constructor(
     private readonly suggestion: Suggestion,
     private readonly action: "accept" | "reject",
     textLocator: TextLocator = getDefaultTextLocator(),
+    private readonly telemetryPort: ITelemetryPort = {
+      emit: async () => undefined,
+    },
   ) {
     this.stateInspector = new DocumentReviewStateInspector();
     this.locator = new SuggestionLocator(suggestion);
@@ -69,6 +79,10 @@ export class ResolveSuggestionCommand {
     this.resultFactory = new ResolveSuggestionResultFactory(
       action,
       this.stateInspector,
+    );
+    this.resolver = new SuggestionResolutionResolver(
+      suggestion.id,
+      this.resultFactory,
     );
     this.commentOnlyResolver = new CommentOnlySuggestionResolver(
       suggestion.id,
@@ -90,9 +104,14 @@ export class ResolveSuggestionCommand {
     try {
       return await Word.run(async (context) => {
         this.lastExecutionReport = undefined;
+        this.workflowAttemptId = this.buildWorkflowAttemptId();
+        this.telemetryWarnings = [];
         console.log(
           `🎯 [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" type=${this.suggestion.type}`,
         );
+        await this.emitTelemetry("observe-before", "started", {
+          suggestionType: this.suggestion.type,
+        });
         const pendingBefore = await this.stateInspector.inspect(context);
         const { rankedCandidates, selectedCc: cc } =
           await this.locator.locateResolutionArtifacts(context);
@@ -101,6 +120,9 @@ export class ResolveSuggestionCommand {
           console.warn(
             `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" failed: CC not found`,
           );
+          await this.emitTelemetry("observe-before", "failed", {
+            reason: "cc-not-found",
+          });
           return this.resultFactory.buildResolutionResult(
             "cc-not-found",
             0,
@@ -122,6 +144,10 @@ export class ResolveSuggestionCommand {
               context,
               colocatedComment,
             );
+          await this.emitTelemetry("cleanup", "succeeded", {
+            commentDeleted,
+            commentOnly: true,
+          });
           return this.commentOnlyResolver.resolve({
             context,
             cc,
@@ -140,6 +166,9 @@ export class ResolveSuggestionCommand {
           console.warn(
             `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" ended in identity-lost`,
           );
+          await this.emitTelemetry("observe-before", "failed", {
+            reason: "identity-lost",
+          });
           return this.resultFactory.buildObservationFailureResult(
             context,
             "identity-lost",
@@ -154,6 +183,9 @@ export class ResolveSuggestionCommand {
           console.warn(
             `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" ended in unobservable after all evidence sources`,
           );
+          await this.emitTelemetry("observe-before", "warning", {
+            reason: "unobservable",
+          });
           return this.resultFactory.buildObservationFailureResult(
             context,
             "unobservable",
@@ -161,14 +193,32 @@ export class ResolveSuggestionCommand {
           );
         }
 
+        await this.emitTelemetry("observe-before", "succeeded", {
+          trackedChangesObserved: observation.trackedChanges.length,
+        });
+        await this.emitTelemetry("execute", "started", {
+          trackedChangesAttempted: observation.trackedChanges.length,
+        });
         const executionReport = this.executor.apply(observation.trackedChanges);
         this.lastExecutionReport = executionReport;
+        await this.emitTelemetry(
+          "execute",
+          executionReport.error ? "failed" : "succeeded",
+          {
+            attempted: executionReport.attempted,
+            completed: executionReport.completed,
+            remaining: executionReport.remaining,
+            failureIndex: executionReport.failureIndex ?? null,
+          },
+        );
 
         if (executionReport.error) {
           throw new Error(executionReport.error);
         }
 
-        const warnings: SuggestionResolutionWarning[] = [];
+        const warnings: SuggestionResolutionWarning[] = [
+          ...this.telemetryWarnings,
+        ];
         const commentCleanup =
           await this.cleanup.deleteLocatedStylisticCommentAfterResolution(
             context,
@@ -177,6 +227,10 @@ export class ResolveSuggestionCommand {
         if (commentCleanup.warning) {
           warnings.push(commentCleanup.warning);
         }
+        await this.emitTelemetry("cleanup", "succeeded", {
+          commentDeleted: commentCleanup.deleted,
+          commentCleanupWarning: !!commentCleanup.warning,
+        });
 
         const anchorCleanupWarning =
           await this.cleanup.cleanupResolvedSuggestionAnchor(
@@ -196,6 +250,10 @@ export class ResolveSuggestionCommand {
         if (inspectAfter.warning) {
           warnings.push(inspectAfter.warning);
         }
+        await this.emitTelemetry("inspect-after", "succeeded", {
+          pendingArtifacts: inspectAfter.pendingAfter.pendingStylisticArtifacts,
+          inspectionWarning: !!inspectAfter.warning,
+        });
 
         return this.resultFactory.buildResolutionResult(
           this.resultFactory.toResolutionStatus(),
@@ -222,8 +280,17 @@ export class ResolveSuggestionCommand {
         message,
       );
       if (reconciliation) {
+        await this.emitTelemetry("reconcile", "reconciled", {
+          status: reconciliation.status,
+          warnings: reconciliation.warnings?.length ?? 0,
+        });
         return reconciliation;
       }
+
+      await this.emitTelemetry("reconcile", "failed", {
+        reason: message,
+        pendingArtifacts: pendingAfter.pendingStylisticArtifacts,
+      });
 
       return this.resultFactory.buildErrorResult(
         message,
@@ -239,30 +306,44 @@ export class ResolveSuggestionCommand {
     pendingAfter: import("../../domain/types").DocumentReviewState,
     message: string,
   ): Promise<SuggestionActionResult | null> {
-    if (!this.lastExecutionReport || this.lastExecutionReport.remaining > 0) {
-      return null;
-    }
-
-    return this.resultFactory.buildResolutionResult(
-      this.resultFactory.toResolutionStatus(),
-      this.lastExecutionReport.completed,
-      false,
+    return this.resolver.reconcileLateFailure(
       pendingAfter,
-      pendingAfter,
-      undefined,
-      [
-        {
-          code: "cleanup-failed",
-          phase: "cleanup",
-          message,
-        },
-        {
-          code: "reconciled-after-error",
-          phase: "reconcile",
-          message,
-        },
-      ],
       this.lastExecutionReport,
+      message,
+      this.telemetryWarnings,
     );
+  }
+
+  /** Builds a correlation id for one resolution workflow attempt. */
+  private buildWorkflowAttemptId(): string {
+    return `${this.suggestion.id}:${this.action}:${Date.now()}`;
+  }
+
+  /** Emits best-effort structured telemetry without changing semantic outcomes. */
+  private async emitTelemetry(
+    phase: ResolutionPhase,
+    outcome: ResolutionTelemetryEvent["outcome"],
+    metadata?: ResolutionTelemetryEvent["metadata"],
+  ): Promise<void> {
+    try {
+      await this.telemetryPort.emit({
+        workflowAttemptId: this.workflowAttemptId,
+        suggestionId: this.suggestion.id,
+        action: this.action,
+        phase,
+        outcome,
+        metadata,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.telemetryWarnings.push({
+        code: "telemetry-failed",
+        phase,
+        message,
+      });
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] telemetry failed for suggestionId="${this.suggestion.id}" phase=${phase}: ${message}`,
+      );
+    }
   }
 }

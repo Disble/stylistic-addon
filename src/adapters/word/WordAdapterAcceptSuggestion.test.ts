@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "./WordAdapter";
+import type { ITelemetryPort } from "../../domain/ports";
 import {
   installRejectingWord,
   makeCompoundV2Title,
@@ -1089,5 +1090,59 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(deletedAcceptSpy).toHaveBeenCalledTimes(2);
     expect(commentDeleteSpy).toHaveBeenCalledOnce();
     expect(context._cc.delete).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps accepted semantic resolution when telemetry emission fails", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-telemetry-1",
+      anchor: "texto original",
+      suggestedText: "texto sugerido",
+      context: "Contexto con texto original.",
+    });
+    const telemetryPort: ITelemetryPort = {
+      emit: vi.fn().mockRejectedValue(new Error("telemetry sink offline")),
+    };
+    adapter = new WordAdapter(undefined, telemetryPort);
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "s-telemetry-1",
+        insertedTag: "stylistic:track-change:s-telemetry-1",
+        deletedValue: "texto original",
+        anchorValue: "Contexto con texto original.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-added",
+          type: "Added",
+          accept: vi.fn(),
+          reject: vi.fn(),
+        },
+        {
+          id: "tc-deleted",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(),
+        },
+      ],
+      comments: [],
+    });
+
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "telemetry-failed",
+          message: "telemetry sink offline",
+        }),
+      ]),
+    );
+    expect(telemetryPort.emit).toHaveBeenCalled();
   });
 });
