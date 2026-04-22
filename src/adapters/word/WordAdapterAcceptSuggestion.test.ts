@@ -952,7 +952,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.documentState).toBe("ready-to-disable-track-changes");
   });
 
-  it("returns accepted with warnings when a second accept click completes semantic resolution before late ItemNotFound cleanup failure", async () => {
+  it("returns accepted in one click when immediate re-observation can finish the remaining replace side before late cleanup failure", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-4",
       anchor: "sándwich o sánduche",
@@ -1060,21 +1060,18 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     installWordWithContext(context);
 
-    const firstResult = await adapter.acceptSuggestion(suggestion);
-    const secondResult = await adapter.acceptSuggestion(suggestion);
+    const result = await adapter.acceptSuggestion(suggestion);
 
-    expect(firstResult.status).toBe("error");
-    expect(firstResult.error).toContain("ItemNotFound");
-    expect(secondResult.status).toBe("accepted");
-    expect(secondResult.trackedChangesAffected).toBe(1);
-    expect(secondResult.commentDeleted).toBe(false);
-    expect(secondResult.executionReport).toEqual({
-      attempted: 1,
-      completed: 1,
+    expect(result.status).toBe("accepted");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.commentDeleted).toBe(false);
+    expect(result.executionReport).toEqual({
+      attempted: 2,
+      completed: 2,
       remaining: 0,
     });
-    expect(secondResult.warnings).toHaveLength(3);
-    expect(secondResult.warnings).toEqual(
+    expect(result.warnings).toHaveLength(3);
+    expect(result.warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: "cleanup-failed",

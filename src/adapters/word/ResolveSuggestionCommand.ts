@@ -28,6 +28,7 @@ import type {
 } from "../../domain/types";
 import { CommentOnlySuggestionResolver } from "./resolution/CommentOnlySuggestionResolver";
 import { DocumentReviewStateInspector } from "./resolution/DocumentReviewStateInspector";
+import type { ResolutionObservation } from "./resolution/ResolutionContext";
 import { ResolveSuggestionResultFactory } from "./resolution/ResolveSuggestionResultFactory";
 import { SuggestionLocator } from "./resolution/SuggestionLocator";
 import { SuggestionResolutionCleanup } from "./resolution/SuggestionResolutionCleanup";
@@ -63,6 +64,9 @@ export class ResolveSuggestionCommand {
   private lastExecutionReport?: ResolutionExecutionReport;
   private workflowAttemptId = "";
   private telemetryWarnings: SuggestionResolutionWarning[] = [];
+
+  /** Captures one execute phase, including any same-click recovery attempt. */
+  private typeSafeNoop?: never;
 
   constructor(
     private readonly suggestion: Suggestion,
@@ -199,7 +203,13 @@ export class ResolveSuggestionCommand {
         await this.emitTelemetry("execute", "started", {
           trackedChangesAttempted: observation.trackedChanges.length,
         });
-        const executionReport = this.executor.apply(observation.trackedChanges);
+        const executeAttempt =
+          await this.executeTrackedChangesWithImmediateRecovery(
+            context,
+            rankedCandidates,
+            observation,
+          );
+        const executionReport = executeAttempt.executionReport;
         this.lastExecutionReport = executionReport;
         await this.emitTelemetry(
           "execute",
@@ -209,6 +219,8 @@ export class ResolveSuggestionCommand {
             completed: executionReport.completed,
             remaining: executionReport.remaining,
             failureIndex: executionReport.failureIndex ?? null,
+            recoveryAttempted: executeAttempt.recoveryAttempted,
+            recoverySucceeded: executeAttempt.recoverySucceeded,
           },
         );
 
@@ -222,7 +234,7 @@ export class ResolveSuggestionCommand {
         const commentCleanup =
           await this.cleanup.deleteLocatedStylisticCommentAfterResolution(
             context,
-            observation.selectedComment,
+            executeAttempt.observation.selectedComment,
           );
         if (commentCleanup.warning) {
           warnings.push(commentCleanup.warning);
@@ -235,7 +247,7 @@ export class ResolveSuggestionCommand {
         const anchorCleanupWarning =
           await this.cleanup.cleanupResolvedSuggestionAnchor(
             context,
-            observation.selectedCc,
+            executeAttempt.observation.selectedCc,
           );
         if (anchorCleanupWarning) {
           warnings.push(anchorCleanupWarning);
@@ -312,6 +324,115 @@ export class ResolveSuggestionCommand {
       message,
       this.telemetryWarnings,
     );
+  }
+
+  /** Executes tracked changes and retries once after partial progress if re-observation can recover the remainder. */
+  private async executeTrackedChangesWithImmediateRecovery(
+    context: Word.RequestContext,
+    rankedCandidates: Word.ContentControl[],
+    observation: ResolutionObservation,
+  ): Promise<{
+    observation: ResolutionObservation;
+    executionReport: ResolutionExecutionReport;
+    recoveryAttempted: boolean;
+    recoverySucceeded: boolean;
+  }> {
+    const initialReport = this.executor.apply(observation.trackedChanges);
+
+    if (!initialReport.error || initialReport.remaining === 0) {
+      return {
+        observation,
+        executionReport: initialReport,
+        recoveryAttempted: false,
+        recoverySucceeded: false,
+      };
+    }
+
+    console.warn(
+      `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" attempting same-click recovery after partial execute failure: ${initialReport.error}`,
+    );
+
+    try {
+      const relocated = await this.locator.locateResolutionArtifacts(context);
+      if (!relocated.selectedCc) {
+        return {
+          observation,
+          executionReport: initialReport,
+          recoveryAttempted: true,
+          recoverySucceeded: false,
+        };
+      }
+
+      const recoveryObservation =
+        await this.observer.observeResolutionCandidates(
+          context,
+          relocated.rankedCandidates,
+          relocated.selectedCc,
+        );
+
+      if (
+        recoveryObservation.observationStatus !== "confirmed-pending" ||
+        recoveryObservation.trackedChanges.length === 0
+      ) {
+        return {
+          observation,
+          executionReport: initialReport,
+          recoveryAttempted: true,
+          recoverySucceeded: false,
+        };
+      }
+
+      const recoveryReport = this.executor.apply(
+        recoveryObservation.trackedChanges,
+      );
+
+      return {
+        observation: recoveryObservation,
+        executionReport: this.mergeExecutionReports(
+          initialReport,
+          recoveryReport,
+        ),
+        recoveryAttempted: true,
+        recoverySucceeded: !recoveryReport.error,
+      };
+    } catch (recoveryError) {
+      const message =
+        recoveryError instanceof Error
+          ? recoveryError.message
+          : String(recoveryError);
+
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" same-click recovery failed: ${message}`,
+      );
+
+      return {
+        observation,
+        executionReport: initialReport,
+        recoveryAttempted: true,
+        recoverySucceeded: false,
+      };
+    }
+  }
+
+  /** Merges the initial partial execution report with one immediate recovery pass. */
+  private mergeExecutionReports(
+    initialReport: ResolutionExecutionReport,
+    recoveryReport: ResolutionExecutionReport,
+  ): ResolutionExecutionReport {
+    const completed = initialReport.completed + recoveryReport.completed;
+    const remaining = recoveryReport.remaining;
+
+    return {
+      attempted: completed + remaining,
+      completed,
+      remaining,
+      ...(recoveryReport.failureIndex !== undefined
+        ? {
+            failureIndex: initialReport.completed + recoveryReport.failureIndex,
+          }
+        : {}),
+      ...(recoveryReport.error ? { error: recoveryReport.error } : {}),
+    };
   }
 
   /** Builds a correlation id for one resolution workflow attempt. */

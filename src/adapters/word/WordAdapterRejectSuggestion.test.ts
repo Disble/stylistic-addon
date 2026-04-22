@@ -767,4 +767,141 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(rejectSpy1).toHaveBeenCalledOnce();
     expect(rejectSpy2).toHaveBeenCalledOnce();
   });
+
+  it("returns rejected in one click when immediate re-observation can finish the remaining replace side before late cleanup failure", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-4",
+      anchor: "sándwich o sánduche",
+      suggestedText: "sándwich o sánguche",
+      context: "Quería debatir si debía decir sándwich o sánduche antes de hacer el pedido.",
+    });
+
+    let resolutionPhase = 0;
+    let cleanupAttemptedAfterFullResolution = false;
+    let shouldThrowOnDeletedReject = true;
+
+    const addedRejectSpy = vi.fn(() => {
+      resolutionPhase = Math.max(resolutionPhase, 1);
+    });
+    const deletedRejectSpy = vi.fn(() => {
+      if (shouldThrowOnDeletedReject) {
+        shouldThrowOnDeletedReject = false;
+        throw new Error("ItemNotFound");
+      }
+
+      resolutionPhase = 2;
+    });
+    const commentDeleteSpy = vi.fn(() => {
+      cleanupAttemptedAfterFullResolution = true;
+    });
+
+    const commentRange = {
+      compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+    };
+    const comment = {
+      authorName: "Usuario de prueba",
+      content: "[Claridad]\nMas claro",
+      getRange: vi.fn(() => commentRange),
+      delete: commentDeleteSpy,
+    };
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-4",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-4",
+        insertedTag: "stylistic:track-change:chunk0-4",
+        deletedValue: "sándwich o sánduche",
+        anchorValue:
+          "Quería debatir si debía decir sándwich o sánduche antes de hacer el pedido.",
+      }),
+      comments: [comment],
+    });
+
+    const buildTrackedChanges = () => {
+      if (resolutionPhase === 0) {
+        return [
+          {
+            id: "tc-added",
+            type: "Added",
+            accept: vi.fn(),
+            reject: addedRejectSpy,
+          },
+          {
+            id: "tc-deleted",
+            type: "Deleted",
+            accept: vi.fn(),
+            reject: deletedRejectSpy,
+          },
+        ];
+      }
+
+      if (resolutionPhase === 1) {
+        return [
+          {
+            id: "tc-deleted",
+            type: "Deleted",
+            accept: vi.fn(),
+            reject: deletedRejectSpy,
+          },
+        ];
+      }
+
+      return [];
+    };
+
+    context._cc.getTrackedChanges.mockImplementation(() => ({
+      items: buildTrackedChanges(),
+      load: vi.fn(),
+    }));
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    context.sync.mockImplementation(() => {
+      if (cleanupAttemptedAfterFullResolution) {
+        return Promise.reject(new Error("ItemNotFound"));
+      }
+      return Promise.resolve();
+    });
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.commentDeleted).toBe(false);
+    expect(result.executionReport).toEqual({
+      attempted: 2,
+      completed: 2,
+      remaining: 0,
+    });
+    expect(result.warnings).toHaveLength(3);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "cleanup-failed",
+          phase: "cleanup",
+        }),
+        expect.objectContaining({
+          code: "inspection-failed",
+          phase: "inspect-after",
+        }),
+      ]),
+    );
+    expect(addedRejectSpy).toHaveBeenCalledOnce();
+    expect(deletedRejectSpy).toHaveBeenCalledTimes(2);
+    expect(commentDeleteSpy).toHaveBeenCalledOnce();
+    expect(context._cc.delete).toHaveBeenCalledWith(true);
+  });
 });
