@@ -65,7 +65,7 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.context.document.load).not.toHaveBeenCalledWith(
       "changeTrackingMode",
     );

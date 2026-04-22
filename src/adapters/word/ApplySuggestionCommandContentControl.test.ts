@@ -30,7 +30,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.anchorRange.insertComment).toHaveBeenCalledWith(
       "[Estilo]\nMejora la claridad",
     );
@@ -67,7 +67,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
     expect(env.context.document.body.search).toHaveBeenCalledTimes(2);
     expect(freshAnchor.insertText).toHaveBeenCalled();
@@ -103,7 +103,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
     expect(freshAnchor.insertText).toHaveBeenCalledOnce();
   });
@@ -122,7 +122,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "replace-1" });
+    expect(result).toMatchObject({ success: true, commandId: "replace-1" });
     expect(env.cc.tag).toBe("stylistic:track-change:replace-1");
     expect(env.cc.title.startsWith(IDENTITY_TITLE_PREFIX)).toBe(true);
 
@@ -144,6 +144,48 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         kind: "anchor",
         role: "operational-anchor",
         value: "Contexto con texto original.",
+      },
+    });
+  });
+
+  it("returns a localized mutation patch for replace suggestions", async () => {
+    const paragraphText = "Antes texto original y después.";
+    const anchorRange = createRange({
+      text: "texto original",
+      paragraphText,
+    });
+    const contextRange = createRange({
+      text: paragraphText,
+      paragraphText,
+      searchSequence: [[anchorRange]],
+    });
+
+    installWordContext({
+      documentText: paragraphText,
+      contextText: paragraphText,
+      contextSearchSequence: [[contextRange]],
+    });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "replace-patch-1",
+        anchor: "texto original",
+        suggestedText: "texto sugerido",
+        context: paragraphText,
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({
+      success: true,
+      commandId: "replace-patch-1",
+      mutationPatch: {
+        suggestionId: "replace-patch-1",
+        originalText: paragraphText,
+        updatedText: "Antes texto sugerido y después.",
+        deltaLength: 0,
+        affectedStart: 6,
+        affectedEnd: 20,
       },
     });
   });

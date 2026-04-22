@@ -100,6 +100,12 @@ export class BatchApplyOrchestrator {
         successCount,
       );
 
+      this.rebasePendingSnapshotHints(
+        sortedSuggestions,
+        suggestion.id,
+        commandResult,
+      );
+
       this.reportApplyProgress(
         onProgress,
         successCount + failedSuggestions.length,
@@ -127,11 +133,31 @@ export class BatchApplyOrchestrator {
   // -------------------------------------------------------------------------
 
   /**
-   * Sorts suggestions in reverse array order as a heuristic for applying
-   * end-of-document suggestions first.
+   * Sorts suggestions by snapshot-derived document position when available,
+   * falling back to reverse array order only for legacy suggestion batches.
    */
   private sortByDocumentPosition(suggestions: Suggestion[]): Suggestion[] {
     if (suggestions.length <= 1) return suggestions;
+
+    const allHavePositionHints = suggestions.every(
+      (suggestion) => suggestion.positionHint?.source === "snapshot",
+    );
+
+    if (allHavePositionHints) {
+      return [...suggestions].sort((left, right) => {
+        const endDifference =
+          (right.positionHint?.end ?? 0) - (left.positionHint?.end ?? 0);
+
+        if (endDifference !== 0) {
+          return endDifference;
+        }
+
+        return (
+          (right.positionHint?.start ?? 0) - (left.positionHint?.start ?? 0)
+        );
+      });
+    }
+
     return [...suggestions].reverse();
   }
 
@@ -242,5 +268,36 @@ export class BatchApplyOrchestrator {
       total,
       `Aplicando sugerencia ${completedCount} de ${total}...`,
     );
+  }
+
+  /** Applies a minimal delta rebase to later snapshot hints after a successful patch. */
+  private rebasePendingSnapshotHints(
+    suggestions: Suggestion[],
+    appliedSuggestionId: string,
+    commandResult: CommandResult,
+  ): void {
+    const patch = commandResult.mutationPatch;
+    if (!commandResult.success || !patch || patch.deltaLength === 0) {
+      return;
+    }
+
+    for (const suggestion of suggestions) {
+      if (suggestion.id === appliedSuggestionId) {
+        continue;
+      }
+
+      const hint = suggestion.positionHint;
+      if (!hint || hint.source !== "snapshot") {
+        continue;
+      }
+
+      if (hint.start >= patch.affectedEnd) {
+        suggestion.positionHint = {
+          ...hint,
+          start: hint.start + patch.deltaLength,
+          end: hint.end + patch.deltaLength,
+        };
+      }
+    }
   }
 }

@@ -64,7 +64,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.context.document.body.search).toHaveBeenCalledWith(
       "Contexto con texto original.",
       { matchCase: true, matchWholeWord: false },
@@ -91,7 +91,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.bodyRange.search).toHaveBeenNthCalledWith(1, "texto original", {
       matchCase: true,
       matchWholeWord: false,
@@ -116,7 +116,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.context.document.body.search).toHaveBeenCalledTimes(1);
     expect(env.context.document.body.search).toHaveBeenCalledWith(longContext, {
       matchCase: true,
@@ -138,7 +138,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.bodyRange.load).toHaveBeenCalledWith("text");
     expect(env.bodyRange.search).toHaveBeenNthCalledWith(
       3,
@@ -183,7 +183,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.anchorRange.insertText).toHaveBeenCalledWith(
       "lo que me dijo",
       "Replace",
@@ -218,7 +218,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.anchorRange.insertText).toHaveBeenCalledWith(
       "no tenía",
       "Replace",
@@ -258,7 +258,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
 
     const searchCalls = vi.mocked(env.context.document.body.search).mock.calls;
     const step3CallArg = searchCalls[1]?.[0];
@@ -317,7 +317,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.anchorRange.insertText).toHaveBeenCalledWith(
       "lo que me dijo",
       "Replace",
@@ -361,7 +361,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.anchorRange.insertText).toHaveBeenCalledWith(
       "lo que me dijo",
       "Replace",
@@ -406,7 +406,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(env.anchorRange.insertText).toHaveBeenCalledWith(
       "lo que me dijo",
       "Replace",
@@ -509,7 +509,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining(
         'contextMatchLen=2, paragraphLen=338, anchorIndexInMatch=-1, anchorIndexInParagraph=265',
@@ -563,7 +563,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining(
         'contextMatchLen=24, paragraphLen=87, anchorIndexInMatch=0, anchorIndexInParagraph=63',
@@ -619,7 +619,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("does not contain anchor — expanding to paragraph"),
     );
@@ -668,7 +668,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("anchor not found inside partial context match"),
     );
@@ -717,7 +717,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("anchor not found inside partial context match"),
     );
@@ -766,7 +766,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("does not contain anchor — expanding to paragraph"),
     );
@@ -805,7 +805,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("context not found — retrying anchor search in full body"),
     );
@@ -853,7 +853,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toEqual({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("context not found — retrying anchor search in full body"),
     );

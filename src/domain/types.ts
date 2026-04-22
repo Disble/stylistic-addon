@@ -24,6 +24,23 @@ export type SuggestionSeverity = "high" | "medium" | "low";
 export type SuggestionType = "track-change" | "comment-only";
 
 /**
+ * Frontend-owned position hint derived from a live apply snapshot.
+ *
+ * This is intentionally optional while the batch apply workflow migrates away
+ * from backend-array heuristics toward real document-position ranking.
+ */
+export interface SuggestionBatchPositionHint {
+  /** Snapshot-relative start offset for the current suggestion anchor/context. */
+  start: number;
+
+  /** Snapshot-relative end offset used for end-first application ranking. */
+  end: number;
+
+  /** Identifies the ranking source that produced this hint. */
+  source: "snapshot";
+}
+
+/**
  * A single editorial suggestion, either received from the Mastra workflow
  * or prepared for insertion into the Word document.
  */
@@ -62,6 +79,14 @@ export interface Suggestion {
    *   location with no tracked change. `suggestedText` is undefined.
    */
   type: SuggestionType;
+
+  /**
+   * Optional live position hint used by batch apply orchestration.
+   *
+   * When present, this SHOULD outrank raw backend array order because it is
+   * derived from the frontend's latest document snapshot.
+   */
+  positionHint?: SuggestionBatchPositionHint;
 }
 
 /**
@@ -198,6 +223,33 @@ export interface ApplySuggestionsResult extends InsertionResult {
    * first real `track-change` suggestion.
    */
   trackChangesActivatedForBatch: boolean;
+}
+
+/**
+ * Localized mutation patch captured after a successful real-Word apply.
+ *
+ * This is the minimal bridge toward the future incremental snapshot/rebase
+ * workflow: one command reports what changed locally without forcing a full
+ * document reread.
+ */
+export interface ApplyMutationPatch {
+  /** Suggestion whose successful apply produced this patch. */
+  suggestionId: string;
+
+  /** Paragraph or local container text before the mutation. */
+  originalText: string;
+
+  /** Paragraph or local container text after the mutation. */
+  updatedText: string;
+
+  /** Length delta produced by the replacement in the local text. */
+  deltaLength: number;
+
+  /** Snapshot-local start offset of the affected anchor. */
+  affectedStart: number;
+
+  /** Snapshot-local end offset of the original affected anchor. */
+  affectedEnd: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -520,6 +572,9 @@ export interface CommandResult {
 
   /** Error message if `success` is false. */
   error?: string;
+
+  /** Optional localized patch returned by successful real-Word apply commands. */
+  mutationPatch?: ApplyMutationPatch;
 }
 
 /**

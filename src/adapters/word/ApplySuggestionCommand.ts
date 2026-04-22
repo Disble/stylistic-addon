@@ -23,6 +23,7 @@
  */
 
 import type {
+  ApplyMutationPatch,
   ChangeType,
   CommandResult,
   ReplaceSuggestionIdentity,
@@ -188,6 +189,33 @@ function scoreParagraphAgainstContext(
     (score, token) => score + (paragraphTokens.has(token) ? 1 : 0),
     0,
   );
+}
+
+/** Builds a localized mutation patch from one successful anchor replacement. */
+function buildApplyMutationPatch(
+  suggestion: Suggestion,
+  containerText: string,
+): ApplyMutationPatch | undefined {
+  const replacement = suggestion.suggestedText ?? "";
+  const affectedStart = containerText.indexOf(suggestion.anchor);
+
+  if (affectedStart < 0) {
+    return undefined;
+  }
+
+  const affectedEnd = affectedStart + suggestion.anchor.length;
+
+  return {
+    suggestionId: suggestion.id,
+    originalText: containerText,
+    updatedText:
+      containerText.slice(0, affectedStart) +
+      replacement +
+      containerText.slice(affectedEnd),
+    deltaLength: replacement.length - suggestion.anchor.length,
+    affectedStart,
+    affectedEnd,
+  };
 }
 
 /**
@@ -461,6 +489,12 @@ export class ApplySuggestionCommand {
           }
         }
 
+        const containingParagraph = range.paragraphs
+          .getFirst()
+          .getRange("Whole");
+        containingParagraph.load("text");
+        await context.sync();
+
         console.log(
           `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
         );
@@ -488,7 +522,14 @@ export class ApplySuggestionCommand {
           `✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`,
         );
 
-        return { success: true, commandId: this.id };
+        return {
+          success: true,
+          commandId: this.id,
+          mutationPatch: buildApplyMutationPatch(
+            this.suggestion,
+            containingParagraph.text,
+          ),
+        };
       });
     } catch (error) {
       const message = stringifyUnknownError(error);
