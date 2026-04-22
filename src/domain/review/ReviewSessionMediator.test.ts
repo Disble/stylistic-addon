@@ -135,6 +135,38 @@ describe("ReviewSessionMediator", () => {
     });
   });
 
+  it("triggers orphan comment cleanup after terminal resolution reports cleanup-failed", async () => {
+    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+      makeActionResult({
+        status: "accepted",
+        warnings: [
+          {
+            code: "cleanup-failed",
+            phase: "cleanup",
+            message: "late ItemNotFound",
+          },
+        ],
+      }),
+    );
+    vi.mocked(documentPort.cleanupResolvedComments).mockResolvedValueOnce({
+      deleted: 1,
+      kept: 0,
+    });
+    vi.mocked(documentPort.getCleanupPreview).mockResolvedValueOnce({
+      deletable: 0,
+      kept: 0,
+    });
+
+    const result = await mediator.acceptSuggestion(makeSuggestion());
+
+    expect(documentPort.cleanupResolvedComments).toHaveBeenCalledOnce();
+    expect(result.taskpaneState).toEqual({
+      documentState: "pending-review",
+      showDisableTrackChangesCta: false,
+      showCleanupSection: false,
+    });
+  });
+
   it("delegates explicit Track Changes deactivation and returns updated taskpane state", async () => {
     vi.mocked(documentPort.getCleanupPreview).mockResolvedValueOnce({
       deletable: 0,

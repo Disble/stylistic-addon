@@ -19,6 +19,7 @@ import type {
   ReviewTaskpaneState,
   Suggestion,
   SuggestionResolutionMediatorResult,
+  SuggestionResolutionWarning,
 } from "../types";
 import { DocumentReviewStateMachine } from "./DocumentReviewStateMachine";
 
@@ -101,12 +102,44 @@ export class ReviewSessionMediator {
       workflowResult.pendingAfter,
     );
 
+    await this.cleanupOrphanCommentsAfterTerminalResolution(
+      workflowResult.status,
+      workflowResult.warnings,
+    );
+
     const cleanup = await this.documentPort.getCleanupPreview();
 
     return {
       ...workflowResult,
       taskpaneState: this.buildTaskpaneState(cleanup.deletable > 0),
     };
+  }
+
+  /** Runs best-effort orphan comment cleanup after terminal resolutions that already exposed cleanup failure. */
+  private async cleanupOrphanCommentsAfterTerminalResolution(
+    status: SuggestionResolutionMediatorResult["status"],
+    warnings?: SuggestionResolutionWarning[],
+  ): Promise<void> {
+    if (status !== "accepted" && status !== "rejected") {
+      return;
+    }
+
+    const shouldCleanupOrphans = warnings?.some(
+      (warning) => warning.code === "cleanup-failed",
+    );
+
+    if (!shouldCleanupOrphans) {
+      return;
+    }
+
+    try {
+      await this.documentPort.cleanupResolvedComments();
+    } catch (error) {
+      console.warn(
+        "⚠️ [ReviewSessionMediator] Orphan comment cleanup after terminal resolution failed:",
+        error,
+      );
+    }
   }
 
   /**
