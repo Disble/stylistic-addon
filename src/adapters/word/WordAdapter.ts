@@ -398,7 +398,7 @@ export class WordAdapter implements IDocumentPort {
     return orchestrator.run(suggestions, onProgress);
   }
 
-  /** Rebuilds one snapshot hint from real Word after local patch reseed stops being trustworthy. */
+  /** Rebuilds one localized hint from real Word after local patch reseed stops being trustworthy. */
   private async rereadSuggestionPositionHint(
     suggestion: Suggestion,
     patch: NonNullable<CommandResult["mutationPatch"]>,
@@ -449,7 +449,9 @@ export class WordAdapter implements IDocumentPort {
       return {
         start,
         end: start + suggestion.anchor.length,
-        source: "snapshot",
+        snapshotVersion: patch.snapshotVersion,
+        ...(patch.paragraphId ? { paragraphId: patch.paragraphId } : {}),
+        source: "localized-reread",
       };
     });
   }

@@ -57,7 +57,7 @@ describe("BatchApplyOrchestrator", () => {
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, backendFirst);
   });
 
-  it("rebases pending snapshot position hints after a successful mutation patch in legacy-order batches", async () => {
+  it("does not rebase snapshot hints from legacy local patch offsets", async () => {
     const orchestrator = new BatchApplyOrchestrator({
       ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
       getDocumentReviewState: vi.fn().mockResolvedValue({
@@ -78,6 +78,7 @@ describe("BatchApplyOrchestrator", () => {
         commandId: "s-legacy-first",
         mutationPatch: {
           suggestionId: "s-legacy-first",
+          snapshotVersion: 1,
           originalText: "abcdefghij",
           updatedText: "abc",
           deltaLength: -7,
@@ -100,22 +101,24 @@ describe("BatchApplyOrchestrator", () => {
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
       ...hintedEvenLater,
       positionHint: {
-        start: 123,
-        end: 133,
+        start: 130,
+        end: 140,
+        snapshotVersion: 0,
         source: "snapshot",
       },
     });
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
       ...hintedLater,
       positionHint: {
-        start: 93,
-        end: 103,
+        start: 100,
+        end: 110,
+        snapshotVersion: 0,
         source: "snapshot",
       },
     });
   });
 
-  it("marks overlapping snapshot hints for local reread and lets safe hinted suggestions run first", async () => {
+  it("does not mark snapshot hints for local reread from legacy local patch offsets", async () => {
     const orchestrator = new BatchApplyOrchestrator({
       ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
       getDocumentReviewState: vi.fn().mockResolvedValue({
@@ -136,6 +139,7 @@ describe("BatchApplyOrchestrator", () => {
         commandId: "s-legacy-first",
         mutationPatch: {
           suggestionId: "s-legacy-first",
+          snapshotVersion: 1,
           originalText: "abcdefghij",
           updatedText: "abc",
           deltaLength: -7,
@@ -158,8 +162,9 @@ describe("BatchApplyOrchestrator", () => {
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
       ...safeLaterHint,
       positionHint: {
-        start: 93,
-        end: 103,
+        start: 100,
+        end: 110,
+        snapshotVersion: 0,
         source: "snapshot",
       },
     });
@@ -168,8 +173,8 @@ describe("BatchApplyOrchestrator", () => {
       positionHint: {
         start: 24,
         end: 34,
+        snapshotVersion: 0,
         source: "snapshot",
-        requiresLocalReread: true,
       },
     });
   });
@@ -198,7 +203,9 @@ describe("BatchApplyOrchestrator", () => {
       positionHint: {
         start: 24,
         end: 38,
+        snapshotVersion: 0,
         source: "snapshot",
+        requiresLocalReread: true,
       },
     };
     const safeLaterHint = makeSuggestion("s-safe-2", 100, 110);
@@ -210,6 +217,7 @@ describe("BatchApplyOrchestrator", () => {
         commandId: "s-legacy-first-2",
         mutationPatch: {
           suggestionId: "s-legacy-first-2",
+          snapshotVersion: 1,
           originalText: "012345678901234567890123overlap-anchor tail",
           updatedText: "01234567890123456overlap-anchor tail",
           deltaLength: -7,
@@ -233,6 +241,7 @@ describe("BatchApplyOrchestrator", () => {
       positionHint: {
         start: 17,
         end: 31,
+        snapshotVersion: 1,
         source: "snapshot",
         requiresLocalReread: false,
       },
@@ -243,7 +252,8 @@ describe("BatchApplyOrchestrator", () => {
     const rereadSuggestionPositionHint = vi.fn().mockResolvedValue({
       start: 210,
       end: 224,
-      source: "snapshot",
+      snapshotVersion: 1,
+      source: "localized-reread",
     });
     const orchestrator = new BatchApplyOrchestrator({
       ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
@@ -268,7 +278,9 @@ describe("BatchApplyOrchestrator", () => {
       positionHint: {
         start: 24,
         end: 49,
+        snapshotVersion: 0,
         source: "snapshot",
+        requiresLocalReread: true,
       },
     };
     const safeLaterHint = makeSuggestion("s-safe-3", 100, 110);
@@ -276,6 +288,7 @@ describe("BatchApplyOrchestrator", () => {
 
     const latestPatch = {
       suggestionId: "s-legacy-first-3",
+      snapshotVersion: 1,
       originalText: "012345678901234567890123unchanged tail",
       updatedText: "01234567890123456unchanged tail",
       deltaLength: -7,
@@ -306,20 +319,22 @@ describe("BatchApplyOrchestrator", () => {
       latestPatch,
     );
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
+      ...safeLaterHint,
+      positionHint: {
+        start: 100,
+        end: 110,
+        snapshotVersion: 0,
+        source: "snapshot",
+      },
+    });
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
       ...overlappingHint,
       positionHint: {
         start: 210,
         end: 224,
-        source: "snapshot",
+        snapshotVersion: 1,
+        source: "localized-reread",
         requiresLocalReread: false,
-      },
-    });
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
-      ...safeLaterHint,
-      positionHint: {
-        start: 93,
-        end: 103,
-        source: "snapshot",
       },
     });
   });
@@ -335,8 +350,8 @@ describe("BatchApplyOrchestrator", () => {
       deriveDocumentState: vi.fn().mockReturnValue("idle"),
     });
 
-    const appliedFirst = makeSuggestion("s-applied-first", 200, 210);
-    const overlappingHint = makeSuggestion("s-overlap-rerank", 140, 150);
+    const appliedFirst = makeSuggestion("s-applied-first", 140, 150);
+    const overlappingHint = makeSuggestion("s-overlap-rerank", 130, 145);
     const safeMiddleHint = makeSuggestion("s-safe-middle", 110, 120);
 
     hoistedCommandMocks.execute
@@ -345,11 +360,12 @@ describe("BatchApplyOrchestrator", () => {
         commandId: "s-applied-first",
         mutationPatch: {
           suggestionId: "s-applied-first",
+          snapshotVersion: 1,
           originalText: "abcdefghij",
           updatedText: "abc",
           deltaLength: -7,
-          affectedStart: 145,
-          affectedEnd: 155,
+          affectedStart: 5,
+          affectedEnd: 15,
         },
       })
       .mockResolvedValueOnce({
@@ -373,16 +389,103 @@ describe("BatchApplyOrchestrator", () => {
       positionHint: {
         start: 110,
         end: 120,
+        snapshotVersion: 0,
         source: "snapshot",
       },
     });
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
       ...overlappingHint,
       positionHint: {
-        start: 140,
-        end: 150,
+        start: 130,
+        end: 145,
+        snapshotVersion: 0,
         source: "snapshot",
         requiresLocalReread: true,
+      },
+    });
+  });
+
+  it("does not promote localized reread offsets as globally comparable snapshot order", async () => {
+    const rereadSuggestionPositionHint = vi.fn().mockResolvedValue({
+      start: 210,
+      end: 224,
+      snapshotVersion: 1,
+      source: "localized-reread",
+    });
+    const orchestrator = new BatchApplyOrchestrator({
+      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
+      getDocumentReviewState: vi.fn().mockResolvedValue({
+        pendingStylisticArtifacts: 0,
+        hasPendingStylisticArtifacts: false,
+        trackChangesActive: true,
+      }),
+      deriveDocumentState: vi.fn().mockReturnValue("idle"),
+      rereadSuggestionPositionHint,
+    });
+
+    const overlappingHint: Suggestion = {
+      id: "s-overlap-localized",
+      anchor: "anchor-missing-from-patch",
+      context: "context-s-overlap-localized",
+      suggestedText: "replacement-s-overlap-localized",
+      justification: "justification",
+      category: "category",
+      severity: "medium",
+      type: "track-change",
+      positionHint: {
+        start: 24,
+        end: 49,
+        snapshotVersion: 0,
+        source: "snapshot",
+        requiresLocalReread: true,
+      },
+    };
+    const appliedFirst = makeSuggestion("s-applied-localized", 200, 210);
+    const safeLaterHint = makeSuggestion("s-safe-after-localized", 100, 110);
+
+    hoistedCommandMocks.execute
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-applied-localized",
+        mutationPatch: {
+          suggestionId: "s-applied-localized",
+          snapshotVersion: 1,
+          originalText: "012345678901234567890123unchanged tail",
+          updatedText: "01234567890123456unchanged tail",
+          deltaLength: -7,
+          affectedStart: 20,
+          affectedEnd: 30,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-safe-after-localized",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        commandId: "s-overlap-localized",
+      });
+
+    await orchestrator.run([overlappingHint, safeLaterHint, appliedFirst]);
+
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, appliedFirst);
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
+      ...safeLaterHint,
+      positionHint: {
+        start: 100,
+        end: 110,
+        snapshotVersion: 0,
+        source: "snapshot",
+      },
+    });
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
+      ...overlappingHint,
+      positionHint: {
+        start: 210,
+        end: 224,
+        snapshotVersion: 1,
+        source: "localized-reread",
+        requiresLocalReread: false,
       },
     });
   });
@@ -402,6 +505,7 @@ function makeSuggestion(id: string, start: number, end: number): Suggestion {
     positionHint: {
       start,
       end,
+      snapshotVersion: 0,
       source: "snapshot",
     },
   };

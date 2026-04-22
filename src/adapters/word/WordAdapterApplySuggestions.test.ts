@@ -319,7 +319,7 @@ describe("WordAdapter.applySuggestions", () => {
     expect(commandMocks.execute).toHaveBeenCalledOnce();
   });
 
-  it("rebuilds a snapshot hint from Word when the batch requests a localized reread", async () => {
+  it("rebuilds a localized reread hint from Word when the batch requests it", async () => {
     const paragraphRange = {
       text: "prefijo overlap-anchor sufijo",
       load: vi.fn(),
@@ -368,6 +368,7 @@ describe("WordAdapter.applySuggestions", () => {
       makeSuggestion({ id: "s-overlap", anchor: "overlap-anchor" }),
       {
         suggestionId: "s-legacy",
+        snapshotVersion: 1,
         originalText: "texto viejo",
         updatedText: "prefijo overlap-anchor sufijo",
         deltaLength: -7,
@@ -379,7 +380,8 @@ describe("WordAdapter.applySuggestions", () => {
     expect(rereadHint).toEqual({
       start: 8,
       end: 22,
-      source: "snapshot",
+      snapshotVersion: 1,
+      source: "localized-reread",
     });
   });
 });

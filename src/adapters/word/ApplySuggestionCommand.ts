@@ -207,6 +207,8 @@ function buildApplyMutationPatch(
 
   return {
     suggestionId: suggestion.id,
+    snapshotVersion: (suggestion.positionHint?.snapshotVersion ?? 0) + 1,
+    paragraphId: suggestion.positionHint?.paragraphId,
     originalText: containerText,
     updatedText:
       containerText.slice(0, affectedStart) +

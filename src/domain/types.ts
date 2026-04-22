@@ -30,14 +30,20 @@ export type SuggestionType = "track-change" | "comment-only";
  * from backend-array heuristics toward real document-position ranking.
  */
 export interface SuggestionBatchPositionHint {
-  /** Snapshot-relative start offset for the current suggestion anchor/context. */
+  /** Start offset relative to the coordinate source that produced this hint. */
   start: number;
 
-  /** Snapshot-relative end offset used for end-first application ranking. */
+  /** End offset relative to the coordinate source that produced this hint. */
   end: number;
 
-  /** Identifies the ranking source that produced this hint. */
-  source: "snapshot";
+  /** Snapshot version whose coordinates this hint is comparable against. */
+  snapshotVersion: number;
+
+  /** Optional paragraph/local-container identity for localized recovery. */
+  paragraphId?: string;
+
+  /** Identifies the coordinate/ranking source that produced this hint. */
+  source: "snapshot" | "localized-reread";
 
   /** Indicates the current hint must be revalidated with a localized reread. */
   requiresLocalReread?: boolean;
@@ -238,6 +244,12 @@ export interface ApplySuggestionsResult extends InsertionResult {
 export interface ApplyMutationPatch {
   /** Suggestion whose successful apply produced this patch. */
   suggestionId: string;
+
+  /** Snapshot version after this successful mutation has been applied. */
+  snapshotVersion: number;
+
+  /** Optional paragraph/local-container identity for localized recovery. */
+  paragraphId?: string;
 
   /** Paragraph or local container text before the mutation. */
   originalText: string;

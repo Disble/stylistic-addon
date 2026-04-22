@@ -46,6 +46,19 @@ type BatchApplyDependencies = {
   ) => Promise<Suggestion["positionHint"] | undefined>;
 };
 
+/** Returns true when two hints belong to the same comparable snapshot scope. */
+function areComparableSnapshotHints(
+  left: Suggestion["positionHint"],
+  right: Suggestion["positionHint"],
+): left is NonNullable<Suggestion["positionHint"]> {
+  return (
+    left?.source === "snapshot" &&
+    right?.source === "snapshot" &&
+    left.snapshotVersion === right.snapshotVersion &&
+    left.paragraphId === right.paragraphId
+  );
+}
+
 /**
  * Orchestrates batch suggestion application.
  *
@@ -99,7 +112,11 @@ export class BatchApplyOrchestrator {
       if (
         pendingSuggestions.every(
           (pendingSuggestion) =>
-            pendingSuggestion.positionHint?.source === "snapshot",
+            pendingSuggestion.positionHint?.source === "snapshot" &&
+            pendingSuggestion.positionHint.snapshotVersion ===
+              pendingSuggestions[0]?.positionHint?.snapshotVersion &&
+            pendingSuggestion.positionHint.paragraphId ===
+              pendingSuggestions[0]?.positionHint?.paragraphId,
         )
       ) {
         pendingSuggestions = this.sortByDocumentPosition(pendingSuggestions);
@@ -128,7 +145,7 @@ export class BatchApplyOrchestrator {
 
       this.rebasePendingSnapshotHints(
         pendingSuggestions,
-        suggestion.id,
+        suggestion,
         commandResult,
       );
 
@@ -169,11 +186,12 @@ export class BatchApplyOrchestrator {
   private sortByDocumentPosition(suggestions: Suggestion[]): Suggestion[] {
     if (suggestions.length <= 1) return suggestions;
 
-    const allHavePositionHints = suggestions.every(
-      (suggestion) => suggestion.positionHint?.source === "snapshot",
+    const firstHint = suggestions[0]?.positionHint;
+    const allHaveComparableSnapshotHints = suggestions.every((suggestion) =>
+      areComparableSnapshotHints(firstHint, suggestion.positionHint),
     );
 
-    if (allHavePositionHints) {
+    if (allHaveComparableSnapshotHints) {
       return [...suggestions].sort((left, right) => {
         const leftRequiresReread =
           left.positionHint?.requiresLocalReread === true;
@@ -312,7 +330,7 @@ export class BatchApplyOrchestrator {
   /** Applies a minimal delta rebase to later snapshot hints after a successful patch. */
   private rebasePendingSnapshotHints(
     suggestions: Suggestion[],
-    appliedSuggestionId: string,
+    appliedSuggestion: Suggestion,
     commandResult: CommandResult,
   ): void {
     const patch = commandResult.mutationPatch;
@@ -320,8 +338,13 @@ export class BatchApplyOrchestrator {
       return;
     }
 
+    const appliedHint = appliedSuggestion.positionHint;
+    if (!appliedHint || appliedHint.source !== "snapshot") {
+      return;
+    }
+
     for (const suggestion of suggestions) {
-      if (suggestion.id === appliedSuggestionId) {
+      if (suggestion.id === appliedSuggestion.id) {
         continue;
       }
 
@@ -330,7 +353,7 @@ export class BatchApplyOrchestrator {
         continue;
       }
 
-      if (hint.end > patch.affectedStart && hint.start < patch.affectedEnd) {
+      if (!areComparableSnapshotHints(appliedHint, hint)) {
         suggestion.positionHint = {
           ...hint,
           requiresLocalReread: true,
@@ -338,7 +361,15 @@ export class BatchApplyOrchestrator {
         continue;
       }
 
-      if (hint.start >= patch.affectedEnd) {
+      if (hint.end > appliedHint.start && hint.start < appliedHint.end) {
+        suggestion.positionHint = {
+          ...hint,
+          requiresLocalReread: true,
+        };
+        continue;
+      }
+
+      if (hint.start >= appliedHint.end) {
         suggestion.positionHint = {
           ...hint,
           start: hint.start + patch.deltaLength,
@@ -382,6 +413,8 @@ export class BatchApplyOrchestrator {
 
       suggestion.positionHint = {
         ...refreshedHint,
+        snapshotVersion: refreshedHint.snapshotVersion,
+        paragraphId: refreshedHint.paragraphId,
         requiresLocalReread: false,
       };
       return;
@@ -391,6 +424,8 @@ export class BatchApplyOrchestrator {
       ...hint,
       start: reseededStart,
       end: reseededStart + suggestion.anchor.length,
+      snapshotVersion: patch.snapshotVersion,
+      paragraphId: patch.paragraphId,
       requiresLocalReread: false,
     };
   }

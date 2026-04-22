@@ -181,6 +181,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       commandId: "replace-patch-1",
       mutationPatch: {
         suggestionId: "replace-patch-1",
+        snapshotVersion: 1,
         originalText: paragraphText,
         updatedText: "Antes texto sugerido y después.",
         deltaLength: 0,
