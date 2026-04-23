@@ -763,6 +763,7 @@ export class ResolveSuggestionCommand {
       };
     }
 
+    let bodyRecoveryError: string | undefined;
     if (initialReport.silentNoOpDetected && !initialReport.error) {
       console.warn(
         `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} silent no-op detected (bodyTrackedChangeCountBefore=${initialReport.silentNoOpDetected.bodyTrackedChangeCountBefore} after=${initialReport.silentNoOpDetected.bodyTrackedChangeCountAfter}); attempting body-text recovery before returning success`,
@@ -782,14 +783,18 @@ export class ResolveSuggestionCommand {
 
       // Body-text recovery did not succeed; surface this as a step error so
       // the existing recovery cascade gets a chance to relocate fresh proxies.
+      bodyRecoveryError = bodyRecovery.error;
       console.warn(
         `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} silent-no-op body-text recovery failed: ${bodyRecovery.error ?? "no matching body tracked-change"}`,
       );
     }
 
+    const silentNoOpSuffix = bodyRecoveryError
+      ? ` [recovery: ${bodyRecoveryError}]`
+      : "";
     const initialErrorMessage =
       initialReport.error ??
-      `Word ignoró el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).`;
+      `Word ignoró el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).${silentNoOpSuffix}`;
 
     console.warn(
       `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} retrying after failure: ${initialErrorMessage}`,
@@ -1092,9 +1097,19 @@ export class ResolveSuggestionCommand {
       };
     }
 
-    const normalizedExpected = expectedText.trim();
-    const matchingIndex = candidateRanges.findIndex((range) => {
-      const rangeText = (range.text ?? "").trim();
+    // Diagnostic: log every candidate so we can refine matching when it fails.
+    candidateRanges.forEach((range, index) => {
+      const tc = candidates[index];
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op body candidate[${index}] type=${tc?.type ?? "unknown"} id=${tc?.id ?? "unknown"} text="${(range.text ?? "").slice(0, 120)}"`,
+      );
+    });
+
+    const normalizeForMatch = (value: string): string =>
+      value.trim().replace(/\s+/gu, " ").toLowerCase();
+    const normalizedExpected = normalizeForMatch(expectedText);
+    let matchingIndex = candidateRanges.findIndex((range) => {
+      const rangeText = normalizeForMatch(range.text ?? "");
       if (rangeText.length === 0 || normalizedExpected.length === 0) {
         return false;
       }
@@ -1105,10 +1120,23 @@ export class ResolveSuggestionCommand {
       );
     });
 
+    // Single-candidate fallback: when text matching fails but only ONE
+    // body tracked-change of the requested type exists, it must be the one
+    // we wanted to resolve. Tracked-change ranges sometimes expose only the
+    // edited delta or stale text after the sibling side was resolved, so
+    // text matching alone is unreliable. We still gate this fallback on
+    // having exactly one candidate to avoid touching neighboring suggestions.
+    if (matchingIndex === -1 && candidates.length === 1) {
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op single-candidate fallback for ${trackedChangeType} (text matching failed but only one body candidate of this type exists)`,
+      );
+      matchingIndex = 0;
+    }
+
     if (matchingIndex === -1) {
       return {
         completed: false,
-        error: `silent-no-op recovery: no body ${trackedChangeType} tracked-change matched expected text "${expectedText.slice(0, 80)}"`,
+        error: `silent-no-op recovery: no body ${trackedChangeType} tracked-change matched expected text "${expectedText.slice(0, 80)}" among ${candidates.length} candidates`,
       };
     }
 
