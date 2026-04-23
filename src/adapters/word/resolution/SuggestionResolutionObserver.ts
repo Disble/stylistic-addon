@@ -283,6 +283,55 @@ export class SuggestionResolutionObserver {
     return false;
   }
 
+  /**
+   * Classifies which body tracked-changes are spatially related to the CC range.
+   *
+   * Word desktop sometimes throws `InvalidRibbonDefinition` (a misnamed
+   * Office.js error code) from `compareLocationWith` when one of the body
+   * tracked-change proxies references an invalidated range — typically
+   * orphaned tracked-changes left by a prior failed reject. We isolate the
+   * comparison sync so a single bad proxy cannot abort the entire observation;
+   * we still have the ccTrackedChanges and ccRangeTrackedChanges evidence to
+   * fall back on.
+   */
+  private async classifyBodyRelatedTrackedChanges(
+    context: Word.RequestContext,
+    candidates: Word.TrackedChange[],
+    comparisons: OfficeExtension.ClientResult<string>[],
+  ): Promise<Word.TrackedChange[]> {
+    if (candidates.length === 0) {
+      return [];
+    }
+
+    try {
+      await context.sync();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `⚠️ [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" body tracked-change compareLocationWith sync failed (treating ${candidates.length} body candidates as not-related): ${message}`,
+      );
+      return [];
+    }
+
+    const related: Word.TrackedChange[] = [];
+    for (let index = 0; index < candidates.length; index += 1) {
+      let relationValue: string | undefined;
+      try {
+        relationValue = comparisons[index].value;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `⚠️ [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" reading compareLocationWith result[${index}] failed: ${message}`,
+        );
+        continue;
+      }
+      if (RESOLUTION_RELATED_RELATIONS.has(relationValue)) {
+        related.push(candidates[index]);
+      }
+    }
+    return related;
+  }
+
   /** Resolves all tracked changes semantically tied to a suggestion CC. */
   private async collectTrackedChangesForContentControl(
     context: Word.RequestContext,
@@ -347,24 +396,14 @@ export class SuggestionResolutionObserver {
       range.compareLocationWith(ccRange),
     );
 
-    if (comparisons.length > 0) {
-      await context.sync();
-    }
-
-    const bodyRelatedTrackedChanges: Word.TrackedChange[] = [];
-
-    for (
-      let index = 0;
-      index < candidateBodyTrackedChanges.length;
-      index += 1
-    ) {
-      const tc = candidateBodyTrackedChanges[index];
-      if (
-        RESOLUTION_RELATED_RELATIONS.has(comparisons[index].value as string)
-      ) {
-        addTrackedChange(tc);
-        bodyRelatedTrackedChanges.push(tc);
-      }
+    const bodyRelatedTrackedChanges =
+      await this.classifyBodyRelatedTrackedChanges(
+        context,
+        candidateBodyTrackedChanges,
+        comparisons,
+      );
+    for (const tc of bodyRelatedTrackedChanges) {
+      addTrackedChange(tc);
     }
 
     const trackedChanges = [
