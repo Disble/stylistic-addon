@@ -754,7 +754,7 @@ export class ResolveSuggestionCommand {
     }
 
     const initialReport = await this.executor.apply(context, [trackedChange]);
-    if (!initialReport.error) {
+    if (!initialReport.error && !initialReport.silentNoOpDetected) {
       return {
         observation,
         completed: true,
@@ -763,8 +763,36 @@ export class ResolveSuggestionCommand {
       };
     }
 
+    if (initialReport.silentNoOpDetected && !initialReport.error) {
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} silent no-op detected (bodyTrackedChangeCountBefore=${initialReport.silentNoOpDetected.bodyTrackedChangeCountBefore} after=${initialReport.silentNoOpDetected.bodyTrackedChangeCountAfter}); attempting body-text recovery before returning success`,
+      );
+      const bodyRecovery = await this.recoverFromSilentNoOpForReplaceSide(
+        context,
+        trackedChangeType,
+      );
+      if (bodyRecovery.completed) {
+        return {
+          observation,
+          completed: true,
+          recoveryAttempted: true,
+          recoverySucceeded: true,
+        };
+      }
+
+      // Body-text recovery did not succeed; surface this as a step error so
+      // the existing recovery cascade gets a chance to relocate fresh proxies.
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} silent-no-op body-text recovery failed: ${bodyRecovery.error ?? "no matching body tracked-change"}`,
+      );
+    }
+
+    const initialErrorMessage =
+      initialReport.error ??
+      `Word ignoró el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).`;
+
     console.warn(
-      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} retrying after failure: ${initialReport.error}`,
+      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} retrying after failure: ${initialErrorMessage}`,
     );
 
     const firstRecoveryObservation = await this.reobserveResolutionCandidates(
@@ -775,7 +803,7 @@ export class ResolveSuggestionCommand {
       return {
         observation,
         completed: false,
-        error: initialReport.error,
+        error: initialErrorMessage,
         recoveryAttempted: true,
         recoverySucceeded: false,
       };
@@ -992,6 +1020,139 @@ export class ResolveSuggestionCommand {
         (trackedChange) => trackedChange.type === trackedChangeType,
       ) ?? null
     );
+  }
+
+  /**
+   * Recovers from a silent no-op resolution by reaching for a fresh tracked-change
+   * proxy from `body.getTrackedChanges()` whose range text matches this
+   * suggestion's expected side text.
+   *
+   * The silent no-op pattern happens in real Word when the executor receives a
+   * stale `Word.TrackedChange` proxy obtained from `ccRange.getTrackedChanges()`
+   * (or `cc.getTrackedChanges()`) — the host-side `accept()/reject()` resolves
+   * cleanly and `context.sync()` returns no error, but the document is not
+   * mutated. The body-level `getTrackedChanges()` call returns a different
+   * proxy backed by the actual document range; reapplying the action on that
+   * proxy mutates the document for real.
+   *
+   * Returns `{ completed: true }` only if the body-text recovery actually
+   * decreased the document tracked-change count (i.e., the recovery proxy was
+   * not silent too). Otherwise returns `{ completed: false, error }` so the
+   * caller can decide whether to surface the failure or fall back to the
+   * existing reobserve-and-retry cascade.
+   *
+   * Restricted by text matching to avoid accidentally resolving tracked
+   * changes that belong to a neighboring suggestion.
+   */
+  private async recoverFromSilentNoOpForReplaceSide(
+    context: Word.RequestContext,
+    trackedChangeType: "Added" | "Deleted",
+  ): Promise<{ completed: boolean; error?: string }> {
+    const expectedText =
+      trackedChangeType === "Deleted"
+        ? this.suggestion.anchor
+        : (this.suggestion.suggestedText ?? "");
+
+    if (expectedText.length === 0) {
+      return {
+        completed: false,
+        error: `silent-no-op recovery aborted: missing expected text for ${trackedChangeType} side`,
+      };
+    }
+
+    let bodyTrackedChangesBefore = 0;
+    let candidateRanges: Word.Range[] = [];
+    let candidates: Word.TrackedChange[] = [];
+
+    try {
+      const body = context.document.body;
+      const bodyTrackedChanges = body.getTrackedChanges();
+      bodyTrackedChanges.load({ select: "type,id" });
+      await context.sync();
+      bodyTrackedChangesBefore = bodyTrackedChanges.items.length;
+
+      candidates = bodyTrackedChanges.items.filter(
+        (tc) => tc.type === trackedChangeType,
+      );
+      if (candidates.length === 0) {
+        return {
+          completed: false,
+          error: `silent-no-op recovery: body exposed 0 ${trackedChangeType} tracked changes`,
+        };
+      }
+
+      candidateRanges = candidates.map((tc) => tc.getRange());
+      candidateRanges.forEach((range) => range.load({ select: "text" }));
+      await context.sync();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        completed: false,
+        error: `silent-no-op recovery probe failed: ${message}`,
+      };
+    }
+
+    const normalizedExpected = expectedText.trim();
+    const matchingIndex = candidateRanges.findIndex((range) => {
+      const rangeText = (range.text ?? "").trim();
+      if (rangeText.length === 0 || normalizedExpected.length === 0) {
+        return false;
+      }
+      return (
+        rangeText === normalizedExpected ||
+        rangeText.includes(normalizedExpected) ||
+        normalizedExpected.includes(rangeText)
+      );
+    });
+
+    if (matchingIndex === -1) {
+      return {
+        completed: false,
+        error: `silent-no-op recovery: no body ${trackedChangeType} tracked-change matched expected text "${expectedText.slice(0, 80)}"`,
+      };
+    }
+
+    const matchingTrackedChange = candidates[matchingIndex];
+    console.warn(
+      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op body-text recovery applying ${this.action} on body ${trackedChangeType} tracked-change matching expected text`,
+    );
+
+    const recoveryReport = await this.executor.apply(context, [
+      matchingTrackedChange,
+    ]);
+    if (recoveryReport.error) {
+      return {
+        completed: false,
+        error: `silent-no-op recovery apply failed: ${recoveryReport.error}`,
+      };
+    }
+    if (recoveryReport.silentNoOpDetected) {
+      return {
+        completed: false,
+        error: `silent-no-op recovery: body proxy was also a silent no-op (bodyTrackedChangeCountBefore=${recoveryReport.silentNoOpDetected.bodyTrackedChangeCountBefore} after=${recoveryReport.silentNoOpDetected.bodyTrackedChangeCountAfter})`,
+      };
+    }
+
+    // Confirm document tracked-change count actually decreased.
+    let bodyTrackedChangesAfter = bodyTrackedChangesBefore;
+    try {
+      const body = context.document.body;
+      const bodyTrackedChanges = body.getTrackedChanges();
+      bodyTrackedChanges.load({ select: "type,id" });
+      await context.sync();
+      bodyTrackedChangesAfter = bodyTrackedChanges.items.length;
+    } catch {
+      // If we can't probe the count again, trust the executor's own check.
+    }
+
+    if (bodyTrackedChangesAfter >= bodyTrackedChangesBefore) {
+      return {
+        completed: false,
+        error: `silent-no-op recovery: bodyTrackedChangeCount did not decrease (before=${bodyTrackedChangesBefore} after=${bodyTrackedChangesAfter})`,
+      };
+    }
+
+    return { completed: true };
   }
 
   /** Collapses duplicate replace proxies into one semantic Deleted/Added pair before execution. */

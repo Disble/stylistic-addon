@@ -681,6 +681,25 @@ export interface ResolutionExecutionReport {
   failureIndex?: number;
   /** Human-readable execution error captured at the mutation boundary. */
   error?: string;
+  /**
+   * Set when the executor detected that one tracked-change resolution call
+   * (`accept()` / `reject()`) was a silent no-op in the host: the call
+   * succeeded and `context.sync()` resolved without errors, but the document
+   * tracked-change count did not decrease, indicating the proxy was stale
+   * (typical for Word's `ccRange.getTrackedChanges()` proxy when the deletion
+   * mark lives outside the suggestion CC range). The outer command can use
+   * this signal to recover with a fresh proxy from `body.getTrackedChanges()`.
+   */
+  silentNoOpDetected?: {
+    /** Index inside the executor's ordered step list where the no-op occurred. */
+    stepIndex: number;
+    /** Type of the tracked change that did not mutate the document. */
+    trackedChangeType: "Added" | "Deleted";
+    /** Body tracked-change count observed before the failed step. */
+    bodyTrackedChangeCountBefore: number;
+    /** Body tracked-change count observed after the failed step. */
+    bodyTrackedChangeCountAfter: number;
+  };
 }
 
 /** Structured telemetry event emitted by resolution workflows. */

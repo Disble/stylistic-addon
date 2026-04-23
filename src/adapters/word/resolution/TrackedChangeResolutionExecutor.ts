@@ -93,10 +93,13 @@ export class TrackedChangeResolutionExecutor {
       },
     );
     let completed = 0;
+    let silentNoOpDetected: ResolutionExecutionReport["silentNoOpDetected"];
 
     for (const [index, trackedChange] of orderedTrackedChanges.entries()) {
       let actionQueued = false;
       const trackedChangeDetail = this.describeTrackedChange(trackedChange);
+      const bodyTrackedChangeCountBefore =
+        await this.countBodyTrackedChanges(context);
 
       try {
         console.log(
@@ -117,6 +120,27 @@ export class TrackedChangeResolutionExecutor {
         console.log(
           `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=sync-done`,
         );
+
+        const bodyTrackedChangeCountAfter =
+          await this.countBodyTrackedChanges(context);
+        if (
+          !silentNoOpDetected &&
+          this.action === "reject" &&
+          bodyTrackedChangeCountBefore > 0 &&
+          bodyTrackedChangeCountAfter >= bodyTrackedChangeCountBefore &&
+          (trackedChangeDetail.type === "Added" ||
+            trackedChangeDetail.type === "Deleted")
+        ) {
+          console.warn(
+            `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} silent-no-op detected: bodyTrackedChangeCount before=${bodyTrackedChangeCountBefore} after=${bodyTrackedChangeCountAfter} (proxy mutation did not reduce document tracked-change count)`,
+          );
+          silentNoOpDetected = {
+            stepIndex: index,
+            trackedChangeType: trackedChangeDetail.type as "Added" | "Deleted",
+            bodyTrackedChangeCountBefore,
+            bodyTrackedChangeCountAfter,
+          };
+        }
       } catch (error) {
         if (actionQueued) {
           completed += 1;
@@ -144,6 +168,7 @@ export class TrackedChangeResolutionExecutor {
       attempted: orderedTrackedChanges.length,
       completed,
       remaining: orderedTrackedChanges.length - completed,
+      ...(silentNoOpDetected ? { silentNoOpDetected } : {}),
     };
   }
 
@@ -209,6 +234,37 @@ export class TrackedChangeResolutionExecutor {
         failureIndex: 0,
         error: message,
       };
+    }
+  }
+
+  /**
+   * Counts how many tracked changes the document body currently exposes.
+   *
+   * Used by `apply()` to detect silent no-op resolutions: when the host
+   * accepts/rejects a stale `Word.TrackedChange` proxy (typical for
+   * `ccRange.getTrackedChanges()` when the deletion mark lives outside the
+   * suggestion CC range), `context.sync()` resolves cleanly but the document
+   * tracked-change count does not decrease. Comparing the count before and
+   * after each step lets the executor surface this case to the outer command
+   * so it can recover with a fresh proxy from a different evidence source.
+   *
+   * Returns 0 when the host does not expose the count (defensive: any error
+   * here must not abort the resolution flow).
+   */
+  private async countBodyTrackedChanges(
+    context: Word.RequestContext,
+  ): Promise<number> {
+    try {
+      const bodyTrackedChanges = context.document.body.getTrackedChanges();
+      bodyTrackedChanges.load({ select: "type,id" });
+      await context.sync();
+      return bodyTrackedChanges.items.length;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" body tracked-change count probe failed: ${message}`,
+      );
+      return 0;
     }
   }
 }

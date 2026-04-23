@@ -966,7 +966,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(deletedRejectSpy).toHaveBeenCalledOnce();
   });
 
-  it("returns error when rejecting the tracked changes invalidates the CC before final cleanup", async () => {
+  it("treats CC GeneralException after successful reject as soft cleanup success (host already invalidated CC proxy as side-effect of the resolution)", async () => {
     const suggestion = makeSuggestion({
       anchor: "con la Jing",
       suggestedText: "con Jing",
@@ -1040,9 +1040,16 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const result = await adapter.rejectSuggestion(suggestion);
 
-    expect(result.status).toBe("error");
+    // Per the post-Phase-3 cleanup contract: when execute reports success but
+    // the host raises GeneralException during cc.delete()/sync (because the
+    // CC proxy was already collapsed as a side-effect of rejecting the
+    // tracked changes inside it), the workflow MUST surface this as a
+    // successful resolution. Returning "error" here previously left the
+    // taskpane card stuck in "pending with error" even though the document
+    // was already in the desired state.
+    expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
-    expect(result.error).toBe("GeneralException");
+    expect(result.error).toBeUndefined();
     expect(rejectAddedSpy).toHaveBeenCalledOnce();
     expect(rejectDeletedSpy).toHaveBeenCalledOnce();
   });

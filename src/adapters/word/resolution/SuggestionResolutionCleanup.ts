@@ -7,7 +7,19 @@ export class SuggestionResolutionCleanup {
     private readonly action: "accept" | "reject",
   ) {}
 
-  /** Deletes a previously located Stylistic comment. */
+  /**
+   * Deletes a previously located Stylistic comment.
+   *
+   * Treats `GeneralException` from `comment.delete()` / `context.sync()` as a
+   * soft success: this almost always means the host already invalidated the
+   * comment proxy as a side-effect of the preceding tracked-change resolution
+   * (typical when rejecting a replace removes the surrounding CC and the
+   * colocated comment proxy points to a now-orphaned anchor). The user-visible
+   * outcome is identical — the comment is no longer attached to the document —
+   * so we MUST NOT surface this as a workflow error and leave the taskpane
+   * card stuck in "pending with error". Other host errors are propagated so
+   * legitimate cleanup failures still abort the workflow.
+   */
   async deleteLocatedStylisticComment(
     context: Word.RequestContext,
     colocatedComment: ColocatedCommentContext | null,
@@ -22,8 +34,25 @@ export class SuggestionResolutionCleanup {
     console.log(
       `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-start`,
     );
-    colocatedComment.comment.delete();
-    await context.sync();
+    try {
+      colocatedComment.comment.delete();
+      await context.sync();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code = (error as { code?: string } | null)?.code ?? "";
+      const isGeneralException =
+        code === "GeneralException" ||
+        message.includes("GeneralException");
+
+      if (isGeneralException) {
+        console.warn(
+          `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-soft-success (host invalidated comment proxy after prior mutation: ${message})`,
+        );
+        return true;
+      }
+
+      throw error;
+    }
     console.log(
       `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-done`,
     );
@@ -38,7 +67,17 @@ export class SuggestionResolutionCleanup {
     return this.deleteLocatedStylisticComment(context, colocatedComment);
   }
 
-  /** Deletes the resolved CC anchor as part of atomic cleanup. */
+  /**
+   * Deletes the resolved CC anchor as part of atomic cleanup.
+   *
+   * Tolerates `GeneralException` for the same reason as
+   * `deleteLocatedStylisticComment`: when the preceding tracked-change
+   * resolution already collapsed the CC (e.g. rejecting the inserted-side
+   * tracked change inside the CC), the host invalidates the CC proxy and
+   * `cc.delete()` raises `GeneralException`. The CC is gone from the user's
+   * perspective, so this is a soft success — surfacing it as a workflow error
+   * would leave the taskpane card stuck.
+   */
   async cleanupResolvedSuggestionAnchor(
     context: Word.RequestContext,
     cc: Word.ContentControl,
@@ -46,8 +85,25 @@ export class SuggestionResolutionCleanup {
     console.log(
       `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-start tag="${cc.tag}"`,
     );
-    cc.delete(true);
-    await context.sync();
+    try {
+      cc.delete(true);
+      await context.sync();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code = (error as { code?: string } | null)?.code ?? "";
+      const isGeneralException =
+        code === "GeneralException" ||
+        message.includes("GeneralException");
+
+      if (isGeneralException) {
+        console.warn(
+          `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-soft-success tag="${cc.tag}" (host invalidated CC proxy after prior mutation: ${message})`,
+        );
+        return;
+      }
+
+      throw error;
+    }
     console.log(
       `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-done tag="${cc.tag}"`,
     );
