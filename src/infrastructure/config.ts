@@ -68,6 +68,20 @@ export const POLL_INTERVAL_MS = 1_000;
 export const SUGGESTION_CARD_REORDER_ANIMATION_MS = 500;
 
 // ---------------------------------------------------------------------------
+// Development Analysis Bypass
+// ---------------------------------------------------------------------------
+
+/**
+ * Enables a development-only bypass for the full Mastra analysis path.
+ *
+ * When `true`, the frontend no longer depends on the backend for the analysis
+ * flow: connection check, submit, and poll all use local mock behavior. This
+ * keeps the rest of the pipeline and UI flow unchanged while letting the backend
+ * rest completely during debugging sessions.
+ */
+export const MASTRA_POLL_BYPASS_ENABLED = true;
+
+// ---------------------------------------------------------------------------
 // Word Artifact Identity
 // ---------------------------------------------------------------------------
 

@@ -12,13 +12,8 @@ describe("DocumentReviewStateInspector", () => {
     });
   });
 
-  it("falls back to pendingBefore when reject post-resolution inspection throws", async () => {
+  it("propagates reject post-resolution inspection failures", async () => {
     const inspector = new DocumentReviewStateInspector();
-    const pendingBefore = {
-      pendingStylisticArtifacts: 2,
-      hasPendingStylisticArtifacts: true,
-      trackChangesActive: true,
-    };
     const context = {
       document: {
         contentControls: {
@@ -31,20 +26,8 @@ describe("DocumentReviewStateInspector", () => {
       sync: vi.fn(),
     } as unknown as Word.RequestContext;
 
-    const result = await inspector.inspectAfterResolution(
-      context,
-      pendingBefore,
-      "reject",
-      "s-1",
+    await expect(inspector.inspectAfterResolution(context)).rejects.toThrow(
+      "GeneralException",
     );
-
-    expect(result).toEqual({
-      pendingAfter: pendingBefore,
-      warning: {
-        code: "inspection-failed",
-        phase: "inspect-after",
-        message: "GeneralException",
-      },
-    });
   });
 });

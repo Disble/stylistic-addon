@@ -12,6 +12,7 @@ export type MockRange = {
   load: ReturnType<typeof vi.fn>;
   search: ReturnType<typeof vi.fn>;
   insertText: ReturnType<typeof vi.fn>;
+  getReviewedText: ReturnType<typeof vi.fn>;
   insertComment: ReturnType<typeof vi.fn>;
   insertContentControl: ReturnType<typeof vi.fn>;
   parentContentControlOrNullObject: ParentCC;
@@ -37,6 +38,11 @@ export type ApplyCommandTestContext = {
   bodyRange: MockRange;
   anchorRange: MockRange;
   insertedRange: {
+    getReviewedText: ReturnType<typeof vi.fn>;
+    paragraphs: {
+      getFirst: ReturnType<typeof vi.fn>;
+    };
+    search: ReturnType<typeof vi.fn>;
     insertContentControl: ReturnType<typeof vi.fn>;
     insertComment: ReturnType<typeof vi.fn>;
   };
@@ -52,6 +58,10 @@ function createRangeCollection(items: MockRange[]): RangeCollection {
   return { items, load: vi.fn() };
 }
 
+function createClientResult<T>(value: T) {
+  return { value };
+}
+
 export function createSearchMock(
   sequence: MockRange[][],
 ): ReturnType<typeof vi.fn> {
@@ -62,9 +72,11 @@ export function createSearchMock(
 export function createRange(options: {
   text: string;
   searchSequence?: MockRange[][];
-  insertTextImpl?: () => unknown;
+  insertTextImpl?: (text: string, insertLocation: string) => unknown;
   parentCC?: Partial<ParentCC>;
   paragraphText?: string;
+  reviewedCurrentText?: string;
+  reviewedOriginalText?: string;
 }): MockRange {
   const parentCC: ParentCC = {
     tag: "",
@@ -75,7 +87,23 @@ export function createRange(options: {
   };
 
   const defaultCC = { tag: "", appearance: "", cannotDelete: true };
+  const defaultInsertedParagraphRange = {
+    text: options.paragraphText ?? options.text,
+    load: vi.fn(),
+    search: createSearchMock([[]]),
+  };
   const defaultInsertedRange = {
+    text: "texto sugerido",
+    load: vi.fn(),
+    search: createSearchMock([[]]),
+    getReviewedText: vi.fn((version: "Current" | "Original") =>
+      createClientResult(version === "Original" ? "" : "texto sugerido"),
+    ),
+    paragraphs: {
+      getFirst: vi.fn(() => ({
+        getRange: vi.fn(() => defaultInsertedParagraphRange),
+      })),
+    },
     insertContentControl: vi.fn(() => defaultCC),
     insertComment: vi.fn(),
   };
@@ -94,7 +122,26 @@ export function createRange(options: {
     text: options.text,
     load: vi.fn(),
     search: createSearchMock(options.searchSequence ?? [[]]),
-    insertText: vi.fn(options.insertTextImpl ?? (() => defaultInsertedRange)),
+    insertText: vi.fn(
+      options.insertTextImpl ??
+        ((text: string) => {
+          defaultInsertedRange.text = text;
+          defaultInsertedParagraphRange.text =
+            options.paragraphText ?? options.text;
+          defaultInsertedRange.getReviewedText = vi.fn(
+            (version: "Current" | "Original") =>
+              createClientResult(version === "Original" ? "" : text),
+          );
+          return defaultInsertedRange;
+        }),
+    ),
+    getReviewedText: vi.fn((version: "Current" | "Original") =>
+      createClientResult(
+        version === "Original"
+          ? (options.reviewedOriginalText ?? "")
+          : (options.reviewedCurrentText ?? options.text),
+      ),
+    ),
     insertComment: vi.fn(),
     insertContentControl: vi.fn(() => defaultCC),
     parentContentControlOrNullObject: parentCC,
@@ -130,6 +177,13 @@ export function installWordContext(options: {
   paragraphSearchSequence?: MockRange[][];
   initialTrackingMode?: string;
   insertError?: Error;
+  insertedRange?: {
+    text?: string;
+    reviewedCurrentText?: string;
+    reviewedOriginalText?: string;
+    searchSequence?: MockRange[][];
+    paragraphText?: string;
+  };
   contextRangeParentCC?: Partial<ParentCC>;
   anchorRangeParentCC?: Partial<ParentCC>;
   onSync?: (count: number) => void | Promise<void>;
@@ -146,17 +200,33 @@ export function installWordContext(options: {
   const documentText = options.documentText ?? contextText;
 
   const cc = { tag: "", title: "", appearance: "", cannotDelete: true };
-  const insertedRange = {
-    insertContentControl: vi.fn(() => cc),
-    insertComment: vi.fn(),
-  };
+  let insertedCurrentText = options.insertedRange?.reviewedCurrentText;
+  const insertedRange = createRange({
+    text: options.insertedRange?.text ?? (options.documentText ?? contextText),
+    reviewedCurrentText: insertedCurrentText ?? "texto sugerido",
+    reviewedOriginalText: options.insertedRange?.reviewedOriginalText ?? "",
+    searchSequence: options.insertedRange?.searchSequence ?? [[]],
+    paragraphText:
+      options.insertedRange?.paragraphText ??
+      options.insertedRange?.text ??
+      (options.documentText ?? contextText),
+  });
+  insertedRange.insertContentControl = vi.fn(() => cc);
+  insertedRange.insertComment = vi.fn();
 
   const anchorRange = createRange({
     text: anchorText,
     parentCC: options.anchorRangeParentCC,
-    insertTextImpl: () => {
+    insertTextImpl: (text: string) => {
       if (options.insertError) {
         throw options.insertError;
+      }
+      if (!insertedCurrentText) {
+        insertedRange.text = text;
+        insertedRange.getReviewedText = vi.fn(
+          (version: "Current" | "Original") =>
+            createClientResult(version === "Original" ? "" : text),
+        );
       }
       return insertedRange;
     },

@@ -135,7 +135,7 @@ describe("WordAdapter.navigateToText", () => {
     expect(anchorSelect).toHaveBeenCalledOnce();
   });
 
-  it("prefers the compound-v2 CC whose full identity matches the current suggestion", async () => {
+  it("prefers the compound-v2 CC whose metadata best matches the current suggestion", async () => {
     const staleSelect = vi.fn();
     const currentSelect = vi.fn();
     const ccResult = {

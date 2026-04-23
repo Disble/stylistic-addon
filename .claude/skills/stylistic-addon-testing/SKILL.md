@@ -253,6 +253,26 @@ the same tag, the first one is legacy/non-v2, and a later one has valid
 `compound-v2` metadata plus actionable tracked changes. The adapter must choose
 the valid v2 candidate instead of `items[0]`.
 
+#### Verified repo lesson: re-observation must remap logical candidates to fresh proxies
+
+Another escaped regression showed that preserving the previously selected
+Content Control by object reference is not enough once Word re-materializes the
+ suggestion after a semantic step.
+
+That means:
+
+- re-observation must never inject the old `preferredCc` proxy back into the
+  observer,
+- the workflow must resolve that preference to a fresh candidate from the new
+  `getByTag()` result,
+- matching by logical identity (`tag` + persisted `title` metadata) is safer
+  than proxy identity.
+
+**Testing rule**: add a RED case where the first observation uses one CC proxy,
+the next `getByTag()` returns a fresh equivalent candidate, and the old proxy
+throws if reused. The workflow must still resolve successfully through the
+fresh candidate.
+
 #### Verified repo lesson: `compound-v2` fixtures must match the real suggestion identity
 
 Another escaped regression showed that tests can still lie even when they use a

@@ -2,8 +2,8 @@ import { DocumentReviewStateMachine } from "../../../domain/review/DocumentRevie
 import type {
   DocumentReviewState,
   ResolutionExecutionReport,
+  ResolutionPhase,
   SuggestionActionResult,
-  SuggestionResolutionWarning,
 } from "../../../domain/types";
 import type { ResolutionStatus } from "./ResolutionContext";
 
@@ -34,7 +34,6 @@ export class ResolveSuggestionResultFactory {
     pendingBefore: DocumentReviewState,
     pendingAfter: DocumentReviewState,
     error?: string,
-    warnings?: SuggestionResolutionWarning[],
     executionReport?: ResolutionExecutionReport,
   ): SuggestionActionResult {
     const transition = DocumentReviewStateMachine.evaluateTransition(
@@ -49,7 +48,6 @@ export class ResolveSuggestionResultFactory {
       pendingAfter,
       documentState: transition.to,
       ...(error ? { error } : {}),
-      ...(warnings && warnings.length > 0 ? { warnings } : {}),
       ...(executionReport ? { executionReport } : {}),
     };
   }
@@ -80,7 +78,7 @@ export class ResolveSuggestionResultFactory {
   buildErrorResult(
     error: string,
     pendingAfter: DocumentReviewState,
-    warnings?: SuggestionResolutionWarning[],
+    errorPhase?: ResolutionPhase,
     executionReport?: ResolutionExecutionReport,
   ): SuggestionActionResult {
     return {
@@ -90,7 +88,7 @@ export class ResolveSuggestionResultFactory {
       pendingAfter,
       documentState: this.stateInspector.deriveDocumentState(pendingAfter),
       error,
-      ...(warnings && warnings.length > 0 ? { warnings } : {}),
+      ...(errorPhase ? { errorPhase } : {}),
       ...(executionReport ? { executionReport } : {}),
     };
   }

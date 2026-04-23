@@ -19,3 +19,9 @@ When working in this project, IMMEDIATELY read the corresponding skill file befo
 - When a bug escapes existing tests, update the relevant local testing skill with the new lesson.
 - Document not only the fix, but also **why the previous test strategy failed**.
 - Corrections of prior corrections MUST also be documented when they reveal a false assumption, permissive mock, or missing semantic assertion.
+
+## Philosophy
+
+- This project ALWAYS prioritizes breaking changes over legacy code.
+- This project consider legacy code as TECHNICAL DEBT to be paid off, not a constraint to work around.
+- Each new feauture, bug fix, or refactor should be designed from the start with SOLID design patterns, clean architecture principles, and best testing practices in mind.

@@ -11,3 +11,9 @@ When working in this project, IMMEDIATELY read the corresponding skill file befo
 | Debugging a regression, bug investigation, Word behavior mismatch | `.claude/skills/stylistic-addon-debugging/SKILL.md` |
 
 Update the local testing skill when a regression teaches a new repo-specific lesson.
+
+## Philosophy
+
+- This project ALWAYS prioritizes breaking changes over legacy code.
+- This project consider legacy code as TECHNICAL DEBT to be paid off, not a constraint to work around.
+- Each new feauture, bug fix, or refactor should be designed from the start with SOLID design patterns, clean architecture principles, and best testing practices in mind.

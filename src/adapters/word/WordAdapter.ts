@@ -44,6 +44,7 @@ import {
 import {
   isValidCompoundReplaceIdentity,
   parseReplaceIdentityTitle,
+  scoreCompoundReplaceIdentityMatch,
 } from "./ReplaceIdentityParser";
 import { ResolveSuggestionCommand } from "./ResolveSuggestionCommand";
 import {
@@ -142,12 +143,25 @@ export class WordAdapter implements IDocumentPort {
       return null;
     }
 
-    const v2Candidate = ccs.find((cc) => {
+    const ranked = [...ccs].sort((left, right) => {
+      const leftScore = scoreCompoundReplaceIdentityMatch(
+        parseReplaceIdentityTitle(left.title),
+        suggestion,
+      );
+      const rightScore = scoreCompoundReplaceIdentityMatch(
+        parseReplaceIdentityTitle(right.title),
+        suggestion,
+      );
+
+      return rightScore - leftScore;
+    });
+
+    const v2Candidate = ranked.find((cc) => {
       const identity = parseReplaceIdentityTitle(cc.title);
       return isValidCompoundReplaceIdentity(identity, suggestion);
     });
 
-    return v2Candidate ?? ccs[0] ?? null;
+    return v2Candidate ?? ranked[0] ?? null;
   }
 
   /** Searches a body or range through the shared Word text locator. */

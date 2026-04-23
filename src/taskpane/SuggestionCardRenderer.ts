@@ -21,7 +21,6 @@ import type {
   Suggestion,
   SuggestionApplicationFailure,
   SuggestionResolutionMediatorResult,
-  SuggestionResolutionWarning,
   SuggestionState,
 } from "../domain/types";
 import { SUGGESTION_CARD_REORDER_ANIMATION_MS } from "../infrastructure/config";
@@ -421,22 +420,12 @@ function applySuggestionCardState(
   acceptBtn: HTMLButtonElement | null,
   rejectBtn: HTMLButtonElement | null,
   errorMessage?: string,
-  warnings?: SuggestionResolutionWarning[],
 ): void {
   switch (state) {
     case "accepted":
     case "rejected":
       li.querySelector(".result-actions")?.remove();
       li.classList.add(`result-${state}`);
-      {
-        const warningNote = buildResolutionWarningNote(warnings);
-        if (
-          warningNote &&
-          !li.querySelector(".result-resolution-warning-note")
-        ) {
-          appendNote(li, warningNote, "result-resolution-warning-note");
-        }
-      }
       moveSuggestionCardToEnd(li);
       break;
 
@@ -521,33 +510,6 @@ function updateResultsSummaryAfterResolution(
   );
 }
 
-/** Builds a compact warning note for terminal accepted/rejected cards. */
-function buildResolutionWarningNote(
-  warnings: SuggestionResolutionWarning[] | undefined,
-): string | null {
-  if (!warnings || warnings.length === 0) {
-    return null;
-  }
-
-  if (warnings.some((warning) => warning.code === "reconciled-after-error")) {
-    return "(resuelta con recuperación semántica)";
-  }
-
-  if (warnings.some((warning) => warning.code === "cleanup-failed")) {
-    return "(resuelta con limpieza pendiente)";
-  }
-
-  if (warnings.some((warning) => warning.code === "inspection-failed")) {
-    return "(resuelta con verificación parcial)";
-  }
-
-  if (warnings.some((warning) => warning.code === "telemetry-failed")) {
-    return "(resuelta con observabilidad degradada)";
-  }
-
-  return "(resuelta con advertencias)";
-}
-
 // ---------------------------------------------------------------------------
 // Accept / Reject handlers
 // ---------------------------------------------------------------------------
@@ -588,7 +550,6 @@ async function handleAcceptSuggestion(
     buttons.acceptBtn,
     buttons.rejectBtn,
     result.error,
-    result.warnings,
   );
   applyResolutionWorkflowUi(result);
   updateResultsSummaryAfterResolution(
@@ -636,7 +597,6 @@ async function handleRejectSuggestion(
     buttons.acceptBtn,
     buttons.rejectBtn,
     result.error,
-    result.warnings,
   );
   applyResolutionWorkflowUi(result);
   updateResultsSummaryAfterResolution(

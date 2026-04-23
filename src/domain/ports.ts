@@ -85,6 +85,7 @@ export interface IDocumentPort {
    * Returns a result object — never throws.
    *
    * Result contract:
+   * - `accepted` means tracked changes and Stylistic cleanup completed atomically
    * - `unobservable` means Word could not prove the suggestion state yet
    * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
    */
@@ -96,6 +97,7 @@ export interface IDocumentPort {
    * Returns a result object — never throws.
    *
    * Result contract:
+   * - `rejected` means tracked changes and Stylistic cleanup completed atomically
    * - `unobservable` means Word could not prove the suggestion state yet
    * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
    */

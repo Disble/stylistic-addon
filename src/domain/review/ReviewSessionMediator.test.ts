@@ -106,60 +106,16 @@ describe("ReviewSessionMediator", () => {
     });
   });
 
-  it("preserves workflow warnings while enriching taskpane state", async () => {
-    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
-      makeActionResult({
-        warnings: [
-          {
-            code: "cleanup-failed",
-            phase: "cleanup",
-            message: "late ItemNotFound",
-          },
-        ],
-      }),
-    );
-
-    const result = await mediator.acceptSuggestion(makeSuggestion());
-
-    expect(result.warnings).toEqual([
-      {
-        code: "cleanup-failed",
-        phase: "cleanup",
-        message: "late ItemNotFound",
-      },
-    ]);
-    expect(result.taskpaneState).toEqual({
-      documentState: "pending-review",
-      showDisableTrackChangesCta: false,
-      showCleanupSection: false,
-    });
-  });
-
-  it("triggers orphan comment cleanup after terminal resolution reports cleanup-failed", async () => {
+  it("does not run deferred orphan cleanup after terminal accept", async () => {
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
       makeActionResult({
         status: "accepted",
-        warnings: [
-          {
-            code: "cleanup-failed",
-            phase: "cleanup",
-            message: "late ItemNotFound",
-          },
-        ],
       }),
     );
-    vi.mocked(documentPort.cleanupResolvedComments).mockResolvedValueOnce({
-      deleted: 1,
-      kept: 0,
-    });
-    vi.mocked(documentPort.getCleanupPreview).mockResolvedValueOnce({
-      deletable: 0,
-      kept: 0,
-    });
 
     const result = await mediator.acceptSuggestion(makeSuggestion());
 
-    expect(documentPort.cleanupResolvedComments).toHaveBeenCalledOnce();
+    expect(documentPort.cleanupResolvedComments).not.toHaveBeenCalled();
     expect(result.taskpaneState).toEqual({
       documentState: "pending-review",
       showDisableTrackChangesCta: false,

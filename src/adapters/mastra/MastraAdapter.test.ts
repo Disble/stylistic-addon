@@ -60,6 +60,7 @@ describe("MastraAdapter", () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    vi.doUnmock("../../infrastructure/config");
     vi.clearAllMocks();
 
     mastraMocks.getWorkflow.mockReturnValue(mastraMocks.workflow);
@@ -73,6 +74,7 @@ describe("MastraAdapter", () => {
   });
 
   afterEach(() => {
+    vi.doUnmock("../../infrastructure/config");
     logSpy.mockRestore();
     errorSpy.mockRestore();
   });
@@ -122,6 +124,27 @@ describe("MastraAdapter", () => {
 
       await expect(adapter.checkConnection()).resolves.toBe(false);
 
+      expect(mastraMocks.details).not.toHaveBeenCalled();
+    });
+
+    it("returns true without touching the backend when the bypass is enabled", async () => {
+      vi.doMock("../../infrastructure/config", async () => {
+        const actual = await vi.importActual<typeof import("../../infrastructure/config")>(
+          "../../infrastructure/config",
+        );
+
+        return {
+          ...actual,
+          MASTRA_POLL_BYPASS_ENABLED: true,
+        };
+      });
+
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      await expect(adapter.checkConnection()).resolves.toBe(true);
+
+      expect(mastraMocks.getWorkflow).not.toHaveBeenCalled();
       expect(mastraMocks.details).not.toHaveBeenCalled();
     });
   });
@@ -223,6 +246,35 @@ describe("MastraAdapter", () => {
         error: "connect ECONNREFUSED",
       });
     });
+
+    it("returns a bypass runId without calling createRun when the bypass is enabled", async () => {
+      vi.doMock("../../infrastructure/config", async () => {
+        const actual = await vi.importActual<typeof import("../../infrastructure/config")>(
+          "../../infrastructure/config",
+        );
+
+        return {
+          ...actual,
+          MASTRA_POLL_BYPASS_ENABLED: true,
+        };
+      });
+
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.submitChunkAnalysis(
+        makeChunk({ index: 4 }),
+        "general",
+        "Disble",
+      );
+
+      expect(mastraMocks.getWorkflow).not.toHaveBeenCalled();
+      expect(mastraMocks.createRun).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        chunkIndex: 4,
+        runId: "bypass-run-4",
+      });
+    });
   });
 
   describe("pollChunkAnalysis", () => {
@@ -236,6 +288,78 @@ describe("MastraAdapter", () => {
       expect(mastraMocks.runById).toHaveBeenCalledWith("run-123", {
         fields: ["result", "error"],
         withNestedWorkflows: false,
+      });
+    });
+
+    it("returns mocked suggestions without calling runById when the poll bypass is enabled", async () => {
+      vi.doMock("../../infrastructure/config", async () => {
+        const actual = await vi.importActual<typeof import("../../infrastructure/config")>(
+          "../../infrastructure/config",
+        );
+
+        return {
+          ...actual,
+          MASTRA_POLL_BYPASS_ENABLED: true,
+        };
+      });
+
+      const { MastraAdapter } = await importAdapterModule();
+      const adapter = new MastraAdapter();
+
+      const result = await adapter.pollChunkAnalysis(2, "run-bypass");
+
+      expect(mastraMocks.runById).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        chunkIndex: 2,
+        runId: "run-bypass",
+        status: "success",
+        suggestions: [
+          {
+            id: "chunk2-0",
+            context:
+              "Xia no tenía idea de lo que estaba pasando por la mente de Mei ni Shu.",
+            anchor: "ni Shu",
+            suggestedText: "ni de Shu",
+            justification:
+              "Omisión de preposición en estructuras paralelas.",
+            category: "gramática",
+            severity: "high",
+            type: "track-change",
+          },
+          {
+            id: "chunk2-1",
+            context:
+              "Cualquier cosa que pudiera decir eran meras suposiciones.",
+            anchor: "eran meras suposiciones",
+            suggestedText: "era una mera suposición",
+            justification: "Concordancia verbal con sujeto singular.",
+            category: "gramática",
+            severity: "high",
+            type: "track-change",
+          },
+          {
+            id: "chunk2-2",
+            context: "Todas se quedaron en silencio.",
+            anchor: "se quedaron en silencio",
+            suggestedText: "guardaron silencio",
+            justification:
+              "Eco léxico por repetición de 'silencio' en párrafos cercanos.",
+            category: "estilo",
+            severity: "medium",
+            type: "track-change",
+          },
+          {
+            id: "chunk2-3",
+            context:
+              "desperté en unas instalaciones de WEPO lejos de las garras de Jack y desde allí no volví a saber de él.",
+            anchor: "desde allí",
+            justification:
+              "Evaluar si se refiere a la ubicación (correcto) o al momento temporal (debería ser 'desde entonces').",
+            category: "estilo",
+            severity: "low",
+            type: "comment-only",
+          },
+        ],
       });
     });
 

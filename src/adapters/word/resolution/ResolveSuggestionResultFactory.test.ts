@@ -48,7 +48,11 @@ describe("ResolveSuggestionResultFactory", () => {
       inspect: vi.fn(),
     });
 
-    const result = factory.buildErrorResult("boom", pendingAfter);
+    const result = factory.buildErrorResult(
+      "boom",
+      pendingAfter,
+      "execute",
+    );
 
     expect(result).toEqual({
       status: "error",
@@ -57,6 +61,7 @@ describe("ResolveSuggestionResultFactory", () => {
       pendingAfter,
       documentState: "idle",
       error: "boom",
+      errorPhase: "execute",
     });
     expect(deriveDocumentState).toHaveBeenCalledWith(pendingAfter);
   });

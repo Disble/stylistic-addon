@@ -85,18 +85,11 @@ describe("SuggestionResolutionWorkflow", () => {
     );
   });
 
-  it("still dispatches feedback when accepted results include warnings", async () => {
+  it("still dispatches feedback for accepted terminal results", async () => {
     const suggestion = makeSuggestion();
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
       makeActionResult({
         status: "accepted",
-        warnings: [
-          {
-            code: "telemetry-failed",
-            phase: "execute",
-            message: "telemetry sink offline",
-          },
-        ],
       }),
     );
 

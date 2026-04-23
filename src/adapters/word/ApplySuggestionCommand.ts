@@ -10,8 +10,11 @@
  * 1. Searches the document for the original text (case-sensitive).
  * 2. Calls range.insertText(suggestedText, replace) — assuming the workflow
  *    layer already enabled Track Changes when appropriate.
- * 3. Inserts a comment on the inserted range with category + justification.
- * 4. Wraps the inserted range in a ContentControl tagged `stylistic:{type}:{id}`.
+ * 3. Re-locates a clean current-side range for replace suggestions when Word
+ *    returns a hybrid tracked-change span.
+ * 4. Inserts a comment on the current inserted side with category + justification.
+ * 5. Wraps that current inserted side in a ContentControl tagged
+ *    `stylistic:{type}:{id}`.
  *
  * Each suggestion runs in its own `Word.run` context (per-suggestion isolation)
  * to avoid stale ranges after insertions shift document positions.
@@ -235,6 +238,110 @@ export class ApplySuggestionCommand {
   ) {
     this.id = suggestion.id;
     this.description = `Apply suggestion [${suggestion.type}]: "${suggestion.anchor.substring(0, 40)}" → "${(suggestion.suggestedText ?? "").substring(0, 40)}"`;
+  }
+
+  /** Reads current/original reviewed text for one Word range. */
+  private async readReviewedText(
+    context: Word.RequestContext,
+    range: Word.Range,
+  ): Promise<{ current: string; original: string }> {
+    const current = range.getReviewedText("Current");
+    const original = range.getReviewedText("Original");
+    await context.sync();
+
+    return {
+      current: current.value,
+      original: original.value,
+    };
+  }
+
+  /**
+   * Verifies whether a candidate range represents only the current inserted side.
+   *
+   * For replace suggestions under Track Changes, the host may return a range that
+   * still spans both the inserted/current text and the deleted/original text. A
+   * safe annotation range must expose the expected current text while exposing no
+   * original reviewed text.
+   */
+  private async isCurrentOnlyReviewedRange(
+    context: Word.RequestContext,
+    candidate: Word.Range,
+    expectedCurrentText: string,
+  ): Promise<boolean> {
+    const reviewedText = await this.readReviewedText(context, candidate);
+
+    return (
+      reviewedText.current === expectedCurrentText &&
+      reviewedText.original.length === 0
+    );
+  }
+
+  /**
+   * Re-locates the current inserted side for replace suggestions.
+   *
+   * Office.js only guarantees that `insertText(..., replace)` returns a `Range`;
+   * it does NOT guarantee that the returned range is already isolated to the
+   * inserted/current side while Track Changes is on. When Word returns a hybrid
+   * replace span, annotating that span directly can wrap both semantic sides and
+   * create the duplicated/overlapped artifacts reported by QA.
+   */
+  private async resolveReplaceAnnotationRange(
+    context: Word.RequestContext,
+    mutationRange: Word.Range,
+  ): Promise<Word.Range | null> {
+    const expectedCurrentText = this.suggestion.suggestedText ?? "";
+    const reviewedMutationRange = await this.readReviewedText(
+      context,
+      mutationRange,
+    );
+
+    if (
+      reviewedMutationRange.current === expectedCurrentText &&
+      reviewedMutationRange.original.length === 0
+    ) {
+      return mutationRange;
+    }
+
+    const directCandidate = await this.textLocator.locate({
+      context,
+      container: mutationRange as unknown as WordSearchContainer,
+      searchText: expectedCurrentText,
+    });
+
+    if (
+      directCandidate &&
+      (await this.isCurrentOnlyReviewedRange(
+        context,
+        directCandidate,
+        expectedCurrentText,
+      ))
+    ) {
+      return directCandidate;
+    }
+
+    const paragraphRange = mutationRange.paragraphs.getFirst().getRange("Whole");
+    const paragraphCandidate = await this.textLocator.locate({
+      context,
+      container: paragraphRange as unknown as WordSearchContainer,
+      searchText: expectedCurrentText,
+    });
+
+    if (
+      paragraphCandidate &&
+      (await this.isCurrentOnlyReviewedRange(
+        context,
+        paragraphCandidate,
+        expectedCurrentText,
+      ))
+    ) {
+      return paragraphCandidate;
+    }
+
+    console.warn(
+      `⚠️ [ApplySuggestionCommand] "${this.id}": no se pudo aislar el rango insertado actual (current="${reviewedMutationRange.current}", original="${reviewedMutationRange.original}")`,
+    );
+
+    return null;
   }
 
   /**
@@ -506,14 +613,27 @@ export class ApplySuggestionCommand {
           Word.InsertLocation.replace,
         );
 
-        insertedRange.insertComment(
+        const annotationRange =
+          changeType === "replace"
+            ? await this.resolveReplaceAnnotationRange(context, insertedRange)
+            : insertedRange;
+
+        if (!annotationRange) {
+          return {
+            success: false,
+            commandId: this.id,
+            error: "No se pudo aislar el texto insertado de la sugerencia",
+          };
+        }
+
+        annotationRange.insertComment(
           buildStylisticCommentContent(
             this.suggestion.category,
             this.suggestion.justification,
           ),
         );
 
-        const cc = insertedRange.insertContentControl();
+        const cc = annotationRange.insertContentControl();
         cc.tag = buildSuggestionTag(this.suggestion);
         cc.title = buildContentControlTitle(this.suggestion, changeType);
         cc.appearance = "Hidden";

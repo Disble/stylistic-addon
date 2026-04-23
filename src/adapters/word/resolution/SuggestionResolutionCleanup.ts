@@ -1,4 +1,3 @@
-import type { SuggestionResolutionWarning } from "../../../domain/types";
 import type { ColocatedCommentContext } from "./ResolutionContext";
 
 /** Owns cleanup policy after tracked changes were already resolved. */
@@ -14,11 +13,20 @@ export class SuggestionResolutionCleanup {
     colocatedComment: ColocatedCommentContext | null,
   ): Promise<boolean> {
     if (!colocatedComment) {
+      console.log(
+        `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=missing`,
+      );
       return false;
     }
 
+    console.log(
+      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-start`,
+    );
     colocatedComment.comment.delete();
     await context.sync();
+    console.log(
+      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-done`,
+    );
     return true;
   }
 
@@ -26,55 +34,22 @@ export class SuggestionResolutionCleanup {
   async deleteLocatedStylisticCommentAfterResolution(
     context: Word.RequestContext,
     colocatedComment: ColocatedCommentContext | null,
-  ): Promise<{ deleted: boolean; warning?: SuggestionResolutionWarning }> {
-    try {
-      const deleted = await this.deleteLocatedStylisticComment(
-        context,
-        colocatedComment,
-      );
-      return { deleted };
-    } catch (deleteError) {
-      const message =
-        deleteError instanceof Error
-          ? deleteError.message
-          : String(deleteError);
-
-      console.warn(
-        `⚠️ [SuggestionResolutionCleanup] "${this.suggestionId}": ${this.action} comment cleanup failed after semantic resolution (will be cleaned up later): ${message}`,
-      );
-      return {
-        deleted: false,
-        warning: {
-          code: "cleanup-failed",
-          phase: "cleanup",
-          message,
-        },
-      };
-    }
+  ): Promise<boolean> {
+    return this.deleteLocatedStylisticComment(context, colocatedComment);
   }
 
-  /** Deletes the resolved CC anchor, tolerating reject-side invalidation. */
+  /** Deletes the resolved CC anchor as part of atomic cleanup. */
   async cleanupResolvedSuggestionAnchor(
     context: Word.RequestContext,
     cc: Word.ContentControl,
-  ): Promise<SuggestionResolutionWarning | undefined> {
-    try {
-      cc.delete(true);
-      await context.sync();
-    } catch (cleanupError) {
-      const message =
-        cleanupError instanceof Error
-          ? cleanupError.message
-          : String(cleanupError);
-
-      console.warn(
-        `⚠️ [SuggestionResolutionCleanup] "${this.suggestionId}": ${this.action} anchor cleanup skipped after semantic resolution: ${message}`,
-      );
-      return {
-        code: "cleanup-failed",
-        phase: "cleanup",
-        message,
-      };
-    }
+  ): Promise<void> {
+    console.log(
+      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-start tag="${cc.tag}"`,
+    );
+    cc.delete(true);
+    await context.sync();
+    console.log(
+      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-done tag="${cc.tag}"`,
+    );
   }
 }

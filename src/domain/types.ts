@@ -662,28 +662,12 @@ export type SuggestionState =
 
 /** Ordered phases emitted by the resolution workflow for observability. */
 export type ResolutionPhase =
+  | "locate"
   | "observe-before"
   | "execute"
-  | "reconcile"
-  | "cleanup"
+  | "cleanup-comment"
+  | "cleanup-anchor"
   | "inspect-after";
-
-/** Stable warning codes surfaced after semantic success with degraded housekeeping. */
-export type SuggestionResolutionWarningCode =
-  | "cleanup-failed"
-  | "inspection-failed"
-  | "reconciled-after-error"
-  | "telemetry-failed";
-
-/** Warning attached to a terminal resolution that completed with degraded visibility. */
-export interface SuggestionResolutionWarning {
-  /** Stable code used by UI and telemetry. */
-  code: SuggestionResolutionWarningCode;
-  /** Workflow phase that emitted the warning. */
-  phase: ResolutionPhase;
-  /** Human-readable detail for logs and UI notes. */
-  message: string;
-}
 
 /** Execution summary for tracked-change resolution attempts. */
 export interface ResolutionExecutionReport {
@@ -738,8 +722,8 @@ export interface SuggestionActionResult {
   documentState: import("./review/DocumentReviewStateMachine").DocumentReviewUiState;
   /** Human-readable error message when status is "error" or "not-found". */
   error?: string;
-  /** Best-effort warnings captured after semantic success or degraded visibility. */
-  warnings?: SuggestionResolutionWarning[];
+  /** Internal execute phase that failed, when the workflow could classify it. */
+  errorPhase?: ResolutionPhase;
   /** Execution summary emitted by tracked-change resolution, when available. */
   executionReport?: ResolutionExecutionReport;
 }

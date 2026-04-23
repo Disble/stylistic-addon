@@ -2,10 +2,7 @@ import {
   DocumentReviewStateMachine,
   type DocumentReviewUiState,
 } from "../../../domain/review/DocumentReviewStateMachine";
-import type {
-  DocumentReviewState,
-  SuggestionResolutionWarning,
-} from "../../../domain/types";
+import type { DocumentReviewState } from "../../../domain/types";
 import { STYLISTIC_TAG_PREFIX } from "../../../infrastructure/config";
 
 /** Creates document-derived review snapshots and reuses them safely. */
@@ -51,32 +48,10 @@ export class DocumentReviewStateInspector {
     );
   }
 
-  /** Reads pending review state after resolution, tolerating reject-side invalidation. */
+  /** Reads pending review state after resolution and propagates host failures. */
   async inspectAfterResolution(
     context: Word.RequestContext,
-    pendingBefore: DocumentReviewState,
-    action: "accept" | "reject",
-    suggestionId: string,
-  ): Promise<{
-    pendingAfter: DocumentReviewState;
-    warning?: SuggestionResolutionWarning;
-  }> {
-    try {
-      return { pendingAfter: await this.inspect(context) };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      console.warn(
-        `⚠️ [DocumentReviewStateInspector] "${suggestionId}": ${action} post-resolution state inspection failed, falling back to pendingBefore snapshot: ${message}`,
-      );
-      return {
-        pendingAfter: pendingBefore,
-        warning: {
-          code: "inspection-failed",
-          phase: "inspect-after",
-          message,
-        },
-      };
-    }
+  ): Promise<DocumentReviewState> {
+    return this.inspect(context);
   }
 }

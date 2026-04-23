@@ -90,6 +90,7 @@ describe("domain types (compile-time checks)", () => {
       },
       documentState: "idle",
       error: "something went wrong",
+      errorPhase: "execute",
     };
     const applyResult: ApplySuggestionsResult = {
       successCount: 1,

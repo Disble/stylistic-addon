@@ -3,6 +3,10 @@ import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";
 import { CheckConnectionHandler } from "./CheckConnectionHandler";
 
+vi.mock("../../../infrastructure/config", () => ({
+  MASTRA_POLL_BYPASS_ENABLED: false,
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -84,6 +88,23 @@ describe("CheckConnectionHandler", () => {
 
       expect(ctx.analysisPort.checkConnection).toHaveBeenCalledOnce();
     });
+
+    it("skips the backend connectivity check entirely when the bypass is enabled", async () => {
+      vi.doMock("../../../infrastructure/config", () => ({
+        MASTRA_POLL_BYPASS_ENABLED: true,
+      }));
+      vi.resetModules();
+      const { CheckConnectionHandler: BypassCheckConnectionHandler } = await import(
+        "./CheckConnectionHandler"
+      );
+      const bypassHandler = new BypassCheckConnectionHandler();
+      const ctx = makeContext();
+
+      await bypassHandler.handle(ctx, next);
+
+      expect(ctx.analysisPort.checkConnection).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledOnce();
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -152,6 +173,28 @@ describe("CheckConnectionHandler", () => {
 
       await handler.handle(ctx, next);
 
+      expect(onPhaseComplete).toHaveBeenCalledWith("connecting");
+    });
+
+    it("does not emit phaseStart('connecting') when the bypass is enabled", async () => {
+      vi.doMock("../../../infrastructure/config", () => ({
+        MASTRA_POLL_BYPASS_ENABLED: true,
+      }));
+      vi.resetModules();
+      const { CheckConnectionHandler: BypassCheckConnectionHandler } = await import(
+        "./CheckConnectionHandler"
+      );
+      const bypassHandler = new BypassCheckConnectionHandler();
+      const emitter = new PipelineEventEmitter();
+      const onPhaseStart = vi.fn();
+      const onPhaseComplete = vi.fn();
+      emitter.subscribe({ onPhaseStart, onPhaseComplete });
+
+      const ctx = makeContext({ emitter });
+
+      await bypassHandler.handle(ctx, next);
+
+      expect(onPhaseStart).not.toHaveBeenCalled();
       expect(onPhaseComplete).toHaveBeenCalledWith("connecting");
     });
 

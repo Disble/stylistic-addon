@@ -177,6 +177,8 @@ export function makeResolveSuggestionContext({
   bodyTCRelations = [] as string[],
   comments = [] as MockComment[],
   commentRangeTCItems = [] as MockTrackedChange[][],
+  deletedSideText,
+  deletedSideRangeTCItems = [] as MockTrackedChange[],
   operationalAnchorText,
   operationalAnchorRangeTCItems = [] as MockTrackedChange[],
 }: {
@@ -195,17 +197,88 @@ export function makeResolveSuggestionContext({
   bodyTCRelations?: string[];
   comments?: MockComment[];
   commentRangeTCItems?: MockTrackedChange[][];
+  deletedSideText?: string;
+  deletedSideRangeTCItems?: MockTrackedChange[];
   operationalAnchorText?: string;
   operationalAnchorRangeTCItems?: MockTrackedChange[];
 }): ResolveSuggestionContext {
+  const mutableSpanTCItems = [...spanTCItems];
+  const mutableRangeTCItems = [...rangeTCItems];
+  const mutableBodyTCItems = [...bodyTCItems];
+  const mutableDeletedSideRangeTCItems = [...deletedSideRangeTCItems];
+  const mutableOperationalAnchorRangeTCItems = [...operationalAnchorRangeTCItems];
+  const mutableCommentRangeTCItems = commentRangeTCItems.map((items) => [...items]);
+
+  const trackedChangeCollections = [
+    mutableSpanTCItems,
+    mutableRangeTCItems,
+    mutableBodyTCItems,
+    mutableDeletedSideRangeTCItems,
+    mutableOperationalAnchorRangeTCItems,
+    ...mutableCommentRangeTCItems,
+  ];
+
+  const removeTrackedChangesBySemanticSide = (trackedChange: MockTrackedChange) => {
+    const trackedChangeType = trackedChange.type;
+    if (!trackedChangeType) {
+      return;
+    }
+
+    for (const collection of trackedChangeCollections) {
+      for (let index = collection.length - 1; index >= 0; index -= 1) {
+        if (collection[index]?.type === trackedChangeType) {
+          collection.splice(index, 1);
+        }
+      }
+    }
+  };
+
+  const wrappedTrackedChanges = new WeakSet<object>();
+  const wrapTrackedChangeMutation = (trackedChange: MockTrackedChange) => {
+    if (wrappedTrackedChanges.has(trackedChange)) {
+      return trackedChange;
+    }
+
+    const originalAccept = trackedChange.accept;
+    const originalReject = trackedChange.reject;
+
+    if (originalAccept) {
+      trackedChange.accept = vi.fn(() => {
+        const result = originalAccept();
+        removeTrackedChangesBySemanticSide(trackedChange);
+        return result;
+      });
+    }
+
+    if (originalReject) {
+      trackedChange.reject = vi.fn(() => {
+        const result = originalReject();
+        removeTrackedChangesBySemanticSide(trackedChange);
+        return result;
+      });
+    }
+
+    wrappedTrackedChanges.add(trackedChange);
+    return trackedChange;
+  };
+
+  for (const collection of trackedChangeCollections) {
+    for (const trackedChange of collection) {
+      wrapTrackedChangeMutation(trackedChange);
+    }
+  }
+
   const ccTagParts = ccTag.split(":");
   const inferredSuggestionId =
     ccTagParts[ccTagParts.length - 1] ?? "s-1";
-  const spanTCCollection = { items: spanTCItems, load: vi.fn() };
-  const rangeTCCollection = { items: rangeTCItems, load: vi.fn() };
-  const bodyTCCollection = { items: bodyTCItems, load: vi.fn() };
+  const rangeTCCollection = { items: mutableRangeTCItems, load: vi.fn() };
+  const bodyTCCollection = { items: mutableBodyTCItems, load: vi.fn() };
   const operationalAnchorRangeTCCollection = {
-    items: operationalAnchorRangeTCItems,
+    items: mutableOperationalAnchorRangeTCItems,
+    load: vi.fn(),
+  };
+  const deletedSideRangeTCCollection = {
+    items: mutableDeletedSideRangeTCItems,
     load: vi.fn(),
   };
 
@@ -216,12 +289,31 @@ export function makeResolveSuggestionContext({
     rangeTCItems?: MockTrackedChange[];
   }) => {
     const thisTag = options?.tag ?? ccTag;
+    const thisSpanTCItems = options?.spanTCItems ?? mutableSpanTCItems;
+    const thisRangeTCItems = options?.rangeTCItems ?? mutableRangeTCItems;
+
+    if (!trackedChangeCollections.includes(thisSpanTCItems)) {
+      trackedChangeCollections.push(thisSpanTCItems);
+    }
+
+    if (!trackedChangeCollections.includes(thisRangeTCItems)) {
+      trackedChangeCollections.push(thisRangeTCItems);
+    }
+
+    for (const trackedChange of thisSpanTCItems) {
+      wrapTrackedChangeMutation(trackedChange);
+    }
+
+    for (const trackedChange of thisRangeTCItems) {
+      wrapTrackedChangeMutation(trackedChange);
+    }
+
     const thisSpanTCCollection = {
-      items: options?.spanTCItems ?? spanTCItems,
+      items: thisSpanTCItems,
       load: vi.fn(),
     };
     const thisRangeTCCollection = {
-      items: options?.rangeTCItems ?? rangeTCItems,
+      items: thisRangeTCItems,
       load: vi.fn(),
     };
     const thisCcRange: MockRangeWithTrackedChanges = {
@@ -262,7 +354,7 @@ export function makeResolveSuggestionContext({
   }
 
   const commentRangeTCCollections = comments.map((_, index) => ({
-    items: commentRangeTCItems[index] ?? [],
+    items: mutableCommentRangeTCItems[index] ?? [],
     load: vi.fn(),
   }));
 
@@ -297,11 +389,25 @@ export function makeResolveSuggestionContext({
     getTrackedChanges: vi.fn(() => operationalAnchorRangeTCCollection),
   };
 
+  const deletedSideRange = {
+    text: deletedSideText ?? "",
+    load: vi.fn(),
+    search: vi.fn(() => ({ items: [], load: vi.fn() })),
+    getTrackedChanges: vi.fn(() => deletedSideRangeTCCollection),
+  };
+
   const bodySearch = vi.fn((searchText: string) => ({
-    items:
-      operationalAnchorText && searchText === operationalAnchorText
-        ? [operationalAnchorRange]
-        : [],
+    items: (() => {
+      if (deletedSideText && searchText === deletedSideText) {
+        return [deletedSideRange];
+      }
+
+      if (operationalAnchorText && searchText === operationalAnchorText) {
+        return [operationalAnchorRange];
+      }
+
+      return [];
+    })(),
     load: vi.fn(),
   }));
 

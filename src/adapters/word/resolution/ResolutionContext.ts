@@ -22,6 +22,30 @@ export type ReplaceObservationContext = {
   identity?: ReplaceSuggestionIdentity;
   trackedChanges: Word.TrackedChange[];
   observationStatus: SuggestionObservationStatus;
+  debugMetadata?: ResolutionObservationDebugMetadata;
+};
+
+/** Primitive debug metadata captured during observation for telemetry/logging. */
+export type ResolutionObservationDebugMetadata = {
+  selectedCcTag?: string;
+  selectedCcTitleKind?: string;
+  selectedCommentFound?: boolean;
+  trackedChangesObserved: number;
+  trackedChangeTypes: string;
+  selectedDeletedSource?: string;
+  selectedAddedSource?: string;
+  selectedSemanticSideSource?: string;
+  observationStatus?: SuggestionObservationStatus;
+  identityVersion?: string;
+  ccTrackedChangesCount?: number;
+  ccRangeTrackedChangesCount?: number;
+  bodyTrackedChangesCount?: number;
+  bodyRelatedTrackedChangesCount?: number;
+  deletedSideTrackedChangesCount?: number;
+  deletedSideLocatorFound?: boolean;
+  operationalAnchorTrackedChangesCount?: number;
+  operationalAnchorFound?: boolean;
+  commentTrackedChangesCount?: number;
 };
 
 /** Normalized resolution observation returned to the command orchestrator. */
@@ -30,6 +54,7 @@ export type ResolutionObservation = {
   selectedComment: ColocatedCommentContext | null;
   trackedChanges: Word.TrackedChange[];
   observationStatus: SuggestionObservationStatus;
+  debugMetadata?: ResolutionObservationDebugMetadata;
 };
 
 /** Result of locating candidate artifacts for one suggestion. */

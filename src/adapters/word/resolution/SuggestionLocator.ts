@@ -3,6 +3,7 @@ import { OVERLAPPING_RELATIONS } from "../cleanup/CommentCleanup";
 import {
   isValidCompoundReplaceIdentity,
   parseReplaceIdentityTitle,
+  scoreCompoundReplaceIdentityMatch,
 } from "../ReplaceIdentityParser";
 import { isStylisticComment } from "../StylisticCommentBuilder";
 import type {
@@ -10,9 +11,104 @@ import type {
   LocatedSuggestionArtifacts,
 } from "./ResolutionContext";
 
+type ResolutionCandidateDebugEntry = {
+  candidateIndex: number;
+  wasSelected: boolean;
+  selectionReason: "valid-compound-v2" | "fallback-first-candidate" | "not-selected";
+  tag: string;
+  titleKind: "compound-v2" | "legacy-or-empty";
+  rawTitle: string;
+  score: number;
+  validCompoundV2: boolean;
+  identityVersion: string | null;
+  identitySuggestionId: string | null;
+  insertedSideValue: string | null;
+  deletedSideValue: string | null;
+  anchorValue: string | null;
+};
+
 /** Finds the right Word artifacts for one resolution workflow. */
 export class SuggestionLocator {
   constructor(private readonly suggestion: Suggestion) {}
+
+  /** Builds one structured debug entry so duplicate CC candidates can be compared. */
+  private buildCandidateDebugEntry(
+    cc: Word.ContentControl,
+    candidateIndex: number,
+    selectedCc: Word.ContentControl | null,
+  ): ResolutionCandidateDebugEntry {
+    const identity = parseReplaceIdentityTitle(cc.title);
+    const validCompoundV2 = isValidCompoundReplaceIdentity(
+      identity,
+      this.suggestion,
+    );
+    const selectedBecauseCompoundV2 = selectedCc === cc && validCompoundV2;
+    const selectedAsFallback = selectedCc === cc && !validCompoundV2;
+
+    return {
+      candidateIndex,
+      wasSelected: selectedCc === cc,
+      selectionReason: selectedBecauseCompoundV2
+        ? "valid-compound-v2"
+        : selectedAsFallback
+          ? "fallback-first-candidate"
+          : "not-selected",
+      tag: cc.tag,
+      titleKind: identity?.version === "compound-v2" ? "compound-v2" : "legacy-or-empty",
+      rawTitle: cc.title ?? "",
+      score: scoreCompoundReplaceIdentityMatch(identity, this.suggestion),
+      validCompoundV2,
+      identityVersion: identity?.version ?? null,
+      identitySuggestionId: identity?.suggestionId ?? null,
+      insertedSideValue: identity?.insertedSideRef?.value ?? null,
+      deletedSideValue: identity?.deletedSideRef?.value ?? null,
+      anchorValue: identity?.anchorRef?.value ?? null,
+    };
+  }
+
+  /** Logs all candidate details needed to tell a fresh CC from stale duplicates. */
+  private logResolutionCandidateDiagnostics(
+    rankedCandidates: Word.ContentControl[],
+    selectedCc: Word.ContentControl | null,
+  ): void {
+    const diagnostics = rankedCandidates.map((cc, index) =>
+      this.buildCandidateDebugEntry(cc, index, selectedCc),
+    );
+
+    console.log(
+      `🧾 [SuggestionLocator] candidate diagnostics for suggestionId="${this.suggestion.id}"`,
+      diagnostics,
+    );
+
+    const indistinguishableCandidates = diagnostics.filter((candidate) => {
+      const comparableKey = JSON.stringify({
+        tag: candidate.tag,
+        rawTitle: candidate.rawTitle,
+        score: candidate.score,
+        validCompoundV2: candidate.validCompoundV2,
+      });
+
+      return (
+        diagnostics.filter((otherCandidate) => {
+          const otherComparableKey = JSON.stringify({
+            tag: otherCandidate.tag,
+            rawTitle: otherCandidate.rawTitle,
+            score: otherCandidate.score,
+            validCompoundV2: otherCandidate.validCompoundV2,
+          });
+
+          return comparableKey === otherComparableKey;
+        }).length > 1
+      );
+    });
+
+    if (indistinguishableCandidates.length > 1) {
+      console.warn(
+        `⚠️ [SuggestionLocator] indistinguishable duplicate candidates for suggestionId="${this.suggestion.id}"`,
+        indistinguishableCandidates,
+      );
+    }
+  }
 
   /** Finds, ranks, and selects content-control candidates for one suggestion. */
   async locateResolutionArtifacts(
@@ -30,6 +126,7 @@ export class SuggestionLocator {
 
     const rankedCandidates = this.rankResolutionContentControls(result.items);
     const selectedCc = this.selectResolutionContentControl(rankedCandidates);
+    this.logResolutionCandidateDiagnostics(rankedCandidates, selectedCc);
 
     return { rankedCandidates, selectedCc };
   }
@@ -55,16 +152,16 @@ export class SuggestionLocator {
     ccs: Word.ContentControl[],
   ): Word.ContentControl[] {
     return [...ccs].sort((left, right) => {
-      const leftValid = isValidCompoundReplaceIdentity(
+      const leftScore = scoreCompoundReplaceIdentityMatch(
         parseReplaceIdentityTitle(left.title),
         this.suggestion,
       );
-      const rightValid = isValidCompoundReplaceIdentity(
+      const rightScore = scoreCompoundReplaceIdentityMatch(
         parseReplaceIdentityTitle(right.title),
         this.suggestion,
       );
 
-      return Number(rightValid) - Number(leftValid);
+      return rightScore - leftScore;
     });
   }
 

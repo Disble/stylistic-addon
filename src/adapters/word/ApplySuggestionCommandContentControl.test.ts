@@ -191,6 +191,80 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     });
   });
 
+  it("re-locates the current inserted side before annotating a replace suggestion", async () => {
+    const insertedHybridRange = createRange({
+      text: "texto sugerido texto original",
+      reviewedCurrentText: "texto sugerido",
+      reviewedOriginalText: "texto original",
+      paragraphText: "Antes texto sugerido texto original y después.",
+    });
+    const isolatedInsertedRange = createRange({
+      text: "texto sugerido",
+      reviewedCurrentText: "texto sugerido",
+      reviewedOriginalText: "",
+      paragraphText: "Antes texto sugerido texto original y después.",
+    });
+    insertedHybridRange.search = vi
+      .fn()
+      .mockReturnValueOnce({ items: [isolatedInsertedRange], load: vi.fn() });
+
+    installWordContext({
+      insertedRange: {
+        text: insertedHybridRange.text,
+        reviewedCurrentText: "texto sugerido",
+        reviewedOriginalText: "texto original",
+        searchSequence: [[isolatedInsertedRange]],
+        paragraphText: "Antes texto sugerido texto original y después.",
+      },
+    });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "replace-rerange-1",
+        anchor: "texto original",
+        suggestedText: "texto sugerido",
+        context: "Contexto con texto original.",
+        type: "track-change",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toMatchObject({ success: true, commandId: "replace-rerange-1" });
+    expect(isolatedInsertedRange.insertComment).toHaveBeenCalledWith(
+      "[Estilo]\nMejora la claridad",
+    );
+    expect(isolatedInsertedRange.insertContentControl).toHaveBeenCalledOnce();
+  });
+
+  it("fails safely when it cannot isolate the current inserted side for a replace suggestion", async () => {
+    installWordContext({
+      insertedRange: {
+        text: "texto sugerido texto original",
+        reviewedCurrentText: "texto sugerido",
+        reviewedOriginalText: "texto original",
+        searchSequence: [[]],
+        paragraphText: "Antes texto sugerido texto original y después.",
+      },
+    });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "replace-rerange-fail-1",
+        anchor: "texto original",
+        suggestedText: "texto sugerido",
+        context: "Contexto con texto original.",
+        type: "track-change",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({
+      success: false,
+      commandId: "replace-rerange-fail-1",
+      error: "No se pudo aislar el texto insertado de la sugerencia",
+    });
+  });
+
   it("keeps legacy anchor titles for comment-only suggestions", async () => {
     const env = installWordContext();
 

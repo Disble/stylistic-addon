@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  getDeletedSideLocator,
+  getOperationalAnchorLocator,
   isValidCompoundReplaceIdentity,
   parseReplaceIdentityTitle,
+  scoreCompoundReplaceIdentityMatch,
 } from "./ReplaceIdentityParser";
 import {
   makeCompoundV2Title,
@@ -68,6 +71,24 @@ describe("ReplaceIdentityParser", () => {
     expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(true);
   });
 
+  it("accepts identities whose deleted-side and anchor values drift while the inserted-side tag stays valid", () => {
+    const suggestion = makeSuggestion({
+      id: "s-42",
+      anchor: "texto original",
+      context: "Contexto con texto original.",
+    });
+    const identity = parseReplaceIdentityTitle(
+      makeCompoundV2Title({
+        suggestionId: suggestion.id,
+        insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
+        deletedValue: "texto original con drift del host",
+        anchorValue: "Contexto más largo rehidratado por Word.",
+      }),
+    );
+
+    expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(true);
+  });
+
   it("rejects identities whose inserted-side tag does not match the suggestion", () => {
     const suggestion = makeSuggestion({ id: "s-42" });
     const identity = parseReplaceIdentityTitle(
@@ -80,7 +101,7 @@ describe("ReplaceIdentityParser", () => {
     expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(false);
   });
 
-  it("rejects identities whose deleted-side or anchor values drift from the suggestion", () => {
+  it("rejects identities whose deleted-side or anchor metadata is structurally empty", () => {
     const suggestion = makeSuggestion({
       id: "s-42",
       anchor: "texto original",
@@ -89,11 +110,61 @@ describe("ReplaceIdentityParser", () => {
     const identity = parseReplaceIdentityTitle(
       makeCompoundV2Title({
         suggestionId: suggestion.id,
-        deletedValue: "texto distinto",
-        anchorValue: "Contexto distinto.",
+        deletedValue: "",
+        anchorValue: "",
       }),
     );
 
     expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(false);
+  });
+
+  it("scores exact deleted-side and anchor matches above structurally valid drifted identities", () => {
+    const suggestion = makeSuggestion({
+      id: "s-42",
+      anchor: "texto original",
+      context: "Contexto con texto original.",
+    });
+    const exactIdentity = parseReplaceIdentityTitle(
+      makeCompoundV2Title({
+        suggestionId: suggestion.id,
+        insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
+        deletedValue: suggestion.anchor,
+        anchorValue: suggestion.context,
+      }),
+    );
+    const driftedIdentity = parseReplaceIdentityTitle(
+      makeCompoundV2Title({
+        suggestionId: suggestion.id,
+        insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
+        deletedValue: "texto original con drift del host",
+        anchorValue: "Contexto más largo rehidratado por Word.",
+      }),
+    );
+
+    expect(scoreCompoundReplaceIdentityMatch(exactIdentity, suggestion)).toBe(3);
+    expect(scoreCompoundReplaceIdentityMatch(driftedIdentity, suggestion)).toBe(1);
+  });
+
+  it("returns explicit deleted-side and operational-anchor locators for valid identities", () => {
+    const suggestion = makeSuggestion({
+      id: "s-42",
+      anchor: "texto original",
+      context: "Contexto con texto original.",
+    });
+    const identity = parseReplaceIdentityTitle(
+      makeCompoundV2Title({
+        suggestionId: suggestion.id,
+        insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
+        deletedValue: "texto borrado persistido",
+        anchorValue: "Contexto operativo persistido.",
+      }),
+    );
+
+    expect(getDeletedSideLocator(identity, suggestion)).toBe(
+      "texto borrado persistido",
+    );
+    expect(getOperationalAnchorLocator(identity, suggestion)).toBe(
+      "Contexto operativo persistido.",
+    );
   });
 });

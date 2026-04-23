@@ -25,7 +25,12 @@ import type {
   WorkflowOutput,
   WorkflowSuggestion,
 } from "../../domain/types";
-import { MASTRA_BASE_URL, WORKFLOW_ID } from "../../infrastructure/config";
+import {
+  MASTRA_BASE_URL,
+  MASTRA_POLL_BYPASS_ENABLED,
+  WORKFLOW_ID,
+} from "../../infrastructure/config";
+import { MOCK_MASTRA_POLL_OUTPUT } from "./MockMastraPollOutput";
 
 /** Singleton Mastra client instance, reused across all calls. */
 const client = new MastraClient({ baseUrl: MASTRA_BASE_URL });
@@ -36,6 +41,13 @@ export class MastraAdapter implements IAnalysisPort {
    * workflow is registered. Never throws — returns `false` on any error.
    */
   async checkConnection(): Promise<boolean> {
+    if (MASTRA_POLL_BYPASS_ENABLED) {
+      console.log(
+        "🧪 [MastraAdapter] Bypass activo: se omite checkConnection real y se asume conexión OK",
+      );
+      return true;
+    }
+
     try {
       console.log(
         `🔌 [MastraAdapter] Verificando → ${MASTRA_BASE_URL}, workflow: "${WORKFLOW_ID}"`,
@@ -60,6 +72,10 @@ export class MastraAdapter implements IAnalysisPort {
     genero: string,
     autorSlug: string,
   ): Promise<ChunkSubmitResult> {
+    if (MASTRA_POLL_BYPASS_ENABLED) {
+      return this.buildBypassedSubmitResult(chunk.index);
+    }
+
     const inputData: WorkflowInput = {
       text: chunk.text,
       genero: genero as WorkflowInput["genero"],
@@ -112,6 +128,10 @@ export class MastraAdapter implements IAnalysisPort {
     console.log(
       `🔄 [MastraAdapter] Polling chunk #${chunkIndex} runId "${runId}"`,
     );
+
+    if (MASTRA_POLL_BYPASS_ENABLED) {
+      return this.buildBypassedPollResult(chunkIndex, runId);
+    }
 
     const workflow = client.getWorkflow(WORKFLOW_ID);
     const state = await workflow.runById(runId, {
@@ -255,6 +275,40 @@ export class MastraAdapter implements IAnalysisPort {
       suggestions: result.suggestions,
       warnings: result.warnings,
     } as WorkflowOutput;
+  }
+
+  /** Builds a deterministic success result for development poll bypass mode. */
+  private buildBypassedPollResult(
+    chunkIndex: number,
+    runId: string,
+  ): ChunkPollResult {
+    const suggestions = this.mapSuggestions(
+      MOCK_MASTRA_POLL_OUTPUT.suggestions,
+      chunkIndex,
+    );
+    console.log(
+      `🧪 [MastraAdapter] Poll bypass activo para chunk #${chunkIndex} → ${suggestions.length} sugerencias mockeadas`,
+    );
+
+    return {
+      chunkIndex,
+      runId,
+      status: "success",
+      suggestions,
+    };
+  }
+
+  /** Builds a deterministic submit result for development bypass mode. */
+  private buildBypassedSubmitResult(chunkIndex: number): ChunkSubmitResult {
+    const runId = `bypass-run-${chunkIndex}`;
+    console.log(
+      `🧪 [MastraAdapter] Submit bypass activo para chunk #${chunkIndex} → runId "${runId}"`,
+    );
+
+    return {
+      chunkIndex,
+      runId,
+    };
   }
 
   private isNonTerminalStatus(status: string): status is ChunkAnalysisStatus {

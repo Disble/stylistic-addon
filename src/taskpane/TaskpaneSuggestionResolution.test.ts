@@ -302,7 +302,7 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.textContent).not.toContain("(aplicación falló)");
   });
 
-  it("keeps terminal accepted UI when semantic reconciliation returns accepted with warnings", async () => {
+  it("keeps terminal accepted UI when the adapter returns accepted", async () => {
     taskpaneMocks.acceptSuggestion.mockResolvedValue({
       status: "accepted",
       trackedChangesAffected: 1,
@@ -313,13 +313,6 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "pending-review",
-      warnings: [
-        {
-          code: "cleanup-failed",
-          phase: "cleanup",
-          message: "ItemNotFound after semantic accept",
-        },
-      ],
       feedbackStatus: "sent",
       taskpaneState: {
         documentState: "pending-review",
@@ -345,53 +338,6 @@ describe("taskpane suggestion resolution guardrails", () => {
     expect(li.querySelector(".result-actions")).toBeNull();
     expect(li.textContent).not.toContain("(aplicación falló)");
     expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledWith(suggestion);
-  });
-
-  it("renders a terminal warning note for accepted suggestions with degraded observability", async () => {
-    taskpaneMocks.acceptSuggestion.mockResolvedValue({
-      status: "accepted",
-      trackedChangesAffected: 2,
-      commentDeleted: true,
-      pendingAfter: {
-        pendingStylisticArtifacts: 1,
-        hasPendingStylisticArtifacts: true,
-        trackChangesActive: true,
-      },
-      documentState: "pending-review",
-      warnings: [
-        {
-          code: "telemetry-failed",
-          phase: "execute",
-          message: "telemetry sink offline",
-        },
-      ],
-      feedbackStatus: "sent",
-      taskpaneState: {
-        documentState: "pending-review",
-        showDisableTrackChangesCta: false,
-        showCleanupSection: false,
-      },
-    });
-
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({
-      id: "s-accept-telemetry-warning",
-      anchor: "texto original",
-      suggestedText: "texto sugerido",
-    });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
-
-    acceptBtn.click();
-    await flushTaskpaneWork();
-
-    expect(li.classList.contains("result-accepted")).toBe(true);
-    expect(li.querySelector(".result-actions")).toBeNull();
-    expect(
-      li.querySelector(".result-resolution-warning-note")?.textContent,
-    ).toBe("(resuelta con observabilidad degradada)");
-    expect(li.textContent).not.toContain("(aplicación falló)");
   });
 
   it("treats cc-not-found as terminal amber UI without sending feedback", async () => {
