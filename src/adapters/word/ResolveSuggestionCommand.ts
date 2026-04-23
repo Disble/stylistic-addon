@@ -1118,13 +1118,21 @@ export class ResolveSuggestionCommand {
     };
   }
 
-  /** Returns the semantic execution order for replace suggestions. */
+  /**
+   * Returns the semantic execution order for replace suggestions.
+   *
+   * For BOTH accept and reject we resolve the Deleted side first, then the
+   * Added side. Rationale: the suggestion CC wraps the Added (inserted) text.
+   * Rejecting the Added TC first in Word removes the inserted text and with
+   * it the CC, so the inter-step re-observation for the remaining Deleted
+   * side fails with `getByTag returned 0 CC candidate(s)` and the workflow
+   * reports a false "no pudo reubicar" error. Resolving the Deleted side
+   * first keeps the CC intact through the first step for both actions.
+   */
   private getReplaceSemanticOrder():
     | readonly ["Deleted", "Added"]
     | readonly ["Added", "Deleted"] {
-    return this.action === "accept"
-      ? (["Deleted", "Added"] as const)
-      : (["Added", "Deleted"] as const);
+    return ["Deleted", "Added"] as const;
   }
 
   /** Builds the terminal outcome for a replace-step failure, preserving one-shot atomic fallback. */

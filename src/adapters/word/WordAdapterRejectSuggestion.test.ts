@@ -81,7 +81,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(context._cc.delete).toHaveBeenCalledWith(true);
   });
 
-  it("rejects replace tracked changes by removing insertion before restoring deletion", async () => {
+  it("rejects replace tracked changes by restoring deletion before removing insertion", async () => {
     const suggestion = makeSuggestion({
       id: "s-ordered-reject",
       anchor: "desde allí",
@@ -127,7 +127,7 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
-    expect(callOrder).toEqual(["reject-added", "reject-deleted"]);
+    expect(callOrder).toEqual(["reject-deleted", "reject-added"]);
   });
 
   it("syncs after each replace reject step before continuing with the next semantic side", async () => {
@@ -158,7 +158,7 @@ describe("WordAdapter.rejectSuggestion", () => {
           type: "Deleted",
           accept: vi.fn(),
           reject: vi.fn(() => {
-            queuedStep = 2;
+            queuedStep = 1;
             callOrder.push("reject-deleted");
           }),
         },
@@ -167,7 +167,7 @@ describe("WordAdapter.rejectSuggestion", () => {
           type: "Added",
           accept: vi.fn(),
           reject: vi.fn(() => {
-            queuedStep = 1;
+            queuedStep = 2;
             callOrder.push("reject-added");
           }),
         },
@@ -189,9 +189,9 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
     expect(callOrder.slice(0, 4)).toEqual([
-      "reject-added",
-      "sync",
       "reject-deleted",
+      "sync",
+      "reject-added",
       "sync",
     ]);
   });
@@ -662,16 +662,13 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
-    // Full-pair resolution picks cc+ccRange+deletedSide (ccRange+bodyRelated
-    // cannot complete on its own because cc already owns the Added-main id and
-    // the body duplicate gets id-deduped out of bodyRelated). Reject runs the
-    // Added first, which clears Added-main everywhere. The inter-step
-    // re-observation for the remaining Deleted side then picks the body-
-    // proximity Deleted-stale-body proxy because bodyRelated is the primary
-    // semantic-side source for document-adjacent deletions.
+    // Deleted-first semantic order: cc-internal Deleted is deprioritized so the
+    // first step picks the deletedSide locator (tc-deleted-main). The inter-step
+    // re-observation for the remaining Added side then picks tc-added-main from
+    // the cc/ccRange scope (its body duplicate is id-deduped out of bodyRelated).
     expect(callOrder).toEqual([
+      "reject-deleted-main",
       "reject-added-main",
-      "reject-deleted-stale-body",
     ]);
   });
 
@@ -744,9 +741,10 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
-    // ccRange+bodyRelated wins: ccRange Added + bodyRelated Deleted. The
-    // cc-internal Deleted is skipped (cc.getTrackedChanges is deprioritized).
-    expect(callOrder).toEqual(["reject-added-range", "reject-deleted-body"]);
+    // Deleted-first semantic order: bodyRelated Deleted is rejected first, then
+    // ccRange Added. The cc-internal Deleted is skipped (cc.getTrackedChanges is
+    // deprioritized).
+    expect(callOrder).toEqual(["reject-deleted-body", "reject-added-range"]);
   });
 
   it("rejects replace suggestions when the deleted-side locator exposes the missing deleted tracked change", async () => {
@@ -985,16 +983,16 @@ describe("WordAdapter.rejectSuggestion", () => {
       comments: [],
     });
 
-    const rejectAddedSpy = vi.fn(() => {
+    const rejectDeletedSpy = vi.fn(() => {
       resolutionPhase = 1;
-      context._cc.delete.mockImplementation(() => {
-        throw new Error("GeneralException");
-      });
     });
 
     let resolutionPhase = 0;
-    const rejectDeletedSpy = vi.fn(() => {
+    const rejectAddedSpy = vi.fn(() => {
       resolutionPhase = 2;
+      context._cc.delete.mockImplementation(() => {
+        throw new Error("GeneralException");
+      });
     });
 
     context._cc.getTrackedChanges.mockImplementation(() => {
@@ -1022,10 +1020,10 @@ describe("WordAdapter.rejectSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted",
-              type: "Deleted",
+              id: "tc-added",
+              type: "Added",
               accept: vi.fn(),
-              reject: rejectDeletedSpy,
+              reject: rejectAddedSpy,
             },
           ],
           load: vi.fn(),
@@ -1078,11 +1076,11 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     let rejectExecuted = false;
     let resolutionPhase = 0;
-    const rejectAddedSpy = vi.fn(() => {
-      rejectExecuted = true;
+    const rejectDeletedSpy = vi.fn(() => {
       resolutionPhase = 1;
     });
-    const rejectDeletedSpy = vi.fn(() => {
+    const rejectAddedSpy = vi.fn(() => {
+      rejectExecuted = true;
       resolutionPhase = 2;
     });
     context._cc.getTrackedChanges.mockImplementation(() => {
@@ -1110,10 +1108,10 @@ describe("WordAdapter.rejectSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted",
-              type: "Deleted",
+              id: "tc-added",
+              type: "Added",
               accept: vi.fn(),
-              reject: rejectDeletedSpy,
+              reject: rejectAddedSpy,
             },
           ],
           load: vi.fn(),
@@ -1258,14 +1256,14 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     let resolutionPhase = 0;
     let cleanupAttemptedAfterFullResolution = false;
-    let shouldThrowOnDeletedReject = true;
+    let shouldThrowOnAddedReject = true;
 
-    const addedRejectSpy = vi.fn(() => {
+    const deletedRejectSpy = vi.fn(() => {
       resolutionPhase = Math.max(resolutionPhase, 1);
     });
-    const deletedRejectSpy = vi.fn(() => {
-      if (shouldThrowOnDeletedReject) {
-        shouldThrowOnDeletedReject = false;
+    const addedRejectSpy = vi.fn(() => {
+      if (shouldThrowOnAddedReject) {
+        shouldThrowOnAddedReject = false;
         throw new Error("ItemNotFound");
       }
 
@@ -1319,10 +1317,10 @@ describe("WordAdapter.rejectSuggestion", () => {
       if (resolutionPhase === 1) {
         return [
           {
-            id: "tc-deleted",
-            type: "Deleted",
+            id: "tc-added",
+            type: "Added",
             accept: vi.fn(),
-            reject: deletedRejectSpy,
+            reject: addedRejectSpy,
           },
         ];
       }
@@ -1368,8 +1366,8 @@ describe("WordAdapter.rejectSuggestion", () => {
       remaining: 0,
     });
     expect(result.error).toBe("ItemNotFound");
-    expect(addedRejectSpy).toHaveBeenCalledOnce();
-    expect(deletedRejectSpy).toHaveBeenCalledTimes(2);
+    expect(addedRejectSpy).toHaveBeenCalledTimes(2);
+    expect(deletedRejectSpy).toHaveBeenCalledOnce();
     expect(commentDeleteSpy).toHaveBeenCalledOnce();
     expect(context._cc.delete).not.toHaveBeenCalled();
   });
@@ -1385,16 +1383,16 @@ describe("WordAdapter.rejectSuggestion", () => {
     let phase = 0;
     const callOrder: string[] = [];
 
-    const addedRejectInitial = vi.fn(() => {
-      callOrder.push("reject-added-initial");
+    const deletedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-deleted-initial");
       phase = 1;
     });
-    const deletedRejectStale = vi.fn(() => {
-      callOrder.push("reject-deleted-stale");
+    const addedRejectStale = vi.fn(() => {
+      callOrder.push("reject-added-stale");
       throw new Error("ItemNotFound");
     });
-    const deletedRejectFresh = vi.fn(() => {
-      callOrder.push("reject-deleted-fresh");
+    const addedRejectFresh = vi.fn(() => {
+      callOrder.push("reject-added-fresh");
       phase = 2;
     });
 
@@ -1415,16 +1413,16 @@ describe("WordAdapter.rejectSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-added-initial",
+              id: "tc-added-stale",
               type: "Added",
               accept: vi.fn(),
-              reject: addedRejectInitial,
+              reject: addedRejectStale,
             },
             {
-              id: "tc-deleted-stale",
+              id: "tc-deleted-initial",
               type: "Deleted",
               accept: vi.fn(),
-              reject: deletedRejectStale,
+              reject: deletedRejectInitial,
             },
           ],
           load: vi.fn(),
@@ -1435,10 +1433,10 @@ describe("WordAdapter.rejectSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted-fresh",
-              type: "Deleted",
+              id: "tc-added-fresh",
+              type: "Added",
               accept: vi.fn(),
-              reject: deletedRejectFresh,
+              reject: addedRejectFresh,
             },
           ],
           load: vi.fn(),
@@ -1471,11 +1469,11 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
     expect(callOrder).toEqual([
-      "reject-added-initial",
-      "reject-deleted-fresh",
+      "reject-deleted-initial",
+      "reject-added-fresh",
     ]);
-    expect(deletedRejectStale).not.toHaveBeenCalled();
-    expect(deletedRejectFresh).toHaveBeenCalledOnce();
+    expect(addedRejectStale).not.toHaveBeenCalled();
+    expect(addedRejectFresh).toHaveBeenCalledOnce();
   });
 
   it("re-resolves the preferred candidate to a fresh proxy instead of reusing a stale content control during reject re-observation", async () => {
@@ -1490,16 +1488,16 @@ describe("WordAdapter.rejectSuggestion", () => {
     let getByTagCalls = 0;
     const callOrder: string[] = [];
 
-    const addedRejectInitial = vi.fn(() => {
-      callOrder.push("reject-added-initial");
+    const deletedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-deleted-initial");
       phase = 1;
     });
-    const deletedRejectInitial = vi.fn(() => {
-      callOrder.push("reject-deleted-initial-should-not-run");
-      throw new Error("stale-deleted-should-not-run");
+    const addedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-added-initial-should-not-run");
+      throw new Error("stale-added-should-not-run");
     });
-    const deletedRejectFresh = vi.fn(() => {
-      callOrder.push("reject-deleted-fresh");
+    const addedRejectFresh = vi.fn(() => {
+      callOrder.push("reject-added-fresh");
       phase = 2;
     });
 
@@ -1552,17 +1550,17 @@ describe("WordAdapter.rejectSuggestion", () => {
     });
 
     const freshRangeTCCollection = { load: vi.fn() };
-    const getFreshDeletedRangeItems = () => {
+    const getFreshAddedRangeItems = () => {
       if (phase !== 1) {
         return [];
       }
 
       return [
         {
-          id: "tc-deleted-fresh",
-          type: "Deleted",
+          id: "tc-added-fresh",
+          type: "Added",
           accept: vi.fn(),
-          reject: deletedRejectFresh,
+          reject: addedRejectFresh,
         },
       ];
     };
@@ -1575,7 +1573,7 @@ describe("WordAdapter.rejectSuggestion", () => {
         compareLocationWith: vi.fn(() => ({ value: "Equal" })),
         getTrackedChanges: vi.fn(() => ({
           ...freshRangeTCCollection,
-          items: getFreshDeletedRangeItems(),
+          items: getFreshAddedRangeItems(),
         })),
       })),
       delete: vi.fn(),
@@ -1602,14 +1600,14 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(2);
     expect(result.error).toBeUndefined();
     expect(callOrder).toEqual([
-      "reject-added-initial",
-      "reject-deleted-fresh",
+      "reject-deleted-initial",
+      "reject-added-fresh",
     ]);
-    expect(deletedRejectInitial).not.toHaveBeenCalled();
-    expect(deletedRejectFresh).toHaveBeenCalledOnce();
+    expect(addedRejectInitial).not.toHaveBeenCalled();
+    expect(addedRejectFresh).toHaveBeenCalledOnce();
   });
 
-  it("re-observes the remaining Deleted side without requiring a fresh Added pair", async () => {
+  it("re-observes the remaining Added side without requiring a fresh Deleted pair", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-side-specific-deleted",
       anchor: "ni Shu",
@@ -1620,12 +1618,12 @@ describe("WordAdapter.rejectSuggestion", () => {
     let phase = 0;
     const callOrder: string[] = [];
 
-    const addedRejectInitial = vi.fn(() => {
-      callOrder.push("reject-added-initial");
+    const deletedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-deleted-initial");
       phase = 1;
     });
-    const deletedRejectFresh = vi.fn(() => {
-      callOrder.push("reject-deleted-fresh");
+    const addedRejectFresh = vi.fn(() => {
+      callOrder.push("reject-added-fresh");
       phase = 2;
     });
 
@@ -1649,15 +1647,15 @@ describe("WordAdapter.rejectSuggestion", () => {
                 id: "tc-added-initial",
                 type: "Added",
                 accept: vi.fn(),
-                reject: addedRejectInitial,
+                reject: vi.fn(() => {
+                  throw new Error("stale-added-should-not-run");
+                }),
               },
               {
                 id: "tc-deleted-initial",
                 type: "Deleted",
                 accept: vi.fn(),
-                reject: vi.fn(() => {
-                  throw new Error("stale-deleted-should-not-run");
-                }),
+                reject: deletedRejectInitial,
               },
             ]
           : [],
@@ -1673,10 +1671,10 @@ describe("WordAdapter.rejectSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted-fresh",
-              type: "Deleted",
+              id: "tc-added-fresh",
+              type: "Added",
               accept: vi.fn(),
-              reject: deletedRejectFresh,
+              reject: addedRejectFresh,
             },
           ],
           load: vi.fn(),
@@ -1700,8 +1698,8 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.status).toBe("rejected");
     expect(result.trackedChangesAffected).toBe(2);
     expect(callOrder).toEqual([
-      "reject-added-initial",
-      "reject-deleted-fresh",
+      "reject-deleted-initial",
+      "reject-added-fresh",
     ]);
   });
 

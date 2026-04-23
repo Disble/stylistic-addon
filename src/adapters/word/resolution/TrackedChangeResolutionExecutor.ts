@@ -35,34 +35,21 @@ export class TrackedChangeResolutionExecutor {
   /**
    * Orders replace-pair tracked changes so semantic sides resolve predictably.
    *
-   * Accepting a replace should first confirm the deletion of the original text
-   * and then confirm the inserted replacement. Rejecting a replace should do the
-   * inverse: first remove the inserted text and then restore the deleted text.
-   *
-   * This keeps the executor aligned with the user-visible two-step model instead
-   * of trusting whatever host enumeration order Word happened to expose.
+   * For BOTH accept and reject we process the Deleted side first, then the
+   * Added side. The suggestion CC wraps the Added (inserted) text, so
+   * resolving the Added TC first destroys the CC and breaks any re-observation
+   * the outer command does between steps. Deleted-first keeps the CC anchor
+   * stable for the second step in both actions.
    */
   private orderTrackedChangesForExecution(
     trackedChanges: Word.TrackedChange[],
   ): Word.TrackedChange[] {
     const getPriority = (trackedChange: Word.TrackedChange): number => {
-      if (this.action === "accept") {
-        if (trackedChange.type === "Deleted") {
-          return 0;
-        }
-
-        if (trackedChange.type === "Added") {
-          return 1;
-        }
-
-        return 2;
-      }
-
-      if (trackedChange.type === "Added") {
+      if (trackedChange.type === "Deleted") {
         return 0;
       }
 
-      if (trackedChange.type === "Deleted") {
+      if (trackedChange.type === "Added") {
         return 1;
       }
 
