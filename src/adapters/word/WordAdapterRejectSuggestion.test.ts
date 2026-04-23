@@ -81,6 +81,121 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(context._cc.delete).toHaveBeenCalledWith(true);
   });
 
+  it("rejects replace tracked changes by removing insertion before restoring deletion", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-ordered-reject",
+      anchor: "desde allí",
+      suggestedText: "desde entonces",
+      context:
+        "Después de eso desperté en unas instalaciones de WEPO lejos de las garras de Jack y desde allí no volví a saber de él.",
+    });
+    const callOrder: string[] = [];
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-ordered-reject",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "s-ordered-reject",
+        insertedTag: "stylistic:track-change:s-ordered-reject",
+        deletedValue: "desde allí",
+        anchorValue:
+          "Después de eso desperté en unas instalaciones de WEPO lejos de las garras de Jack y desde allí no volví a saber de él.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-deleted",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => {
+            callOrder.push("reject-deleted");
+          }),
+        },
+        {
+          id: "tc-added",
+          type: "Added",
+          accept: vi.fn(),
+          reject: vi.fn(() => {
+            callOrder.push("reject-added");
+          }),
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(callOrder).toEqual(["reject-added", "reject-deleted"]);
+  });
+
+  it("syncs after each replace reject step before continuing with the next semantic side", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-sync-reject",
+      anchor: "desde allí",
+      suggestedText: "desde entonces",
+      context:
+        "Después de eso desperté en unas instalaciones de WEPO lejos de las garras de Jack y desde allí no volví a saber de él.",
+    });
+    const callOrder: string[] = [];
+    let queuedStep = 0;
+    let lastSyncedStep = 0;
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-sync-reject",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "s-sync-reject",
+        insertedTag: "stylistic:track-change:s-sync-reject",
+        deletedValue: "desde allí",
+        anchorValue:
+          "Después de eso desperté en unas instalaciones de WEPO lejos de las garras de Jack y desde allí no volví a saber de él.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-deleted",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => {
+            queuedStep = 2;
+            callOrder.push("reject-deleted");
+          }),
+        },
+        {
+          id: "tc-added",
+          type: "Added",
+          accept: vi.fn(),
+          reject: vi.fn(() => {
+            queuedStep = 1;
+            callOrder.push("reject-added");
+          }),
+        },
+      ],
+      comments: [],
+    });
+
+    context.sync.mockImplementation(async () => {
+      if (queuedStep > lastSyncedStep) {
+        callOrder.push("sync");
+        lastSyncedStep = queuedStep;
+      }
+    });
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(callOrder.slice(0, 4)).toEqual([
+      "reject-added",
+      "sync",
+      "reject-deleted",
+      "sync",
+    ]);
+  });
+
   it("returns cc-not-found when the Content Control anchor is missing", async () => {
     const suggestion = makeSuggestion({
       anchor: "texto original",
@@ -152,6 +267,51 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(context._cc.delete).not.toHaveBeenCalled();
   });
 
+  it("returns unobservable when a replace suggestion exposes only the inserted side during reject", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-half-visible",
+      anchor: "desde allí",
+      suggestedText: "desde entonces",
+      context:
+        "Después de eso desperté en unas instalaciones de WEPO lejos de las garras de Jack y desde allí no volví a saber de él.",
+    });
+    const addedRejectSpy = vi.fn();
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-half-visible",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "s-half-visible",
+        insertedTag: "stylistic:track-change:s-half-visible",
+        deletedValue: "desde allí",
+        anchorValue:
+          "Después de eso desperté en unas instalaciones de WEPO lejos de las garras de Jack y desde allí no volví a saber de él.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-added-only",
+          type: "Added",
+          accept: vi.fn(),
+          reject: addedRejectSpy,
+        },
+      ],
+      rangeTCItems: [],
+      bodyTCItems: [],
+      comments: [],
+    });
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("unobservable");
+    expect(result.trackedChangesAffected).toBe(0);
+    expect(result.commentDeleted).toBe(false);
+    expect(result.error).toContain("Word no expuso suficientes tracked changes");
+    expect(addedRejectSpy).not.toHaveBeenCalled();
+    expect(context._cc.delete).not.toHaveBeenCalled();
+  });
+
   it("rejects compound-v2 replace suggestions when rich metadata and tracked changes are present", async () => {
     const suggestion = makeSuggestion({ id: "s-1" });
     const addedRejectSpy = vi.fn();
@@ -176,7 +336,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(deletedRejectSpy).toHaveBeenCalledOnce();
   });
 
-  it("returns identity-lost for corrupt compound-v2 metadata during reject", async () => {
+  it("returns identity-lost for structurally corrupt compound-v2 metadata during reject", async () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const context = makeResolveSuggestionContext({
@@ -192,6 +352,49 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.status).toBe("identity-lost");
     expect(result.trackedChangesAffected).toBe(0);
     expect(context._cc.delete).not.toHaveBeenCalled();
+  });
+
+  it("still resolves reject when the only compound-v2 artifact has host-drifted deleted and anchor text", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-1",
+      anchor: "texto actual",
+      context: "Contexto con texto actual.",
+    });
+    const addedRejectSpy = vi.fn();
+    const deletedRejectSpy = vi.fn();
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTitle: makeCompoundV2Title({
+        suggestionId: suggestion.id,
+        insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
+        deletedValue: "texto viejo preservado por Word",
+        anchorValue: "Contexto viejo rehidratado por Word.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-added",
+          type: "Added",
+          accept: vi.fn(),
+          reject: addedRejectSpy,
+        },
+        {
+          id: "tc-deleted",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: deletedRejectSpy,
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(addedRejectSpy).toHaveBeenCalledOnce();
+    expect(deletedRejectSpy).toHaveBeenCalledOnce();
   });
 
   it("rejects overlapping body tracked changes when the CC-scoped collection misses one side", async () => {
@@ -385,6 +588,219 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(deletedRejectSpy).toHaveBeenCalledOnce();
   });
 
+  it("does not over-collect replace tracked changes during reject when stale sources expose extras", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-no-overcollect",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "No sabían si venía de ni Shu o de otro sitio.",
+    });
+    const callOrder: string[] = [];
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-no-overcollect",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "s-no-overcollect",
+        insertedTag: "stylistic:track-change:s-no-overcollect",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-added-main",
+          type: "Added",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-added-main")),
+        },
+      ],
+      rangeTCItems: [],
+      bodyTCItems: [
+        {
+          id: "tc-added-main",
+          type: "Added",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-added-duplicate")),
+        },
+        {
+          id: "tc-deleted-stale-body",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-deleted-stale-body")),
+        },
+      ],
+      bodyTCRelations: ["Equal", "AdjacentBefore"],
+      deletedSideText: "ni Shu",
+      deletedSideRangeTCItems: [
+        {
+          id: "tc-deleted-main",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-deleted-main")),
+        },
+      ],
+      operationalAnchorText: "No sabían si venía de ni Shu o de otro sitio.",
+      operationalAnchorRangeTCItems: [
+        {
+          id: "tc-added-stale-anchor",
+          type: "Added",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-added-stale-anchor")),
+        },
+        {
+          id: "tc-deleted-stale-anchor",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-deleted-stale-anchor")),
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    // Full-pair resolution picks cc+ccRange+deletedSide (ccRange+bodyRelated
+    // cannot complete on its own because cc already owns the Added-main id and
+    // the body duplicate gets id-deduped out of bodyRelated). Reject runs the
+    // Added first, which clears Added-main everywhere. The inter-step
+    // re-observation for the remaining Deleted side then picks the body-
+    // proximity Deleted-stale-body proxy because bodyRelated is the primary
+    // semantic-side source for document-adjacent deletions.
+    expect(callOrder).toEqual([
+      "reject-added-main",
+      "reject-deleted-stale-body",
+    ]);
+  });
+
+  it("normalizes duplicate deleted-side observations into a single semantic replace pair during reject", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-semantic-dedupe",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "Xia no tenía idea de lo que estaba pasando por la mente de Mei ni Shu.",
+    });
+    const callOrder: string[] = [];
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-semantic-dedupe",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "s-semantic-dedupe",
+        insertedTag: "stylistic:track-change:s-semantic-dedupe",
+        deletedValue: "ni Shu",
+        anchorValue:
+          "Xia no tenía idea de lo que estaba pasando por la mente de Mei ni Shu.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-deleted-cc",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-deleted-cc")),
+        },
+      ],
+      rangeTCItems: [
+        {
+          id: "tc-added-range",
+          type: "Added",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-added-range")),
+        },
+      ],
+      bodyTCItems: [
+        {
+          id: "tc-deleted-body",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: vi.fn(() => callOrder.push("reject-deleted-body")),
+        },
+      ],
+      bodyTCRelations: ["AdjacentBefore"],
+      comments: [
+        {
+          authorName: "Stylistic",
+          content: "[gramática]\nAjuste",
+          getRange: vi.fn(() => ({ compareLocationWith: vi.fn(() => ({ value: "Equal" })) })),
+          delete: vi.fn(),
+        },
+      ],
+      commentRangeTCItems: [
+        [
+          {
+            id: "tc-deleted-comment",
+            type: "Deleted",
+            accept: vi.fn(),
+            reject: vi.fn(() => callOrder.push("reject-deleted-comment")),
+          },
+        ],
+      ],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    // ccRange+bodyRelated wins: ccRange Added + bodyRelated Deleted. The
+    // cc-internal Deleted is skipped (cc.getTrackedChanges is deprioritized).
+    expect(callOrder).toEqual(["reject-added-range", "reject-deleted-body"]);
+  });
+
+  it("rejects replace suggestions when the deleted-side locator exposes the missing deleted tracked change", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-pre-replace-context",
+      anchor: "parecía ser",
+      suggestedText: "parece que es",
+      context: "Hasta donde sabía, parecía ser la única al tanto.",
+    });
+    const addedRejectSpy = vi.fn();
+    const deletedRejectSpy = vi.fn();
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-pre-replace-context",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "s-pre-replace-context",
+        insertedTag: "stylistic:track-change:s-pre-replace-context",
+        deletedValue: "parecía ser",
+        anchorValue: "Hasta donde sabía, parecía ser la única al tanto.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-added",
+          type: "Added",
+          accept: vi.fn(),
+          reject: addedRejectSpy,
+        },
+      ],
+      rangeTCItems: [],
+      bodyTCItems: [],
+      deletedSideText: "parecía ser",
+      deletedSideRangeTCItems: [
+        {
+          id: "tc-deleted",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: deletedRejectSpy,
+        },
+      ],
+      operationalAnchorText: undefined,
+      operationalAnchorRangeTCItems: [],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(addedRejectSpy).toHaveBeenCalledOnce();
+    expect(deletedRejectSpy).toHaveBeenCalledOnce();
+  });
+
   it("rejects replace suggestions when only the colocated comment range exposes tracked changes", async () => {
     const suggestion = makeSuggestion({
       id: "s-comment-range",
@@ -552,7 +968,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(deletedRejectSpy).toHaveBeenCalledOnce();
   });
 
-  it("returns rejected even when rejecting the tracked changes invalidates the CC before final cleanup", async () => {
+  it("returns error when rejecting the tracked changes invalidates the CC before final cleanup", async () => {
     const suggestion = makeSuggestion({
       anchor: "con la Jing",
       suggestedText: "con Jing",
@@ -570,44 +986,70 @@ describe("WordAdapter.rejectSuggestion", () => {
     });
 
     const rejectAddedSpy = vi.fn(() => {
+      resolutionPhase = 1;
       context._cc.delete.mockImplementation(() => {
         throw new Error("GeneralException");
       });
     });
 
-    const rejectDeletedSpy = vi.fn();
+    let resolutionPhase = 0;
+    const rejectDeletedSpy = vi.fn(() => {
+      resolutionPhase = 2;
+    });
 
-    const ccScopedTrackedChanges = [
-      {
-        id: "tc-added",
-        type: "Added",
-        accept: vi.fn(),
-        reject: rejectAddedSpy,
-      },
-      {
-        id: "tc-deleted",
-        type: "Deleted",
-        accept: vi.fn(),
-        reject: rejectDeletedSpy,
-      },
-    ];
+    context._cc.getTrackedChanges.mockImplementation(() => {
+      if (resolutionPhase === 0) {
+        return {
+          items: [
+            {
+              id: "tc-added",
+              type: "Added",
+              accept: vi.fn(),
+              reject: rejectAddedSpy,
+            },
+            {
+              id: "tc-deleted",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: rejectDeletedSpy,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
 
-    context._cc.getTrackedChanges.mockReturnValue({
-      items: ccScopedTrackedChanges,
-      load: vi.fn(),
+      if (resolutionPhase === 1) {
+        return {
+          items: [
+            {
+              id: "tc-deleted",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: rejectDeletedSpy,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      return {
+        items: [],
+        load: vi.fn(),
+      };
     });
 
     installWordWithContext(context);
 
     const result = await adapter.rejectSuggestion(suggestion);
 
-    expect(result.status).toBe("rejected");
+    expect(result.status).toBe("error");
     expect(result.trackedChangesAffected).toBe(2);
+    expect(result.error).toBe("GeneralException");
     expect(rejectAddedSpy).toHaveBeenCalledOnce();
     expect(rejectDeletedSpy).toHaveBeenCalledOnce();
   });
 
-  it("returns rejected when reject succeeds but a later document-state read throws GeneralException", async () => {
+  it("returns error when reject succeeds but a later document-state read throws GeneralException", async () => {
     const suggestion = makeSuggestion({ id: "chunk0-7" });
 
     const context = makeResolveSuggestionContext({
@@ -635,24 +1077,53 @@ describe("WordAdapter.rejectSuggestion", () => {
     });
 
     let rejectExecuted = false;
-    context._cc.getTrackedChanges.mockReturnValue({
-      items: [
-        {
-          id: "tc-added",
-          type: "Added",
-          accept: vi.fn(),
-          reject: vi.fn(() => {
-            rejectExecuted = true;
-          }),
-        },
-        {
-          id: "tc-deleted",
-          type: "Deleted",
-          accept: vi.fn(),
-          reject: vi.fn(),
-        },
-      ],
-      load: vi.fn(),
+    let resolutionPhase = 0;
+    const rejectAddedSpy = vi.fn(() => {
+      rejectExecuted = true;
+      resolutionPhase = 1;
+    });
+    const rejectDeletedSpy = vi.fn(() => {
+      resolutionPhase = 2;
+    });
+    context._cc.getTrackedChanges.mockImplementation(() => {
+      if (resolutionPhase === 0) {
+        return {
+          items: [
+            {
+              id: "tc-added",
+              type: "Added",
+              accept: vi.fn(),
+              reject: rejectAddedSpy,
+            },
+            {
+              id: "tc-deleted",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: rejectDeletedSpy,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      if (resolutionPhase === 1) {
+        return {
+          items: [
+            {
+              id: "tc-deleted",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: rejectDeletedSpy,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      return {
+        items: [],
+        load: vi.fn(),
+      };
     });
 
     context.document.contentControls.load.mockImplementation(() => {
@@ -666,15 +1137,22 @@ describe("WordAdapter.rejectSuggestion", () => {
     const result = await adapter.rejectSuggestion(suggestion);
 
     expect(rejectExecuted).toBe(true);
-    expect(result.status).toBe("rejected");
+    expect(result.status).toBe("error");
     expect(result.trackedChangesAffected).toBe(2);
+    expect(result.error).toBe("GeneralException");
   });
 
   it("signals the disable CTA when rejecting the final pending artifact reaches zero", async () => {
-    const suggestion = makeSuggestion({ id: "s-final" });
+    const suggestion = makeSuggestion({
+      id: "s-final",
+      anchor: "texto original",
+      suggestedText: "",
+      context: "Contexto con texto original.",
+    });
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:s-final",
+      ccTitle: "texto original",
       spanTCItems: [
         {
           type: "Deleted",
@@ -696,12 +1174,12 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.documentState).toBe("ready-to-disable-track-changes");
   });
 
-  it("returns rejected (not error) when rejecting tracked changes causes comment.delete() sync to throw GeneralException", async () => {
+  it("returns error when rejecting tracked changes causes comment.delete() sync to throw GeneralException", async () => {
     // Reproduces the real-host bug: tc.reject() invalidates the Word context, so
     // the context.sync() inside deleteLocatedStylisticComment throws GeneralException
     // AFTER the tracked changes were already successfully rejected in Word.
-    // Expected: status="rejected" so the taskpane UI updates correctly.
-    // Actual (before fix): status="error" because the exception escaped to the outer catch.
+    // Atomic contract: if cleanup explodes after tracked-change mutation, the
+    // workflow MUST return error instead of lying with terminal success.
     const suggestion = makeSuggestion({
       id: "chunk0-3",
       anchor: "sería a quien lo desconocía",
@@ -711,7 +1189,7 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const rejectSpy1 = vi.fn();
     const rejectSpy2 = vi.fn();
-    let rejectExecuted = false;
+    let cleanupStarted = false;
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
@@ -728,7 +1206,6 @@ describe("WordAdapter.rejectSuggestion", () => {
           type: "Added",
           accept: vi.fn(),
           reject: vi.fn(() => {
-            rejectExecuted = true;
             rejectSpy1();
           }),
         },
@@ -744,15 +1221,17 @@ describe("WordAdapter.rejectSuggestion", () => {
           authorName: "Stylistic",
           content: "[gramática]\nsería quien lo desconocía",
           getRange: vi.fn(() => ({ compareLocationWith: vi.fn(() => ({ value: "Equal" })) })),
-          delete: vi.fn(),
+          delete: vi.fn(() => {
+            cleanupStarted = true;
+          }),
         },
       ],
     });
 
-    // Simulate: after tc.reject() executes, the context.sync() throws GeneralException
-    // (this is what happens in real Word when reject invalidates the comment/CC proxy)
+    // Simulate: tracked changes reject successfully, but the later comment cleanup
+    // sync explodes with GeneralException after semantic resolution already happened.
     context.sync.mockImplementation(() => {
-      if (rejectExecuted) {
+      if (cleanupStarted) {
         return Promise.reject(new Error("GeneralException"));
       }
       return Promise.resolve();
@@ -762,13 +1241,14 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const result = await adapter.rejectSuggestion(suggestion);
 
-    expect(result.status).toBe("rejected");
+    expect(result.status).toBe("error");
     expect(result.trackedChangesAffected).toBe(2);
+    expect(result.error).toBe("GeneralException");
     expect(rejectSpy1).toHaveBeenCalledOnce();
     expect(rejectSpy2).toHaveBeenCalledOnce();
   });
 
-  it("returns rejected in one click when immediate re-observation can finish the remaining replace side before late cleanup failure", async () => {
+  it("returns error in one click when immediate re-observation finishes the remaining replace side but cleanup fails", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-4",
       anchor: "sándwich o sánduche",
@@ -878,30 +1358,452 @@ describe("WordAdapter.rejectSuggestion", () => {
 
     const result = await adapter.rejectSuggestion(suggestion);
 
-    expect(result.status).toBe("rejected");
+    expect(result.status).toBe("error");
     expect(result.trackedChangesAffected).toBe(2);
     expect(result.commentDeleted).toBe(false);
+    expect(result.errorPhase).toBe("cleanup-comment");
     expect(result.executionReport).toEqual({
       attempted: 2,
       completed: 2,
       remaining: 0,
     });
-    expect(result.warnings).toHaveLength(3);
-    expect(result.warnings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "cleanup-failed",
-          phase: "cleanup",
-        }),
-        expect.objectContaining({
-          code: "inspection-failed",
-          phase: "inspect-after",
-        }),
-      ]),
-    );
+    expect(result.error).toBe("ItemNotFound");
     expect(addedRejectSpy).toHaveBeenCalledOnce();
     expect(deletedRejectSpy).toHaveBeenCalledTimes(2);
     expect(commentDeleteSpy).toHaveBeenCalledOnce();
-    expect(context._cc.delete).toHaveBeenCalledWith(true);
+    expect(context._cc.delete).not.toHaveBeenCalled();
+  });
+
+  it("re-observes the remaining replace side with fresh proxies after the first reject sync", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-fresh-reobserve-reject",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "No sabían si venía de ni Shu o de otro sitio.",
+    });
+
+    let phase = 0;
+    const callOrder: string[] = [];
+
+    const addedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-added-initial");
+      phase = 1;
+    });
+    const deletedRejectStale = vi.fn(() => {
+      callOrder.push("reject-deleted-stale");
+      throw new Error("ItemNotFound");
+    });
+    const deletedRejectFresh = vi.fn(() => {
+      callOrder.push("reject-deleted-fresh");
+      phase = 2;
+    });
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-fresh-reobserve-reject",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-fresh-reobserve-reject",
+        insertedTag: "stylistic:track-change:chunk0-fresh-reobserve-reject",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      comments: [],
+    });
+
+    context._cc.getTrackedChanges.mockImplementation(() => {
+      if (phase === 0) {
+        return {
+          items: [
+            {
+              id: "tc-added-initial",
+              type: "Added",
+              accept: vi.fn(),
+              reject: addedRejectInitial,
+            },
+            {
+              id: "tc-deleted-stale",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: deletedRejectStale,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      if (phase === 1) {
+        return {
+          items: [
+            {
+              id: "tc-deleted-fresh",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: deletedRejectFresh,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      return {
+        items: [],
+        load: vi.fn(),
+      };
+    });
+
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(callOrder).toEqual([
+      "reject-added-initial",
+      "reject-deleted-fresh",
+    ]);
+    expect(deletedRejectStale).not.toHaveBeenCalled();
+    expect(deletedRejectFresh).toHaveBeenCalledOnce();
+  });
+
+  it("re-resolves the preferred candidate to a fresh proxy instead of reusing a stale content control during reject re-observation", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-preferred-fresh-proxy-reject",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "No sabían si venía de ni Shu o de otro sitio.",
+    });
+
+    let phase = 0;
+    let getByTagCalls = 0;
+    const callOrder: string[] = [];
+
+    const addedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-added-initial");
+      phase = 1;
+    });
+    const deletedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-deleted-initial-should-not-run");
+      throw new Error("stale-deleted-should-not-run");
+    });
+    const deletedRejectFresh = vi.fn(() => {
+      callOrder.push("reject-deleted-fresh");
+      phase = 2;
+    });
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-preferred-fresh-proxy-reject",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-preferred-fresh-proxy-reject",
+        insertedTag:
+          "stylistic:track-change:chunk0-preferred-fresh-proxy-reject",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      comments: [],
+    });
+
+    context._cc.getTrackedChanges.mockImplementation(() => ({
+      items:
+        phase === 0
+          ? [
+              {
+                id: "tc-added-initial",
+                type: "Added",
+                accept: vi.fn(),
+                reject: addedRejectInitial,
+              },
+              {
+                id: "tc-deleted-initial",
+                type: "Deleted",
+                accept: vi.fn(),
+                reject: deletedRejectInitial,
+              },
+            ]
+          : [],
+      load: vi.fn(),
+    }));
+
+    const initialCcRange = (context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    })();
+    initialCcRange.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    context._cc.load.mockImplementation(() => {
+      if (phase >= 1) {
+        throw new Error("stale-preferred-cc");
+      }
+    });
+
+    const freshRangeTCCollection = { load: vi.fn() };
+    const getFreshDeletedRangeItems = () => {
+      if (phase !== 1) {
+        return [];
+      }
+
+      return [
+        {
+          id: "tc-deleted-fresh",
+          type: "Deleted",
+          accept: vi.fn(),
+          reject: deletedRejectFresh,
+        },
+      ];
+    };
+    const freshCc = {
+      title: context._cc.title,
+      tag: context._cc.tag,
+      load: vi.fn(),
+      getTrackedChanges: vi.fn(() => ({ items: [], load: vi.fn() })),
+      getRange: vi.fn(() => ({
+        compareLocationWith: vi.fn(() => ({ value: "Equal" })),
+        getTrackedChanges: vi.fn(() => ({
+          ...freshRangeTCCollection,
+          items: getFreshDeletedRangeItems(),
+        })),
+      })),
+      delete: vi.fn(),
+    };
+
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    context.document.contentControls.getByTag.mockImplementation(() => {
+      getByTagCalls += 1;
+      return {
+        items: getByTagCalls === 1 ? [context._cc] : [freshCc],
+        load: vi.fn(),
+      };
+    });
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.error).toBeUndefined();
+    expect(callOrder).toEqual([
+      "reject-added-initial",
+      "reject-deleted-fresh",
+    ]);
+    expect(deletedRejectInitial).not.toHaveBeenCalled();
+    expect(deletedRejectFresh).toHaveBeenCalledOnce();
+  });
+
+  it("re-observes the remaining Deleted side without requiring a fresh Added pair", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-side-specific-deleted",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "No sabían si venía de ni Shu o de otro sitio.",
+    });
+
+    let phase = 0;
+    const callOrder: string[] = [];
+
+    const addedRejectInitial = vi.fn(() => {
+      callOrder.push("reject-added-initial");
+      phase = 1;
+    });
+    const deletedRejectFresh = vi.fn(() => {
+      callOrder.push("reject-deleted-fresh");
+      phase = 2;
+    });
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-side-specific-deleted",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-side-specific-deleted",
+        insertedTag: "stylistic:track-change:chunk0-side-specific-deleted",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      comments: [],
+    });
+
+    context._cc.getTrackedChanges.mockImplementation(() => ({
+      items:
+        phase === 0
+          ? [
+              {
+                id: "tc-added-initial",
+                type: "Added",
+                accept: vi.fn(),
+                reject: addedRejectInitial,
+              },
+              {
+                id: "tc-deleted-initial",
+                type: "Deleted",
+                accept: vi.fn(),
+                reject: vi.fn(() => {
+                  throw new Error("stale-deleted-should-not-run");
+                }),
+              },
+            ]
+          : [],
+      load: vi.fn(),
+    }));
+
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => {
+      if (phase === 1) {
+        return {
+          items: [
+            {
+              id: "tc-deleted-fresh",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: deletedRejectFresh,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      return {
+        items: [],
+        load: vi.fn(),
+      };
+    });
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(callOrder).toEqual([
+      "reject-added-initial",
+      "reject-deleted-fresh",
+    ]);
+  });
+
+  it("returns error and skips cleanup when reject leaves one semantic side pending after execution", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-half-after-reject",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "No sabían si venía de ni Shu o de otro sitio.",
+    });
+
+    let phase = 0;
+    const addedRejectSpy = vi.fn(() => {
+      phase = 1;
+    });
+    const deletedRejectSpy = vi.fn(() => {
+      phase = 2;
+    });
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-half-after-reject",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-half-after-reject",
+        insertedTag: "stylistic:track-change:chunk0-half-after-reject",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      comments: [],
+    });
+
+    context._cc.getTrackedChanges.mockImplementation(() => ({
+      items:
+        phase === 0
+          ? [
+              {
+                id: "tc-added-initial",
+                type: "Added",
+                accept: vi.fn(),
+                reject: addedRejectSpy,
+              },
+              {
+                id: "tc-deleted-initial",
+                type: "Deleted",
+                accept: vi.fn(),
+                reject: deletedRejectSpy,
+              },
+            ]
+          : [],
+      load: vi.fn(),
+    }));
+
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => {
+      if (phase === 1) {
+        return {
+          items: [
+            {
+              id: "tc-deleted-fresh",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: deletedRejectSpy,
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      if (phase >= 2) {
+        return {
+          items: [
+            {
+              id: "tc-deleted-still-pending",
+              type: "Deleted",
+              accept: vi.fn(),
+              reject: vi.fn(),
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      return {
+        items: [],
+        load: vi.fn(),
+      };
+    });
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("error");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.error).toContain("falso success");
+    expect(context._cc.delete).not.toHaveBeenCalled();
   });
 });
