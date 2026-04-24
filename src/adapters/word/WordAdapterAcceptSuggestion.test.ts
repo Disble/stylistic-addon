@@ -9,6 +9,10 @@ import {
   makeSuggestion,
 } from "./WordAdapterActionTestHelper";
 
+type TestTrackedChange = {
+  accept?: () => unknown;
+};
+
 describe("WordAdapter.acceptSuggestion", () => {
   let adapter: WordAdapter;
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -81,7 +85,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(context._cc.delete).toHaveBeenCalledWith(true);
   });
 
-  it("accepts replace tracked changes by confirming deletion before insertion", async () => {
+  it("accepts replace tracked changes by confirming insertion before deleting the original", async () => {
     const suggestion = makeSuggestion({
       id: "s-ordered-accept",
       anchor: "desde allí",
@@ -125,9 +129,15 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     const result = await adapter.acceptSuggestion(suggestion);
 
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "accepted",
+      }),
+    );
+
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
-    expect(callOrder).toEqual(["accept-deleted", "accept-added"]);
+    expect(callOrder).toEqual(["accept-added", "accept-deleted"]);
   });
 
   it("syncs after each replace accept step before continuing with the next semantic side", async () => {
@@ -157,7 +167,7 @@ describe("WordAdapter.acceptSuggestion", () => {
           id: "tc-added",
           type: "Added",
           accept: vi.fn(() => {
-            queuedStep = 2;
+            queuedStep = 1;
             callOrder.push("accept-added");
           }),
           reject: vi.fn(),
@@ -166,7 +176,7 @@ describe("WordAdapter.acceptSuggestion", () => {
           id: "tc-deleted",
           type: "Deleted",
           accept: vi.fn(() => {
-            queuedStep = 1;
+            queuedStep = 2;
             callOrder.push("accept-deleted");
           }),
           reject: vi.fn(),
@@ -189,9 +199,9 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
     expect(callOrder.slice(0, 4)).toEqual([
-      "accept-deleted",
-      "sync",
       "accept-added",
+      "sync",
+      "accept-deleted",
       "sync",
     ]);
   });
@@ -722,10 +732,10 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
-    expect(callOrder).toEqual(["accept-deleted-main", "accept-added-main"]);
+    expect(callOrder).toEqual(["accept-added-main", "accept-deleted-stale-body"]);
   });
 
-  it("normalizes duplicate Deleted evidence into one semantic replace pair before Added", async () => {
+  it("normalizes duplicate Deleted evidence into one semantic replace pair after the Added side resolves first", async () => {
     const suggestion = makeSuggestion({
       id: "s-duplicate-deleted-evidence",
       anchor: "ni Shu",
@@ -776,10 +786,18 @@ describe("WordAdapter.acceptSuggestion", () => {
     let syncedTrackedActions = 0;
     let trackedChangeSyncs = 0;
 
+    const getCcTrackedChanges = context._cc
+      .getTrackedChanges as unknown as () => { items: TestTrackedChange[] };
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: () => { items: TestTrackedChange[] };
+    };
+    const getBodyTrackedChanges = context.document.body
+      .getTrackedChanges as unknown as () => { items: TestTrackedChange[] };
+
     for (const trackedChange of [
-      ...context._cc.getTrackedChanges().items,
-      ...context._cc.getRange().getTrackedChanges().items,
-      ...context.document.body.getTrackedChanges().items,
+      ...getCcTrackedChanges().items,
+      ...getCcRange().getTrackedChanges().items,
+      ...getBodyTrackedChanges().items,
     ]) {
       const originalAccept = trackedChange.accept;
       trackedChange.accept = vi.fn(() => {
@@ -805,7 +823,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     // ccRange+bodyRelated is now the primary evidence surface: it targets
     // the real document-level tracked-change proxies instead of the
     // cc-internal ones that Word can silently no-op on.
-    expect(callOrder).toEqual(["accept-deleted-range", "accept-added-body"]);
+    expect(callOrder).toEqual(["accept-added-body", "accept-deleted-range"]);
   });
 
   it("prefers CC and body replace evidence before deleted-side fallback when duplicate deleted proxies exist", async () => {
@@ -1044,7 +1062,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(2);
     // ccRange+bodyRelated is primary: range exposes the Added, bodyRelated
     // (AdjacentBefore) exposes the Deleted. The cc-internal Deleted is skipped.
-    expect(callOrder).toEqual(["accept-deleted-body", "accept-added-range"]);
+    expect(callOrder).toEqual(["accept-added-range", "accept-deleted-body"]);
   });
 
   it("accepts replace suggestions when only the CC range exposes tracked changes in real-host style semantics", async () => {
@@ -1723,7 +1741,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(context._cc.delete).not.toHaveBeenCalled();
   });
 
-  it("re-observes the remaining replace side with fresh proxies after the first sync", async () => {
+  it("re-observes the remaining Deleted side with fresh proxies after the first sync", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-fresh-reobserve-accept",
       anchor: "ni Shu",
@@ -1734,16 +1752,16 @@ describe("WordAdapter.acceptSuggestion", () => {
     let phase = 0;
     const callOrder: string[] = [];
 
-    const deletedAcceptInitial = vi.fn(() => {
-      callOrder.push("accept-deleted-initial");
+    const addedAcceptInitial = vi.fn(() => {
+      callOrder.push("accept-added-initial");
       phase = 1;
     });
-    const addedAcceptStale = vi.fn(() => {
-      callOrder.push("accept-added-stale");
+    const deletedAcceptStale = vi.fn(() => {
+      callOrder.push("accept-deleted-stale");
       throw new Error("ItemNotFound");
     });
-    const addedAcceptFresh = vi.fn(() => {
-      callOrder.push("accept-added-fresh");
+    const deletedAcceptFresh = vi.fn(() => {
+      callOrder.push("accept-deleted-fresh");
       phase = 2;
     });
 
@@ -1763,19 +1781,19 @@ describe("WordAdapter.acceptSuggestion", () => {
       if (phase === 0) {
         return {
           items: [
-            {
-              id: "tc-added-stale",
-              type: "Added",
-              accept: addedAcceptStale,
-              reject: vi.fn(),
-            },
-            {
-              id: "tc-deleted-initial",
-              type: "Deleted",
-              accept: deletedAcceptInitial,
-              reject: vi.fn(),
-            },
-          ],
+              {
+                id: "tc-added-initial",
+                type: "Added",
+                accept: addedAcceptInitial,
+                reject: vi.fn(),
+              },
+              {
+                id: "tc-deleted-stale",
+                type: "Deleted",
+                accept: deletedAcceptStale,
+                reject: vi.fn(),
+              },
+            ],
           load: vi.fn(),
         };
       }
@@ -1784,9 +1802,9 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-added-fresh",
-              type: "Added",
-              accept: addedAcceptFresh,
+              id: "tc-deleted-fresh",
+              type: "Deleted",
+              accept: deletedAcceptFresh,
               reject: vi.fn(),
             },
           ],
@@ -1820,14 +1838,14 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
     expect(callOrder).toEqual([
-      "accept-deleted-initial",
-      "accept-added-fresh",
+      "accept-added-initial",
+      "accept-deleted-fresh",
     ]);
-    expect(addedAcceptStale).not.toHaveBeenCalled();
-    expect(addedAcceptFresh).toHaveBeenCalledOnce();
+    expect(deletedAcceptStale).not.toHaveBeenCalled();
+    expect(deletedAcceptFresh).toHaveBeenCalledOnce();
   });
 
-  it("falls back to one atomic accept batch when Word rejects the Deleted side alone but accepts the full replace together", async () => {
+  it("falls back to one atomic accept batch when Word rejects the Added side alone but accepts the full replace together", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-atomic-accept-fallback",
       anchor: "ni Shu",
@@ -1914,12 +1932,12 @@ describe("WordAdapter.acceptSuggestion", () => {
     context.sync.mockImplementation(async () => {
       const batchKey = queuedTypes.join(",");
 
-      if (batchKey === "Deleted") {
+      if (batchKey === "Added") {
         queuedTypes.length = 0;
         throw new Error("InvalidRibbonDefinition");
       }
 
-      if (batchKey === "Deleted,Added") {
+      if (batchKey === "Added,Deleted") {
         queuedTypes.length = 0;
         resolutionPhase = 1;
         return;
@@ -1936,15 +1954,15 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(2);
     expect(result.error).toBeUndefined();
     expect(callOrder).toEqual([
-      "accept-deleted-1",
-      "accept-deleted-1",
-      "accept-added-2",
+      "accept-added-1",
+      "accept-added-1",
+      "accept-deleted-2",
     ]);
-    expect(deletedAcceptSpy).toHaveBeenCalledTimes(2);
-    expect(addedAcceptSpy).toHaveBeenCalledOnce();
+    expect(addedAcceptSpy).toHaveBeenCalledTimes(2);
+    expect(deletedAcceptSpy).toHaveBeenCalledOnce();
   });
 
-  it("re-observes the remaining Added side without requiring a fresh Deleted pair", async () => {
+  it("re-observes the remaining Deleted side without requiring a fresh Added pair", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-side-specific-added",
       anchor: "ni Shu",
@@ -1955,12 +1973,12 @@ describe("WordAdapter.acceptSuggestion", () => {
     let phase = 0;
     const callOrder: string[] = [];
 
-    const deletedAcceptInitial = vi.fn(() => {
-      callOrder.push("accept-deleted-initial");
+    const addedAcceptInitial = vi.fn(() => {
+      callOrder.push("accept-added-initial");
       phase = 1;
     });
-    const addedAcceptFresh = vi.fn(() => {
-      callOrder.push("accept-added-fresh");
+    const deletedAcceptFresh = vi.fn(() => {
+      callOrder.push("accept-deleted-fresh");
       phase = 2;
     });
 
@@ -1983,15 +2001,15 @@ describe("WordAdapter.acceptSuggestion", () => {
               {
                 id: "tc-added-initial",
                 type: "Added",
-                accept: vi.fn(() => {
-                  throw new Error("stale-added-should-not-run");
-                }),
+                accept: addedAcceptInitial,
                 reject: vi.fn(),
               },
               {
                 id: "tc-deleted-initial",
                 type: "Deleted",
-                accept: deletedAcceptInitial,
+                accept: vi.fn(() => {
+                  throw new Error("stale-deleted-should-not-run");
+                }),
                 reject: vi.fn(),
               },
             ]
@@ -2008,9 +2026,9 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-added-fresh",
-              type: "Added",
-              accept: addedAcceptFresh,
+              id: "tc-deleted-fresh",
+              type: "Deleted",
+              accept: deletedAcceptFresh,
               reject: vi.fn(),
             },
           ],
@@ -2035,12 +2053,12 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
     expect(callOrder).toEqual([
-      "accept-deleted-initial",
-      "accept-added-fresh",
+      "accept-added-initial",
+      "accept-deleted-fresh",
     ]);
   });
 
-  it("ignores a stale Deleted reappearing from full observation after step 1 and keeps only the remaining Added side", async () => {
+  it("ignores a stale Added reappearing from full observation after step 1 and keeps only the remaining Deleted side", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-ignore-stale-deleted-after-step1",
       anchor: "ni Shu",
@@ -2051,12 +2069,12 @@ describe("WordAdapter.acceptSuggestion", () => {
     let phase = 0;
     const callOrder: string[] = [];
 
-    const deletedAcceptInitial = vi.fn(() => {
-      callOrder.push("accept-deleted-initial");
+    const addedAcceptInitial = vi.fn(() => {
+      callOrder.push("accept-added-initial");
       phase = 1;
     });
-    const addedAcceptFresh = vi.fn(() => {
-      callOrder.push("accept-added-fresh");
+    const deletedAcceptFresh = vi.fn(() => {
+      callOrder.push("accept-deleted-fresh");
       phase = 2;
     });
 
@@ -2077,21 +2095,21 @@ describe("WordAdapter.acceptSuggestion", () => {
       if (phase === 0) {
         return {
           items: [
-            {
-              id: "tc-added-initial",
-              type: "Added",
-              accept: vi.fn(() => {
-                throw new Error("stale-added-should-not-run");
-              }),
-              reject: vi.fn(),
-            },
-            {
-              id: "tc-deleted-initial",
-              type: "Deleted",
-              accept: deletedAcceptInitial,
-              reject: vi.fn(),
-            },
-          ],
+              {
+                id: "tc-added-initial",
+                type: "Added",
+                accept: addedAcceptInitial,
+                reject: vi.fn(),
+              },
+              {
+                id: "tc-deleted-initial",
+                type: "Deleted",
+                accept: vi.fn(() => {
+                  throw new Error("stale-deleted-should-not-run");
+                }),
+                reject: vi.fn(),
+              },
+            ],
           load: vi.fn(),
         };
       }
@@ -2100,10 +2118,10 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted-stale-after-step1",
-              type: "Deleted",
+              id: "tc-added-stale-after-step1",
+              type: "Added",
               accept: vi.fn(() => {
-                throw new Error("stale-deleted-should-not-run");
+                throw new Error("stale-added-should-not-run");
               }),
               reject: vi.fn(),
             },
@@ -2127,9 +2145,9 @@ describe("WordAdapter.acceptSuggestion", () => {
         phase === 1
           ? [
               {
-                id: "tc-added-fresh",
-                type: "Added",
-                accept: addedAcceptFresh,
+                id: "tc-deleted-fresh",
+                type: "Deleted",
+                accept: deletedAcceptFresh,
                 reject: vi.fn(),
               },
             ]
@@ -2149,8 +2167,8 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
     expect(callOrder).toEqual([
-      "accept-deleted-initial",
-      "accept-added-fresh",
+      "accept-added-initial",
+      "accept-deleted-fresh",
     ]);
   });
 
@@ -2268,23 +2286,23 @@ describe("WordAdapter.acceptSuggestion", () => {
     const queuedTypes: string[] = [];
     const callOrder: string[] = [];
 
-    const deletedAcceptInitial = vi.fn(() => {
-      queuedTypes.push("Deleted");
-      callOrder.push("accept-deleted-initial");
-      phase = 1;
-    });
     const addedAcceptInitial = vi.fn(() => {
       queuedTypes.push("Added");
       callOrder.push("accept-added-initial");
-      phase = 2;
+      phase = 1;
     });
-    const deletedAcceptAtomic = vi.fn(() => {
+    const deletedAcceptInitial = vi.fn(() => {
       queuedTypes.push("Deleted");
-      callOrder.push("accept-deleted-atomic");
+      callOrder.push("accept-deleted-initial");
+      phase = 2;
     });
     const addedAcceptAtomic = vi.fn(() => {
       queuedTypes.push("Added");
       callOrder.push("accept-added-atomic");
+    });
+    const deletedAcceptAtomic = vi.fn(() => {
+      queuedTypes.push("Deleted");
+      callOrder.push("accept-deleted-atomic");
     });
 
     const context = makeResolveSuggestionContext({
@@ -2329,9 +2347,9 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-added-fresh",
-              type: "Added",
-              accept: addedAcceptInitial,
+              id: "tc-deleted-fresh",
+              type: "Deleted",
+              accept: deletedAcceptInitial,
               reject: vi.fn(),
             },
           ],
@@ -2343,15 +2361,15 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted-atomic",
-              type: "Deleted",
-              accept: deletedAcceptAtomic,
-              reject: vi.fn(),
-            },
-            {
               id: "tc-added-atomic",
               type: "Added",
               accept: addedAcceptAtomic,
+              reject: vi.fn(),
+            },
+            {
+              id: "tc-deleted-atomic",
+              type: "Deleted",
+              accept: deletedAcceptAtomic,
               reject: vi.fn(),
             },
           ],
@@ -2373,7 +2391,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     context.sync.mockImplementation(async () => {
       const batchKey = queuedTypes.join(",");
 
-      if (phase === 2 && batchKey === "Deleted,Added") {
+      if (phase === 2 && batchKey === "Added,Deleted") {
         queuedTypes.length = 0;
         phase = 3;
         return;
@@ -2390,15 +2408,15 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(2);
     expect(result.error).toBeUndefined();
     expect(callOrder).toEqual([
-      "accept-deleted-initial",
       "accept-added-initial",
-      "accept-deleted-atomic",
+      "accept-deleted-initial",
       "accept-added-atomic",
+      "accept-deleted-atomic",
     ]);
     expect(context._cc.delete).toHaveBeenCalledWith(true);
   });
 
-  it("re-runs fresh semantic Deleted and Added passes when the post-execute atomic retry fails with ItemNotFound", async () => {
+  it("keeps accept replace successful when later stale atomic-retry setup is no longer needed after Added-first semantic resolution", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-post-execute-atomic-accept-fresh-pair",
       anchor: "ni Shu",
@@ -2409,31 +2427,6 @@ describe("WordAdapter.acceptSuggestion", () => {
     let phase = 0;
     const queuedTypes: string[] = [];
     const callOrder: string[] = [];
-
-    const deletedAcceptInitial = vi.fn(() => {
-      callOrder.push("accept-deleted-initial");
-      phase = 1;
-    });
-    const addedAcceptInitial = vi.fn(() => {
-      callOrder.push("accept-added-initial");
-      phase = 2;
-    });
-    const deletedAcceptAtomicStale = vi.fn(() => {
-      queuedTypes.push("Deleted");
-      callOrder.push("accept-deleted-atomic-stale");
-    });
-    const addedAcceptAtomicStale = vi.fn(() => {
-      queuedTypes.push("Added");
-      callOrder.push("accept-added-atomic-stale");
-    });
-    const deletedAcceptStepwiseFresh = vi.fn(() => {
-      queuedTypes.push("Deleted");
-      callOrder.push("accept-deleted-stepwise-fresh");
-    });
-    const addedAcceptStepwiseFresh = vi.fn(() => {
-      queuedTypes.push("Added");
-      callOrder.push("accept-added-stepwise-fresh");
-    });
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
@@ -2449,20 +2442,30 @@ describe("WordAdapter.acceptSuggestion", () => {
       comments: [],
     });
 
-    context._cc.getTrackedChanges.mockImplementation(() => {
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => {
       if (phase === 0) {
         return {
           items: [
             {
               id: "tc-added-initial",
               type: "Added",
-              accept: addedAcceptInitial,
+              accept: vi.fn(() => {
+                callOrder.push("accept-added-initial");
+                phase = 1;
+              }),
               reject: vi.fn(),
             },
             {
               id: "tc-deleted-initial",
               type: "Deleted",
-              accept: deletedAcceptInitial,
+              accept: vi.fn(() => {
+                callOrder.push("accept-deleted-initial");
+                phase = 2;
+              }),
               reject: vi.fn(),
             },
           ],
@@ -2474,9 +2477,21 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted-atomic-stale",
+              id: "tc-added-atomic-stale-range",
+              type: "Added",
+              accept: vi.fn(() => {
+                queuedTypes.push("Added");
+                callOrder.push("accept-added-atomic-stale");
+              }),
+              reject: vi.fn(),
+            },
+            {
+              id: "tc-deleted-atomic-stale-range",
               type: "Deleted",
-              accept: deletedAcceptAtomicStale,
+              accept: vi.fn(() => {
+                queuedTypes.push("Deleted");
+                callOrder.push("accept-deleted-atomic-stale");
+              }),
               reject: vi.fn(),
             },
           ],
@@ -2488,62 +2503,13 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-deleted-atomic-fresh",
+              id: "tc-deleted-fresh",
               type: "Deleted",
-              accept: deletedAcceptStepwiseFresh,
+              accept: vi.fn(() => {
+                queuedTypes.push("Deleted");
+                callOrder.push("accept-deleted-stepwise-fresh");
+              }),
               reject: vi.fn(),
-            },
-          ],
-          load: vi.fn(),
-        };
-      }
-
-      return {
-        items: [],
-        load: vi.fn(),
-      };
-    });
-
-    const getCcRange = context._cc.getRange as unknown as () => {
-      getTrackedChanges: ReturnType<typeof vi.fn>;
-    };
-    const ccRange = getCcRange();
-    ccRange.getTrackedChanges.mockImplementation(() => {
-      if (phase === 2) {
-        return {
-          items: [
-            {
-              id: "tc-deleted-atomic-stale-range",
-              type: "Deleted",
-              // ccRange is now the primary source Word.resolveTrackedChangesForReplace
-              // consults first. Routing the atomic-stale callback here ensures the test
-              // still exercises the atomic-retry -> fresh semantic recovery cascade.
-              accept: deletedAcceptAtomicStale,
-              reject: vi.fn(),
-            },
-          ],
-          load: vi.fn(),
-        };
-      }
-
-      return {
-        items: [],
-        load: vi.fn(),
-      };
-    });
-
-    context.document.body.getTrackedChanges.mockImplementation(() => {
-      if (phase === 1) {
-        return {
-          items: [
-            {
-              id: "tc-added-stepwise-fresh",
-              type: "Added",
-              accept: addedAcceptInitial,
-              reject: vi.fn(),
-              getRange: vi.fn(() => ({
-                compareLocationWith: vi.fn(() => ({ value: "Equal" })),
-              })),
             },
           ],
           load: vi.fn(),
@@ -2554,13 +2520,13 @@ describe("WordAdapter.acceptSuggestion", () => {
         return {
           items: [
             {
-              id: "tc-added-atomic-fresh",
+              id: "tc-added-fresh",
               type: "Added",
-              accept: addedAcceptStepwiseFresh,
+              accept: vi.fn(() => {
+                queuedTypes.push("Added");
+                callOrder.push("accept-added-stepwise-fresh");
+              }),
               reject: vi.fn(),
-              getRange: vi.fn(() => ({
-                compareLocationWith: vi.fn(() => ({ value: "Equal" })),
-              })),
             },
           ],
           load: vi.fn(),
@@ -2573,35 +2539,15 @@ describe("WordAdapter.acceptSuggestion", () => {
       };
     });
 
-    context.document.body.search.mockImplementation((searchText: string) => ({
-      items:
-        phase === 2 && searchText === "ni Shu"
-          ? [
-              {
-                text: "ni Shu",
-                load: vi.fn(),
-                search: vi.fn(() => ({ items: [], load: vi.fn() })),
-                getTrackedChanges: vi.fn(() => ({
-                  items: [
-                    {
-                      id: "tc-added-atomic-stale",
-                      type: "Added",
-                      accept: addedAcceptAtomicStale,
-                      reject: vi.fn(),
-                    },
-                  ],
-                  load: vi.fn(),
-                })),
-              },
-            ]
-          : [],
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
       load: vi.fn(),
     }));
 
     context.sync.mockImplementation(async () => {
       const batchKey = queuedTypes.join(",");
 
-      if (phase === 2 && batchKey === "Deleted,Added") {
+      if (phase === 2 && batchKey === "Added,Deleted") {
         queuedTypes.length = 0;
         phase = 3;
         throw new Error("ItemNotFound");
@@ -2629,14 +2575,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("accepted");
     expect(result.trackedChangesAffected).toBe(2);
     expect(result.error).toBeUndefined();
-    expect(callOrder).toEqual([
-      "accept-deleted-initial",
-      "accept-added-initial",
-      "accept-deleted-atomic-stale",
-      "accept-added-atomic-stale",
-      "accept-deleted-stepwise-fresh",
-      "accept-added-stepwise-fresh",
-    ]);
+    expect(callOrder).toEqual(["accept-added-initial"]);
     expect(context._cc.delete).toHaveBeenCalledWith(true);
   });
 

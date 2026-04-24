@@ -30,7 +30,7 @@ import {
   MASTRA_POLL_BYPASS_ENABLED,
   WORKFLOW_ID,
 } from "../../infrastructure/config";
-import { MOCK_MASTRA_POLL_OUTPUT } from "./MockMastraPollOutput";
+import { MOCK_MASTRA_POLL_OUTPUT } from "./MockMastraPollOutputFactory";
 
 /** Singleton Mastra client instance, reused across all calls. */
 const client = new MastraClient({ baseUrl: MASTRA_BASE_URL });

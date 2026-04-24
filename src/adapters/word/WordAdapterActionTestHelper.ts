@@ -244,7 +244,7 @@ export function makeResolveSuggestionContext({
 
     if (originalAccept) {
       trackedChange.accept = vi.fn(() => {
-        const result = originalAccept();
+        const result = (originalAccept as () => unknown)();
         removeTrackedChangesBySemanticSide(trackedChange);
         return result;
       });
@@ -252,7 +252,7 @@ export function makeResolveSuggestionContext({
 
     if (originalReject) {
       trackedChange.reject = vi.fn(() => {
-        const result = originalReject();
+        const result = (originalReject as () => unknown)();
         removeTrackedChangesBySemanticSide(trackedChange);
         return result;
       });

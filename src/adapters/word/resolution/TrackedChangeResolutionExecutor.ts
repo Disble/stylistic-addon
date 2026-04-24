@@ -1,5 +1,15 @@
 import type { ResolutionExecutionReport } from "../../../domain/types";
 
+type BodyTrackedChangeCountProbe =
+  | {
+      status: "known";
+      count: number;
+    }
+  | {
+      status: "unknown";
+      error: string;
+    };
+
 /** Applies one terminal resolution action to a tracked-change collection. */
 export class TrackedChangeResolutionExecutor {
   constructor(
@@ -8,9 +18,7 @@ export class TrackedChangeResolutionExecutor {
   ) {}
 
   /** Builds one stable tracked-change diagnostic entry for runtime logs. */
-  private describeTrackedChange(
-    trackedChange: Word.TrackedChange,
-  ): {
+  private describeTrackedChange(trackedChange: Word.TrackedChange): {
     id: string;
     type: string;
   } {
@@ -21,9 +29,7 @@ export class TrackedChangeResolutionExecutor {
   }
 
   /** Builds a compact tracked-change list so one host attempt can be reconstructed later. */
-  private describeTrackedChanges(
-    trackedChanges: Word.TrackedChange[],
-  ): Array<{
+  private describeTrackedChanges(trackedChanges: Word.TrackedChange[]): Array<{
     id: string;
     type: string;
   }> {
@@ -32,24 +38,72 @@ export class TrackedChangeResolutionExecutor {
     );
   }
 
+  /** Returns true when the tracked-change type can be semantically verified by body count. */
+  private isVerifiableTrackedChangeType(
+    trackedChangeType: string,
+  ): trackedChangeType is "Added" | "Deleted" {
+    return trackedChangeType === "Added" || trackedChangeType === "Deleted";
+  }
+
+  /** Returns the known body count from a probe, if Word exposed one. */
+  private getKnownBodyTrackedChangeCount(
+    probe: BodyTrackedChangeCountProbe,
+  ): number | undefined {
+    return probe.status === "known" ? probe.count : undefined;
+  }
+
+  /** Builds an unverified-mutation signal without conflating unknown host state with count zero. */
+  private buildUnverifiedMutation(
+    stepIndex: number,
+    trackedChangeType: "Added" | "Deleted",
+    beforeProbe: BodyTrackedChangeCountProbe,
+    afterProbe: BodyTrackedChangeCountProbe,
+  ): ResolutionExecutionReport["unverifiedMutation"] | undefined {
+    if (beforeProbe.status === "known" && afterProbe.status === "known") {
+      return undefined;
+    }
+
+    return {
+      stepIndex,
+      trackedChangeType,
+      reason: "body-count-probe-failed",
+      ...(beforeProbe.status === "known"
+        ? { bodyTrackedChangeCountBefore: beforeProbe.count }
+        : { bodyTrackedChangeCountBeforeError: beforeProbe.error }),
+      ...(afterProbe.status === "known"
+        ? { bodyTrackedChangeCountAfter: afterProbe.count }
+        : { bodyTrackedChangeCountAfterError: afterProbe.error }),
+    };
+  }
+
   /**
    * Orders replace-pair tracked changes so semantic sides resolve predictably.
    *
-   * For BOTH accept and reject we process the Deleted side first, then the
-   * Added side. The suggestion CC wraps the Added (inserted) text, so
-   * resolving the Added TC first destroys the CC and breaks any re-observation
-   * the outer command does between steps. Deleted-first keeps the CC anchor
-   * stable for the second step in both actions.
+   * Accept and reject intentionally diverge:
+   * - accept: `Added -> Deleted`, because real Word can keep the inserted-side
+   *   host surface actionable while stale Deleted proxies silently no-op.
+   * - reject: `Deleted -> Added`, because rejecting the deletion first preserves
+   *   the inserted-side CC long enough for the second semantic step.
+   *
+   * This ordering is applied consistently to stepwise and atomic execution so
+   * runtime telemetry reflects the same semantic intent in both paths.
    */
   private orderTrackedChangesForExecution(
     trackedChanges: Word.TrackedChange[],
   ): Word.TrackedChange[] {
     const getPriority = (trackedChange: Word.TrackedChange): number => {
-      if (trackedChange.type === "Deleted") {
+      if (this.action === "accept" && trackedChange.type === "Added") {
         return 0;
       }
 
-      if (trackedChange.type === "Added") {
+      if (this.action === "reject" && trackedChange.type === "Deleted") {
+        return 0;
+      }
+
+      if (
+        (this.action === "accept" && trackedChange.type === "Deleted") ||
+        (this.action === "reject" && trackedChange.type === "Added")
+      ) {
         return 1;
       }
 
@@ -77,9 +131,8 @@ export class TrackedChangeResolutionExecutor {
     context: Word.RequestContext,
     trackedChanges: Word.TrackedChange[],
   ): Promise<ResolutionExecutionReport> {
-    const orderedTrackedChanges = this.orderTrackedChangesForExecution(
-      trackedChanges,
-    );
+    const orderedTrackedChanges =
+      this.orderTrackedChangesForExecution(trackedChanges);
     console.log(
       `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} orderedTypes=${orderedTrackedChanges
         .map((trackedChange) => trackedChange.type ?? "unknown")
@@ -94,6 +147,7 @@ export class TrackedChangeResolutionExecutor {
     );
     let completed = 0;
     let silentNoOpDetected: ResolutionExecutionReport["silentNoOpDetected"];
+    let unverifiedMutation: ResolutionExecutionReport["unverifiedMutation"];
 
     for (const [index, trackedChange] of orderedTrackedChanges.entries()) {
       let actionQueued = false;
@@ -123,22 +177,48 @@ export class TrackedChangeResolutionExecutor {
 
         const bodyTrackedChangeCountAfter =
           await this.countBodyTrackedChanges(context);
+        const beforeCount = this.getKnownBodyTrackedChangeCount(
+          bodyTrackedChangeCountBefore,
+        );
+        const afterCount = this.getKnownBodyTrackedChangeCount(
+          bodyTrackedChangeCountAfter,
+        );
+
+        if (
+          !unverifiedMutation &&
+          this.isVerifiableTrackedChangeType(trackedChangeDetail.type)
+        ) {
+          unverifiedMutation = this.buildUnverifiedMutation(
+            index,
+            trackedChangeDetail.type,
+            bodyTrackedChangeCountBefore,
+            bodyTrackedChangeCountAfter,
+          );
+
+          if (unverifiedMutation) {
+            console.warn(
+              `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} mutation verification unavailable: bodyTrackedChangeCount before=${beforeCount ?? "unknown"} after=${afterCount ?? "unknown"}`,
+              unverifiedMutation,
+            );
+          }
+        }
+
         if (
           !silentNoOpDetected &&
-          this.action === "reject" &&
-          bodyTrackedChangeCountBefore > 0 &&
-          bodyTrackedChangeCountAfter >= bodyTrackedChangeCountBefore &&
-          (trackedChangeDetail.type === "Added" ||
-            trackedChangeDetail.type === "Deleted")
+          beforeCount !== undefined &&
+          afterCount !== undefined &&
+          beforeCount > 0 &&
+          afterCount >= beforeCount &&
+          this.isVerifiableTrackedChangeType(trackedChangeDetail.type)
         ) {
           console.warn(
-            `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} silent-no-op detected: bodyTrackedChangeCount before=${bodyTrackedChangeCountBefore} after=${bodyTrackedChangeCountAfter} (proxy mutation did not reduce document tracked-change count)`,
+            `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} silent-no-op detected: bodyTrackedChangeCount before=${beforeCount} after=${afterCount} (proxy mutation did not reduce document tracked-change count)`,
           );
           silentNoOpDetected = {
             stepIndex: index,
-            trackedChangeType: trackedChangeDetail.type as "Added" | "Deleted",
-            bodyTrackedChangeCountBefore,
-            bodyTrackedChangeCountAfter,
+            trackedChangeType: trackedChangeDetail.type,
+            bodyTrackedChangeCountBefore: beforeCount,
+            bodyTrackedChangeCountAfter: afterCount,
           };
         }
       } catch (error) {
@@ -169,6 +249,7 @@ export class TrackedChangeResolutionExecutor {
       completed,
       remaining: orderedTrackedChanges.length - completed,
       ...(silentNoOpDetected ? { silentNoOpDetected } : {}),
+      ...(unverifiedMutation ? { unverifiedMutation } : {}),
     };
   }
 
@@ -177,9 +258,8 @@ export class TrackedChangeResolutionExecutor {
     context: Word.RequestContext,
     trackedChanges: Word.TrackedChange[],
   ): Promise<ResolutionExecutionReport> {
-    const orderedTrackedChanges = this.orderTrackedChangesForExecution(
-      trackedChanges,
-    );
+    const orderedTrackedChanges =
+      this.orderTrackedChangesForExecution(trackedChanges);
     console.log(
       `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} atomic-orderedTypes=${orderedTrackedChanges
         .map((trackedChange) => trackedChange.type ?? "unknown")
@@ -248,23 +328,30 @@ export class TrackedChangeResolutionExecutor {
    * after each step lets the executor surface this case to the outer command
    * so it can recover with a fresh proxy from a different evidence source.
    *
-   * Returns 0 when the host does not expose the count (defensive: any error
-   * here must not abort the resolution flow).
+   * Returns an explicit unknown probe when the host does not expose the count.
+   * This must not abort the mutation flow, but callers also must not interpret
+   * the unknown state as an actual zero-count document.
    */
   private async countBodyTrackedChanges(
     context: Word.RequestContext,
-  ): Promise<number> {
+  ): Promise<BodyTrackedChangeCountProbe> {
     try {
       const bodyTrackedChanges = context.document.body.getTrackedChanges();
       bodyTrackedChanges.load({ select: "type,id" });
       await context.sync();
-      return bodyTrackedChanges.items.length;
+      return {
+        status: "known",
+        count: bodyTrackedChanges.items.length,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(
         `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" body tracked-change count probe failed: ${message}`,
       );
-      return 0;
+      return {
+        status: "unknown",
+        error: message,
+      };
     }
   }
 }

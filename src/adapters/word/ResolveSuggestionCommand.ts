@@ -59,6 +59,15 @@ type TrackedChangeLogEntry = {
   type: string;
 };
 
+type SerializedOfficeErrorDiagnostics = {
+  message: string;
+  name?: string;
+  code?: string | number;
+  debugInfo?: unknown;
+  traceMessages?: unknown;
+  stackPreview?: string[];
+};
+
 // ---------------------------------------------------------------------------
 // ResolveSuggestionCommand
 // ---------------------------------------------------------------------------
@@ -111,6 +120,60 @@ export class ResolveSuggestionCommand {
     );
   }
 
+  /** Reads one unknown error property defensively so diagnostic logging never throws. */
+  private readUnknownErrorProperty(
+    error: unknown,
+    propertyName: string,
+  ): unknown {
+    if (typeof error !== "object" || error === null) {
+      return undefined;
+    }
+
+    try {
+      return (error as Record<string, unknown>)[propertyName];
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Builds one plain Office.js-ish error diagnostic object for console output. */
+  private serializeUnknownError(
+    error: unknown,
+  ): SerializedOfficeErrorDiagnostics {
+    const fallbackMessage =
+      error instanceof Error ? error.message : String(error ?? "Unknown error");
+    const messageValue = this.readUnknownErrorProperty(error, "message");
+    const nameValue = this.readUnknownErrorProperty(error, "name");
+    const codeValue = this.readUnknownErrorProperty(error, "code");
+    const debugInfo = this.readUnknownErrorProperty(error, "debugInfo");
+    const traceMessages = this.readUnknownErrorProperty(error, "traceMessages");
+    const stackValue = this.readUnknownErrorProperty(error, "stack");
+    const stackPreview =
+      typeof stackValue === "string"
+        ? stackValue
+            .split(/\r?\n/u)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .slice(0, 5)
+        : undefined;
+
+    return {
+      message:
+        typeof messageValue === "string" && messageValue.length > 0
+          ? messageValue
+          : fallbackMessage,
+      ...(typeof nameValue === "string" && nameValue.length > 0
+        ? { name: nameValue }
+        : {}),
+      ...(typeof codeValue === "string" || typeof codeValue === "number"
+        ? { code: codeValue }
+        : {}),
+      ...(debugInfo !== undefined ? { debugInfo } : {}),
+      ...(traceMessages !== undefined ? { traceMessages } : {}),
+      ...(stackPreview && stackPreview.length > 0 ? { stackPreview } : {}),
+    };
+  }
+
   /**
    * Executes the resolution command.
    * Never throws — catches all errors and returns a result object.
@@ -133,7 +196,19 @@ export class ResolveSuggestionCommand {
       if (!this.executeStateMachine.isTerminal) {
         this.executeStateMachine.fail();
       }
-      const message = error instanceof Error ? error.message : String(error);
+      const serializedError = this.serializeUnknownError(error);
+      const message = serializedError.message;
+      console.warn(
+        `🧪 [ResolveSuggestionCommand] observe-before failure bracket`,
+        {
+          workflowAttemptId: this.workflowAttemptId,
+          suggestionId: this.suggestion.id,
+          action: this.action,
+          phase: this.executeStateMachine.currentPhase ?? "unknown",
+          execution: this.formatExecutionReportForLog(this.lastExecutionReport),
+          error: serializedError,
+        },
+      );
       console.warn(
         `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" suggestionId="${this.suggestion.id}" action=${this.action} phase=${this.executeStateMachine.currentPhase ?? "unknown"} execution=${this.formatExecutionReportForLog(this.lastExecutionReport)} error=${message}`,
       );
@@ -198,6 +273,14 @@ export class ResolveSuggestionCommand {
 
     const pendingBefore = await this.stateInspector.inspect(context);
     this.transitionExecuteState("observing-before");
+    console.log(`🧪 [ResolveSuggestionCommand] observe-before start`, {
+      workflowAttemptId: this.workflowAttemptId,
+      suggestionId: this.suggestion.id,
+      action: this.action,
+      selectedCcTag: cc.tag,
+      rankedCandidateCount: rankedCandidates.length,
+      suggestionType: this.suggestion.type,
+    });
     await this.emitTelemetry("observe-before", "started", {
       suggestionType: this.suggestion.type,
     });
@@ -234,11 +317,27 @@ export class ResolveSuggestionCommand {
       };
     }
 
-    const observation = await this.observer.observeResolutionCandidates(
-      context,
-      rankedCandidates,
-      cc,
-    );
+    let observation: ResolutionObservation;
+    try {
+      observation = await this.observer.observeResolutionCandidates(
+        context,
+        rankedCandidates,
+        cc,
+      );
+    } catch (error) {
+      console.warn(
+        `🧪 [ResolveSuggestionCommand] observe-before observer failed`,
+        {
+          workflowAttemptId: this.workflowAttemptId,
+          suggestionId: this.suggestion.id,
+          action: this.action,
+          selectedCcTag: cc.tag,
+          rankedCandidateCount: rankedCandidates.length,
+          error: this.serializeUnknownError(error),
+        },
+      );
+      throw error;
+    }
     console.log(
       `🧭 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" observation status=${observation.observationStatus} trackedChanges=${observation.trackedChanges.length} types=${observation.debugMetadata?.trackedChangeTypes ?? ""} selectedCc=${observation.debugMetadata?.selectedCcTag ?? cc.tag}`,
     );
@@ -621,7 +720,10 @@ export class ResolveSuggestionCommand {
     };
   }
 
-  /** Falls back to the pre-refactor atomic accept behavior when Deleted-alone execution is rejected by Word. */
+  /**
+   * Falls back to one atomic accept batch, but only trusts it after a fresh
+   * re-observation proves the replace pair is no longer pending.
+   */
   private async tryAtomicAcceptReplaceFallback(
     context: Word.RequestContext,
     stepIndex: number,
@@ -631,6 +733,7 @@ export class ResolveSuggestionCommand {
   ): Promise<{
     observation: ResolutionObservation;
     executionReport: ResolutionExecutionReport;
+    recoverySucceeded: boolean;
   } | null> {
     if (
       this.action !== "accept" ||
@@ -658,7 +761,7 @@ export class ResolveSuggestionCommand {
     }
 
     console.warn(
-      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" retrying accept replace as one atomic batch after Deleted-alone execution failed`,
+      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" retrying accept replace as one atomic batch after the first semantic side failed`,
     );
 
     const atomicReport = await this.executor.applyAtomically(
@@ -669,13 +772,33 @@ export class ResolveSuggestionCommand {
       return null;
     }
 
+    const reobservedAfterAtomic = await this.logWorkflowSnapshot(
+      context,
+      "after-post-execute-recovery-before-cleanup",
+      latestObservation.selectedCc,
+    );
+    const atomicCompletion = this.classifyAtomicReplaceCompletion(
+      reobservedAfterAtomic,
+    );
+
     return {
-      observation: latestObservation,
-      executionReport: atomicReport,
+      observation: reobservedAfterAtomic ?? latestObservation,
+      executionReport: atomicCompletion.completed
+        ? atomicReport
+        : {
+            ...atomicReport,
+            remaining: atomicCompletion.remaining,
+            error:
+              "Word siguió exponiendo tracked changes del replace después del fallback atómico; se cancela cleanup para evitar falso success.",
+          },
+      recoverySucceeded: atomicCompletion.completed,
     };
   }
 
-  /** Tries the known-good atomic accept behavior once a fresh observation still exposes the full replace pair. */
+  /**
+   * Tries the atomic accept fallback for one semantic side, but only certifies
+   * success after a fresh re-observation proves that side disappeared.
+   */
   private async tryAtomicAcceptStepFallback(
     context: Word.RequestContext,
     trackedChangeType: "Added" | "Deleted",
@@ -689,7 +812,7 @@ export class ResolveSuggestionCommand {
   } | null> {
     if (
       this.action !== "accept" ||
-      trackedChangeType !== "Deleted" ||
+      trackedChangeType !== "Added" ||
       observation.trackedChanges.length < 2
     ) {
       return null;
@@ -707,7 +830,7 @@ export class ResolveSuggestionCommand {
     }
 
     console.warn(
-      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" retrying accept replace as one atomic batch after Deleted-alone execution failed`,
+      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" retrying accept replace as one atomic batch after Added-alone execution failed`,
     );
 
     const atomicReport = await this.executor.applyAtomically(
@@ -718,11 +841,37 @@ export class ResolveSuggestionCommand {
       return null;
     }
 
+    const reobservedAfterAtomic = await this.reobserveResolutionCandidates(
+      context,
+      observation.selectedCc,
+    );
+    if (!reobservedAfterAtomic) {
+      return {
+        observation,
+        completed: false,
+        error:
+          "Word no pudo reobservar el replace después del fallback atómico; se cancela cleanup para evitar falso success.",
+        recoveryAttempted: true,
+        recoverySucceeded: false,
+      };
+    }
+
+    const sideStillPending =
+      this.findTrackedChangeByType(
+        reobservedAfterAtomic.observation.trackedChanges,
+        trackedChangeType,
+      ) !== null;
+
     return {
-      observation,
-      completed: true,
+      observation: reobservedAfterAtomic.observation,
+      completed: !sideStillPending,
+      ...(sideStillPending
+        ? {
+            error: `Word siguió exponiendo el tracked change ${trackedChangeType} después del fallback atómico; se cancela cleanup para evitar falso success.`,
+          }
+        : {}),
       recoveryAttempted: true,
-      recoverySucceeded: true,
+      recoverySucceeded: !sideStillPending,
     };
   }
 
@@ -754,7 +903,7 @@ export class ResolveSuggestionCommand {
     }
 
     const initialReport = await this.executor.apply(context, [trackedChange]);
-    if (!initialReport.error && !initialReport.silentNoOpDetected) {
+    if (this.isExecutionReportSemanticallyVerified(initialReport)) {
       return {
         observation,
         completed: true,
@@ -789,12 +938,22 @@ export class ResolveSuggestionCommand {
       );
     }
 
+    if (initialReport.unverifiedMutation && !initialReport.error) {
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} mutation verification unavailable after ${this.action}; re-observing fresh Word state before returning success`,
+        initialReport.unverifiedMutation,
+      );
+    }
+
     const silentNoOpSuffix = bodyRecoveryError
       ? ` [recovery: ${bodyRecoveryError}]`
       : "";
+    const initialUnverifiedMutation = initialReport.unverifiedMutation;
     const initialErrorMessage =
       initialReport.error ??
-      `Word ignoró el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).${silentNoOpSuffix}`;
+      (initialUnverifiedMutation
+        ? `Word no pudo verificar si el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} mutó el documento (${this.formatUnverifiedMutationForLog(initialUnverifiedMutation)}).${silentNoOpSuffix}`
+        : `Word ignoró el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).${silentNoOpSuffix}`);
 
     console.warn(
       `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} retrying after failure: ${initialErrorMessage}`,
@@ -832,35 +991,38 @@ export class ResolveSuggestionCommand {
     }
 
     if (!recoveredTrackedChange) {
-      if (firstRecoveryObservation.observation.trackedChanges.length === 0) {
-        return {
-          observation: firstRecoveryObservation.observation,
-          completed: true,
-          recoveryAttempted: true,
-          recoverySucceeded: true,
-        };
-      }
-
-      return {
-        observation: firstRecoveryObservation.observation,
-        completed: false,
-        error:
-          "Word dejó el replace en un estado parcial; se cancela cleanup para evitar falso success.",
-        recoveryAttempted: true,
-        recoverySucceeded: false,
-      };
-    }
-
-    const recoveryReport = await this.executor.apply(context, [
-      recoveredTrackedChange,
-    ]);
-    if (!recoveryReport.error) {
       return {
         observation: firstRecoveryObservation.observation,
         completed: true,
         recoveryAttempted: true,
         recoverySucceeded: true,
       };
+    }
+
+    const recoveryReport = await this.executor.apply(context, [
+      recoveredTrackedChange,
+    ]);
+    if (this.isExecutionReportSemanticallyVerified(recoveryReport)) {
+      return {
+        observation: firstRecoveryObservation.observation,
+        completed: true,
+        recoveryAttempted: true,
+        recoverySucceeded: true,
+      };
+    }
+
+    if (recoveryReport.silentNoOpDetected) {
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} recovered proxy was a silent no-op; validating with final re-observation`,
+        recoveryReport.silentNoOpDetected,
+      );
+    }
+
+    if (recoveryReport.unverifiedMutation) {
+      console.warn(
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} recovered proxy mutation verification unavailable; validating with final re-observation`,
+        recoveryReport.unverifiedMutation,
+      );
     }
 
     const finalRecoveryObservation = await this.reobserveResolutionCandidates(
@@ -885,21 +1047,23 @@ export class ResolveSuggestionCommand {
       finalRecoveryObservation.observation.trackedChanges,
       trackedChangeType,
     );
+    const recoveredSideCompleted = stillPendingTrackedChange === null;
 
     return {
       observation: finalRecoveryObservation.observation,
-      completed:
-        stillPendingTrackedChange === null &&
-        finalRecoveryObservation.observation.trackedChanges.length === 0,
-      ...this.buildReplaceRecoveryError(
-        stillPendingTrackedChange,
-        finalRecoveryObservation.observation.trackedChanges.length,
-        recoveryReport.error,
-      ),
+      completed: recoveredSideCompleted,
+      ...(recoveredSideCompleted
+        ? {}
+        : {
+            error:
+              recoveryReport.error ??
+              this.buildUntrustedExecutionError(
+                recoveryReport,
+                trackedChangeType,
+              ),
+          }),
       recoveryAttempted: true,
-      recoverySucceeded:
-        stillPendingTrackedChange === null &&
-        finalRecoveryObservation.observation.trackedChanges.length === 0,
+      recoverySucceeded: recoveredSideCompleted,
     };
   }
 
@@ -1087,7 +1251,9 @@ export class ResolveSuggestionCommand {
       }
 
       candidateRanges = candidates.map((tc) => tc.getRange());
-      candidateRanges.forEach((range) => range.load({ select: "text" }));
+      candidateRanges.forEach((range) => {
+        range.load({ select: "text" });
+      });
       await context.sync();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1100,8 +1266,11 @@ export class ResolveSuggestionCommand {
     // Diagnostic: log every candidate so we can refine matching when it fails.
     candidateRanges.forEach((range, index) => {
       const tc = candidates[index];
+      const trackedChangeLog = tc
+        ? this.describeTrackedChangeForLog(tc)
+        : { id: "unknown", type: "unknown" };
       console.warn(
-        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op body candidate[${index}] type=${tc?.type ?? "unknown"} id=${tc?.id ?? "unknown"} text="${(range.text ?? "").slice(0, 120)}"`,
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op body candidate[${index}] type=${trackedChangeLog.type} id=${trackedChangeLog.id} text="${(range.text ?? "").slice(0, 120)}"`,
       );
     });
 
@@ -1158,6 +1327,12 @@ export class ResolveSuggestionCommand {
       return {
         completed: false,
         error: `silent-no-op recovery: body proxy was also a silent no-op (bodyTrackedChangeCountBefore=${recoveryReport.silentNoOpDetected.bodyTrackedChangeCountBefore} after=${recoveryReport.silentNoOpDetected.bodyTrackedChangeCountAfter})`,
+      };
+    }
+    if (recoveryReport.unverifiedMutation) {
+      return {
+        completed: false,
+        error: `silent-no-op recovery: body proxy mutation could not be verified (${this.formatUnverifiedMutationForLog(recoveryReport.unverifiedMutation)})`,
       };
     }
 
@@ -1234,29 +1409,6 @@ export class ResolveSuggestionCommand {
     return false;
   }
 
-  /** Queues the observed tracked changes in Word order, matching the pre-refactor duplicate-side path. */
-  private queueObservedTrackedChangeResolution(
-    trackedChanges: Word.TrackedChange[],
-  ): void {
-    console.log(
-      `🧾 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" queued-observed-tracked-changes`,
-      {
-        trackedChanges: this.describeTrackedChangesForLog(trackedChanges),
-      },
-    );
-    for (const trackedChange of trackedChanges) {
-      if (this.action === "accept") {
-        trackedChange.accept();
-      } else {
-        trackedChange.reject();
-      }
-    }
-
-    console.log(
-      `⚙️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" queued ${this.action} for ${trackedChanges.length} observed tracked changes without immediate replace sync`,
-    );
-  }
-
   /** Returns true when the current suggestion is a tracked replace. */
   private isReplaceSuggestion(): boolean {
     return (
@@ -1264,6 +1416,58 @@ export class ResolveSuggestionCommand {
       this.suggestion.anchor.length > 0 &&
       (this.suggestion.suggestedText?.length ?? 0) > 0
     );
+  }
+
+  /** Returns true only when execution has no error and no unknown host-verification state. */
+  private isExecutionReportSemanticallyVerified(
+    report: ResolutionExecutionReport,
+  ): boolean {
+    return (
+      !report.error && !report.silentNoOpDetected && !report.unverifiedMutation
+    );
+  }
+
+  /** Formats an unverified mutation signal for single-line workflow errors. */
+  private formatUnverifiedMutationForLog(
+    unverifiedMutation: NonNullable<
+      ResolutionExecutionReport["unverifiedMutation"]
+    >,
+  ): string {
+    const before = unverifiedMutation.bodyTrackedChangeCountBefore ?? "unknown";
+    const after = unverifiedMutation.bodyTrackedChangeCountAfter ?? "unknown";
+    const beforeError =
+      unverifiedMutation.bodyTrackedChangeCountBeforeError ?? null;
+    const afterError =
+      unverifiedMutation.bodyTrackedChangeCountAfterError ?? null;
+
+    return [
+      `bodyTrackedChangeCountBefore=${before}`,
+      `bodyTrackedChangeCountAfter=${after}`,
+      beforeError ? `beforeError=${beforeError}` : null,
+      afterError ? `afterError=${afterError}` : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join("; ");
+  }
+
+  /** Builds a conservative error for an execution report that cannot certify mutation. */
+  private buildUntrustedExecutionError(
+    report: ResolutionExecutionReport,
+    trackedChangeType: "Added" | "Deleted",
+  ): string {
+    if (report.error) {
+      return report.error;
+    }
+
+    if (report.unverifiedMutation) {
+      return `Word no pudo verificar si el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} mutó el documento (${this.formatUnverifiedMutationForLog(report.unverifiedMutation)}).`;
+    }
+
+    if (report.silentNoOpDetected) {
+      return `Word ignoró el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).`;
+    }
+
+    return `Word no pudo certificar la resolución del tracked change ${trackedChangeType}.`;
   }
 
   /** Merges the initial partial execution report with one immediate recovery pass. */
@@ -1285,6 +1489,22 @@ export class ResolveSuggestionCommand {
             failureIndex: initialReport.completed + failureIndex,
           }),
       ...(recoveryReport.error ? { error: recoveryReport.error } : {}),
+      ...((recoveryReport.silentNoOpDetected ??
+      initialReport.silentNoOpDetected)
+        ? {
+            silentNoOpDetected:
+              recoveryReport.silentNoOpDetected ??
+              initialReport.silentNoOpDetected,
+          }
+        : {}),
+      ...((recoveryReport.unverifiedMutation ??
+      initialReport.unverifiedMutation)
+        ? {
+            unverifiedMutation:
+              recoveryReport.unverifiedMutation ??
+              initialReport.unverifiedMutation,
+          }
+        : {}),
     };
   }
 
@@ -1310,17 +1530,21 @@ export class ResolveSuggestionCommand {
   /**
    * Returns the semantic execution order for replace suggestions.
    *
-   * For BOTH accept and reject we resolve the Deleted side first, then the
-   * Added side. Rationale: the suggestion CC wraps the Added (inserted) text.
-   * Rejecting the Added TC first in Word removes the inserted text and with
-   * it the CC, so the inter-step re-observation for the remaining Deleted
-   * side fails with `getByTag returned 0 CC candidate(s)` and the workflow
-   * reports a false "no pudo reubicar" error. Resolving the Deleted side
-   * first keeps the CC intact through the first step for both actions.
+   * Accept and reject intentionally diverge because real Word exposes different
+   * survivable host surfaces per action:
+   * - accept: `Added -> Deleted`, so the workflow uses the inserted-side host
+   *   surface before stale Deleted proxies can silently no-op.
+   * - reject: `Deleted -> Added`, because rejecting the Deleted side first keeps
+   *   the inserted-side CC alive long enough to re-observe the remaining Added
+   *   side with fresh proxies.
    */
   private getReplaceSemanticOrder():
     | readonly ["Deleted", "Added"]
     | readonly ["Added", "Deleted"] {
+    if (this.action === "accept") {
+      return ["Added", "Deleted"] as const;
+    }
+
     return ["Deleted", "Added"] as const;
   }
 
@@ -1329,6 +1553,7 @@ export class ResolveSuggestionCommand {
     atomicFallback: {
       observation: ResolutionObservation;
       executionReport: ResolutionExecutionReport;
+      recoverySucceeded: boolean;
     } | null,
     options: {
       observation: ResolutionObservation;
@@ -1350,7 +1575,7 @@ export class ResolveSuggestionCommand {
         observation: atomicFallback.observation,
         executionReport: atomicFallback.executionReport,
         recoveryAttempted: true,
-        recoverySucceeded: true,
+        recoverySucceeded: atomicFallback.recoverySucceeded,
       };
     }
 
@@ -1365,6 +1590,38 @@ export class ResolveSuggestionCommand {
       },
       recoveryAttempted: options.recoveryAttempted,
       recoverySucceeded: options.recoverySucceeded,
+    };
+  }
+
+  /**
+   * Classifies whether an atomic replace fallback is semantically complete.
+   *
+   * Success is trusted ONLY after a fresh observation proves there is no
+   * remaining CC-scoped confirmed-pending replace pair for this suggestion.
+   */
+  private classifyAtomicReplaceCompletion(
+    observation: ResolutionObservation | null,
+  ): {
+    completed: boolean;
+    remaining: number;
+  } {
+    if (!observation) {
+      return {
+        completed: false,
+        remaining: 1,
+      };
+    }
+
+    const ccScopedRemaining =
+      (observation.debugMetadata?.ccTrackedChangesCount ?? 0) +
+      (observation.debugMetadata?.ccRangeTrackedChangesCount ?? 0);
+    const replaceStillPending =
+      observation.observationStatus === "confirmed-pending" &&
+      ccScopedRemaining > 0;
+
+    return {
+      completed: !replaceStillPending,
+      remaining: replaceStillPending ? ccScopedRemaining : 0,
     };
   }
 
@@ -1473,26 +1730,6 @@ export class ResolveSuggestionCommand {
     };
   }
 
-  /** Returns the final replace-step error payload after recovery. */
-  private buildReplaceRecoveryError(
-    stillPendingTrackedChange: Word.TrackedChange | null,
-    trackedChangesCount: number,
-    recoveryError?: string,
-  ): { error?: string } {
-    if (stillPendingTrackedChange === null && trackedChangesCount === 0) {
-      return {};
-    }
-
-    if (stillPendingTrackedChange) {
-      return { error: recoveryError };
-    }
-
-    return {
-      error:
-        "Word dejó el replace en un estado parcial; se cancela cleanup para evitar falso success.",
-    };
-  }
-
   /** Re-checks post-execute replace state and retries one atomic accept batch if Word still exposes a full pair. */
   private async observePostExecuteResolutionState(
     context: Word.RequestContext,
@@ -1588,8 +1825,7 @@ export class ResolveSuggestionCommand {
       observation: recoveredObservation ?? postExecuteObservation,
       recoveryAttempted: true,
       recoverySucceeded:
-        recoveredObservation !== null &&
-        recoveredObservation.trackedChanges.length === 0,
+        this.classifyAtomicReplaceCompletion(recoveredObservation).completed,
     };
   }
 
@@ -1636,7 +1872,7 @@ export class ResolveSuggestionCommand {
     const deletedRecoveryReport = await this.executor.apply(context, [
       deletedTrackedChange,
     ]);
-    if (deletedRecoveryReport.error) {
+    if (!this.isExecutionReportSemanticallyVerified(deletedRecoveryReport)) {
       return {
         observation: fallbackObservation,
         recoveryAttempted: true,
@@ -1668,7 +1904,8 @@ export class ResolveSuggestionCommand {
       return {
         observation: addedObservation,
         recoveryAttempted: true,
-        recoverySucceeded: addedObservation.trackedChanges.length === 0,
+        recoverySucceeded:
+          this.classifyAtomicReplaceCompletion(addedObservation).completed,
       };
     }
 
@@ -1679,7 +1916,7 @@ export class ResolveSuggestionCommand {
     const addedRecoveryReport = await this.executor.apply(context, [
       addedTrackedChange,
     ]);
-    if (addedRecoveryReport.error) {
+    if (!this.isExecutionReportSemanticallyVerified(addedRecoveryReport)) {
       return {
         observation: addedReobservation.observation,
         recoveryAttempted: true,
@@ -1697,8 +1934,7 @@ export class ResolveSuggestionCommand {
       observation: recoveredObservation ?? fallbackObservation,
       recoveryAttempted: true,
       recoverySucceeded:
-        recoveredObservation !== null &&
-        recoveredObservation.trackedChanges.length === 0,
+        this.classifyAtomicReplaceCompletion(recoveredObservation).completed,
     };
   }
 
@@ -1826,9 +2062,12 @@ export class ResolveSuggestionCommand {
       );
       return observation;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const serializedError = this.serializeUnknownError(error);
       console.warn(
-        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" snapshot=${label} failed: ${message}`,
+        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" snapshot=${label} failed: ${serializedError.message}`,
+        {
+          error: serializedError,
+        },
       );
       return null;
     }

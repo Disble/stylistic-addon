@@ -323,6 +323,32 @@ changes successfully, but a later cleanup or `inspectDocumentReviewState()` call
 throws `GeneralException`. The adapter must still return `rejected` rather than
 degrading to `error`.
 
+#### Verified repo lesson: unknown mutation verification is not zero tracked changes
+
+Another real-host correction showed that `accept()` can flush cleanly on a
+stale replace-side `TrackedChange` proxy while Word still exposes the same
+`Deleted,Added` pair as pending. In that run, the executor's body
+tracked-change count probe failed with Word's misnamed `InvalidRibbonDefinition`
+error, and the previous implementation returned `0` from the probe failure.
+
+That test strategy failed because it encoded two false assumptions:
+
+- a failed body count probe is equivalent to a document with zero tracked
+  changes,
+- accept flows are exempt from the stale-proxy silent no-op pattern that had
+  previously been seen on reject.
+
+Both assumptions are wrong. Unknown host evidence must remain **unknown**, and
+both `accept` and `reject` must treat a non-decreasing known body count as a
+silent no-op signal.
+
+**Testing rule**: executor tests must include both (1) accept-side silent no-op
+detection when body tracked-change count stays flat after sync, and (2) probe
+failure cases where `body.getTrackedChanges()` throws `InvalidRibbonDefinition`.
+The report must expose an unverified mutation instead of pretending the count is
+`0`, and replace workflow tests must force a fresh re-observation before any
+terminal success.
+
 ---
 
 ### 6. Reclassify tests by confidence tier

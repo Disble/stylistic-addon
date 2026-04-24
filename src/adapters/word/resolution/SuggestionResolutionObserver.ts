@@ -58,6 +58,26 @@ type LoadedReplaceObservationSources = {
   >;
 };
 
+type SerializedOfficeErrorDiagnostics = {
+  message: string;
+  name?: string;
+  code?: string | number;
+  debugInfo?: unknown;
+  traceMessages?: unknown;
+  stackPreview?: string[];
+};
+
+type BodyTrackedChangeCandidateDiagnostic = {
+  index: number;
+  trackedChangeId: string;
+  trackedChangeType: string;
+  rangeObtained: boolean;
+  comparisonQueued: boolean;
+  rangeTextSnippet: string | null;
+  relationValue?: string;
+  related?: boolean;
+};
+
 /** Collects and classifies host evidence for one resolution workflow. */
 export class SuggestionResolutionObserver {
   constructor(
@@ -65,6 +85,134 @@ export class SuggestionResolutionObserver {
     private readonly locator: SuggestionLocator,
     private readonly textLocator: TextLocator,
   ) {}
+
+  /** Emits one searchable observe-before diagnostic log entry for this suggestion. */
+  private logObserveBefore(
+    step: string,
+    details?: Record<string, unknown>,
+  ): void {
+    if (details) {
+      console.log(
+        `🧪 [SuggestionResolutionObserver] observe-before ${step}`,
+        details,
+      );
+      return;
+    }
+
+    console.log(`🧪 [SuggestionResolutionObserver] observe-before ${step}`);
+  }
+
+  /** Emits one searchable observe-before diagnostic warning for this suggestion. */
+  private warnObserveBefore(
+    step: string,
+    details?: Record<string, unknown>,
+  ): void {
+    if (details) {
+      console.warn(
+        `🧪 [SuggestionResolutionObserver] observe-before ${step}`,
+        details,
+      );
+      return;
+    }
+
+    console.warn(`🧪 [SuggestionResolutionObserver] observe-before ${step}`);
+  }
+
+  /** Reads one unknown error property defensively so diagnostics never throw while logging. */
+  private readUnknownErrorProperty(
+    error: unknown,
+    propertyName: string,
+  ): unknown {
+    if (typeof error !== "object" || error === null) {
+      return undefined;
+    }
+
+    try {
+      return (error as Record<string, unknown>)[propertyName];
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Builds one plain diagnostic object from an unknown Office.js-ish error payload. */
+  private serializeUnknownError(
+    error: unknown,
+  ): SerializedOfficeErrorDiagnostics {
+    const fallbackMessage =
+      error instanceof Error ? error.message : String(error ?? "Unknown error");
+    const messageValue = this.readUnknownErrorProperty(error, "message");
+    const nameValue = this.readUnknownErrorProperty(error, "name");
+    const codeValue = this.readUnknownErrorProperty(error, "code");
+    const debugInfo = this.readUnknownErrorProperty(error, "debugInfo");
+    const traceMessages = this.readUnknownErrorProperty(error, "traceMessages");
+    const stackValue = this.readUnknownErrorProperty(error, "stack");
+    const stackPreview =
+      typeof stackValue === "string"
+        ? stackValue
+            .split(/\r?\n/u)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .slice(0, 5)
+        : undefined;
+
+    return {
+      message:
+        typeof messageValue === "string" && messageValue.length > 0
+          ? messageValue
+          : fallbackMessage,
+      ...(typeof nameValue === "string" && nameValue.length > 0
+        ? { name: nameValue }
+        : {}),
+      ...(typeof codeValue === "string" || typeof codeValue === "number"
+        ? { code: codeValue }
+        : {}),
+      ...(debugInfo !== undefined ? { debugInfo } : {}),
+      ...(traceMessages !== undefined ? { traceMessages } : {}),
+      ...(stackPreview && stackPreview.length > 0 ? { stackPreview } : {}),
+    };
+  }
+
+  /** Returns one best-effort text snippet only when the range text is already safely available. */
+  private getLoadedRangeTextSnippet(range: Word.Range | null): string | null {
+    if (!range) {
+      return null;
+    }
+
+    try {
+      const text = (range as { text?: unknown }).text;
+      if (typeof text !== "string") {
+        return null;
+      }
+
+      const normalized = text.replace(/\s+/gu, " ").trim();
+      return normalized.length > 0 ? normalized.slice(0, 80) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Builds one compact body tracked-change diagnostic row for compareLocationWith tracing. */
+  private buildBodyTrackedChangeCandidateDiagnostic(
+    trackedChange: Word.TrackedChange,
+    index: number,
+    range: Word.Range | null,
+    comparisonQueued: boolean,
+    relationValue?: string,
+    related?: boolean,
+  ): BodyTrackedChangeCandidateDiagnostic {
+    return {
+      index,
+      trackedChangeId: String(
+        (trackedChange as { id?: string | number }).id ?? "no-id",
+      ),
+      trackedChangeType: trackedChange.type ?? "unknown",
+      rangeObtained: Boolean(range),
+      comparisonQueued,
+      rangeTextSnippet: this.getLoadedRangeTextSnippet(range),
+      ...(relationValue !== undefined ? { relationValue } : {}),
+      ...(related !== undefined ? { related } : {}),
+    };
+  }
 
   /** Builds one tracked-change diagnostic entry with its selected evidence source when known. */
   private describeTrackedChange(
@@ -297,38 +445,109 @@ export class SuggestionResolutionObserver {
   private async classifyBodyRelatedTrackedChanges(
     context: Word.RequestContext,
     candidates: Word.TrackedChange[],
+    candidateRanges: Word.Range[],
     comparisons: OfficeExtension.ClientResult<string>[],
   ): Promise<Word.TrackedChange[]> {
     if (candidates.length === 0) {
+      this.logObserveBefore("body related tracked changes skipped", {
+        suggestionId: this.suggestion.id,
+        candidateCount: 0,
+      });
       return [];
     }
 
+    const queuedCandidateDiagnostics = candidates.map((candidate, index) =>
+      this.buildBodyTrackedChangeCandidateDiagnostic(
+        candidate,
+        index,
+        candidateRanges[index] ?? null,
+        comparisons[index] !== undefined,
+      ),
+    );
+
+    this.logObserveBefore(
+      "before flushing body compareLocationWith comparisons",
+      {
+        suggestionId: this.suggestion.id,
+        candidateCount: candidates.length,
+        candidates: queuedCandidateDiagnostics,
+      },
+    );
+
+    // 56d18f2 behavior: do NOT swallow compareLocationWith sync failures.
+    // The c3060d5 defensive try/catch returned [] silently, which forced the
+    // selector to fall back to ccRange + deletedSide proxies that are stale
+    // duplicates of the Deleted side, leading to ItemNotFound at accept().
+    // Let the exception bubble up so the observation legitimately fails and
+    // the higher-level command can retry/recover with fresh state.
     try {
       await context.sync();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `⚠️ [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" body tracked-change compareLocationWith sync failed (treating ${candidates.length} body candidates as not-related): ${message}`,
-      );
-      return [];
+      this.warnObserveBefore("body compareLocationWith sync failed", {
+        suggestionId: this.suggestion.id,
+        candidateCount: candidates.length,
+        candidates: queuedCandidateDiagnostics,
+        error: this.serializeUnknownError(error),
+      });
+      throw error;
     }
 
+    this.logObserveBefore(
+      "after flushing body compareLocationWith comparisons",
+      {
+        suggestionId: this.suggestion.id,
+        candidateCount: candidates.length,
+        candidates: queuedCandidateDiagnostics,
+      },
+    );
+
     const related: Word.TrackedChange[] = [];
+    const resolvedCandidateDiagnostics: BodyTrackedChangeCandidateDiagnostic[] =
+      [];
     for (let index = 0; index < candidates.length; index += 1) {
       let relationValue: string | undefined;
       try {
         relationValue = comparisons[index].value;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `⚠️ [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" reading compareLocationWith result[${index}] failed: ${message}`,
+        this.warnObserveBefore(
+          "reading body compareLocationWith result failed",
+          {
+            suggestionId: this.suggestion.id,
+            candidate: this.buildBodyTrackedChangeCandidateDiagnostic(
+              candidates[index],
+              index,
+              candidateRanges[index] ?? null,
+              comparisons[index] !== undefined,
+            ),
+            error: this.serializeUnknownError(error),
+          },
         );
         continue;
       }
-      if (RESOLUTION_RELATED_RELATIONS.has(relationValue)) {
+      const isRelated = RESOLUTION_RELATED_RELATIONS.has(relationValue);
+      resolvedCandidateDiagnostics.push(
+        this.buildBodyTrackedChangeCandidateDiagnostic(
+          candidates[index],
+          index,
+          candidateRanges[index] ?? null,
+          comparisons[index] !== undefined,
+          relationValue,
+          isRelated,
+        ),
+      );
+
+      if (isRelated) {
         related.push(candidates[index]);
       }
     }
+
+    this.logObserveBefore("after classifying body related tracked changes", {
+      suggestionId: this.suggestion.id,
+      candidateCount: candidates.length,
+      relatedCount: related.length,
+      candidates: resolvedCandidateDiagnostics,
+    });
+
     return related;
   }
 
@@ -351,16 +570,44 @@ export class SuggestionResolutionObserver {
   }> {
     const ccRange = cc.getRange();
 
+    this.logObserveBefore("before collecting CC tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+    });
     const ccTrackedChanges = cc.getTrackedChanges();
     ccTrackedChanges.load({ select: "type,id" });
 
+    this.logObserveBefore("before collecting CC range tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+    });
     const rangeTrackedChanges = ccRange.getTrackedChanges();
     rangeTrackedChanges.load({ select: "type,id" });
 
+    this.logObserveBefore("before collecting body tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+    });
     const bodyTrackedChanges = context.document.body.getTrackedChanges();
     bodyTrackedChanges.load({ select: "type,id" });
 
     await context.sync();
+
+    this.logObserveBefore("after collecting CC tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+      ccTrackedChangesCount: ccTrackedChanges.items.length,
+    });
+    this.logObserveBefore("after collecting CC range tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+      ccRangeTrackedChangesCount: rangeTrackedChanges.items.length,
+    });
+    this.logObserveBefore("after collecting body tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+      bodyTrackedChangesCount: bodyTrackedChanges.items.length,
+    });
 
     const trackedChangesById = new Map<string, Word.TrackedChange>();
     const trackedChangesWithoutId: Word.TrackedChange[] = [];
@@ -389,6 +636,22 @@ export class SuggestionResolutionObserver {
       },
     );
 
+    this.logObserveBefore(
+      "before queuing body compareLocationWith comparisons",
+      {
+        suggestionId: this.suggestion.id,
+        ccTag: cc.tag,
+        candidateCount: candidateBodyTrackedChanges.length,
+        candidates: candidateBodyTrackedChanges.map((candidate, index) =>
+          this.buildBodyTrackedChangeCandidateDiagnostic(
+            candidate,
+            index,
+            null,
+            false,
+          ),
+        ),
+      },
+    );
     const candidateRanges = candidateBodyTrackedChanges.map((tc) =>
       tc.getRange(),
     );
@@ -396,12 +659,40 @@ export class SuggestionResolutionObserver {
       range.compareLocationWith(ccRange),
     );
 
+    this.logObserveBefore(
+      "after queuing body compareLocationWith comparisons",
+      {
+        suggestionId: this.suggestion.id,
+        ccTag: cc.tag,
+        candidateCount: candidateBodyTrackedChanges.length,
+        candidates: candidateBodyTrackedChanges.map((candidate, index) =>
+          this.buildBodyTrackedChangeCandidateDiagnostic(
+            candidate,
+            index,
+            candidateRanges[index] ?? null,
+            comparisons[index] !== undefined,
+          ),
+        ),
+      },
+    );
+
+    this.logObserveBefore("before collecting body related tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+      candidateCount: candidateBodyTrackedChanges.length,
+    });
     const bodyRelatedTrackedChanges =
       await this.classifyBodyRelatedTrackedChanges(
         context,
         candidateBodyTrackedChanges,
+        candidateRanges,
         comparisons,
       );
+    this.logObserveBefore("after collecting body related tracked changes", {
+      suggestionId: this.suggestion.id,
+      ccTag: cc.tag,
+      bodyRelatedTrackedChangesCount: bodyRelatedTrackedChanges.length,
+    });
     for (const tc of bodyRelatedTrackedChanges) {
       addTrackedChange(tc);
     }
@@ -1137,37 +1428,61 @@ export class SuggestionResolutionObserver {
       observationStatus: "unobservable",
     };
 
-    for (const candidate of rankedCandidates) {
-      const colocatedComment = await this.locator.findColocatedStylisticComment(
-        context,
-        candidate,
-      );
-      const candidateObservation = await this.observeResolutionCandidate(
-        context,
-        candidate,
-        colocatedComment,
-      );
-      console.log(
-        `🧪 [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" candidate-observation tag="${candidate.tag}"`,
-        {
+    for (const [candidateIndex, candidate] of rankedCandidates.entries()) {
+      this.logObserveBefore("selected CC observation start", {
+        suggestionId: this.suggestion.id,
+        candidateIndex,
+        candidateTag: candidate.tag,
+        initialCcTag: initialCc.tag,
+      });
+
+      try {
+        const colocatedComment =
+          await this.locator.findColocatedStylisticComment(context, candidate);
+        const candidateObservation = await this.observeResolutionCandidate(
+          context,
+          candidate,
+          colocatedComment,
+        );
+        console.log(
+          `🧪 [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" candidate-observation tag="${candidate.tag}"`,
+          {
+            observationStatus: candidateObservation.observationStatus,
+            trackedChangesObserved: candidateObservation.trackedChanges.length,
+            debugMetadata: candidateObservation.debugMetadata ?? null,
+          },
+        );
+
+        this.logObserveBefore("selected CC observation end", {
+          suggestionId: this.suggestion.id,
+          candidateIndex,
+          candidateTag: candidate.tag,
           observationStatus: candidateObservation.observationStatus,
           trackedChangesObserved: candidateObservation.trackedChanges.length,
-          debugMetadata: candidateObservation.debugMetadata ?? null,
-        },
-      );
+        });
 
-      observation.selectedCc = candidate;
-      observation.selectedComment = colocatedComment;
-      observation.trackedChanges = candidateObservation.trackedChanges;
-      observation.observationStatus = candidateObservation.observationStatus;
-      observation.debugMetadata = candidateObservation.debugMetadata;
+        observation.selectedCc = candidate;
+        observation.selectedComment = colocatedComment;
+        observation.trackedChanges = candidateObservation.trackedChanges;
+        observation.observationStatus = candidateObservation.observationStatus;
+        observation.debugMetadata = candidateObservation.debugMetadata;
 
-      if (
-        candidateObservation.observationStatus === "identity-lost" ||
-        (candidateObservation.observationStatus === "confirmed-pending" &&
-          candidateObservation.trackedChanges.length > 0)
-      ) {
-        break;
+        if (
+          candidateObservation.observationStatus === "identity-lost" ||
+          (candidateObservation.observationStatus === "confirmed-pending" &&
+            candidateObservation.trackedChanges.length > 0)
+        ) {
+          break;
+        }
+      } catch (error) {
+        this.warnObserveBefore("selected CC observation failed", {
+          suggestionId: this.suggestion.id,
+          candidateIndex,
+          candidateTag: candidate.tag,
+          initialCcTag: initialCc.tag,
+          error: this.serializeUnknownError(error),
+        });
+        throw error;
       }
     }
 

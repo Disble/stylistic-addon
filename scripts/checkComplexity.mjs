@@ -17,8 +17,17 @@ const KNOWN_EXCEPTIONS = new Map([
   [
     "src/adapters/word/ResolveSuggestionCommand.ts",
     {
-      maxLines: 1030,
-      reason: "Temporary exception until the approved resolution split lands",
+      maxLines: 2150,
+      reason:
+        "Temporary exception for active real-host resolution debugging until the approved resolution split lands",
+    },
+  ],
+  [
+    "src/adapters/word/resolution/SuggestionResolutionObserver.ts",
+    {
+      maxLines: 1550,
+      reason:
+        "Temporary exception for active observe-before diagnostics until the approved observer split lands",
     },
   ],
 ]);

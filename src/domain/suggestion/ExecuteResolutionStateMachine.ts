@@ -94,7 +94,7 @@ export class ExecuteResolutionStateMachine {
     }
 
     console.log(`🔄 [ExecuteResolutionStateMachine] ${this.current} → ${to}`);
-    if (to !== "completed" && to !== "failed") {
+    if (to !== "idle" && to !== "completed" && to !== "failed") {
       this.lastActivePhase = this.currentPhaseForState(to);
     }
     this.current = to;

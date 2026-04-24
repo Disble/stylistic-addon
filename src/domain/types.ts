@@ -700,6 +700,29 @@ export interface ResolutionExecutionReport {
     /** Body tracked-change count observed after the failed step. */
     bodyTrackedChangeCountAfter: number;
   };
+  /**
+   * Set when the executor successfully flushed a tracked-change mutation but
+   * could not verify whether the document-level tracked-change count changed.
+   * Unknown host evidence is intentionally not treated as zero: callers that
+   * need semantic certainty must re-observe fresh Word state before returning
+   * success.
+   */
+  unverifiedMutation?: {
+    /** Index inside the executor's ordered step list where verification was unavailable. */
+    stepIndex: number;
+    /** Type of the tracked change whose mutation could not be verified. */
+    trackedChangeType: "Added" | "Deleted";
+    /** Reason the mutation cannot be trusted as semantically verified. */
+    reason: "body-count-probe-failed";
+    /** Body tracked-change count observed before the step, when available. */
+    bodyTrackedChangeCountBefore?: number;
+    /** Body tracked-change count observed after the step, when available. */
+    bodyTrackedChangeCountAfter?: number;
+    /** Error captured while probing the body count before the step. */
+    bodyTrackedChangeCountBeforeError?: string;
+    /** Error captured while probing the body count after the step. */
+    bodyTrackedChangeCountAfterError?: string;
+  };
 }
 
 /** Structured telemetry event emitted by resolution workflows. */
