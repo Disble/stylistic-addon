@@ -23,7 +23,8 @@ import type {
   DocumentReviewState,
   FeedbackPayload,
   ProgressCallback,
-  ResolutionTelemetryEvent,
+  ResolutionObservabilityEvent,
+  ResolutionObservabilitySnapshot,
   Suggestion,
   SuggestionActionResult,
   TextChunk,
@@ -181,17 +182,20 @@ export interface IFeedbackPort {
 }
 
 // ---------------------------------------------------------------------------
-// Telemetry Port
+// Resolution Observability Port
 // ---------------------------------------------------------------------------
 
 /**
- * Contract for best-effort observability events emitted by workflow phases.
+ * Contract for best-effort resolution observability emitted by workflow phases.
  *
- * Telemetry must NEVER alter semantic document outcomes. Adapters are expected
- * to swallow transport/storage failures internally or let callers degrade them
- * to warnings.
+ * Observability must NEVER alter semantic document outcomes. Adapters are
+ * expected to swallow transport/storage failures internally or let callers
+ * degrade them to warnings.
  */
-export interface ITelemetryPort {
-  /** Emits one structured telemetry event for later debugging or analysis. */
-  emit(event: ResolutionTelemetryEvent): Promise<void>;
+export interface IResolutionObservabilityPort {
+  /** Emits one structured phase event for later debugging or analysis. */
+  emitEvent(event: ResolutionObservabilityEvent): Promise<void>;
+
+  /** Captures one structured host-evidence snapshot for forensic debugging. */
+  captureSnapshot(snapshot: ResolutionObservabilitySnapshot): Promise<void>;
 }

@@ -725,8 +725,14 @@ export interface ResolutionExecutionReport {
   };
 }
 
-/** Structured telemetry event emitted by resolution workflows. */
-export interface ResolutionTelemetryEvent {
+/** Scalar metadata carried by best-effort resolution observability records. */
+export type ResolutionObservabilityMetadata = Record<
+  string,
+  string | number | boolean | null
+>;
+
+/** Structured phase event emitted by resolution workflows. */
+export interface ResolutionObservabilityEvent {
   /** Correlation id shared by all events in one workflow attempt. */
   workflowAttemptId: string;
   /** Stable suggestion id being resolved. */
@@ -737,8 +743,31 @@ export interface ResolutionTelemetryEvent {
   phase: ResolutionPhase;
   /** Phase outcome used for later diagnostics. */
   outcome: "started" | "succeeded" | "failed" | "warning" | "reconciled";
-  /** Optional structured metadata for future telemetry sinks. */
-  metadata?: Record<string, string | number | boolean | null>;
+  /** Optional structured metadata for future observability sinks. */
+  metadata?: ResolutionObservabilityMetadata;
+}
+
+/** Snapshot checkpoints captured around risky resolution transitions. */
+export type ResolutionObservabilitySnapshotLabel =
+  | "after-execute-before-cleanup"
+  | "after-cleanup-before-return";
+
+/** Host evidence snapshot emitted for forensic debugging of resolution workflows. */
+export interface ResolutionObservabilitySnapshot {
+  /** Correlation id shared by all records in one workflow attempt. */
+  workflowAttemptId: string;
+  /** Stable suggestion id being resolved. */
+  suggestionId: string;
+  /** User action requested by the taskpane. */
+  action: "accept" | "reject";
+  /** Workflow checkpoint where the snapshot was captured. */
+  label: ResolutionObservabilitySnapshotLabel;
+  /** Structured workflow-owned state known at snapshot time. */
+  workflowState: Record<string, unknown>;
+  /** Optional host-facing evidence gathered from Word during the snapshot. */
+  hostEvidence?: Record<string, unknown>;
+  /** Optional heuristic or debug-only details associated with the snapshot. */
+  heuristicDiagnostics?: Record<string, unknown>;
 }
 
 /**

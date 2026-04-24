@@ -18,7 +18,10 @@
  * @module WordAdapter
  */
 
-import type { IDocumentPort, ITelemetryPort } from "../../domain/ports";
+import type {
+  IDocumentPort,
+  IResolutionObservabilityPort,
+} from "../../domain/ports";
 import {
   DocumentReviewStateMachine,
   type DocumentReviewUiState,
@@ -36,6 +39,7 @@ import {
   STYLISTIC_IDENTITY_TITLE_PREFIX,
   STYLISTIC_TAG_PREFIX,
 } from "../../infrastructure/config";
+import { NoopResolutionObservabilityAdapter } from "../observability/NoopResolutionObservabilityAdapter";
 import { BatchApplyOrchestrator } from "./BatchApplyOrchestrator";
 import {
   cleanupResolvedComments,
@@ -110,9 +114,7 @@ function buildSuggestionTag(suggestion: Suggestion): string {
 export class WordAdapter implements IDocumentPort {
   constructor(
     private readonly textLocator: TextLocator = getDefaultTextLocator(),
-    private readonly telemetryPort: ITelemetryPort = {
-      emit: async () => undefined,
-    },
+    private readonly observabilityPort: IResolutionObservabilityPort = new NoopResolutionObservabilityAdapter(),
   ) {}
 
   /**
@@ -509,7 +511,7 @@ export class WordAdapter implements IDocumentPort {
       "accept",
       new AcceptReplaceResolutionStrategy(),
       this.textLocator,
-      this.telemetryPort,
+      this.observabilityPort,
     ).execute();
   }
 
@@ -526,7 +528,7 @@ export class WordAdapter implements IDocumentPort {
       "reject",
       new RejectReplaceResolutionStrategy(),
       this.textLocator,
-      this.telemetryPort,
+      this.observabilityPort,
     ).execute();
   }
 
