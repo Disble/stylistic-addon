@@ -1,8 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  AcceptReplaceResolutionStrategy,
-  RejectReplaceResolutionStrategy,
-} from "./ReplaceResolutionStrategyContext";
 import { TrackedChangeResolutionExecutor } from "./TrackedChangeResolutionExecutor";
 
 /**
@@ -51,70 +47,8 @@ function buildBodyTrackedChangeContextStub(
 }
 
 describe("TrackedChangeResolutionExecutor silent no-op detection", () => {
-  it("applies accept replace steps in Added then Deleted order", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-accept-order",
-      "accept",
-      new AcceptReplaceResolutionStrategy(),
-    );
-    const context = buildBodyTrackedChangeContextStub([2, 1, 1, 0]);
-    const callOrder: string[] = [];
-
-    const report = await executor.apply(context, [
-      {
-        type: "Deleted",
-        accept: vi.fn(() => {
-          callOrder.push("accept-deleted");
-        }),
-      } as unknown as Word.TrackedChange,
-      {
-        type: "Added",
-        accept: vi.fn(() => {
-          callOrder.push("accept-added");
-        }),
-      } as unknown as Word.TrackedChange,
-    ]);
-
-    expect(report.error).toBeUndefined();
-    expect(report.completed).toBe(2);
-    expect(callOrder).toEqual(["accept-added", "accept-deleted"]);
-  });
-
-  it("keeps reject replace steps in Deleted then Added order", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-reject-order",
-      "reject",
-      new RejectReplaceResolutionStrategy(),
-    );
-    const context = buildBodyTrackedChangeContextStub([2, 1, 1, 0]);
-    const callOrder: string[] = [];
-
-    const report = await executor.apply(context, [
-      {
-        type: "Added",
-        reject: vi.fn(() => {
-          callOrder.push("reject-added");
-        }),
-      } as unknown as Word.TrackedChange,
-      {
-        type: "Deleted",
-        reject: vi.fn(() => {
-          callOrder.push("reject-deleted");
-        }),
-      } as unknown as Word.TrackedChange,
-    ]);
-
-    expect(report.error).toBeUndefined();
-    expect(report.completed).toBe(2);
-    expect(callOrder).toEqual(["reject-deleted", "reject-added"]);
-  });
-
   it("flags a reject step as silent no-op when bodyTrackedChange count does not decrease after sync", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-1",
-      "reject",
-      new RejectReplaceResolutionStrategy(),
-    );
+    const executor = new TrackedChangeResolutionExecutor("s-1", "reject");
     // Body probes per step:
     //   1. before step 0 (Deleted)
     //   2. after  step 0 (Deleted)  -> NO decrease (3 -> 3): silent no-op
@@ -144,11 +78,7 @@ describe("TrackedChangeResolutionExecutor silent no-op detection", () => {
   });
 
   it("does not flag silent no-op when bodyTrackedChange count decreases after sync", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-2",
-      "reject",
-      new RejectReplaceResolutionStrategy(),
-    );
+    const executor = new TrackedChangeResolutionExecutor("s-2", "reject");
     const context = buildBodyTrackedChangeContextStub([2, 1, 1, 0]);
     const rejectDeleted = vi.fn();
     const rejectAdded = vi.fn();
@@ -163,16 +93,12 @@ describe("TrackedChangeResolutionExecutor silent no-op detection", () => {
   });
 
   it("flags an accept step as silent no-op when bodyTrackedChange count does not decrease after sync", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-3",
-      "accept",
-      new AcceptReplaceResolutionStrategy(),
-    );
+    const executor = new TrackedChangeResolutionExecutor("s-3", "accept");
     const context = buildBodyTrackedChangeContextStub([2, 2, 2, 2]);
 
     const report = await executor.apply(context, [
-      { type: "Deleted", accept: vi.fn() } as unknown as Word.TrackedChange,
       { type: "Added", accept: vi.fn() } as unknown as Word.TrackedChange,
+      { type: "Deleted", accept: vi.fn() } as unknown as Word.TrackedChange,
     ]);
 
     expect(report.silentNoOpDetected).toEqual({
@@ -184,11 +110,7 @@ describe("TrackedChangeResolutionExecutor silent no-op detection", () => {
   });
 
   it("reports unverified mutation when the body count probe fails instead of treating unknown as zero", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-5",
-      "accept",
-      new AcceptReplaceResolutionStrategy(),
-    );
+    const executor = new TrackedChangeResolutionExecutor("s-5", "accept");
     const context = buildBodyTrackedChangeContextStub([
       new Error("InvalidRibbonDefinition"),
       1,
@@ -213,11 +135,7 @@ describe("TrackedChangeResolutionExecutor silent no-op detection", () => {
   });
 
   it("does not flag silent no-op when bodyTrackedChangeCountBefore is 0 (mocks that do not expose body counts must be tolerated)", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-4",
-      "reject",
-      new RejectReplaceResolutionStrategy(),
-    );
+    const executor = new TrackedChangeResolutionExecutor("s-4", "reject");
     const context = buildBodyTrackedChangeContextStub([0, 0, 0, 0]);
 
     const report = await executor.apply(context, [

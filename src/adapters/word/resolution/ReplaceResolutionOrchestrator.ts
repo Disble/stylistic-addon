@@ -5,9 +5,12 @@ import type {
   ReplaceResolutionStrategy,
   ReplaceTrackedChangeSide,
 } from "./ReplaceResolutionStrategyContext";
-import type { ResolutionObservation } from "./ResolutionContext";
+import type {
+  ReplaceTrackedChangeCandidate,
+  ResolutionObservation,
+} from "./ResolutionContext";
 import {
-  findTrackedChangeByType,
+  formatTrackedChangeTypesForLog,
   prioritizeFreshPreferredCandidate,
   resolveFreshPreferredCandidate,
 } from "./ResolutionObservationContext";
@@ -45,15 +48,6 @@ export class ReplaceResolutionWorkflow {
     observation: ResolutionObservation,
     workflowAttemptId: string,
   ): Promise<ReplaceResolutionAttempt> {
-    if (this.hasDuplicateReplaceSide(observation.trackedChanges)) {
-      const normalizedObservation =
-        this.normalizeReplaceObservation(observation);
-      console.log(
-        `⚙️ [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" duplicate-side replace normalized to semantic pair types=${normalizedObservation.debugMetadata?.trackedChangeTypes ?? ""}`,
-      );
-      return this.execute(context, normalizedObservation, workflowAttemptId);
-    }
-
     const semanticOrder = this.replaceResolutionStrategy.semanticOrder;
     let activeObservation = observation;
     let completed = 0;
@@ -137,12 +131,12 @@ export class ReplaceResolutionWorkflow {
     recoveryAttempted: boolean;
     recoverySucceeded: boolean;
   }> {
-    const trackedChange = findTrackedChangeByType(
-      observation.trackedChanges,
+    const initialCandidates = this.getSemanticCandidates(
+      observation,
       trackedChangeType,
     );
 
-    if (!trackedChange) {
+    if (initialCandidates.length === 0) {
       return {
         observation,
         completed: false,
@@ -152,8 +146,15 @@ export class ReplaceResolutionWorkflow {
       };
     }
 
-    const initialReport = await this.executor.apply(context, [trackedChange]);
-    if (this.isExecutionReportSemanticallyVerified(initialReport)) {
+    const initialAttempt = await this.executeSemanticCandidates(
+      context,
+      observation,
+      trackedChangeType,
+      initialCandidates,
+      workflowAttemptId,
+      "execute",
+    );
+    if (initialAttempt.completed) {
       return {
         observation,
         completed: true,
@@ -164,12 +165,12 @@ export class ReplaceResolutionWorkflow {
 
     this.logUnverifiedReplaceSemanticStep(
       trackedChangeType,
-      initialReport,
+      initialAttempt.report,
       workflowAttemptId,
     );
     const initialErrorMessage = this.buildReplaceSemanticStepErrorMessage(
       trackedChangeType,
-      initialReport,
+      initialAttempt.report,
       "",
     );
 
@@ -192,14 +193,14 @@ export class ReplaceResolutionWorkflow {
     }
 
     console.log(
-      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} recovery observation status=${firstRecoveryObservation.observation.observationStatus} trackedChanges=${firstRecoveryObservation.observation.trackedChanges.length} types=${firstRecoveryObservation.observation.debugMetadata?.trackedChangeTypes ?? ""}`,
+      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} recovery observation status=${firstRecoveryObservation.observation.observationStatus} trackedChanges=${firstRecoveryObservation.observation.trackedChanges.length} types=${formatTrackedChangeTypesForLog(firstRecoveryObservation.observation.trackedChanges)}`,
     );
 
-    const recoveredTrackedChange = findTrackedChangeByType(
-      firstRecoveryObservation.observation.trackedChanges,
+    const recoveryCandidates = this.getSemanticCandidates(
+      firstRecoveryObservation.observation,
       trackedChangeType,
     );
-    if (!recoveredTrackedChange) {
+    if (recoveryCandidates.length === 0) {
       return {
         observation: firstRecoveryObservation.observation,
         completed: true,
@@ -208,10 +209,15 @@ export class ReplaceResolutionWorkflow {
       };
     }
 
-    const recoveryReport = await this.executor.apply(context, [
-      recoveredTrackedChange,
-    ]);
-    if (this.isExecutionReportSemanticallyVerified(recoveryReport)) {
+    const recoveryAttempt = await this.executeSemanticCandidates(
+      context,
+      firstRecoveryObservation.observation,
+      trackedChangeType,
+      recoveryCandidates,
+      workflowAttemptId,
+      "recovery-execute",
+    );
+    if (recoveryAttempt.completed) {
       return {
         observation: firstRecoveryObservation.observation,
         completed: true,
@@ -220,17 +226,17 @@ export class ReplaceResolutionWorkflow {
       };
     }
 
-    if (recoveryReport.silentNoOpDetected) {
+    if (recoveryAttempt.report.silentNoOpDetected) {
       console.warn(
         `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} recovered proxy was a silent no-op; validating with final re-observation`,
-        recoveryReport.silentNoOpDetected,
+        recoveryAttempt.report.silentNoOpDetected,
       );
     }
 
-    if (recoveryReport.unverifiedMutation) {
+    if (recoveryAttempt.report.unverifiedMutation) {
       console.warn(
         `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} recovered proxy mutation verification unavailable; validating with final re-observation`,
-        recoveryReport.unverifiedMutation,
+        recoveryAttempt.report.unverifiedMutation,
       );
     }
 
@@ -242,21 +248,21 @@ export class ReplaceResolutionWorkflow {
       return {
         observation: firstRecoveryObservation.observation,
         completed: false,
-        error: recoveryReport.error,
+        error: recoveryAttempt.report.error,
         recoveryAttempted: true,
         recoverySucceeded: false,
       };
     }
 
     console.log(
-      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} final recovery observation status=${finalRecoveryObservation.observation.observationStatus} trackedChanges=${finalRecoveryObservation.observation.trackedChanges.length} types=${finalRecoveryObservation.observation.debugMetadata?.trackedChangeTypes ?? ""}`,
+      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} final recovery observation status=${finalRecoveryObservation.observation.observationStatus} trackedChanges=${finalRecoveryObservation.observation.trackedChanges.length} types=${formatTrackedChangeTypesForLog(finalRecoveryObservation.observation.trackedChanges)}`,
     );
 
-    const stillPendingTrackedChange = findTrackedChangeByType(
-      finalRecoveryObservation.observation.trackedChanges,
-      trackedChangeType,
-    );
-    const recoveredSideCompleted = stillPendingTrackedChange === null;
+    const recoveredSideCompleted =
+      this.getSemanticCandidates(
+        finalRecoveryObservation.observation,
+        trackedChangeType,
+      ).length === 0;
 
     return {
       observation: finalRecoveryObservation.observation,
@@ -265,9 +271,9 @@ export class ReplaceResolutionWorkflow {
         ? {}
         : {
             error:
-              recoveryReport.error ??
+              recoveryAttempt.report.error ??
               this.buildUntrustedExecutionError(
-                recoveryReport,
+                recoveryAttempt.report,
                 trackedChangeType,
               ),
           }),
@@ -347,6 +353,57 @@ export class ReplaceResolutionWorkflow {
     };
   }
 
+  /** Returns every executable candidate exposed for one semantic replace side. */
+  private getSemanticCandidates(
+    observation: ResolutionObservation,
+    trackedChangeType: ReplaceTrackedChangeSide,
+  ): ReplaceTrackedChangeCandidate[] {
+    return observation.semanticCandidates?.[trackedChangeType] ?? [];
+  }
+
+  /** Executes candidates in sequence until one is semantically verified or the list is exhausted. */
+  private async executeSemanticCandidates(
+    context: Word.RequestContext,
+    observation: ResolutionObservation,
+    trackedChangeType: ReplaceTrackedChangeSide,
+    candidates: ReplaceTrackedChangeCandidate[],
+    workflowAttemptId: string,
+    phaseLabel: "execute" | "recovery-execute",
+  ): Promise<{
+    completed: boolean;
+    report: ResolutionExecutionReport;
+  }> {
+    let lastReport: ResolutionExecutionReport | undefined;
+
+    for (const candidate of candidates) {
+      console.log(
+        `🧪 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} ${phaseLabel} source=${candidate.source} status=${observation.observationStatus} trackedChanges=${observation.trackedChanges.length} types=${formatTrackedChangeTypesForLog(observation.trackedChanges)}`,
+      );
+
+      const report = await this.executor.apply(context, [
+        candidate.trackedChange,
+      ]);
+      if (this.isExecutionReportSemanticallyVerified(report)) {
+        return {
+          completed: true,
+          report,
+        };
+      }
+
+      lastReport = report;
+    }
+
+    return {
+      completed: false,
+      report: lastReport ?? {
+        attempted: 0,
+        completed: 0,
+        remaining: 0,
+        error: `Word no expuso candidatos ejecutables para el tracked change ${trackedChangeType}.`,
+      },
+    };
+  }
+
   /** Re-observes only the remaining replace side and rejects any reappearance of the resolved side. */
   private async reobserveRemainingReplaceSide(
     context: Word.RequestContext,
@@ -389,14 +446,15 @@ export class ReplaceResolutionWorkflow {
     }
 
     console.log(
-      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace re-observation step=${stepIndex + 1} side=${remainingTrackedChangeType} status=${reobserved.observation.observationStatus} trackedChanges=${reobserved.observation.trackedChanges.length} types=${reobserved.observation.debugMetadata?.trackedChangeTypes ?? ""} semanticSource=${reobserved.observation.debugMetadata?.selectedSemanticSideSource ?? ""} deletedSource=${reobserved.observation.debugMetadata?.selectedDeletedSource ?? ""} addedSource=${reobserved.observation.debugMetadata?.selectedAddedSource ?? ""}`,
+      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace re-observation step=${stepIndex + 1} side=${remainingTrackedChangeType} status=${reobserved.observation.observationStatus} trackedChanges=${reobserved.observation.trackedChanges.length} types=${formatTrackedChangeTypesForLog(reobserved.observation.trackedChanges)} deletedSources=${this.describeSemanticCandidateSources(reobserved.observation, "Deleted")} addedSources=${this.describeSemanticCandidateSources(reobserved.observation, "Added")}`,
     );
 
-    const resolvedSideStillPending = findTrackedChangeByType(
-      reobserved.observation.trackedChanges,
-      resolvedTrackedChangeType,
-    );
-    if (resolvedSideStillPending) {
+    if (
+      this.getSemanticCandidates(
+        reobserved.observation,
+        resolvedTrackedChangeType,
+      ).length > 0
+    ) {
       return {
         observation: reobserved.observation,
         executionReport: {
@@ -411,11 +469,12 @@ export class ReplaceResolutionWorkflow {
       };
     }
 
-    const remainingTrackedChange = findTrackedChangeByType(
-      reobserved.observation.trackedChanges,
-      remainingTrackedChangeType,
-    );
-    if (remainingTrackedChange) {
+    if (
+      this.getSemanticCandidates(
+        reobserved.observation,
+        remainingTrackedChangeType,
+      ).length > 0
+    ) {
       return { observation: reobserved.observation };
     }
 
@@ -447,55 +506,17 @@ export class ReplaceResolutionWorkflow {
     };
   }
 
-  /** Collapses duplicate replace proxies into one semantic Deleted/Added pair before execution. */
-  private normalizeReplaceObservation(
+  /** Formats semantic candidate sources directly from the observation instead of duplicating them in debug metadata. */
+  private describeSemanticCandidateSources(
     observation: ResolutionObservation,
-  ): ResolutionObservation {
-    const normalizedTrackedChanges = [
-      findTrackedChangeByType(observation.trackedChanges, "Deleted"),
-      findTrackedChangeByType(observation.trackedChanges, "Added"),
-    ].filter(
-      (trackedChange): trackedChange is Word.TrackedChange =>
-        trackedChange !== null,
-    );
+    trackedChangeType: ReplaceTrackedChangeSide,
+  ): string {
+    const sources = this.getSemanticCandidates(
+      observation,
+      trackedChangeType,
+    ).map((candidate) => candidate.source);
 
-    return {
-      ...observation,
-      trackedChanges: normalizedTrackedChanges,
-      debugMetadata: observation.debugMetadata
-        ? {
-            ...observation.debugMetadata,
-            trackedChangesObserved: normalizedTrackedChanges.length,
-            trackedChangeTypes: normalizedTrackedChanges
-              .map((trackedChange) => trackedChange.type ?? "unknown")
-              .join(","),
-          }
-        : observation.debugMetadata,
-    };
-  }
-
-  /** Returns true when Word exposes more than one tracked change for the same replace side. */
-  private hasDuplicateReplaceSide(
-    trackedChanges: Word.TrackedChange[],
-  ): boolean {
-    let deletedCount = 0;
-    let addedCount = 0;
-
-    for (const trackedChange of trackedChanges) {
-      if (trackedChange.type === "Deleted") {
-        deletedCount += 1;
-      }
-
-      if (trackedChange.type === "Added") {
-        addedCount += 1;
-      }
-
-      if (deletedCount > 1 || addedCount > 1) {
-        return true;
-      }
-    }
-
-    return false;
+    return sources.length > 0 ? sources.join(",") : "none";
   }
 
   /** Returns true only when execution has no error and no unknown host-verification state. */

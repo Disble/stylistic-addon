@@ -365,7 +365,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     const result = await adapter.acceptSuggestion(suggestion);
 
     expect(result.status).toBe("error");
-    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.trackedChangesAffected).toBe(1);
     expect(result.error).toContain("falso success");
     expect(context._cc.delete).not.toHaveBeenCalled();
   });

@@ -32,7 +32,10 @@ import type { ReplaceResolutionStrategy } from "./resolution/ReplaceResolutionSt
 import type { ResolutionObservation } from "./resolution/ResolutionContext";
 import { ResolutionErrorSerializer } from "./resolution/ResolutionErrorParser";
 import { ResolutionObservabilityReporter } from "./resolution/ResolutionObservabilityAdapter";
-import { describeTrackedChangesForLog } from "./resolution/ResolutionObservationContext";
+import {
+  describeTrackedChangesForLog,
+  formatTrackedChangeTypesForLog,
+} from "./resolution/ResolutionObservationContext";
 import { ResolutionSnapshotObserver } from "./resolution/ResolutionSnapshotObserver";
 import { ResolveSuggestionResultFactory } from "./resolution/ResolveSuggestionResultFactory";
 import { SuggestionLocator } from "./resolution/SuggestionLocator";
@@ -108,11 +111,7 @@ export class ResolveSuggestionCommand {
     this.locator = new SuggestionLocator(suggestion);
     this.replaceResolutionStrategy = replaceResolutionStrategy;
     this.cleanup = new SuggestionResolutionCleanup(suggestion.id, action);
-    this.executor = new TrackedChangeResolutionExecutor(
-      suggestion.id,
-      action,
-      this.replaceResolutionStrategy,
-    );
+    this.executor = new TrackedChangeResolutionExecutor(suggestion.id, action);
     this.resultFactory = new ResolveSuggestionResultFactory(
       action,
       this.stateInspector,
@@ -374,7 +373,7 @@ export class ResolveSuggestionCommand {
       throw error;
     }
     console.log(
-      `🧭 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" observation status=${observation.observationStatus} trackedChanges=${observation.trackedChanges.length} types=${observation.debugMetadata?.trackedChangeTypes ?? ""} selectedCc=${observation.debugMetadata?.selectedCcTag ?? cc.tag}`,
+      `🧭 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" observation status=${observation.observationStatus} trackedChanges=${observation.trackedChanges.length} types=${formatTrackedChangeTypesForLog(observation.trackedChanges)} selectedCc=${observation.debugMetadata?.selectedCcTag ?? cc.tag}`,
     );
     console.log(
       `🧾 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" observation-detail`,
@@ -526,7 +525,9 @@ export class ResolveSuggestionCommand {
     this.transitionExecuteState("executing");
     await this.observabilityReporter.emitPhase("execute", "started", {
       trackedChangesAttempted: observation.trackedChanges.length,
-      trackedChangeTypes: observation.debugMetadata?.trackedChangeTypes ?? "",
+      trackedChangeTypes: formatTrackedChangeTypesForLog(
+        observation.trackedChanges,
+      ),
     });
 
     const executeAttempt = await this.replaceResolutionWorkflow.execute(

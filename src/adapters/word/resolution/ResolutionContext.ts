@@ -3,6 +3,7 @@ import type {
   ReplaceSuggestionIdentity,
   SuggestionObservationStatus,
 } from "../../../domain/types";
+import type { ReplaceTrackedChangeSide } from "./ReplaceResolutionStrategyContext";
 
 /** Terminal success states produced by resolution workflows. */
 export type ResolutionStatus =
@@ -23,18 +24,26 @@ export type ReplaceObservationContext = {
   trackedChanges: Word.TrackedChange[];
   observationStatus: SuggestionObservationStatus;
   debugMetadata?: ResolutionObservationDebugMetadata;
+  semanticCandidates?: ReplaceSemanticCandidateMap;
 };
+
+/** One executable tracked-change candidate together with the evidence source that exposed it. */
+export type ReplaceTrackedChangeCandidate = {
+  trackedChange: Word.TrackedChange;
+  source: string;
+};
+
+/** Exhaustive tracked-change candidates grouped by semantic side. */
+export type ReplaceSemanticCandidateMap = Record<
+  ReplaceTrackedChangeSide,
+  ReplaceTrackedChangeCandidate[]
+>;
 
 /** Primitive debug metadata captured during observation for telemetry/logging. */
 export type ResolutionObservationDebugMetadata = {
   selectedCcTag?: string;
   selectedCcTitleKind?: string;
   selectedCommentFound?: boolean;
-  trackedChangesObserved: number;
-  trackedChangeTypes: string;
-  selectedDeletedSource?: string;
-  selectedAddedSource?: string;
-  selectedSemanticSideSource?: string;
   observationStatus?: SuggestionObservationStatus;
   identityVersion?: string;
   ccTrackedChangesCount?: number;
@@ -55,6 +64,7 @@ export type ResolutionObservation = {
   trackedChanges: Word.TrackedChange[];
   observationStatus: SuggestionObservationStatus;
   debugMetadata?: ResolutionObservationDebugMetadata;
+  semanticCandidates?: ReplaceSemanticCandidateMap;
 };
 
 /** Result of locating candidate artifacts for one suggestion. */

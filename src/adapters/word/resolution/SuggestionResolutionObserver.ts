@@ -13,9 +13,12 @@ import type {
   TextLocator,
   WordSearchContainer,
 } from "../WordTextLocatorContext";
+import type { ReplaceTrackedChangeSide } from "./ReplaceResolutionStrategyContext";
 import type {
   ColocatedCommentContext,
   ReplaceObservationContext,
+  ReplaceSemanticCandidateMap,
+  ReplaceTrackedChangeCandidate,
   ResolutionObservation,
   ResolutionObservationDebugMetadata,
 } from "./ResolutionContext";
@@ -294,29 +297,6 @@ export class SuggestionResolutionObserver {
     );
   }
 
-  /** Logs how each replace-evidence combination scored before the selector returns one. */
-  private logReplaceCandidateEvaluation(
-    collections: Array<{
-      label: string;
-      trackedChanges: Word.TrackedChange[];
-    }>,
-    sources: ReplaceTrackedChangeSources,
-  ): void {
-    console.log(
-      `🧭 [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" replace-candidate-evaluation`,
-      {
-        evaluations: collections.map(({ label, trackedChanges }) => ({
-          label,
-          count: trackedChanges.length,
-          completePair:
-            this.hasCompleteReplaceTrackedChangePair(trackedChanges),
-          duplicateSide: this.hasDuplicateReplaceSide(trackedChanges),
-          trackedChanges: this.describeTrackedChanges(trackedChanges, sources),
-        })),
-      },
-    );
-  }
-
   /** Resolves one stable source label for a tracked change so post-step logs stay actionable. */
   private identifyTrackedChangeSource(
     trackedChange: Word.TrackedChange | null,
@@ -393,34 +373,6 @@ export class SuggestionResolutionObserver {
 
       if (hasAdded && hasDeleted) {
         return true;
-      }
-    }
-
-    return false;
-  }
-
-  /** Returns true when one replace side is duplicated inside the same evidence surface. */
-  private hasDuplicateReplaceSide(
-    trackedChanges: Word.TrackedChange[],
-  ): boolean {
-    let hasAdded = false;
-    let hasDeleted = false;
-
-    for (const trackedChange of trackedChanges) {
-      if (trackedChange.type === "Added") {
-        if (hasAdded) {
-          return true;
-        }
-
-        hasAdded = true;
-      }
-
-      if (trackedChange.type === "Deleted") {
-        if (hasDeleted) {
-          return true;
-        }
-
-        hasDeleted = true;
       }
     }
 
@@ -725,8 +677,6 @@ export class SuggestionResolutionObserver {
         ? "compound-v2"
         : "invalid-or-missing",
       selectedCommentFound: Boolean(colocatedComment),
-      trackedChangesObserved: 0,
-      trackedChangeTypes: "",
       observationStatus,
       ...(identityVersion ? { identityVersion } : {}),
     };
@@ -871,7 +821,6 @@ export class SuggestionResolutionObserver {
     colocatedComment: ColocatedCommentContext | null,
     parsedIdentity: ReplaceSuggestionIdentity,
     trackedChanges: Word.TrackedChange[],
-    sources: ReplaceTrackedChangeSources,
     baseDebugMetadata: LoadedReplaceObservationSources["baseDebugMetadata"],
   ): ResolutionObservationDebugMetadata {
     const observationStatus = this.hasCompleteReplaceTrackedChangePair(
@@ -884,22 +833,6 @@ export class SuggestionResolutionObserver {
       selectedCcTag: cc.tag,
       selectedCcTitleKind: "compound-v2",
       selectedCommentFound: Boolean(colocatedComment),
-      trackedChangesObserved: trackedChanges.length,
-      trackedChangeTypes: trackedChanges
-        .map((trackedChange) => trackedChange.type ?? "unknown")
-        .join(","),
-      selectedDeletedSource: this.identifyTrackedChangeSource(
-        trackedChanges.find(
-          (trackedChange) => trackedChange.type === "Deleted",
-        ) ?? null,
-        sources,
-      ),
-      selectedAddedSource: this.identifyTrackedChangeSource(
-        trackedChanges.find(
-          (trackedChange) => trackedChange.type === "Added",
-        ) ?? null,
-        sources,
-      ),
       observationStatus,
       identityVersion: parsedIdentity.version,
       ...baseDebugMetadata,
@@ -912,7 +845,6 @@ export class SuggestionResolutionObserver {
     colocatedComment: ColocatedCommentContext | null,
     parsedIdentity: ReplaceSuggestionIdentity,
     trackedChanges: Word.TrackedChange[],
-    sources: ReplaceTrackedChangeSources,
     baseDebugMetadata: LoadedReplaceObservationSources["baseDebugMetadata"],
   ): ResolutionObservationDebugMetadata {
     const observationStatus =
@@ -922,151 +854,128 @@ export class SuggestionResolutionObserver {
       selectedCcTag: cc.tag,
       selectedCcTitleKind: "compound-v2",
       selectedCommentFound: Boolean(colocatedComment),
-      trackedChangesObserved: trackedChanges.length,
-      trackedChangeTypes: trackedChanges
-        .map((trackedChange) => trackedChange.type ?? "unknown")
-        .join(","),
-      selectedSemanticSideSource: this.identifyTrackedChangeSource(
-        trackedChanges[0] ?? null,
-        sources,
-      ),
       observationStatus,
       identityVersion: parsedIdentity.version,
       ...baseDebugMetadata,
     };
   }
 
-  /** Returns the first evidence combination that yields a complete replace pair. */
-  private resolveTrackedChangesForReplace(sources: {
-    ccTrackedChanges: Word.TrackedChange[];
-    ccRangeTrackedChanges: Word.TrackedChange[];
-    bodyRelatedTrackedChanges: Word.TrackedChange[];
-    deletedSideTrackedChanges: Word.TrackedChange[];
-    operationalAnchorTrackedChanges: Word.TrackedChange[];
-    commentTrackedChanges: Word.TrackedChange[];
-  }): Word.TrackedChange[] {
-    // Priority order is document-level first: `ccRange.getTrackedChanges()` and
-    // the proximity-filtered `bodyRelated` stream operate on the real document
-    // range that the user sees, so accepting their proxies actually mutates
-    // the document. `cc.getTrackedChanges()` has been demoted to a later
-    // fallback because in real Word it can expose CC-internal proxies that
-    // silently no-op when accepted, leaving the replace pair unresolved while
-    // `sync()` still succeeds. When the document-scoped sources cannot
-    // complete the replace pair on their own, we combine the text-anchored
-    // `deletedSide` locator with the remaining cc/ccRange evidence to avoid
-    // regressing prior scenarios that relied on the text-anchored deletion.
-    const prioritizedCollections: Array<{
-      label: string;
-      trackedChanges: Word.TrackedChange[];
-    }> = [
+  /** Builds the raw replace-evidence collections without collapsing them to a single winner. */
+  private buildReplaceSourceCollections(
+    sources: ReplaceTrackedChangeSources,
+  ): Array<{
+    source: string;
+    trackedChanges: Word.TrackedChange[];
+  }> {
+    return [
+      { source: "cc", trackedChanges: sources.ccTrackedChanges },
+      { source: "ccRange", trackedChanges: sources.ccRangeTrackedChanges },
       {
-        label: "ccRange+bodyRelated",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccRangeTrackedChanges,
-          sources.bodyRelatedTrackedChanges,
+        source: "bodyRelated",
+        trackedChanges: sources.bodyRelatedTrackedChanges,
+      },
+      {
+        source: "deletedSide",
+        trackedChanges: sources.deletedSideTrackedChanges.filter(
+          (trackedChange) => trackedChange.type === "Deleted",
         ),
       },
       {
-        label: "ccRange+deletedSide",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccRangeTrackedChanges,
-          sources.deletedSideTrackedChanges,
-        ),
+        source: "operationalAnchor",
+        trackedChanges: sources.operationalAnchorTrackedChanges,
       },
-      {
-        label: "cc+ccRange+deletedSide",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccTrackedChanges,
-          sources.ccRangeTrackedChanges,
-          sources.deletedSideTrackedChanges,
-        ),
-      },
-      {
-        label: "ccRange+bodyRelated+deletedSide",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccRangeTrackedChanges,
-          sources.bodyRelatedTrackedChanges,
-          sources.deletedSideTrackedChanges,
-        ),
-      },
-      {
-        label: "ccRange+bodyRelated+operationalAnchor",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccRangeTrackedChanges,
-          sources.bodyRelatedTrackedChanges,
-          sources.operationalAnchorTrackedChanges,
-        ),
-      },
-      {
-        label: "ccRange+bodyRelated+comment",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccRangeTrackedChanges,
-          sources.bodyRelatedTrackedChanges,
-          sources.commentTrackedChanges,
-        ),
-      },
-      {
-        label: "ccRange+operationalAnchor",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccRangeTrackedChanges,
-          sources.operationalAnchorTrackedChanges,
-        ),
-      },
-      {
-        label: "ccRange+comment",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccRangeTrackedChanges,
-          sources.commentTrackedChanges,
-        ),
-      },
-      {
-        label: "cc+ccRange+bodyRelated",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccTrackedChanges,
-          sources.ccRangeTrackedChanges,
-          sources.bodyRelatedTrackedChanges,
-        ),
-      },
-      {
-        label: "cc+ccRange+operationalAnchor",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccTrackedChanges,
-          sources.ccRangeTrackedChanges,
-          sources.operationalAnchorTrackedChanges,
-        ),
-      },
-      {
-        label: "cc+ccRange+comment",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccTrackedChanges,
-          sources.ccRangeTrackedChanges,
-          sources.commentTrackedChanges,
-        ),
-      },
-      {
-        label: "cc+ccRange+bodyRelated+deletedSide+operationalAnchor+comment",
-        trackedChanges: this.mergeTrackedChanges(
-          sources.ccTrackedChanges,
-          sources.ccRangeTrackedChanges,
-          sources.bodyRelatedTrackedChanges,
-          sources.deletedSideTrackedChanges,
-          sources.operationalAnchorTrackedChanges,
-          sources.commentTrackedChanges,
-        ),
-      },
+      { source: "comment", trackedChanges: sources.commentTrackedChanges },
     ];
-    this.logReplaceCandidateEvaluation(prioritizedCollections, sources);
+  }
 
-    for (const { trackedChanges } of prioritizedCollections) {
-      if (this.hasCompleteReplaceTrackedChangePair(trackedChanges)) {
-        return trackedChanges;
+  /** Collects every executable candidate for one replace side without declaring a winner up front. */
+  private collectReplaceSemanticCandidates(
+    trackedChangeType: ReplaceTrackedChangeSide,
+    sources: ReplaceTrackedChangeSources,
+  ): ReplaceTrackedChangeCandidate[] {
+    const candidatesById = new Map<string, ReplaceTrackedChangeCandidate>();
+    const candidatesWithoutId: ReplaceTrackedChangeCandidate[] = [];
+
+    for (const collection of this.buildReplaceSourceCollections(sources)) {
+      for (const trackedChange of collection.trackedChanges) {
+        this.collectReplaceSemanticCandidate(
+          trackedChangeType,
+          collection.source,
+          trackedChange,
+          candidatesById,
+          candidatesWithoutId,
+        );
       }
     }
 
-    const lastPrioritizedCollection = [...prioritizedCollections].pop();
+    return [...Array.from(candidatesById.values()), ...candidatesWithoutId];
+  }
 
-    return this.normalizeReplaceTrackedChanges(
-      lastPrioritizedCollection?.trackedChanges ?? [],
+  /** Adds one semantic candidate only when it matches the side and was not already recorded. */
+  private collectReplaceSemanticCandidate(
+    trackedChangeType: ReplaceTrackedChangeSide,
+    source: string,
+    trackedChange: Word.TrackedChange,
+    candidatesById: Map<string, ReplaceTrackedChangeCandidate>,
+    candidatesWithoutId: ReplaceTrackedChangeCandidate[],
+  ): void {
+    if (trackedChange.type !== trackedChangeType) {
+      return;
+    }
+
+    const candidate: ReplaceTrackedChangeCandidate = {
+      trackedChange,
+      source,
+    };
+    const id = String((trackedChange as { id?: string | number }).id ?? "");
+
+    if (id.length > 0) {
+      if (!candidatesById.has(id)) {
+        candidatesById.set(id, candidate);
+      }
+      return;
+    }
+
+    if (
+      !candidatesWithoutId.some(
+        (existingCandidate) =>
+          existingCandidate.trackedChange === candidate.trackedChange,
+      )
+    ) {
+      candidatesWithoutId.push(candidate);
+    }
+  }
+
+  /** Builds the exhaustive candidate lists for both replace sides. */
+  private buildReplaceSemanticCandidates(
+    sources: ReplaceTrackedChangeSources,
+  ): ReplaceSemanticCandidateMap {
+    return {
+      Deleted: this.collectReplaceSemanticCandidates("Deleted", sources),
+      Added: this.collectReplaceSemanticCandidates("Added", sources),
+    };
+  }
+
+  /** Selects one representative tracked change per replace side for snapshots and result payloads. */
+  private selectPrimaryReplaceTrackedChanges(
+    semanticCandidates: ReplaceSemanticCandidateMap,
+  ): Word.TrackedChange[] {
+    return [
+      semanticCandidates.Deleted[0]?.trackedChange,
+      semanticCandidates.Added[0]?.trackedChange,
+    ].filter(
+      (trackedChange): trackedChange is Word.TrackedChange =>
+        trackedChange !== undefined,
+    );
+  }
+
+  /** Exposes all candidates for one side during side-specific re-observation. */
+  private selectReplaceSemanticSideTrackedChanges(
+    trackedChangeType: ReplaceTrackedChangeSide,
+    semanticCandidates: ReplaceSemanticCandidateMap,
+  ): Word.TrackedChange[] {
+    return semanticCandidates[trackedChangeType].map(
+      (candidate) => candidate.trackedChange,
     );
   }
 
@@ -1086,133 +995,6 @@ export class SuggestionResolutionObserver {
       container: context.document.body as unknown as WordSearchContainer,
       searchText: anchorText,
     });
-  }
-
-  /** Merges tracked-change evidence from multiple sources without duplicating logical changes. */
-  private mergeTrackedChanges(
-    ...collections: Array<Word.TrackedChange[]>
-  ): Word.TrackedChange[] {
-    const trackedChangesById = new Map<string, Word.TrackedChange>();
-    const trackedChangesWithoutId: Word.TrackedChange[] = [];
-
-    for (const collection of collections) {
-      for (const trackedChange of collection) {
-        const id = String((trackedChange as { id?: string | number }).id ?? "");
-
-        if (id.length > 0) {
-          trackedChangesById.set(id, trackedChange);
-          continue;
-        }
-
-        if (!trackedChangesWithoutId.includes(trackedChange)) {
-          trackedChangesWithoutId.push(trackedChange);
-        }
-      }
-    }
-
-    return [
-      ...Array.from(trackedChangesById.values()),
-      ...trackedChangesWithoutId,
-    ];
-  }
-
-  /** Keeps only one tracked change per semantic replace side. */
-  private normalizeReplaceTrackedChanges(
-    trackedChanges: Word.TrackedChange[],
-  ): Word.TrackedChange[] {
-    let selectedDeleted: Word.TrackedChange | null = null;
-    let selectedAdded: Word.TrackedChange | null = null;
-
-    for (const trackedChange of trackedChanges) {
-      if (trackedChange.type === "Deleted" && selectedDeleted === null) {
-        selectedDeleted = trackedChange;
-      }
-
-      if (trackedChange.type === "Added" && selectedAdded === null) {
-        selectedAdded = trackedChange;
-      }
-
-      if (selectedDeleted && selectedAdded) {
-        break;
-      }
-    }
-
-    return [selectedDeleted, selectedAdded].filter(
-      (trackedChange): trackedChange is Word.TrackedChange =>
-        trackedChange !== null,
-    );
-  }
-
-  /** Keeps only the first tracked change for one semantic side. */
-  private normalizeTrackedChangesForSemanticSide(
-    trackedChanges: Word.TrackedChange[],
-    trackedChangeType: "Added" | "Deleted",
-  ): Word.TrackedChange[] {
-    const selectedTrackedChange = trackedChanges.find(
-      (trackedChange) => trackedChange.type === trackedChangeType,
-    );
-
-    return selectedTrackedChange ? [selectedTrackedChange] : [];
-  }
-
-  /** Chooses the narrowest, side-specific evidence source for one remaining replace side. */
-  private resolveTrackedChangesForReplaceSemanticSide(
-    trackedChangeType: "Added" | "Deleted",
-    sources: {
-      ccTrackedChanges: Word.TrackedChange[];
-      ccRangeTrackedChanges: Word.TrackedChange[];
-      bodyRelatedTrackedChanges: Word.TrackedChange[];
-      deletedSideTrackedChanges: Word.TrackedChange[];
-      operationalAnchorTrackedChanges: Word.TrackedChange[];
-      commentTrackedChanges: Word.TrackedChange[];
-    },
-  ): Word.TrackedChange[] {
-    const prioritizedCollections =
-      trackedChangeType === "Added"
-        ? [
-            sources.ccRangeTrackedChanges,
-            sources.bodyRelatedTrackedChanges,
-            sources.ccTrackedChanges,
-            sources.operationalAnchorTrackedChanges,
-            sources.commentTrackedChanges,
-            this.mergeTrackedChanges(
-              sources.ccRangeTrackedChanges,
-              sources.bodyRelatedTrackedChanges,
-              sources.ccTrackedChanges,
-              sources.operationalAnchorTrackedChanges,
-              sources.commentTrackedChanges,
-            ),
-          ]
-        : [
-            sources.bodyRelatedTrackedChanges,
-            sources.ccRangeTrackedChanges,
-            sources.deletedSideTrackedChanges,
-            sources.operationalAnchorTrackedChanges,
-            sources.commentTrackedChanges,
-            sources.ccTrackedChanges,
-            this.mergeTrackedChanges(
-              sources.bodyRelatedTrackedChanges,
-              sources.ccRangeTrackedChanges,
-              sources.deletedSideTrackedChanges,
-              sources.operationalAnchorTrackedChanges,
-              sources.commentTrackedChanges,
-              sources.ccTrackedChanges,
-            ),
-          ];
-
-    for (const trackedChanges of prioritizedCollections) {
-      const normalizedTrackedChanges =
-        this.normalizeTrackedChangesForSemanticSide(
-          trackedChanges,
-          trackedChangeType,
-        );
-
-      if (normalizedTrackedChanges.length > 0) {
-        return normalizedTrackedChanges;
-      }
-    }
-
-    return [];
   }
 
   /** Observes replace suggestion evidence through compound-v2 metadata only. */
@@ -1254,15 +1036,16 @@ export class SuggestionResolutionObserver {
       parsedIdentity,
     );
     this.logReplaceSourceDiagnostics(cc, loadedSources);
-    const trackedChanges = this.resolveTrackedChangesForReplace(
+    const semanticCandidates = this.buildReplaceSemanticCandidates(
       loadedSources.sources,
     );
+    const trackedChanges =
+      this.selectPrimaryReplaceTrackedChanges(semanticCandidates);
     const debugMetadata = this.buildReplacePairDebugMetadata(
       cc,
       colocatedComment,
       parsedIdentity,
       trackedChanges,
-      loadedSources.sources,
       loadedSources.baseDebugMetadata,
     );
     console.log(
@@ -1281,6 +1064,7 @@ export class SuggestionResolutionObserver {
       trackedChanges,
       observationStatus: debugMetadata.observationStatus ?? "unobservable",
       debugMetadata,
+      semanticCandidates,
     };
   }
 
@@ -1289,7 +1073,7 @@ export class SuggestionResolutionObserver {
     context: Word.RequestContext,
     cc: Word.ContentControl,
     colocatedComment: ColocatedCommentContext | null,
-    trackedChangeType: "Added" | "Deleted",
+    trackedChangeType: ReplaceTrackedChangeSide,
   ): Promise<ReplaceObservationContext> {
     cc.load("title,tag");
     await context.sync();
@@ -1323,16 +1107,18 @@ export class SuggestionResolutionObserver {
       colocatedComment,
       parsedIdentity,
     );
-    const trackedChanges = this.resolveTrackedChangesForReplaceSemanticSide(
-      trackedChangeType,
+    const semanticCandidates = this.buildReplaceSemanticCandidates(
       loadedSources.sources,
+    );
+    const trackedChanges = this.selectReplaceSemanticSideTrackedChanges(
+      trackedChangeType,
+      semanticCandidates,
     );
     const debugMetadata = this.buildReplaceSemanticSideDebugMetadata(
       cc,
       colocatedComment,
       parsedIdentity,
       trackedChanges,
-      loadedSources.sources,
       loadedSources.baseDebugMetadata,
     );
     console.log(
@@ -1351,6 +1137,7 @@ export class SuggestionResolutionObserver {
       trackedChanges,
       observationStatus: debugMetadata.observationStatus ?? "unobservable",
       debugMetadata,
+      semanticCandidates,
     };
   }
 
@@ -1359,11 +1146,7 @@ export class SuggestionResolutionObserver {
     context: Word.RequestContext,
     candidate: Word.ContentControl,
     colocatedComment: ColocatedCommentContext | null,
-  ): Promise<{
-    trackedChanges: Word.TrackedChange[];
-    observationStatus: SuggestionObservationStatus;
-    debugMetadata?: ResolutionObservationDebugMetadata;
-  }> {
+  ): Promise<ReplaceObservationContext> {
     const observation = await this.observeReplaceSuggestion(
       context,
       candidate,
@@ -1373,6 +1156,7 @@ export class SuggestionResolutionObserver {
       trackedChanges: observation.trackedChanges,
       observationStatus: observation.observationStatus,
       debugMetadata: observation.debugMetadata,
+      semanticCandidates: observation.semanticCandidates,
     };
   }
 
@@ -1427,6 +1211,8 @@ export class SuggestionResolutionObserver {
         observation.trackedChanges = candidateObservation.trackedChanges;
         observation.observationStatus = candidateObservation.observationStatus;
         observation.debugMetadata = candidateObservation.debugMetadata;
+        observation.semanticCandidates =
+          candidateObservation.semanticCandidates;
 
         if (
           candidateObservation.observationStatus === "identity-lost" ||
@@ -1455,7 +1241,7 @@ export class SuggestionResolutionObserver {
     context: Word.RequestContext,
     rankedCandidates: Word.ContentControl[],
     initialCc: Word.ContentControl,
-    trackedChangeType: "Added" | "Deleted",
+    trackedChangeType: ReplaceTrackedChangeSide,
   ): Promise<ResolutionObservation> {
     const observation: ResolutionObservation = {
       selectedCc: initialCc,
@@ -1482,6 +1268,7 @@ export class SuggestionResolutionObserver {
       observation.trackedChanges = candidateObservation.trackedChanges;
       observation.observationStatus = candidateObservation.observationStatus;
       observation.debugMetadata = candidateObservation.debugMetadata;
+      observation.semanticCandidates = candidateObservation.semanticCandidates;
 
       if (
         candidateObservation.observationStatus === "identity-lost" ||

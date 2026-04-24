@@ -23,6 +23,15 @@ export function describeTrackedChangesForLog(
   );
 }
 
+/** Builds a compact comma-separated type summary for one tracked-change collection. */
+export function formatTrackedChangeTypesForLog(
+  trackedChanges: Word.TrackedChange[],
+): string {
+  return trackedChanges
+    .map((trackedChange) => trackedChange.type ?? "unknown")
+    .join(",");
+}
+
 /** Resolves one stale preferred CC to its fresh logical equivalent from the current locate pass. */
 export function resolveFreshPreferredCandidate(
   rankedCandidates: Word.ContentControl[],

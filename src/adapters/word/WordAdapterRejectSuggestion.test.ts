@@ -472,7 +472,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const result = await adapter.rejectSuggestion(suggestion);
 
     expect(result.status).toBe("error");
-    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.trackedChangesAffected).toBe(1);
     expect(result.error).toContain("falso success");
     expect(context._cc.delete).not.toHaveBeenCalled();
   });

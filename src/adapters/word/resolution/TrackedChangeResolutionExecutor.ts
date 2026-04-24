@@ -1,5 +1,5 @@
 import type { ResolutionExecutionReport } from "../../../domain/types";
-import type { ReplaceResolutionStrategy } from "./ReplaceResolutionStrategyContext";
+import type { ReplaceTrackedChangeSide } from "./ReplaceResolutionStrategyContext";
 
 type BodyTrackedChangeCountProbe =
   | {
@@ -16,7 +16,6 @@ export class TrackedChangeResolutionExecutor {
   constructor(
     private readonly suggestionId: string,
     private readonly action: "accept" | "reject",
-    private readonly replaceResolutionStrategy: ReplaceResolutionStrategy,
   ) {}
 
   /** Builds one stable tracked-change diagnostic entry for runtime logs. */
@@ -40,7 +39,7 @@ export class TrackedChangeResolutionExecutor {
   /** Returns true when the tracked-change type can be semantically verified by body count. */
   private isVerifiableTrackedChangeType(
     trackedChangeType: string,
-  ): trackedChangeType is "Added" | "Deleted" {
+  ): trackedChangeType is ReplaceTrackedChangeSide {
     return trackedChangeType === "Added" || trackedChangeType === "Deleted";
   }
 
@@ -54,7 +53,7 @@ export class TrackedChangeResolutionExecutor {
   /** Builds an unverified-mutation signal without conflating unknown host state with count zero. */
   private buildUnverifiedMutation(
     stepIndex: number,
-    trackedChangeType: "Added" | "Deleted",
+    trackedChangeType: ReplaceTrackedChangeSide,
     beforeProbe: BodyTrackedChangeCountProbe,
     afterProbe: BodyTrackedChangeCountProbe,
   ): ResolutionExecutionReport["unverifiedMutation"] | undefined {
@@ -75,35 +74,12 @@ export class TrackedChangeResolutionExecutor {
     };
   }
 
-  /** Orders tracked changes using the shared replace policy for this action. */
-  private orderTrackedChangesForExecution(
-    trackedChanges: Word.TrackedChange[],
-  ): Word.TrackedChange[] {
-    return trackedChanges
-      .map((trackedChange, index) => ({
-        trackedChange,
-        index,
-        priority: this.replaceResolutionStrategy.priorityFor(
-          trackedChange.type ?? "unknown",
-        ),
-      }))
-      .sort((left, right) => {
-        if (left.priority !== right.priority) {
-          return left.priority - right.priority;
-        }
-
-        return left.index - right.index;
-      })
-      .map(({ trackedChange }) => trackedChange);
-  }
-
   /** Applies the requested action and reports exactly how far execution got. */
   async apply(
     context: Word.RequestContext,
     trackedChanges: Word.TrackedChange[],
   ): Promise<ResolutionExecutionReport> {
-    const orderedTrackedChanges =
-      this.orderTrackedChangesForExecution(trackedChanges);
+    const orderedTrackedChanges = [...trackedChanges];
     console.log(
       `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} workflow-plan orderedTypes=${orderedTrackedChanges
         .map((trackedChange) => trackedChange.type ?? "unknown")
