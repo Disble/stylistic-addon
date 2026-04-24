@@ -372,7 +372,7 @@ describe("WordAdapter.acceptSuggestion", () => {
 
   it("fails closed when a fresh post-execute observation still exposes the full replace pair", async () => {
     const suggestion = makeSuggestion({
-      id: "chunk0-post-execute-atomic-accept",
+      id: "chunk0-post-execute-full-pair-still-pending-accept",
       anchor: "ni Shu",
       suggestedText: "ni de Shu",
       context: "No sabían si venía de ni Shu o de otro sitio.",
@@ -392,10 +392,11 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
-      ccTag: "stylistic:track-change:chunk0-post-execute-atomic-accept",
+      ccTag: "stylistic:track-change:chunk0-post-execute-full-pair-still-pending-accept",
       ccTitle: makeCompoundV2Title({
-        suggestionId: "chunk0-post-execute-atomic-accept",
-        insertedTag: "stylistic:track-change:chunk0-post-execute-atomic-accept",
+        suggestionId: "chunk0-post-execute-full-pair-still-pending-accept",
+        insertedTag:
+          "stylistic:track-change:chunk0-post-execute-full-pair-still-pending-accept",
         deletedValue: "ni Shu",
         anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
       }),
@@ -449,7 +450,7 @@ describe("WordAdapter.acceptSuggestion", () => {
               id: "tc-added-still-pending",
               type: "Added",
               accept: vi.fn(() => {
-                callOrder.push("unexpected-accept-added-fallback");
+                callOrder.push("unexpected-accept-added-extra-attempt");
               }),
               reject: vi.fn(),
             },
@@ -457,7 +458,7 @@ describe("WordAdapter.acceptSuggestion", () => {
               id: "tc-deleted-still-pending",
               type: "Deleted",
               accept: vi.fn(() => {
-                callOrder.push("unexpected-accept-deleted-fallback");
+                callOrder.push("unexpected-accept-deleted-extra-attempt");
               }),
               reject: vi.fn(),
             },

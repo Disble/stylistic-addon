@@ -3,10 +3,10 @@ import type { IFeedbackPort, IDocumentPort } from "../ports";
 import type { Suggestion, SuggestionActionResult } from "../types";
 import { SuggestionResolutionWorkflow } from "./SuggestionResolutionWorkflow";
 
-/** Builds a canonical resolution suggestion for atomicity-focused workflow tests. */
+/** Builds a canonical resolution suggestion for terminal-feedback workflow tests. */
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   return {
-    id: "s-atomic",
+    id: "s-terminal-feedback",
     context: "Contexto con texto original.",
     anchor: "texto original",
     suggestedText: "texto sugerido",
@@ -18,7 +18,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-/** Creates one action result focused on atomic terminal semantics. */
+/** Creates one action result focused on terminal workflow semantics. */
 function makeActionResult(
   overrides: Partial<SuggestionActionResult> = {},
 ): SuggestionActionResult {
@@ -36,7 +36,7 @@ function makeActionResult(
   };
 }
 
-describe("SuggestionResolutionWorkflow atomicity", () => {
+describe("SuggestionResolutionWorkflow terminal feedback", () => {
   let documentPort: IDocumentPort;
   let feedbackPort: IFeedbackPort;
   let workflow: SuggestionResolutionWorkflow;
@@ -62,8 +62,8 @@ describe("SuggestionResolutionWorkflow atomicity", () => {
     workflow = new SuggestionResolutionWorkflow(documentPort, feedbackPort);
   });
 
-  it("dispatches feedback only for atomic accepted results", async () => {
-    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+  it("dispatches feedback only for accepted results", async () => {
+    (documentPort.acceptSuggestion as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeActionResult({
         status: "accepted",
         trackedChangesAffected: 2,
@@ -78,8 +78,8 @@ describe("SuggestionResolutionWorkflow atomicity", () => {
     expect(feedbackPort.sendFeedback).toHaveBeenCalledOnce();
   });
 
-  it("does not dispatch feedback when atomic cleanup fails and the adapter returns error", async () => {
-    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+  it("does not dispatch feedback when cleanup fails and the adapter returns error", async () => {
+    (documentPort.acceptSuggestion as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeActionResult({
         status: "error",
         trackedChangesAffected: 2,
@@ -101,8 +101,8 @@ describe("SuggestionResolutionWorkflow atomicity", () => {
     expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
   });
 
-  it("does not dispatch feedback when atomic reject leaves the workflow in error", async () => {
-    vi.mocked(documentPort.rejectSuggestion).mockResolvedValue(
+  it("does not dispatch feedback when reject leaves the workflow in error", async () => {
+    (documentPort.rejectSuggestion as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeActionResult({
         status: "error",
         trackedChangesAffected: 2,
