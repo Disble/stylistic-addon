@@ -460,11 +460,10 @@ export class ResolveSuggestionCommand {
       trackedChangeTypes: observation.debugMetadata?.trackedChangeTypes ?? "",
     });
 
-    const executeAttempt =
-      await this.executeTrackedChangesWithImmediateRecovery(
-        context,
-        observation,
-      );
+    const executeAttempt = await this.executeTrackedChangesWithFreshProxyRetry(
+      context,
+      observation,
+    );
     const postExecuteAttempt = await this.observePostExecuteResolutionState(
       context,
       executeAttempt.observation.selectedCc,
@@ -559,8 +558,8 @@ export class ResolveSuggestionCommand {
     };
   }
 
-  /** Executes tracked changes and retries once after partial progress if re-observation can recover the remainder. */
-  private async executeTrackedChangesWithImmediateRecovery(
+  /** Executes tracked changes and retries once with fresh proxies when certification fails. */
+  private async executeTrackedChangesWithFreshProxyRetry(
     context: Word.RequestContext,
     observation: ResolutionObservation,
   ): Promise<{
@@ -594,7 +593,7 @@ export class ResolveSuggestionCommand {
     }
 
     console.warn(
-      `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" attempting same-click recovery after partial execute failure: ${initialReport.error}`,
+      `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" retrying with fresh proxies after uncertified execute result: ${initialReport.error}`,
     );
 
     try {
@@ -652,7 +651,7 @@ export class ResolveSuggestionCommand {
           : String(recoveryError);
 
       console.warn(
-        `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" same-click recovery failed: ${message}`,
+        `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" fresh-proxy retry failed: ${message}`,
       );
 
       return {
@@ -789,41 +788,11 @@ export class ResolveSuggestionCommand {
       };
     }
 
-    let bodyRecoveryError: string | undefined;
-    if (initialReport.silentNoOpDetected && !initialReport.error) {
-      console.warn(
-        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} silent no-op detected (bodyTrackedChangeCountBefore=${initialReport.silentNoOpDetected.bodyTrackedChangeCountBefore} after=${initialReport.silentNoOpDetected.bodyTrackedChangeCountAfter}); attempting body-text recovery before returning success`,
-      );
-      const bodyRecovery = await this.recoverFromSilentNoOpForReplaceSide(
-        context,
-        trackedChangeType,
-      );
-      if (bodyRecovery.completed) {
-        return {
-          observation,
-          completed: true,
-          recoveryAttempted: true,
-          recoverySucceeded: true,
-        };
-      }
-
-      // Body-text recovery did not succeed; surface this as a step error so
-      // the existing recovery cascade gets a chance to relocate fresh proxies.
-      bodyRecoveryError = bodyRecovery.error;
-      console.warn(
-        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" replace-step=${trackedChangeType} silent-no-op body-text recovery failed: ${bodyRecovery.error ?? "no matching body tracked-change"}`,
-      );
-    }
-
     this.logUnverifiedReplaceSemanticStep(trackedChangeType, initialReport);
-
-    const silentNoOpSuffix = bodyRecoveryError
-      ? ` [recovery: ${bodyRecoveryError}]`
-      : "";
     const initialErrorMessage = this.buildReplaceSemanticStepErrorMessage(
       trackedChangeType,
       initialReport,
-      silentNoOpSuffix,
+      "",
     );
 
     console.warn(
@@ -1108,151 +1077,6 @@ export class ResolveSuggestionCommand {
    * Restricted by text matching to avoid accidentally resolving tracked
    * changes that belong to a neighboring suggestion.
    */
-  private async recoverFromSilentNoOpForReplaceSide(
-    context: Word.RequestContext,
-    trackedChangeType: "Added" | "Deleted",
-  ): Promise<{ completed: boolean; error?: string }> {
-    const expectedText =
-      trackedChangeType === "Deleted"
-        ? this.suggestion.anchor
-        : (this.suggestion.suggestedText ?? "");
-
-    if (expectedText.length === 0) {
-      return {
-        completed: false,
-        error: `silent-no-op recovery aborted: missing expected text for ${trackedChangeType} side`,
-      };
-    }
-
-    let bodyTrackedChangesBefore = 0;
-    let candidateRanges: Word.Range[] = [];
-    let candidates: Word.TrackedChange[] = [];
-
-    try {
-      const body = context.document.body;
-      const bodyTrackedChanges = body.getTrackedChanges();
-      bodyTrackedChanges.load({ select: "type,id" });
-      await context.sync();
-      bodyTrackedChangesBefore = bodyTrackedChanges.items.length;
-
-      candidates = bodyTrackedChanges.items.filter(
-        (tc) => tc.type === trackedChangeType,
-      );
-      if (candidates.length === 0) {
-        return {
-          completed: false,
-          error: `silent-no-op recovery: body exposed 0 ${trackedChangeType} tracked changes`,
-        };
-      }
-
-      candidateRanges = candidates.map((tc) => tc.getRange());
-      candidateRanges.forEach((range) => {
-        range.load({ select: "text" });
-      });
-      await context.sync();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        completed: false,
-        error: `silent-no-op recovery probe failed: ${message}`,
-      };
-    }
-
-    // Diagnostic: log every candidate so we can refine matching when it fails.
-    candidateRanges.forEach((range, index) => {
-      const tc = candidates[index];
-      const trackedChangeLog = tc
-        ? this.describeTrackedChangeForLog(tc)
-        : { id: "unknown", type: "unknown" };
-      console.warn(
-        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op body candidate[${index}] type=${trackedChangeLog.type} id=${trackedChangeLog.id} text="${(range.text ?? "").slice(0, 120)}"`,
-      );
-    });
-
-    const normalizeForMatch = (value: string): string =>
-      value.trim().split(/\s+/u).join(" ").toLowerCase();
-    const normalizedExpected = normalizeForMatch(expectedText);
-    let matchingIndex = candidateRanges.findIndex((range) => {
-      const rangeText = normalizeForMatch(range.text ?? "");
-      if (rangeText.length === 0 || normalizedExpected.length === 0) {
-        return false;
-      }
-      return (
-        rangeText === normalizedExpected ||
-        rangeText.includes(normalizedExpected) ||
-        normalizedExpected.includes(rangeText)
-      );
-    });
-
-    // Single-candidate fallback: when text matching fails but only ONE
-    // body tracked-change of the requested type exists, it must be the one
-    // we wanted to resolve. Tracked-change ranges sometimes expose only the
-    // edited delta or stale text after the sibling side was resolved, so
-    // text matching alone is unreliable. We still gate this fallback on
-    // having exactly one candidate to avoid touching neighboring suggestions.
-    if (matchingIndex === -1 && candidates.length === 1) {
-      console.warn(
-        `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op single-candidate fallback for ${trackedChangeType} (text matching failed but only one body candidate of this type exists)`,
-      );
-      matchingIndex = 0;
-    }
-
-    if (matchingIndex === -1) {
-      return {
-        completed: false,
-        error: `silent-no-op recovery: no body ${trackedChangeType} tracked-change matched expected text "${expectedText.slice(0, 80)}" among ${candidates.length} candidates`,
-      };
-    }
-
-    const matchingTrackedChange = candidates[matchingIndex];
-    console.warn(
-      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" silent-no-op body-text recovery applying ${this.action} on body ${trackedChangeType} tracked-change matching expected text`,
-    );
-
-    const recoveryReport = await this.executor.apply(context, [
-      matchingTrackedChange,
-    ]);
-    if (recoveryReport.error) {
-      return {
-        completed: false,
-        error: `silent-no-op recovery apply failed: ${recoveryReport.error}`,
-      };
-    }
-    if (recoveryReport.silentNoOpDetected) {
-      return {
-        completed: false,
-        error: `silent-no-op recovery: body proxy was also a silent no-op (bodyTrackedChangeCountBefore=${recoveryReport.silentNoOpDetected.bodyTrackedChangeCountBefore} after=${recoveryReport.silentNoOpDetected.bodyTrackedChangeCountAfter})`,
-      };
-    }
-    if (recoveryReport.unverifiedMutation) {
-      return {
-        completed: false,
-        error: `silent-no-op recovery: body proxy mutation could not be verified (${this.formatUnverifiedMutationForLog(recoveryReport.unverifiedMutation)})`,
-      };
-    }
-
-    // Confirm document tracked-change count actually decreased.
-    let bodyTrackedChangesAfter = bodyTrackedChangesBefore;
-    try {
-      const body = context.document.body;
-      const bodyTrackedChanges = body.getTrackedChanges();
-      bodyTrackedChanges.load({ select: "type,id" });
-      await context.sync();
-      bodyTrackedChangesAfter = bodyTrackedChanges.items.length;
-    } catch {
-      // If we can't probe the count again, trust the executor's own check.
-    }
-
-    if (bodyTrackedChangesAfter >= bodyTrackedChangesBefore) {
-      return {
-        completed: false,
-        error: `silent-no-op recovery: bodyTrackedChangeCount did not decrease (before=${bodyTrackedChangesBefore} after=${bodyTrackedChangesAfter})`,
-      };
-    }
-
-    return { completed: true };
-  }
-
   /** Collapses duplicate replace proxies into one semantic Deleted/Added pair before execution. */
   private normalizeReplaceObservation(
     observation: ResolutionObservation,
@@ -1443,38 +1267,6 @@ export class ResolveSuggestionCommand {
     return ["Deleted", "Added"] as const;
   }
 
-  /**
-   * Classifies whether an atomic replace fallback is semantically complete.
-   *
-   * Success is trusted ONLY after a fresh observation proves there is no
-   * remaining CC-scoped confirmed-pending replace pair for this suggestion.
-   */
-  private classifyAtomicReplaceCompletion(
-    observation: ResolutionObservation | null,
-  ): {
-    completed: boolean;
-    remaining: number;
-  } {
-    if (!observation) {
-      return {
-        completed: false,
-        remaining: 1,
-      };
-    }
-
-    const ccScopedRemaining =
-      (observation.debugMetadata?.ccTrackedChangesCount ?? 0) +
-      (observation.debugMetadata?.ccRangeTrackedChangesCount ?? 0);
-    const replaceStillPending =
-      observation.observationStatus === "confirmed-pending" &&
-      ccScopedRemaining > 0;
-
-    return {
-      completed: !replaceStillPending,
-      remaining: replaceStillPending ? ccScopedRemaining : 0,
-    };
-  }
-
   /** Re-observes only the remaining replace side and rejects any reappearance of the resolved side. */
   private async reobserveRemainingReplaceSide(
     context: Word.RequestContext,
@@ -1580,7 +1372,7 @@ export class ResolveSuggestionCommand {
     };
   }
 
-  /** Re-checks post-execute replace state and retries one atomic accept batch if Word still exposes a full pair. */
+  /** Re-checks post-execute replace state without executing any fallback recovery. */
   private async observePostExecuteResolutionState(
     context: Word.RequestContext,
     preferredCc: Word.ContentControl,
@@ -1603,193 +1395,10 @@ export class ResolveSuggestionCommand {
       };
     }
 
-    const normalizedObservation = this.normalizeReplaceObservation(
-      postExecuteObservation,
-    );
-    const hasDeleted =
-      this.findTrackedChangeByType(
-        normalizedObservation.trackedChanges,
-        "Deleted",
-      ) !== null;
-    const hasAdded =
-      this.findTrackedChangeByType(
-        normalizedObservation.trackedChanges,
-        "Added",
-      ) !== null;
-    // Ignore adjacent neighbor TCs: only trigger the atomic retry when this
-    // suggestion's own CC scope (cc or ccRange) still exposes tracked changes.
-    // `bodyRelated` can pull in `AdjacentBefore/AdjacentAfter` TCs from nearby
-    // suggestions, which wrongly looks like an unresolved replace pair here.
-    const ccScopedRemaining =
-      (normalizedObservation.debugMetadata?.ccTrackedChangesCount ?? 0) +
-      (normalizedObservation.debugMetadata?.ccRangeTrackedChangesCount ?? 0);
-
-    if (
-      this.action !== "accept" ||
-      !this.isReplaceSuggestion() ||
-      !hasDeleted ||
-      !hasAdded ||
-      ccScopedRemaining === 0
-    ) {
-      return {
-        observation: postExecuteObservation,
-        recoveryAttempted: false,
-        recoverySucceeded: false,
-      };
-    }
-
-    console.warn(
-      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" retrying accept replace as one atomic batch after post-execute snapshot still exposed the full replace pair`,
-    );
-
-    const atomicReport = await this.executor.applyAtomically(
-      context,
-      normalizedObservation.trackedChanges,
-    );
-    if (atomicReport.error) {
-      const semanticPairRecovery =
-        await this.tryFreshPostExecuteAcceptSemanticPairRecovery(
-          context,
-          normalizedObservation.selectedCc,
-          atomicReport.error,
-          postExecuteObservation,
-        );
-      if (semanticPairRecovery) {
-        return semanticPairRecovery;
-      }
-
-      return {
-        observation: postExecuteObservation,
-        recoveryAttempted: true,
-        recoverySucceeded: false,
-      };
-    }
-
-    const recoveredObservation = await this.logWorkflowSnapshot(
-      context,
-      "after-post-execute-recovery-before-cleanup",
-      normalizedObservation.selectedCc,
-    );
-
     return {
-      observation: recoveredObservation ?? postExecuteObservation,
-      recoveryAttempted: true,
-      recoverySucceeded:
-        this.classifyAtomicReplaceCompletion(recoveredObservation).completed,
-    };
-  }
-
-  /** Re-runs one fresh semantic Deleted/Added pass after a stale post-execute atomic retry fails with ItemNotFound. */
-  private async tryFreshPostExecuteAcceptSemanticPairRecovery(
-    context: Word.RequestContext,
-    preferredCc: Word.ContentControl,
-    atomicError: string,
-    fallbackObservation: ResolutionObservation,
-  ): Promise<{
-    observation: ResolutionObservation | null;
-    recoveryAttempted: boolean;
-    recoverySucceeded: boolean;
-  } | null> {
-    if (!atomicError.includes("ItemNotFound")) {
-      return null;
-    }
-
-    const deletedReobservation =
-      await this.reobserveResolutionCandidatesForSemanticSide(
-        context,
-        "Deleted",
-        preferredCc,
-      );
-    console.log(
-      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" post-execute semantic recovery side=Deleted status=${deletedReobservation?.observation.observationStatus ?? "missing"} trackedChanges=${deletedReobservation?.observation.trackedChanges.length ?? 0} types=${deletedReobservation?.observation.debugMetadata?.trackedChangeTypes ?? ""} semanticSource=${deletedReobservation?.observation.debugMetadata?.selectedSemanticSideSource ?? ""}`,
-    );
-    if (!deletedReobservation) {
-      return null;
-    }
-
-    const deletedObservation = deletedReobservation.observation;
-    const deletedTrackedChange = this.findTrackedChangeByType(
-      deletedObservation.trackedChanges,
-      "Deleted",
-    );
-
-    if (!deletedTrackedChange) {
-      return null;
-    }
-
-    console.warn(
-      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" retrying accept replace with a fresh semantic Deleted pass after post-execute atomic failure: ${atomicError}`,
-    );
-
-    const deletedRecoveryReport = await this.executor.apply(context, [
-      deletedTrackedChange,
-    ]);
-    if (!this.isExecutionReportSemanticallyVerified(deletedRecoveryReport)) {
-      return {
-        observation: fallbackObservation,
-        recoveryAttempted: true,
-        recoverySucceeded: false,
-      };
-    }
-
-    const addedReobservation =
-      await this.reobserveResolutionCandidatesForSemanticSide(
-        context,
-        "Added",
-        deletedObservation.selectedCc,
-      );
-    console.log(
-      `🔁 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" post-execute semantic recovery side=Added status=${addedReobservation?.observation.observationStatus ?? "missing"} trackedChanges=${addedReobservation?.observation.trackedChanges.length ?? 0} types=${addedReobservation?.observation.debugMetadata?.trackedChangeTypes ?? ""} semanticSource=${addedReobservation?.observation.debugMetadata?.selectedSemanticSideSource ?? ""}`,
-    );
-    if (!addedReobservation) {
-      return {
-        observation: fallbackObservation,
-        recoveryAttempted: true,
-        recoverySucceeded: false,
-      };
-    }
-
-    const addedObservation = addedReobservation.observation;
-    const addedTrackedChange = this.findTrackedChangeByType(
-      addedObservation.trackedChanges,
-      "Added",
-    );
-
-    if (!addedTrackedChange) {
-      return {
-        observation: addedObservation,
-        recoveryAttempted: true,
-        recoverySucceeded:
-          this.classifyAtomicReplaceCompletion(addedObservation).completed,
-      };
-    }
-
-    console.warn(
-      `⚠️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" retrying accept replace with a fresh semantic Added pass after post-execute atomic failure: ${atomicError}`,
-    );
-
-    const addedRecoveryReport = await this.executor.apply(context, [
-      addedTrackedChange,
-    ]);
-    if (!this.isExecutionReportSemanticallyVerified(addedRecoveryReport)) {
-      return {
-        observation: addedObservation,
-        recoveryAttempted: true,
-        recoverySucceeded: false,
-      };
-    }
-
-    const recoveredObservation = await this.logWorkflowSnapshot(
-      context,
-      "after-post-execute-recovery-before-cleanup",
-      addedObservation.selectedCc,
-    );
-
-    return {
-      observation: recoveredObservation ?? fallbackObservation,
-      recoveryAttempted: true,
-      recoverySucceeded:
-        this.classifyAtomicReplaceCompletion(recoveredObservation).completed,
+      observation: postExecuteObservation,
+      recoveryAttempted: false,
+      recoverySucceeded: false,
     };
   }
 
@@ -1851,10 +1460,7 @@ export class ResolveSuggestionCommand {
   /** Captures a best-effort fresh snapshot around execute/cleanup so false-success runs leave enough host evidence. */
   private async logWorkflowSnapshot(
     context: Word.RequestContext,
-    label:
-      | "after-execute-before-cleanup"
-      | "after-post-execute-recovery-before-cleanup"
-      | "after-cleanup-before-return",
+    label: "after-execute-before-cleanup" | "after-cleanup-before-return",
     preferredCc?: Word.ContentControl,
     reviewState?: import("../../domain/types").DocumentReviewState,
   ): Promise<ResolutionObservation | null> {
