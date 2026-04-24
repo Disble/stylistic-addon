@@ -85,14 +85,20 @@ export function installWordWithContext(context: any) {
   const run = vi.fn(async <T>(callback: WordRunCallback<T>) =>
     callback(context),
   );
-  vi.stubGlobal("Word", {
+  const wordGlobal = globalThis as unknown as {
+    Word?: {
+      run: typeof run;
+      ChangeTrackingMode: Record<string, string>;
+    };
+  };
+  wordGlobal.Word = {
     run,
     ChangeTrackingMode: {
       off: "off",
       trackAll: "trackAll",
       trackMine: "trackMine",
     },
-  });
+  };
   return run;
 }
 
@@ -101,7 +107,10 @@ export function installWordWithContext(context: any) {
  */
 export function installRejectingWord(error: Error) {
   const run = vi.fn().mockRejectedValue(error);
-  vi.stubGlobal("Word", { run });
+  const wordGlobal = globalThis as unknown as {
+    Word?: { run: typeof run };
+  };
+  wordGlobal.Word = { run };
   return run;
 }
 

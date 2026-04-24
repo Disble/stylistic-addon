@@ -150,92 +150,28 @@ export class TrackedChangeResolutionExecutor {
     let unverifiedMutation: ResolutionExecutionReport["unverifiedMutation"];
 
     for (const [index, trackedChange] of orderedTrackedChanges.entries()) {
-      let actionQueued = false;
-      const trackedChangeDetail = this.describeTrackedChange(trackedChange);
-      const bodyTrackedChangeCountBefore =
-        await this.countBodyTrackedChanges(context);
+      const stepResult = await this.applyTrackedChangeStep(
+        context,
+        trackedChange,
+        index,
+      );
+      completed += stepResult.completed;
 
-      try {
-        console.log(
-          `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=queue`,
-        );
-        if (this.action === "accept") {
-          trackedChange.accept();
-        } else {
-          trackedChange.reject();
-        }
+      if (!unverifiedMutation && stepResult.unverifiedMutation) {
+        unverifiedMutation = stepResult.unverifiedMutation;
+      }
 
-        actionQueued = true;
-        console.log(
-          `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=sync-start`,
-        );
-        await context.sync();
-        completed += 1;
-        console.log(
-          `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=sync-done`,
-        );
+      if (!silentNoOpDetected && stepResult.silentNoOpDetected) {
+        silentNoOpDetected = stepResult.silentNoOpDetected;
+      }
 
-        const bodyTrackedChangeCountAfter =
-          await this.countBodyTrackedChanges(context);
-        const beforeCount = this.getKnownBodyTrackedChangeCount(
-          bodyTrackedChangeCountBefore,
-        );
-        const afterCount = this.getKnownBodyTrackedChangeCount(
-          bodyTrackedChangeCountAfter,
-        );
-
-        if (
-          !unverifiedMutation &&
-          this.isVerifiableTrackedChangeType(trackedChangeDetail.type)
-        ) {
-          unverifiedMutation = this.buildUnverifiedMutation(
-            index,
-            trackedChangeDetail.type,
-            bodyTrackedChangeCountBefore,
-            bodyTrackedChangeCountAfter,
-          );
-
-          if (unverifiedMutation) {
-            console.warn(
-              `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} mutation verification unavailable: bodyTrackedChangeCount before=${beforeCount ?? "unknown"} after=${afterCount ?? "unknown"}`,
-              unverifiedMutation,
-            );
-          }
-        }
-
-        if (
-          !silentNoOpDetected &&
-          beforeCount !== undefined &&
-          afterCount !== undefined &&
-          beforeCount > 0 &&
-          afterCount >= beforeCount &&
-          this.isVerifiableTrackedChangeType(trackedChangeDetail.type)
-        ) {
-          console.warn(
-            `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} silent-no-op detected: bodyTrackedChangeCount before=${beforeCount} after=${afterCount} (proxy mutation did not reduce document tracked-change count)`,
-          );
-          silentNoOpDetected = {
-            stepIndex: index,
-            trackedChangeType: trackedChangeDetail.type,
-            bodyTrackedChangeCountBefore: beforeCount,
-            bodyTrackedChangeCountAfter: afterCount,
-          };
-        }
-      } catch (error) {
-        if (actionQueued) {
-          completed += 1;
-        }
-
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `⚠️ [TrackedChangeResolutionExecutor] ${this.action} failed at index ${index} for suggestionId="${this.suggestionId}": ${message}`,
-        );
+      if (stepResult.error) {
         return {
           attempted: orderedTrackedChanges.length,
           completed,
           remaining: orderedTrackedChanges.length - completed,
           failureIndex: index,
-          error: message,
+          error: stepResult.error,
         };
       }
     }
@@ -250,6 +186,120 @@ export class TrackedChangeResolutionExecutor {
       remaining: orderedTrackedChanges.length - completed,
       ...(silentNoOpDetected ? { silentNoOpDetected } : {}),
       ...(unverifiedMutation ? { unverifiedMutation } : {}),
+    };
+  }
+
+  /** Applies one tracked-change step and returns diagnostics without mutating the outer loop state. */
+  private async applyTrackedChangeStep(
+    context: Word.RequestContext,
+    trackedChange: Word.TrackedChange,
+    index: number,
+  ): Promise<{
+    completed: number;
+    error?: string;
+    silentNoOpDetected?: ResolutionExecutionReport["silentNoOpDetected"];
+    unverifiedMutation?: ResolutionExecutionReport["unverifiedMutation"];
+  }> {
+    let actionQueued = false;
+    const trackedChangeDetail = this.describeTrackedChange(trackedChange);
+    const bodyTrackedChangeCountBefore =
+      await this.countBodyTrackedChanges(context);
+
+    try {
+      console.log(
+        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=queue`,
+      );
+      if (this.action === "accept") {
+        trackedChange.accept();
+      } else {
+        trackedChange.reject();
+      }
+
+      actionQueued = true;
+      console.log(
+        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=sync-start`,
+      );
+      await context.sync();
+      console.log(
+        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=sync-done`,
+      );
+
+      const bodyTrackedChangeCountAfter =
+        await this.countBodyTrackedChanges(context);
+
+      return {
+        completed: 1,
+        ...this.buildStepDiagnostics(
+          index,
+          trackedChangeDetail.type,
+          bodyTrackedChangeCountBefore,
+          bodyTrackedChangeCountAfter,
+        ),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `⚠️ [TrackedChangeResolutionExecutor] ${this.action} failed at index ${index} for suggestionId="${this.suggestionId}": ${message}`,
+      );
+      return {
+        completed: actionQueued ? 1 : 0,
+        error: message,
+      };
+    }
+  }
+
+  /** Computes optional verification diagnostics for one executed tracked-change step. */
+  private buildStepDiagnostics(
+    index: number,
+    trackedChangeType: string,
+    beforeProbe: BodyTrackedChangeCountProbe,
+    afterProbe: BodyTrackedChangeCountProbe,
+  ): {
+    silentNoOpDetected?: ResolutionExecutionReport["silentNoOpDetected"];
+    unverifiedMutation?: ResolutionExecutionReport["unverifiedMutation"];
+  } {
+    const beforeCount = this.getKnownBodyTrackedChangeCount(beforeProbe);
+    const afterCount = this.getKnownBodyTrackedChangeCount(afterProbe);
+
+    if (!this.isVerifiableTrackedChangeType(trackedChangeType)) {
+      return {};
+    }
+
+    const unverifiedMutation = this.buildUnverifiedMutation(
+      index,
+      trackedChangeType,
+      beforeProbe,
+      afterProbe,
+    );
+    if (unverifiedMutation) {
+      console.warn(
+        `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeType} mutation verification unavailable: bodyTrackedChangeCount before=${beforeCount ?? "unknown"} after=${afterCount ?? "unknown"}`,
+        unverifiedMutation,
+      );
+    }
+
+    const silentNoOpDetected =
+      beforeCount !== undefined &&
+      afterCount !== undefined &&
+      beforeCount > 0 &&
+      afterCount >= beforeCount
+        ? {
+            stepIndex: index,
+            trackedChangeType,
+            bodyTrackedChangeCountBefore: beforeCount,
+            bodyTrackedChangeCountAfter: afterCount,
+          }
+        : undefined;
+
+    if (silentNoOpDetected) {
+      console.warn(
+        `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeType} silent-no-op detected: bodyTrackedChangeCount before=${beforeCount} after=${afterCount} (proxy mutation did not reduce document tracked-change count)`,
+      );
+    }
+
+    return {
+      ...(unverifiedMutation ? { unverifiedMutation } : {}),
+      ...(silentNoOpDetected ? { silentNoOpDetected } : {}),
     };
   }
 

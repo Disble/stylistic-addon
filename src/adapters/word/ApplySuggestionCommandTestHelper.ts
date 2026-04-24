@@ -269,7 +269,14 @@ export function installWordContext(options: {
     }),
   };
 
-  vi.stubGlobal("Word", {
+  const wordGlobal = globalThis as unknown as {
+    Word?: {
+      ChangeTrackingMode: Record<string, string>;
+      InsertLocation: Record<string, string>;
+      run: ReturnType<typeof vi.fn>;
+    };
+  };
+  wordGlobal.Word = {
     ChangeTrackingMode: {
       off: "off",
       trackAll: "trackAll",
@@ -281,7 +288,7 @@ export function installWordContext(options: {
     run: vi.fn(async (callback: (ctx: typeof context) => unknown) =>
       callback(context),
     ),
-  });
+  };
 
   anchorRange.insertContentControl = vi.fn(() => cc);
   bodyRange.insertContentControl = vi.fn(() => cc);

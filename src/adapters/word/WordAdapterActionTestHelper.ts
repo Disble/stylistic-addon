@@ -70,7 +70,7 @@ type ResolveSuggestionContext = {
 };
 
 type MockWordGlobal = {
-  run: <T>(callback: (ctx: ResolveSuggestionContext) => Promise<T> | T) => Promise<T>;
+  run: ReturnType<typeof vi.fn>;
 };
 
 /**
@@ -130,14 +130,17 @@ export function installWordWithContext<TContext>(context: TContext) {
   const run = vi.fn(async <T>(
     callback: (ctx: TContext) => Promise<T> | T
   ) => callback(context));
-  vi.stubGlobal("Word", {
+  const wordGlobal = globalThis as unknown as {
+    Word?: MockWordGlobal & { ChangeTrackingMode: Record<string, string> };
+  };
+  wordGlobal.Word = {
     run,
     ChangeTrackingMode: {
       off: "off",
       trackAll: "trackAll",
       trackMine: "trackMine",
     },
-  });
+  };
   return run;
 }
 
@@ -148,14 +151,17 @@ export function installRejectingWord(error: Error) {
   const run = vi.fn(async () => {
     throw error;
   });
-  vi.stubGlobal("Word", {
+  const wordGlobal = globalThis as unknown as {
+    Word?: MockWordGlobal & { ChangeTrackingMode: Record<string, string> };
+  };
+  wordGlobal.Word = {
     run,
     ChangeTrackingMode: {
       off: "off",
       trackAll: "trackAll",
       trackMine: "trackMine",
     },
-  });
+  };
   return run;
 }
 
