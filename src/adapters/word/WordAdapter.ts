@@ -48,6 +48,10 @@ import {
 } from "./ReplaceIdentityParser";
 import { ResolveSuggestionCommand } from "./ResolveSuggestionCommand";
 import {
+  AcceptReplaceResolutionStrategy,
+  RejectReplaceResolutionStrategy,
+} from "./resolution/ReplaceResolutionStrategyContext";
+import {
   getDefaultTextLocator,
   type TextLocator,
   type WordSearchContainer,
@@ -503,6 +507,7 @@ export class WordAdapter implements IDocumentPort {
     return new ResolveSuggestionCommand(
       suggestion,
       "accept",
+      new AcceptReplaceResolutionStrategy(),
       this.textLocator,
       this.telemetryPort,
     ).execute();
@@ -519,6 +524,7 @@ export class WordAdapter implements IDocumentPort {
     return new ResolveSuggestionCommand(
       suggestion,
       "reject",
+      new RejectReplaceResolutionStrategy(),
       this.textLocator,
       this.telemetryPort,
     ).execute();

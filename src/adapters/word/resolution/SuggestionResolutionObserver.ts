@@ -138,8 +138,12 @@ export class SuggestionResolutionObserver {
   private serializeUnknownError(
     error: unknown,
   ): SerializedOfficeErrorDiagnostics {
-    const fallbackMessage =
-      error instanceof Error ? error.message : String(error ?? "Unknown error");
+    let fallbackMessage = "Unknown error";
+    if (error instanceof Error) {
+      fallbackMessage = error.message;
+    } else if (typeof error === "string") {
+      fallbackMessage = error;
+    }
     const messageValue = this.readUnknownErrorProperty(error, "message");
     const nameValue = this.readUnknownErrorProperty(error, "name");
     const codeValue = this.readUnknownErrorProperty(error, "code");
@@ -154,22 +158,20 @@ export class SuggestionResolutionObserver {
             .filter((line) => line.length > 0)
             .slice(0, 5)
         : undefined;
-
-    return {
+    const serialized: SerializedOfficeErrorDiagnostics = {
       message:
         typeof messageValue === "string" && messageValue.length > 0
           ? messageValue
           : fallbackMessage,
-      ...(typeof nameValue === "string" && nameValue.length > 0
-        ? { name: nameValue }
-        : {}),
-      ...(typeof codeValue === "string" || typeof codeValue === "number"
-        ? { code: codeValue }
-        : {}),
-      ...(debugInfo !== undefined ? { debugInfo } : {}),
-      ...(traceMessages !== undefined ? { traceMessages } : {}),
-      ...(stackPreview && stackPreview.length > 0 ? { stackPreview } : {}),
     };
+    if (typeof nameValue === "string" && nameValue.length > 0)
+      serialized.name = nameValue;
+    if (typeof codeValue === "string" || typeof codeValue === "number")
+      serialized.code = codeValue;
+    if (debugInfo !== undefined) serialized.debugInfo = debugInfo;
+    if (traceMessages !== undefined) serialized.traceMessages = traceMessages;
+    if (stackPreview?.length) serialized.stackPreview = stackPreview;
+    return serialized;
   }
 
   /** Returns one best-effort text snippet only when the range text is already safely available. */
@@ -183,8 +185,13 @@ export class SuggestionResolutionObserver {
       if (typeof text !== "string") {
         return null;
       }
-
-      const normalized = text.replace(/\s+/gu, " ").trim();
+      const normalized = (
+        text as string & {
+          replaceAll(pattern: RegExp, replacement: string): string;
+        }
+      )
+        .replaceAll(/\s+/gu, " ")
+        .trim();
       return normalized.length > 0 ? normalized.slice(0, 80) : null;
     } catch {
       return null;
@@ -200,18 +207,19 @@ export class SuggestionResolutionObserver {
     relationValue?: string,
     related?: boolean,
   ): BodyTrackedChangeCandidateDiagnostic {
-    return {
+    const diagnostic: BodyTrackedChangeCandidateDiagnostic = {
       index,
       trackedChangeId: String(
         (trackedChange as { id?: string | number }).id ?? "no-id",
       ),
       trackedChangeType: trackedChange.type ?? "unknown",
-      rangeObtained: Boolean(range),
+      rangeObtained: range !== null,
       comparisonQueued,
       rangeTextSnippet: this.getLoadedRangeTextSnippet(range),
-      ...(relationValue !== undefined ? { relationValue } : {}),
-      ...(related !== undefined ? { related } : {}),
     };
+    if (relationValue !== undefined) diagnostic.relationValue = relationValue;
+    if (related !== undefined) diagnostic.related = related;
+    return diagnostic;
   }
 
   /** Builds one tracked-change diagnostic entry with its selected evidence source when known. */

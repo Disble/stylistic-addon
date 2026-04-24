@@ -28,6 +28,10 @@ import type {
 } from "../../domain/types";
 import { CommentOnlySuggestionResolver } from "./resolution/CommentOnlySuggestionResolver";
 import { DocumentReviewStateInspector } from "./resolution/DocumentReviewStateInspector";
+import type {
+  ReplaceResolutionStrategy,
+  ReplaceTrackedChangeSide,
+} from "./resolution/ReplaceResolutionStrategyContext";
 import type { ResolutionObservation } from "./resolution/ResolutionContext";
 import { ResolveSuggestionResultFactory } from "./resolution/ResolveSuggestionResultFactory";
 import { SuggestionLocator } from "./resolution/SuggestionLocator";
@@ -85,6 +89,7 @@ export class ResolveSuggestionCommand {
   private readonly locator: SuggestionLocator;
   private readonly cleanup: SuggestionResolutionCleanup;
   private readonly executor: TrackedChangeResolutionExecutor;
+  private readonly replaceResolutionStrategy: ReplaceResolutionStrategy;
   private readonly resultFactory: ResolveSuggestionResultFactory;
   private readonly commentOnlyResolver: CommentOnlySuggestionResolver;
   private readonly observer: SuggestionResolutionObserver;
@@ -95,6 +100,7 @@ export class ResolveSuggestionCommand {
   constructor(
     private readonly suggestion: Suggestion,
     private readonly action: "accept" | "reject",
+    replaceResolutionStrategy: ReplaceResolutionStrategy,
     textLocator: TextLocator = getDefaultTextLocator(),
     private readonly telemetryPort: ITelemetryPort = {
       emit: async () => undefined,
@@ -102,8 +108,13 @@ export class ResolveSuggestionCommand {
   ) {
     this.stateInspector = new DocumentReviewStateInspector();
     this.locator = new SuggestionLocator(suggestion);
+    this.replaceResolutionStrategy = replaceResolutionStrategy;
     this.cleanup = new SuggestionResolutionCleanup(suggestion.id, action);
-    this.executor = new TrackedChangeResolutionExecutor(suggestion.id, action);
+    this.executor = new TrackedChangeResolutionExecutor(
+      suggestion.id,
+      action,
+      this.replaceResolutionStrategy,
+    );
     this.resultFactory = new ResolveSuggestionResultFactory(
       action,
       this.stateInspector,
@@ -685,7 +696,7 @@ export class ResolveSuggestionCommand {
       );
     }
 
-    const semanticOrder = this.getReplaceSemanticOrder();
+    const semanticOrder = this.replaceResolutionStrategy.semanticOrder;
     let activeObservation = observation;
     let completed = 0;
     let recoveryAttempted = false;
@@ -900,7 +911,7 @@ export class ResolveSuggestionCommand {
 
   /** Builds one stable semantic-step error message after Word failed to certify mutation. */
   private buildReplaceSemanticStepErrorMessage(
-    trackedChangeType: "Added" | "Deleted",
+    trackedChangeType: ReplaceTrackedChangeSide,
     report: ResolutionExecutionReport,
     silentNoOpSuffix: string,
   ): string {
@@ -908,7 +919,7 @@ export class ResolveSuggestionCommand {
       return report.error;
     }
 
-    const actionLabel = this.action === "reject" ? "rechazo" : "aceptación";
+    const actionLabel = this.replaceResolutionStrategy.actionLabel;
     if (report.unverifiedMutation) {
       return `Word no pudo verificar si el ${actionLabel} del lado ${trackedChangeType} mutó el documento (${this.formatUnverifiedMutationForLog(report.unverifiedMutation)}).${silentNoOpSuffix}`;
     }
@@ -1172,18 +1183,18 @@ export class ResolveSuggestionCommand {
   /** Builds a conservative error for an execution report that cannot certify mutation. */
   private buildUntrustedExecutionError(
     report: ResolutionExecutionReport,
-    trackedChangeType: "Added" | "Deleted",
+    trackedChangeType: ReplaceTrackedChangeSide,
   ): string {
     if (report.error) {
       return report.error;
     }
 
     if (report.unverifiedMutation) {
-      return `Word no pudo verificar si el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} mutó el documento (${this.formatUnverifiedMutationForLog(report.unverifiedMutation)}).`;
+      return `Word no pudo verificar si el ${this.replaceResolutionStrategy.actionLabel} del lado ${trackedChangeType} mutó el documento (${this.formatUnverifiedMutationForLog(report.unverifiedMutation)}).`;
     }
 
     if (report.silentNoOpDetected) {
-      return `Word ignoró el ${this.action === "reject" ? "rechazo" : "aceptación"} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).`;
+      return `Word ignoró el ${this.replaceResolutionStrategy.actionLabel} del lado ${trackedChangeType} (silent no-op detectado: el proxy del tracked change no mutó el documento).`;
     }
 
     return `Word no pudo certificar la resolución del tracked change ${trackedChangeType}.`;
@@ -1246,34 +1257,14 @@ export class ResolveSuggestionCommand {
     };
   }
 
-  /**
-   * Returns the semantic execution order for replace suggestions.
-   *
-   * Accept and reject intentionally diverge because real Word exposes different
-   * survivable host surfaces per action:
-   * - accept: `Added -> Deleted`, so the workflow uses the inserted-side host
-   *   surface before stale Deleted proxies can silently no-op.
-   * - reject: `Deleted -> Added`, because rejecting the Deleted side first keeps
-   *   the inserted-side CC alive long enough to re-observe the remaining Added
-   *   side with fresh proxies.
-   */
-  private getReplaceSemanticOrder():
-    | readonly ["Deleted", "Added"]
-    | readonly ["Added", "Deleted"] {
-    if (this.action === "accept") {
-      return ["Added", "Deleted"] as const;
-    }
-
-    return ["Deleted", "Added"] as const;
-  }
-
   /** Re-observes only the remaining replace side and rejects any reappearance of the resolved side. */
   private async reobserveRemainingReplaceSide(
     context: Word.RequestContext,
     activeObservation: ResolutionObservation,
-    semanticOrder:
-      | readonly ["Deleted", "Added"]
-      | readonly ["Added", "Deleted"],
+    semanticOrder: readonly [
+      ReplaceTrackedChangeSide,
+      ReplaceTrackedChangeSide,
+    ],
     stepIndex: number,
     completed: number,
     recoveryAttempted: boolean,

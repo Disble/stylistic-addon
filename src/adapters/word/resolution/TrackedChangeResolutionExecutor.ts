@@ -1,4 +1,11 @@
 import type { ResolutionExecutionReport } from "../../../domain/types";
+import type { ReplaceResolutionStrategy } from "./ReplaceResolutionStrategyContext";
+
+type UnexpectedTrackedChangeTypeDiagnostic = {
+  id: string;
+  kind: "missing-type" | "non-replace-type";
+  receivedType: string;
+};
 
 type BodyTrackedChangeCountProbe =
   | {
@@ -15,6 +22,7 @@ export class TrackedChangeResolutionExecutor {
   constructor(
     private readonly suggestionId: string,
     private readonly action: "accept" | "reject",
+    private readonly replaceResolutionStrategy: ReplaceResolutionStrategy,
   ) {}
 
   /** Builds one stable tracked-change diagnostic entry for runtime logs. */
@@ -52,6 +60,51 @@ export class TrackedChangeResolutionExecutor {
     return probe.status === "known" ? probe.count : undefined;
   }
 
+  /** Returns true when the tracked change already matches a replace semantic side. */
+  private isReplaceTrackedChangeSide(
+    trackedChangeType: string,
+  ): trackedChangeType is "Added" | "Deleted" {
+    return trackedChangeType === "Added" || trackedChangeType === "Deleted";
+  }
+
+  /** Logs tracked-change types that cannot participate as a replace semantic side. */
+  private logUnexpectedTrackedChangeTypes(
+    trackedChanges: Word.TrackedChange[],
+  ): void {
+    const diagnostics: UnexpectedTrackedChangeTypeDiagnostic[] = [];
+
+    for (const trackedChange of trackedChanges) {
+      const rawType = trackedChange.type;
+      const receivedType = rawType ?? "unknown";
+
+      if (rawType === undefined) {
+        diagnostics.push({
+          id: String((trackedChange as { id?: string | number }).id ?? "no-id"),
+          kind: "missing-type",
+          receivedType,
+        });
+        continue;
+      }
+
+      if (!this.isReplaceTrackedChangeSide(rawType)) {
+        diagnostics.push({
+          id: String((trackedChange as { id?: string | number }).id ?? "no-id"),
+          kind: "non-replace-type",
+          receivedType,
+        });
+      }
+    }
+
+    if (diagnostics.length === 0) {
+      return;
+    }
+
+    console.warn(
+      `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} unexpected tracked change types encountered during ordering`,
+      diagnostics,
+    );
+  }
+
   /** Builds an unverified-mutation signal without conflating unknown host state with count zero. */
   private buildUnverifiedMutation(
     stepIndex: number,
@@ -76,45 +129,19 @@ export class TrackedChangeResolutionExecutor {
     };
   }
 
-  /**
-   * Orders replace-pair tracked changes so semantic sides resolve predictably.
-   *
-   * Accept and reject intentionally diverge:
-   * - accept: `Added -> Deleted`, because real Word can keep the inserted-side
-   *   host surface actionable while stale Deleted proxies silently no-op.
-   * - reject: `Deleted -> Added`, because rejecting the deletion first preserves
-   *   the inserted-side CC long enough for the second semantic step.
-   *
-   * This ordering is applied consistently to stepwise and atomic execution so
-   * runtime telemetry reflects the same semantic intent in both paths.
-   */
+  /** Orders tracked changes using the shared replace policy for this action. */
   private orderTrackedChangesForExecution(
     trackedChanges: Word.TrackedChange[],
   ): Word.TrackedChange[] {
-    const getPriority = (trackedChange: Word.TrackedChange): number => {
-      if (this.action === "accept" && trackedChange.type === "Added") {
-        return 0;
-      }
-
-      if (this.action === "reject" && trackedChange.type === "Deleted") {
-        return 0;
-      }
-
-      if (
-        (this.action === "accept" && trackedChange.type === "Deleted") ||
-        (this.action === "reject" && trackedChange.type === "Added")
-      ) {
-        return 1;
-      }
-
-      return 2;
-    };
+    this.logUnexpectedTrackedChangeTypes(trackedChanges);
 
     return trackedChanges
       .map((trackedChange, index) => ({
         trackedChange,
         index,
-        priority: getPriority(trackedChange),
+        priority: this.replaceResolutionStrategy.priorityFor(
+          trackedChange.type ?? "unknown",
+        ),
       }))
       .sort((left, right) => {
         if (left.priority !== right.priority) {
