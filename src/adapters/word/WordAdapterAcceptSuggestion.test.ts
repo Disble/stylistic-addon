@@ -139,97 +139,28 @@ describe("WordAdapter.acceptSuggestion", () => {
     ]);
   });
 
-  it("retries a non-replace accept once with fresh proxies and fails closed when the retry also fails", async () => {
+  it("fails fast when a track-change suggestion violates the replace contract", async () => {
     const suggestion = makeSuggestion({
-      id: "s-non-replace-retry-once",
+      id: "s-invalid-track-change-contract",
       anchor: "texto original",
       suggestedText: "",
       context: "Contexto con texto original.",
     });
 
-    let phase = 0;
-    const callOrder: string[] = [];
-
-    const staleAccept = vi.fn(() => {
-      callOrder.push("accept-stale");
-      phase = 1;
-      throw new Error("ItemNotFound");
-    });
-    const freshAccept = vi.fn(() => {
-      callOrder.push("accept-fresh");
-      phase = 2;
-      throw new Error("FreshProxyFailed");
-    });
-
     const context = makeResolveSuggestionContext({
       ccFound: true,
-      ccTag: "stylistic:track-change:s-non-replace-retry-once",
+      ccTag: "stylistic:track-change:s-invalid-track-change-contract",
       spanTCItems: [],
       comments: [],
     });
-
-    context._cc.getTrackedChanges.mockImplementation(() => {
-      if (phase === 0) {
-        return {
-          items: [
-            {
-              id: "tc-initial",
-              type: "Added",
-              accept: staleAccept,
-              reject: vi.fn(),
-            },
-          ],
-          load: vi.fn(),
-        };
-      }
-
-      if (phase === 1) {
-        return {
-          items: [
-            {
-              id: "tc-fresh",
-              type: "Added",
-              accept: freshAccept,
-              reject: vi.fn(),
-            },
-          ],
-          load: vi.fn(),
-        };
-      }
-
-      return {
-        items: [
-          {
-            id: "tc-still-pending",
-            type: "Added",
-            accept: vi.fn(),
-            reject: vi.fn(),
-          },
-        ],
-        load: vi.fn(),
-      };
-    });
-
-    const getCcRange = context._cc.getRange as unknown as () => {
-      getTrackedChanges: ReturnType<typeof vi.fn>;
-    };
-    const ccRange = getCcRange();
-    ccRange.getTrackedChanges.mockImplementation(() => ({
-      items: [],
-      load: vi.fn(),
-    }));
-    context.document.body.getTrackedChanges.mockImplementation(() => ({
-      items: [],
-      load: vi.fn(),
-    }));
 
     installWordWithContext(context);
 
     const result = await adapter.acceptSuggestion(suggestion);
 
-    expect(result.status).not.toBe("accepted");
-    expect(context._cc.delete).not.toHaveBeenCalled();
-    expect(callOrder).toEqual(["accept-stale", "accept-fresh"]);
+    expect(result.status).toBe("error");
+    expect(result.error).toContain("Contrato invalido de track-change");
+    expect(context._cc.getTrackedChanges).not.toHaveBeenCalled();
   });
 
   it("re-observes the remaining Deleted side with fresh proxies after the first sync", async () => {

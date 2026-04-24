@@ -10,9 +10,9 @@
  * @module CheckConnectionHandler
  */
 
+import { MASTRA_POLL_BYPASS_ENABLED } from "../../../infrastructure/config";
 import type { PipelineContext } from "../PipelineContext";
 import type { PipelineHandler } from "./ReadTextHandler";
-import { MASTRA_POLL_BYPASS_ENABLED } from "../../../infrastructure/config";
 
 export class CheckConnectionHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {

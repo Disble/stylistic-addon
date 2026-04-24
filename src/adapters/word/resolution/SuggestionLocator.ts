@@ -14,9 +14,9 @@ import type {
 type ResolutionCandidateDebugEntry = {
   candidateIndex: number;
   wasSelected: boolean;
-  selectionReason: "valid-compound-v2" | "fallback-first-candidate" | "not-selected";
+  selectionReason: "valid-compound-v2" | "not-selected";
   tag: string;
-  titleKind: "compound-v2" | "legacy-or-empty";
+  titleKind: "compound-v2" | "invalid-or-missing";
   rawTitle: string;
   score: number;
   validCompoundV2: boolean;
@@ -43,18 +43,21 @@ export class SuggestionLocator {
       this.suggestion,
     );
     const selectedBecauseCompoundV2 = selectedCc === cc && validCompoundV2;
-    const selectedAsFallback = selectedCc === cc && !validCompoundV2;
+    let selectionReason: ResolutionCandidateDebugEntry["selectionReason"] =
+      "not-selected";
+    if (selectedBecauseCompoundV2) {
+      selectionReason = "valid-compound-v2";
+    }
 
     return {
       candidateIndex,
       wasSelected: selectedCc === cc,
-      selectionReason: selectedBecauseCompoundV2
-        ? "valid-compound-v2"
-        : selectedAsFallback
-          ? "fallback-first-candidate"
-          : "not-selected",
+      selectionReason,
       tag: cc.tag,
-      titleKind: identity?.version === "compound-v2" ? "compound-v2" : "legacy-or-empty",
+      titleKind:
+        identity?.version === "compound-v2"
+          ? "compound-v2"
+          : "invalid-or-missing",
       rawTitle: cc.title ?? "",
       score: scoreCompoundReplaceIdentityMatch(identity, this.suggestion),
       validCompoundV2,
@@ -144,7 +147,7 @@ export class SuggestionLocator {
       return isValidCompoundReplaceIdentity(identity, this.suggestion);
     });
 
-    return v2Candidate ?? ccs[0] ?? null;
+    return v2Candidate ?? null;
   }
 
   /** Orders CC candidates so valid compound-v2 artifacts are tried first. */

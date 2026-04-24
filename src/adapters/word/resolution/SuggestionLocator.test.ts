@@ -30,6 +30,19 @@ describe("SuggestionLocator", () => {
     expect(selected).toBe(v2Cc);
   });
 
+  it("returns null when no valid compound-v2 content control exists", () => {
+    const suggestion = makeSuggestion({ id: "s-1" });
+    const locator = new SuggestionLocator(suggestion);
+    const invalidCc = {
+      tag: "stylistic:track-change:s-1",
+      title: "legacy title",
+    } as unknown as Word.ContentControl;
+
+    const selected = locator.selectResolutionContentControl([invalidCc]);
+
+    expect(selected).toBeNull();
+  });
+
   it("keeps valid compound-v2 candidates first when ranking duplicates", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
     const locator = new SuggestionLocator(suggestion);

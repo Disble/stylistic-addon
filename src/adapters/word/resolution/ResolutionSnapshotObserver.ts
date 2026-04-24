@@ -37,7 +37,7 @@ export class ResolutionSnapshotObserver {
       const currentReviewState =
         reviewState ?? (await this.stateInspector.inspect(context));
 
-      if (!this.isReplaceSuggestion()) {
+      if (this.suggestion.type === "comment-only") {
         await this.observabilityReporter.captureSnapshot(label, {
           reviewState: currentReviewState,
           replaceSuggestion: false,
@@ -101,7 +101,7 @@ export class ResolutionSnapshotObserver {
       await this.observabilityReporter.captureSnapshot(
         label,
         {
-          replaceSuggestion: this.isReplaceSuggestion(),
+          replaceSuggestion: this.suggestion.type === "track-change",
           snapshotFailed: true,
           snapshotError: serializedError.message,
         },
@@ -112,14 +112,5 @@ export class ResolutionSnapshotObserver {
       );
       return null;
     }
-  }
-
-  /** Returns true when the current suggestion is a tracked replace. */
-  private isReplaceSuggestion(): boolean {
-    return (
-      this.suggestion.type === "track-change" &&
-      this.suggestion.anchor.length > 0 &&
-      (this.suggestion.suggestedText?.length ?? 0) > 0
-    );
   }
 }

@@ -328,6 +328,30 @@ export class ResolveSuggestionCommand {
       };
     }
 
+    if (!this.hasValidTrackChangeContract()) {
+      this.transitionExecuteState("completed");
+      await this.observabilityReporter.emitPhase("observe-before", "failed", {
+        reason: "invalid-track-change-contract",
+        suggestionType: this.suggestion.type,
+      });
+      const invalidContractResult = this.resultFactory.buildErrorResult(
+        "Contrato invalido de track-change: anchor y suggestedText son obligatorios.",
+        pendingBefore,
+        "observe-before",
+      );
+      return {
+        outcome: {
+          status: invalidContractResult.status,
+          trackedChangesAffected: invalidContractResult.trackedChangesAffected,
+          commentDeleted: invalidContractResult.commentDeleted,
+          pendingBefore,
+          pendingAfter: invalidContractResult.pendingAfter,
+          error: invalidContractResult.error,
+          executionReport: invalidContractResult.executionReport,
+        },
+      };
+    }
+
     let observation: ResolutionObservation;
     try {
       observation = await this.observer.observeResolutionCandidates(
@@ -505,9 +529,10 @@ export class ResolveSuggestionCommand {
       trackedChangeTypes: observation.debugMetadata?.trackedChangeTypes ?? "",
     });
 
-    const executeAttempt = await this.executeTrackedChangesWithFreshProxyRetry(
+    const executeAttempt = await this.replaceResolutionWorkflow.execute(
       context,
       observation,
+      this.workflowAttemptId,
     );
     const postExecuteAttempt = await this.observePostExecuteResolutionState(
       context,
@@ -556,157 +581,13 @@ export class ResolveSuggestionCommand {
     };
   }
 
-  /** Executes tracked changes and retries once with fresh proxies when certification fails. */
-  private async executeTrackedChangesWithFreshProxyRetry(
-    context: Word.RequestContext,
-    observation: ResolutionObservation,
-  ): Promise<{
-    observation: ResolutionObservation;
-    executionReport: ResolutionExecutionReport;
-    recoveryAttempted: boolean;
-    recoverySucceeded: boolean;
-  }> {
-    if (this.isReplaceSuggestion()) {
-      return this.replaceResolutionWorkflow.execute(
-        context,
-        observation,
-        this.workflowAttemptId,
-      );
-    }
-
-    console.log(
-      `⚙️ [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" execute-start trackedChanges=${observation.trackedChanges.length} types=${observation.debugMetadata?.trackedChangeTypes ?? ""}`,
-    );
-    const initialReport = await this.executor.apply(
-      context,
-      observation.trackedChanges,
-    );
-
-    if (!initialReport.error || initialReport.remaining === 0) {
-      return {
-        observation,
-        executionReport: initialReport,
-        recoveryAttempted: false,
-        recoverySucceeded: false,
-      };
-    }
-
-    console.warn(
-      `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" retrying with fresh proxies after uncertified execute result: ${initialReport.error}`,
-    );
-
-    try {
-      const relocated = await this.locator.locateResolutionArtifacts(context);
-      if (!relocated.selectedCc) {
-        return {
-          observation,
-          executionReport: initialReport,
-          recoveryAttempted: true,
-          recoverySucceeded: false,
-        };
-      }
-
-      const recoveryObservation =
-        await this.observer.observeResolutionCandidates(
-          context,
-          relocated.rankedCandidates,
-          relocated.selectedCc,
-        );
-      console.log(
-        `🔁 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" recovery observation status=${recoveryObservation.observationStatus} trackedChanges=${recoveryObservation.trackedChanges.length} types=${recoveryObservation.debugMetadata?.trackedChangeTypes ?? ""}`,
-      );
-
-      const canContinueRecovery =
-        recoveryObservation.observationStatus !== "identity-lost" &&
-        recoveryObservation.trackedChanges.length > 0;
-
-      if (!canContinueRecovery) {
-        return {
-          observation,
-          executionReport: initialReport,
-          recoveryAttempted: true,
-          recoverySucceeded: false,
-        };
-      }
-
-      const recoveryReport = await this.executor.apply(
-        context,
-        recoveryObservation.trackedChanges,
-      );
-
-      return {
-        observation: recoveryObservation,
-        executionReport: this.mergeExecutionReports(
-          initialReport,
-          recoveryReport,
-        ),
-        recoveryAttempted: true,
-        recoverySucceeded: !recoveryReport.error,
-      };
-    } catch (recoveryError) {
-      const message =
-        recoveryError instanceof Error
-          ? recoveryError.message
-          : String(recoveryError);
-
-      console.warn(
-        `⚠️ [ResolveSuggestionCommand] action=${this.action} suggestionId="${this.suggestion.id}" fresh-proxy retry failed: ${message}`,
-      );
-
-      return {
-        observation,
-        executionReport: initialReport,
-        recoveryAttempted: true,
-        recoverySucceeded: false,
-      };
-    }
-  }
-
-  /** Returns true when the current suggestion is a tracked replace. */
-  private isReplaceSuggestion(): boolean {
+  /** Returns true when the current tracked-change suggestion satisfies the contract. */
+  private hasValidTrackChangeContract(): boolean {
     return (
       this.suggestion.type === "track-change" &&
-      this.suggestion.anchor.length > 0 &&
-      (this.suggestion.suggestedText?.length ?? 0) > 0
+      this.suggestion.anchor.trim().length > 0 &&
+      (this.suggestion.suggestedText?.trim().length ?? 0) > 0
     );
-  }
-
-  /** Merges the initial partial execution report with one immediate recovery pass. */
-  private mergeExecutionReports(
-    initialReport: ResolutionExecutionReport,
-    recoveryReport: ResolutionExecutionReport,
-  ): ResolutionExecutionReport {
-    const completed = initialReport.completed + recoveryReport.completed;
-    const remaining = recoveryReport.remaining;
-    const failureIndex = recoveryReport.failureIndex;
-
-    return {
-      attempted: completed + remaining,
-      completed,
-      remaining,
-      ...(failureIndex === undefined
-        ? {}
-        : {
-            failureIndex: initialReport.completed + failureIndex,
-          }),
-      ...(recoveryReport.error ? { error: recoveryReport.error } : {}),
-      ...((recoveryReport.silentNoOpDetected ??
-      initialReport.silentNoOpDetected)
-        ? {
-            silentNoOpDetected:
-              recoveryReport.silentNoOpDetected ??
-              initialReport.silentNoOpDetected,
-          }
-        : {}),
-      ...((recoveryReport.unverifiedMutation ??
-      initialReport.unverifiedMutation)
-        ? {
-            unverifiedMutation:
-              recoveryReport.unverifiedMutation ??
-              initialReport.unverifiedMutation,
-          }
-        : {}),
-    };
   }
 
   /** Re-checks post-execute replace state without executing any fallback recovery. */

@@ -317,15 +317,6 @@ export class SuggestionResolutionObserver {
     );
   }
 
-  /** Returns `true` when a suggestion is semantically a replace operation. */
-  private isReplaceSuggestion(): boolean {
-    return (
-      this.suggestion.type === "track-change" &&
-      this.suggestion.anchor.length > 0 &&
-      (this.suggestion.suggestedText?.length ?? 0) > 0
-    );
-  }
-
   /** Resolves one stable source label for a tracked change so post-step logs stay actionable. */
   private identifyTrackedChangeSource(
     trackedChange: Word.TrackedChange | null,
@@ -732,7 +723,7 @@ export class SuggestionResolutionObserver {
       selectedCcTag: cc.tag,
       selectedCcTitleKind: (cc.title ?? "").startsWith("stylistic-meta-v2:")
         ? "compound-v2"
-        : "legacy-or-empty",
+        : "invalid-or-missing",
       selectedCommentFound: Boolean(colocatedComment),
       trackedChangesObserved: 0,
       trackedChangeTypes: "",
@@ -1363,7 +1354,7 @@ export class SuggestionResolutionObserver {
     };
   }
 
-  /** Observes one resolution candidate and normalizes replace vs non-replace evidence. */
+  /** Observes one resolution candidate using replace evidence only. */
   private async observeResolutionCandidate(
     context: Word.RequestContext,
     candidate: Word.ContentControl,
@@ -1373,50 +1364,15 @@ export class SuggestionResolutionObserver {
     observationStatus: SuggestionObservationStatus;
     debugMetadata?: ResolutionObservationDebugMetadata;
   }> {
-    if (this.isReplaceSuggestion()) {
-      const observation = await this.observeReplaceSuggestion(
-        context,
-        candidate,
-        colocatedComment,
-      );
-      return {
-        trackedChanges: observation.trackedChanges,
-        observationStatus: observation.observationStatus,
-        debugMetadata: observation.debugMetadata,
-      };
-    }
-
-    const contentControlObservation =
-      await this.collectTrackedChangesForContentControl(context, candidate);
-    const trackedChanges = contentControlObservation.trackedChanges;
-    const observationStatus =
-      trackedChanges.length > 0 ? "confirmed-pending" : "unobservable";
+    const observation = await this.observeReplaceSuggestion(
+      context,
+      candidate,
+      colocatedComment,
+    );
     return {
-      trackedChanges,
-      observationStatus,
-      debugMetadata: {
-        selectedCcTag: candidate.tag,
-        selectedCcTitleKind: (candidate.title ?? "").startsWith(
-          "stylistic-meta-v2:",
-        )
-          ? "compound-v2"
-          : "legacy-or-empty",
-        selectedCommentFound: Boolean(colocatedComment),
-        trackedChangesObserved: trackedChanges.length,
-        trackedChangeTypes: trackedChanges
-          .map((trackedChange) => trackedChange.type ?? "unknown")
-          .join(","),
-        observationStatus,
-        ccTrackedChangesCount:
-          contentControlObservation.debugMetadata.ccTrackedChangesCount,
-        ccRangeTrackedChangesCount:
-          contentControlObservation.debugMetadata.ccRangeTrackedChangesCount,
-        bodyTrackedChangesCount:
-          contentControlObservation.debugMetadata.bodyTrackedChangesCount,
-        bodyRelatedTrackedChangesCount:
-          contentControlObservation.debugMetadata
-            .bodyRelatedTrackedChangesCount,
-      },
+      trackedChanges: observation.trackedChanges,
+      observationStatus: observation.observationStatus,
+      debugMetadata: observation.debugMetadata,
     };
   }
 
@@ -1513,18 +1469,13 @@ export class SuggestionResolutionObserver {
         context,
         candidate,
       );
-      const candidateObservation = this.isReplaceSuggestion()
-        ? await this.observeReplaceSuggestionSemanticSide(
-            context,
-            candidate,
-            colocatedComment,
-            trackedChangeType,
-          )
-        : await this.observeResolutionCandidate(
-            context,
-            candidate,
-            colocatedComment,
-          );
+      const candidateObservation =
+        await this.observeReplaceSuggestionSemanticSide(
+          context,
+          candidate,
+          colocatedComment,
+          trackedChangeType,
+        );
 
       observation.selectedCc = candidate;
       observation.selectedComment = colocatedComment;

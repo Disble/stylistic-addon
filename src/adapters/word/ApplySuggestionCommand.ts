@@ -319,7 +319,9 @@ export class ApplySuggestionCommand {
       return directCandidate;
     }
 
-    const paragraphRange = mutationRange.paragraphs.getFirst().getRange("Whole");
+    const paragraphRange = mutationRange.paragraphs
+      .getFirst()
+      .getRange("Whole");
     const paragraphCandidate = await this.textLocator.locate({
       context,
       container: paragraphRange as unknown as WordSearchContainer,

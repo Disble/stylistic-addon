@@ -275,7 +275,7 @@ export function makeResolveSuggestionContext({
   }
 
   const ccTagParts = ccTag.split(":");
-  const inferredSuggestionId = ccTagParts.slice(-1)[0] ?? "s-1";
+  const inferredSuggestionId = ccTagParts[ccTagParts.length - 1] ?? "s-1";
   const rangeTCCollection = { items: mutableRangeTCItems, load: vi.fn() };
   const bodyTCCollection = { items: mutableBodyTCItems, load: vi.fn() };
   const operationalAnchorRangeTCCollection = {

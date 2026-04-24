@@ -41,8 +41,7 @@ export class SuggestionResolutionCleanup {
       const message = error instanceof Error ? error.message : String(error);
       const code = (error as { code?: string } | null)?.code ?? "";
       const isGeneralException =
-        code === "GeneralException" ||
-        message.includes("GeneralException");
+        code === "GeneralException" || message.includes("GeneralException");
 
       if (isGeneralException) {
         console.warn(
@@ -92,8 +91,7 @@ export class SuggestionResolutionCleanup {
       const message = error instanceof Error ? error.message : String(error);
       const code = (error as { code?: string } | null)?.code ?? "";
       const isGeneralException =
-        code === "GeneralException" ||
-        message.includes("GeneralException");
+        code === "GeneralException" || message.includes("GeneralException");
 
       if (isGeneralException) {
         console.warn(
