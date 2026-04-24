@@ -192,6 +192,55 @@ That means:
 `cc.getRange().getTrackedChanges()` returns the actionable replace changes. The
 adapter must resolve successfully in that scenario.
 
+#### Verified repo lesson: Deleted-side re-observation must prefer deleted-side evidence over stale CC-range proxies
+
+Another escaped regression showed that after `acceptSuggestion` resolves the
+`Added` side of a replace, Word can still expose more than one `Deleted`
+candidate for the remaining semantic step:
+
+- a stale `cc.getRange().getTrackedChanges()` proxy that throws or silently no-ops,
+- and a fresh `deletedSideRef`-anchored range that still resolves the original text.
+
+If the re-observation path prefers the stale CC-range proxy, the workflow can
+apply only the inserted side, leave the original text unresolved, and then fail
+closed during post-execute verification.
+
+**Testing rule**: add a RED case where the remaining `Deleted` side is exposed
+through both `ccRange` and `deletedSide`, but only the `deletedSide` proxy is
+actionable. The adapter must choose `deletedSide` first and complete the
+resolution without invoking the stale CC-range proxy.
+
+#### Verified repo lesson: semantic-step recovery must not fall back to full-pair re-observation
+
+Another escaped regression showed that fixing the between-step re-observation is
+not sufficient when the second semantic step itself fails.
+
+After `acceptSuggestion` completes the `Added` side, the `Deleted` step can
+still fail with a stale proxy. If that recovery path re-observes the full
+replace pair instead of re-observing only the remaining semantic side, it can
+reintroduce the wrong pair selection and keep the workflow stuck in
+`Deleted,Added` even though only `Deleted` should still be under consideration.
+
+**Testing rule**: add a focused regression for `ResolveSuggestionCommand`
+showing that failed replace-step recovery calls the side-specific re-observation
+helper for the same semantic side and does not route through the generic
+full-pair observer.
+
+#### Verified repo lesson: the deleted-side locator must not contribute Added evidence
+
+Another real-host log exposed a more specific observer bug: the range relocated
+through `deletedSideRef` can still expose tracked changes, but if that loader is
+treated as a generic range source it may return an `Added` and contaminate the
+post-execute replace pair as `Deleted(ccRange) + Added(deletedSide)`.
+
+That is semantically invalid. `deletedSideRef` exists to re-anchor the original
+text side of the replace, so its contribution must be restricted to `Deleted`
+tracked changes.
+
+**Testing rule**: add a RED case where the deleted-side range exposes both
+`Added` and `Deleted`, and assert that the observer keeps only the `Deleted`
+entry from that source.
+
 #### Verified repo lesson: persisted identity must be used to re-localize actionable ranges
 
 Another escaped regression showed that persisting richer metadata (`compound-v2`)

@@ -59,7 +59,6 @@ type ResolutionTelemetryMetadata = Record<
 >;
 
 type TrackedChangeLogEntry = {
-  id: string;
   type: string;
 };
 
@@ -1434,7 +1433,6 @@ export class ResolveSuggestionCommand {
     trackedChange: Word.TrackedChange,
   ): TrackedChangeLogEntry {
     return {
-      id: String((trackedChange as { id?: string | number }).id ?? "no-id"),
       type: trackedChange.type ?? "unknown",
     };
   }
@@ -1463,8 +1461,10 @@ export class ResolveSuggestionCommand {
         console.log(
           `🧪 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" snapshot=${label}`,
           {
-            reviewState: currentReviewState,
-            replaceSuggestion: false,
+            workflowState: {
+              reviewState: currentReviewState,
+              replaceSuggestion: false,
+            },
           },
         );
         return null;
@@ -1475,9 +1475,14 @@ export class ResolveSuggestionCommand {
         console.log(
           `🧪 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" snapshot=${label}`,
           {
-            reviewState: currentReviewState,
-            relocatedCandidateCount: relocated.rankedCandidates.length,
-            relocatedSelectedCc: null,
+            workflowState: {
+              reviewState: currentReviewState,
+              replaceSuggestion: true,
+            },
+            hostEvidence: {
+              relocatedCandidateCount: relocated.rankedCandidates.length,
+              relocatedSelectedCc: null,
+            },
           },
         );
         return null;
@@ -1500,16 +1505,23 @@ export class ResolveSuggestionCommand {
       console.log(
         `🧪 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" snapshot=${label}`,
         {
-          reviewState: currentReviewState,
-          relocatedCandidateCount: relocated.rankedCandidates.length,
-          relocatedSelectedCc: relocated.selectedCc.tag,
-          preferredCcResolved: resolvedPreferredCc?.tag ?? null,
-          observationStatus: observation.observationStatus,
-          trackedChangesObserved: observation.trackedChanges.length,
-          trackedChanges: this.describeTrackedChangesForLog(
-            observation.trackedChanges,
-          ),
-          debugMetadata: observation.debugMetadata ?? null,
+          workflowState: {
+            reviewState: currentReviewState,
+            replaceSuggestion: true,
+            observationStatus: observation.observationStatus,
+          },
+          hostEvidence: {
+            relocatedCandidateCount: relocated.rankedCandidates.length,
+            relocatedSelectedCc: relocated.selectedCc.tag,
+            preferredCcResolved: resolvedPreferredCc?.tag ?? null,
+            trackedChangesObserved: observation.trackedChanges.length,
+            trackedChanges: this.describeTrackedChangesForLog(
+              observation.trackedChanges,
+            ),
+          },
+          heuristicDiagnostics: {
+            debugMetadata: observation.debugMetadata ?? null,
+          },
         },
       );
       return observation;

@@ -69,7 +69,6 @@ type SerializedOfficeErrorDiagnostics = {
 
 type BodyTrackedChangeCandidateDiagnostic = {
   index: number;
-  trackedChangeId: string;
   trackedChangeType: string;
   rangeObtained: boolean;
   comparisonQueued: boolean;
@@ -209,9 +208,6 @@ export class SuggestionResolutionObserver {
   ): BodyTrackedChangeCandidateDiagnostic {
     const diagnostic: BodyTrackedChangeCandidateDiagnostic = {
       index,
-      trackedChangeId: String(
-        (trackedChange as { id?: string | number }).id ?? "no-id",
-      ),
       trackedChangeType: trackedChange.type ?? "unknown",
       rangeObtained: range !== null,
       comparisonQueued,
@@ -227,12 +223,10 @@ export class SuggestionResolutionObserver {
     trackedChange: Word.TrackedChange,
     sources?: ReplaceTrackedChangeSources,
   ): {
-    id: string;
     type: string;
     source?: string;
   } {
     return {
-      id: String((trackedChange as { id?: string | number }).id ?? "no-id"),
       type: trackedChange.type ?? "unknown",
       ...(sources
         ? {
@@ -247,7 +241,6 @@ export class SuggestionResolutionObserver {
     trackedChanges: Word.TrackedChange[],
     sources?: ReplaceTrackedChangeSources,
   ): Array<{
-    id: string;
     type: string;
     source?: string;
   }> {
@@ -262,36 +255,40 @@ export class SuggestionResolutionObserver {
     loadedSources: LoadedReplaceObservationSources,
   ): void {
     console.log(
-      `🧾 [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" replace-source-detail cc="${cc.tag}"`,
+      `🧾 [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" host-evidence replace-sources cc="${cc.tag}"`,
       {
-        deletedSideText: loadedSources.deletedSideText,
-        operationalAnchorFound: loadedSources.operationalAnchorFound,
-        baseDebugMetadata: loadedSources.baseDebugMetadata,
-        sources: {
-          ccTrackedChanges: this.describeTrackedChanges(
-            loadedSources.sources.ccTrackedChanges,
-            loadedSources.sources,
-          ),
-          ccRangeTrackedChanges: this.describeTrackedChanges(
-            loadedSources.sources.ccRangeTrackedChanges,
-            loadedSources.sources,
-          ),
-          bodyRelatedTrackedChanges: this.describeTrackedChanges(
-            loadedSources.sources.bodyRelatedTrackedChanges,
-            loadedSources.sources,
-          ),
-          deletedSideTrackedChanges: this.describeTrackedChanges(
-            loadedSources.sources.deletedSideTrackedChanges,
-            loadedSources.sources,
-          ),
-          operationalAnchorTrackedChanges: this.describeTrackedChanges(
-            loadedSources.sources.operationalAnchorTrackedChanges,
-            loadedSources.sources,
-          ),
-          commentTrackedChanges: this.describeTrackedChanges(
-            loadedSources.sources.commentTrackedChanges,
-            loadedSources.sources,
-          ),
+        hostEvidence: {
+          deletedSideText: loadedSources.deletedSideText,
+          operationalAnchorFound: loadedSources.operationalAnchorFound,
+          sources: {
+            ccTrackedChanges: this.describeTrackedChanges(
+              loadedSources.sources.ccTrackedChanges,
+              loadedSources.sources,
+            ),
+            ccRangeTrackedChanges: this.describeTrackedChanges(
+              loadedSources.sources.ccRangeTrackedChanges,
+              loadedSources.sources,
+            ),
+            bodyRelatedTrackedChanges: this.describeTrackedChanges(
+              loadedSources.sources.bodyRelatedTrackedChanges,
+              loadedSources.sources,
+            ),
+            deletedSideTrackedChanges: this.describeTrackedChanges(
+              loadedSources.sources.deletedSideTrackedChanges,
+              loadedSources.sources,
+            ),
+            operationalAnchorTrackedChanges: this.describeTrackedChanges(
+              loadedSources.sources.operationalAnchorTrackedChanges,
+              loadedSources.sources,
+            ),
+            commentTrackedChanges: this.describeTrackedChanges(
+              loadedSources.sources.commentTrackedChanges,
+              loadedSources.sources,
+            ),
+          },
+        },
+        heuristicDiagnostics: {
+          baseDebugMetadata: loadedSources.baseDebugMetadata,
         },
       },
     );

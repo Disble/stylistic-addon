@@ -51,42 +51,6 @@ function buildBodyTrackedChangeContextStub(
 }
 
 describe("TrackedChangeResolutionExecutor silent no-op detection", () => {
-  it("logs missing-type and non-replace-type tracked changes before ordering", async () => {
-    const executor = new TrackedChangeResolutionExecutor(
-      "s-type-log",
-      "accept",
-      new AcceptReplaceResolutionStrategy(),
-    );
-    const context = buildBodyTrackedChangeContextStub([2, 1, 1, 0]);
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-    await executor.apply(context, [
-      { id: "tc-missing", accept: vi.fn() } as unknown as Word.TrackedChange,
-      {
-        id: "tc-formatting",
-        type: "Formatting",
-        accept: vi.fn(),
-      } as unknown as Word.TrackedChange,
-      { id: "tc-added", type: "Added", accept: vi.fn() } as unknown as Word.TrackedChange,
-    ]);
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      "⚠️ [TrackedChangeResolutionExecutor] suggestionId=\"s-type-log\" action=accept unexpected tracked change types encountered during ordering",
-      [
-        {
-          id: "tc-missing",
-          kind: "missing-type",
-          receivedType: "unknown",
-        },
-        {
-          id: "tc-formatting",
-          kind: "non-replace-type",
-          receivedType: "Formatting",
-        },
-      ],
-    );
-  });
-
   it("applies accept replace steps in Added then Deleted order", async () => {
     const executor = new TrackedChangeResolutionExecutor(
       "s-accept-order",

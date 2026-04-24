@@ -1,12 +1,6 @@
 import type { ResolutionExecutionReport } from "../../../domain/types";
 import type { ReplaceResolutionStrategy } from "./ReplaceResolutionStrategyContext";
 
-type UnexpectedTrackedChangeTypeDiagnostic = {
-  id: string;
-  kind: "missing-type" | "non-replace-type";
-  receivedType: string;
-};
-
 type BodyTrackedChangeCountProbe =
   | {
       status: "known";
@@ -27,18 +21,15 @@ export class TrackedChangeResolutionExecutor {
 
   /** Builds one stable tracked-change diagnostic entry for runtime logs. */
   private describeTrackedChange(trackedChange: Word.TrackedChange): {
-    id: string;
     type: string;
   } {
     return {
-      id: String((trackedChange as { id?: string | number }).id ?? "no-id"),
       type: trackedChange.type ?? "unknown",
     };
   }
 
   /** Builds a compact tracked-change list so one host attempt can be reconstructed later. */
   private describeTrackedChanges(trackedChanges: Word.TrackedChange[]): Array<{
-    id: string;
     type: string;
   }> {
     return trackedChanges.map((trackedChange) =>
@@ -58,51 +49,6 @@ export class TrackedChangeResolutionExecutor {
     probe: BodyTrackedChangeCountProbe,
   ): number | undefined {
     return probe.status === "known" ? probe.count : undefined;
-  }
-
-  /** Returns true when the tracked change already matches a replace semantic side. */
-  private isReplaceTrackedChangeSide(
-    trackedChangeType: string,
-  ): trackedChangeType is "Added" | "Deleted" {
-    return trackedChangeType === "Added" || trackedChangeType === "Deleted";
-  }
-
-  /** Logs tracked-change types that cannot participate as a replace semantic side. */
-  private logUnexpectedTrackedChangeTypes(
-    trackedChanges: Word.TrackedChange[],
-  ): void {
-    const diagnostics: UnexpectedTrackedChangeTypeDiagnostic[] = [];
-
-    for (const trackedChange of trackedChanges) {
-      const rawType = trackedChange.type;
-      const receivedType = rawType ?? "unknown";
-
-      if (rawType === undefined) {
-        diagnostics.push({
-          id: String((trackedChange as { id?: string | number }).id ?? "no-id"),
-          kind: "missing-type",
-          receivedType,
-        });
-        continue;
-      }
-
-      if (!this.isReplaceTrackedChangeSide(rawType)) {
-        diagnostics.push({
-          id: String((trackedChange as { id?: string | number }).id ?? "no-id"),
-          kind: "non-replace-type",
-          receivedType,
-        });
-      }
-    }
-
-    if (diagnostics.length === 0) {
-      return;
-    }
-
-    console.warn(
-      `⚠️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} unexpected tracked change types encountered during ordering`,
-      diagnostics,
-    );
   }
 
   /** Builds an unverified-mutation signal without conflating unknown host state with count zero. */
@@ -133,8 +79,6 @@ export class TrackedChangeResolutionExecutor {
   private orderTrackedChangesForExecution(
     trackedChanges: Word.TrackedChange[],
   ): Word.TrackedChange[] {
-    this.logUnexpectedTrackedChangeTypes(trackedChanges);
-
     return trackedChanges
       .map((trackedChange, index) => ({
         trackedChange,
@@ -161,15 +105,19 @@ export class TrackedChangeResolutionExecutor {
     const orderedTrackedChanges =
       this.orderTrackedChangesForExecution(trackedChanges);
     console.log(
-      `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} orderedTypes=${orderedTrackedChanges
+      `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} workflow-plan orderedTypes=${orderedTrackedChanges
         .map((trackedChange) => trackedChange.type ?? "unknown")
         .join(",")}`,
     );
     console.log(
-      `🧾 [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} apply-detail`,
+      `🧾 [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} workflow-plan`,
       {
-        input: this.describeTrackedChanges(trackedChanges),
-        ordered: this.describeTrackedChanges(orderedTrackedChanges),
+        workflowPlan: {
+          inputTrackedChanges: this.describeTrackedChanges(trackedChanges),
+          orderedTrackedChanges: this.describeTrackedChanges(
+            orderedTrackedChanges,
+          ),
+        },
       },
     );
     let completed = 0;
@@ -234,7 +182,7 @@ export class TrackedChangeResolutionExecutor {
 
     try {
       console.log(
-        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=queue`,
+        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} stage=queue`,
       );
       if (this.action === "accept") {
         trackedChange.accept();
@@ -244,11 +192,11 @@ export class TrackedChangeResolutionExecutor {
 
       actionQueued = true;
       console.log(
-        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=sync-start`,
+        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} stage=sync-start`,
       );
       await context.sync();
       console.log(
-        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=sync-done`,
+        `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} step=${index} type=${trackedChangeDetail.type} stage=sync-done`,
       );
 
       const bodyTrackedChangeCountAfter =
@@ -338,15 +286,19 @@ export class TrackedChangeResolutionExecutor {
     const orderedTrackedChanges =
       this.orderTrackedChangesForExecution(trackedChanges);
     console.log(
-      `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} atomic-orderedTypes=${orderedTrackedChanges
+      `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} workflow-plan atomic-orderedTypes=${orderedTrackedChanges
         .map((trackedChange) => trackedChange.type ?? "unknown")
         .join(",")}`,
     );
     console.log(
-      `🧾 [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} atomic-detail`,
+      `🧾 [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} workflow-plan atomic`,
       {
-        input: this.describeTrackedChanges(trackedChanges),
-        ordered: this.describeTrackedChanges(orderedTrackedChanges),
+        workflowPlan: {
+          inputTrackedChanges: this.describeTrackedChanges(trackedChanges),
+          orderedTrackedChanges: this.describeTrackedChanges(
+            orderedTrackedChanges,
+          ),
+        },
       },
     );
 
@@ -354,7 +306,7 @@ export class TrackedChangeResolutionExecutor {
       for (const [index, trackedChange] of orderedTrackedChanges.entries()) {
         const trackedChangeDetail = this.describeTrackedChange(trackedChange);
         console.log(
-          `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} atomic-step=${index} id=${trackedChangeDetail.id} type=${trackedChangeDetail.type} stage=queue`,
+          `⚙️ [TrackedChangeResolutionExecutor] suggestionId="${this.suggestionId}" action=${this.action} atomic-step=${index} type=${trackedChangeDetail.type} stage=queue`,
         );
         if (this.action === "accept") {
           trackedChange.accept();
@@ -414,7 +366,7 @@ export class TrackedChangeResolutionExecutor {
   ): Promise<BodyTrackedChangeCountProbe> {
     try {
       const bodyTrackedChanges = context.document.body.getTrackedChanges();
-      bodyTrackedChanges.load({ select: "type,id" });
+      bodyTrackedChanges.load({ select: "type" });
       await context.sync();
       return {
         status: "known",
