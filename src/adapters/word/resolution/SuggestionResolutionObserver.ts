@@ -4,7 +4,6 @@ import type {
   SuggestionObservationStatus,
 } from "../../../domain/types";
 import {
-  getDeletedSideLocator,
   getOperationalAnchorLocator,
   isValidCompoundReplaceIdentity,
   parseReplaceIdentityTitle,
@@ -38,14 +37,12 @@ type ReplaceTrackedChangeSources = {
   ccTrackedChanges: Word.TrackedChange[];
   ccRangeTrackedChanges: Word.TrackedChange[];
   bodyRelatedTrackedChanges: Word.TrackedChange[];
-  deletedSideTrackedChanges: Word.TrackedChange[];
   operationalAnchorTrackedChanges: Word.TrackedChange[];
   commentTrackedChanges: Word.TrackedChange[];
 };
 
 type LoadedReplaceObservationSources = {
   sources: ReplaceTrackedChangeSources;
-  deletedSideText: string | null;
   operationalAnchorFound: boolean;
   baseDebugMetadata: Pick<
     ResolutionObservationDebugMetadata,
@@ -53,8 +50,6 @@ type LoadedReplaceObservationSources = {
     | "ccRangeTrackedChangesCount"
     | "bodyTrackedChangesCount"
     | "bodyRelatedTrackedChangesCount"
-    | "deletedSideTrackedChangesCount"
-    | "deletedSideLocatorFound"
     | "operationalAnchorTrackedChangesCount"
     | "operationalAnchorFound"
     | "commentTrackedChangesCount"
@@ -261,7 +256,6 @@ export class SuggestionResolutionObserver {
       `🧾 [SuggestionResolutionObserver] suggestionId="${this.suggestion.id}" host-evidence replace-sources cc="${cc.tag}"`,
       {
         hostEvidence: {
-          deletedSideText: loadedSources.deletedSideText,
           operationalAnchorFound: loadedSources.operationalAnchorFound,
           sources: {
             ccTrackedChanges: this.describeTrackedChanges(
@@ -274,10 +268,6 @@ export class SuggestionResolutionObserver {
             ),
             bodyRelatedTrackedChanges: this.describeTrackedChanges(
               loadedSources.sources.bodyRelatedTrackedChanges,
-              loadedSources.sources,
-            ),
-            deletedSideTrackedChanges: this.describeTrackedChanges(
-              loadedSources.sources.deletedSideTrackedChanges,
               loadedSources.sources,
             ),
             operationalAnchorTrackedChanges: this.describeTrackedChanges(
@@ -320,10 +310,6 @@ export class SuggestionResolutionObserver {
         );
         return trackedChangeId.length > 0 && candidateId === trackedChangeId;
       });
-
-    if (belongsToSource(sources.deletedSideTrackedChanges)) {
-      return "deletedSide";
-    }
 
     if (belongsToSource(sources.operationalAnchorTrackedChanges)) {
       return "operationalAnchor";
@@ -580,7 +566,11 @@ export class SuggestionResolutionObserver {
     const candidateBodyTrackedChanges = bodyTrackedChanges.items.filter(
       (tc) => {
         const id = String((tc as { id?: string | number }).id ?? "");
-        return id.length === 0 || !trackedChangesById.has(id);
+        return (
+          tc.type === "Deleted" ||
+          id.length === 0 ||
+          !trackedChangesById.has(id)
+        );
       },
     );
 
@@ -711,15 +701,6 @@ export class SuggestionResolutionObserver {
     const contentControlObservation =
       await this.collectTrackedChangesForContentControl(context, cc);
 
-    const deletedSideText = getDeletedSideLocator(
-      parsedIdentity,
-      this.suggestion,
-    );
-    const deletedSideTrackedChanges = await this.loadDeletedSideTrackedChanges(
-      context,
-      deletedSideText,
-    );
-
     const operationalAnchorRange = await this.resolveOperationalAnchorRange(
       context,
       parsedIdentity,
@@ -740,11 +721,9 @@ export class SuggestionResolutionObserver {
         ccRangeTrackedChanges: contentControlObservation.ccRangeTrackedChanges,
         bodyRelatedTrackedChanges:
           contentControlObservation.bodyRelatedTrackedChanges,
-        deletedSideTrackedChanges,
         operationalAnchorTrackedChanges,
         commentTrackedChanges,
       },
-      deletedSideText,
       operationalAnchorFound: Boolean(operationalAnchorRange),
       baseDebugMetadata: {
         ccTrackedChangesCount:
@@ -756,32 +735,12 @@ export class SuggestionResolutionObserver {
         bodyRelatedTrackedChangesCount:
           contentControlObservation.debugMetadata
             .bodyRelatedTrackedChangesCount,
-        deletedSideTrackedChangesCount: deletedSideTrackedChanges.length,
-        deletedSideLocatorFound: deletedSideText !== null,
         operationalAnchorTrackedChangesCount:
           operationalAnchorTrackedChanges.length,
         operationalAnchorFound: Boolean(operationalAnchorRange),
         commentTrackedChangesCount: commentTrackedChanges.length,
       },
     };
-  }
-
-  /** Loads tracked changes from the explicit deleted-side locator when present. */
-  private async loadDeletedSideTrackedChanges(
-    context: Word.RequestContext,
-    deletedSideText: string | null,
-  ): Promise<Word.TrackedChange[]> {
-    if (!deletedSideText) {
-      return [];
-    }
-
-    const deletedSideRange = await this.textLocator.locate({
-      context,
-      container: context.document.body as unknown as WordSearchContainer,
-      searchText: deletedSideText,
-    });
-
-    return this.loadRangeTrackedChanges(context, deletedSideRange);
   }
 
   /** Loads tracked changes for one arbitrary range if the range exists. */
@@ -875,12 +834,6 @@ export class SuggestionResolutionObserver {
         trackedChanges: sources.bodyRelatedTrackedChanges,
       },
       {
-        source: "deletedSide",
-        trackedChanges: sources.deletedSideTrackedChanges.filter(
-          (trackedChange) => trackedChange.type === "Deleted",
-        ),
-      },
-      {
         source: "operationalAnchor",
         trackedChanges: sources.operationalAnchorTrackedChanges,
       },
@@ -930,8 +883,9 @@ export class SuggestionResolutionObserver {
     const id = String((trackedChange as { id?: string | number }).id ?? "");
 
     if (id.length > 0) {
-      if (!candidatesById.has(id)) {
-        candidatesById.set(id, candidate);
+      const sourceScopedId = `${source}:${id}`;
+      if (!candidatesById.has(sourceScopedId)) {
+        candidatesById.set(sourceScopedId, candidate);
       }
       return;
     }
@@ -1229,6 +1183,12 @@ export class SuggestionResolutionObserver {
           initialCcTag: initialCc.tag,
           error: this.serializeUnknownError(error),
         });
+        if (
+          observation.observationStatus === "identity-lost" ||
+          observation.trackedChanges.length > 0
+        ) {
+          continue;
+        }
         throw error;
       }
     }

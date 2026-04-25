@@ -243,6 +243,77 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(addedRejectFresh).toHaveBeenCalledOnce();
   });
 
+  it("fails closed without retrying a fresh Deleted candidate after the first Deleted proxy fails", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-no-recovery-reject",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "No sabían si venía de ni Shu o de otro sitio.",
+    });
+
+    let observationCount = 0;
+    const deletedRejectStale = vi.fn(() => {
+      throw new Error("ItemNotFound");
+    });
+    const deletedRejectFresh = vi.fn();
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-no-recovery-reject",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-no-recovery-reject",
+        insertedTag: "stylistic:track-change:chunk0-no-recovery-reject",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      comments: [],
+    });
+
+    context._cc.getTrackedChanges.mockImplementation(() => {
+      observationCount += 1;
+      return {
+        items: [
+          {
+            id: observationCount === 1 ? "tc-deleted-stale" : "tc-deleted-fresh",
+            type: "Deleted",
+            accept: vi.fn(),
+            reject:
+              observationCount === 1 ? deletedRejectStale : deletedRejectFresh,
+          },
+          {
+            id: "tc-added-pending",
+            type: "Added",
+            accept: vi.fn(),
+            reject: vi.fn(),
+          },
+        ],
+        load: vi.fn(),
+      };
+    });
+
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: [],
+      load: vi.fn(),
+    }));
+
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("error");
+    expect(deletedRejectStale).toHaveBeenCalledOnce();
+    expect(deletedRejectFresh).not.toHaveBeenCalled();
+    expect(result.error).toBeTruthy();
+  });
+
   it("re-resolves the preferred candidate to a fresh proxy instead of reusing a stale content control during reject re-observation", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-preferred-fresh-proxy-reject",

@@ -565,14 +565,10 @@ export class ResolveSuggestionCommand {
         completed: executionReport.completed,
         remaining: executionReport.remaining,
         failureIndex: executionReport.failureIndex ?? null,
-        recoveryAttempted: executeAttempt.recoveryAttempted,
-        recoverySucceeded: executeAttempt.recoverySucceeded,
         postExecuteTrackedChangesObserved:
           postExecuteAttempt.observation?.trackedChanges.length ?? null,
         postExecuteObservationStatus:
           postExecuteAttempt.observation?.observationStatus ?? null,
-        postExecuteRecoveryAttempted: postExecuteAttempt.recoveryAttempted,
-        postExecuteRecoverySucceeded: postExecuteAttempt.recoverySucceeded,
       },
     );
 
@@ -597,8 +593,6 @@ export class ResolveSuggestionCommand {
     preferredCc: Word.ContentControl,
   ): Promise<{
     observation: ResolutionObservation | null;
-    recoveryAttempted: boolean;
-    recoverySucceeded: boolean;
   }> {
     const postExecuteObservation = await this.snapshotObserver.capture(
       context,
@@ -609,15 +603,11 @@ export class ResolveSuggestionCommand {
     if (!postExecuteObservation) {
       return {
         observation: null,
-        recoveryAttempted: false,
-        recoverySucceeded: false,
       };
     }
 
     return {
       observation: postExecuteObservation,
-      recoveryAttempted: false,
-      recoverySucceeded: false,
     };
   }
 

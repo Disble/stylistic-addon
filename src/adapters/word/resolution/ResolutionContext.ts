@@ -50,8 +50,6 @@ export type ResolutionObservationDebugMetadata = {
   ccRangeTrackedChangesCount?: number;
   bodyTrackedChangesCount?: number;
   bodyRelatedTrackedChangesCount?: number;
-  deletedSideTrackedChangesCount?: number;
-  deletedSideLocatorFound?: boolean;
   operationalAnchorTrackedChangesCount?: number;
   operationalAnchorFound?: boolean;
   commentTrackedChangesCount?: number;

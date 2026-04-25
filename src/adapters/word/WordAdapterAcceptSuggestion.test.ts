@@ -267,6 +267,133 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(deletedAcceptFresh).toHaveBeenCalledOnce();
   });
 
+  it("tries the bodyRelated Deleted proxy even when ccRange exposes the same tracked-change id", async () => {
+    const suggestion = makeSuggestion({
+      id: "chunk0-bodyrelated-deleted-reobserve-accept",
+      anchor: "ni Shu",
+      suggestedText: "ni de Shu",
+      context: "No sabían si venía de ni Shu o de otro sitio.",
+    });
+
+    let phase = 0;
+    const callOrder: string[] = [];
+
+    const addedAcceptInitial = vi.fn(() => {
+      callOrder.push("accept-added-initial");
+      phase = 1;
+    });
+    const deletedAcceptInitial = vi.fn(() => {
+      callOrder.push("unexpected-accept-deleted-initial");
+      throw new Error("Initial Deleted proxy should have been replaced");
+    });
+    const deletedAcceptCcRangeStale = vi.fn(() => {
+      callOrder.push("accept-deleted-ccRange-stale");
+      throw new Error("ItemNotFound");
+    });
+    const deletedAcceptBodyRelated = vi.fn(() => {
+      callOrder.push("accept-deleted-bodyRelated");
+      phase = 2;
+    });
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:chunk0-bodyrelated-deleted-reobserve-accept",
+      ccTitle: makeCompoundV2Title({
+        suggestionId: "chunk0-bodyrelated-deleted-reobserve-accept",
+        insertedTag:
+          "stylistic:track-change:chunk0-bodyrelated-deleted-reobserve-accept",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      spanTCItems: [
+        {
+          id: "tc-added-initial",
+          type: "Added",
+          accept: addedAcceptInitial,
+          reject: vi.fn(),
+        },
+        {
+          id: "tc-deleted-initial",
+          type: "Deleted",
+          accept: deletedAcceptInitial,
+          reject: vi.fn(),
+        },
+      ],
+      rangeTCItems: [
+        {
+          id: "tc-deleted-shared",
+          type: "Deleted",
+          accept: deletedAcceptCcRangeStale,
+          reject: vi.fn(),
+        },
+      ],
+      bodyTCItems: [
+        {
+          id: "tc-deleted-shared",
+          type: "Deleted",
+          accept: deletedAcceptBodyRelated,
+          reject: vi.fn(),
+        },
+      ],
+      bodyTCRelations: ["AdjacentBefore"],
+      comments: [],
+    });
+
+    context._cc.getTrackedChanges.mockImplementation(() => {
+      if (phase === 0) {
+        return {
+          items: [
+            {
+              id: "tc-added-initial",
+              type: "Added",
+              accept: addedAcceptInitial,
+              reject: vi.fn(),
+            },
+            {
+              id: "tc-deleted-initial",
+              type: "Deleted",
+              accept: deletedAcceptInitial,
+              reject: vi.fn(),
+            },
+          ],
+          load: vi.fn(),
+        };
+      }
+
+      return {
+        items: [],
+        load: vi.fn(),
+      };
+    });
+
+    const getCcRange = context._cc.getRange as unknown as () => {
+      getTrackedChanges: ReturnType<typeof vi.fn>;
+    };
+    const ccRange = getCcRange();
+    ccRange.getTrackedChanges.mockImplementation(() => ({
+      items: phase === 1 ? context._rangeTCCollection.items : [],
+      load: vi.fn(),
+    }));
+    context.document.body.getTrackedChanges.mockImplementation(() => ({
+      items: phase === 1 ? context._bodyTCCollection.items : [],
+      load: vi.fn(),
+    }));
+
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.trackedChangesAffected).toBe(2);
+    expect(callOrder).toEqual([
+      "accept-added-initial",
+      "accept-deleted-ccRange-stale",
+      "accept-deleted-bodyRelated",
+    ]);
+    expect(deletedAcceptCcRangeStale).toHaveBeenCalledOnce();
+    expect(deletedAcceptBodyRelated).toHaveBeenCalledOnce();
+  });
+
   it("returns error and skips cleanup when a replace still appears pending after execution", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-half-after-success",
