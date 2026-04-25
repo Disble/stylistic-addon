@@ -2,6 +2,7 @@ import type {
   Suggestion,
   SuggestionObservationStatus,
 } from "../../../domain/types";
+import { STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX } from "../../../infrastructure/config";
 import { OVERLAPPING_RELATIONS } from "../cleanup/CommentCleanup";
 import {
   isValidOperationalReplaceIdentity,
@@ -22,7 +23,7 @@ export class SuggestionLocator {
     context: Word.RequestContext,
   ): Promise<LocatedSuggestionArtifacts> {
     const result = context.document.contentControls.getByTag(
-      `stylistic:${this.suggestion.type}:${this.suggestion.id}`,
+      `${STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX}${this.suggestion.id}`,
     );
     result.load("items/tag,items/title");
     await context.sync();

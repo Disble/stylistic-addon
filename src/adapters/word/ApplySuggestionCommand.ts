@@ -35,6 +35,7 @@ import type {
 } from "../../domain/types";
 import {
   STYLISTIC_IDENTITY_TITLE_PREFIX,
+  STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
   STYLISTIC_TAG_PREFIX,
 } from "../../infrastructure/config";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
@@ -46,6 +47,11 @@ import type {
 /** Returns the canonical Stylistic tag for one suggestion. */
 function buildSuggestionTag(suggestion: Suggestion): string {
   return `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
+}
+
+/** Returns the external operational-wrapper tag for one replace suggestion. */
+function buildOperationalWrapperTag(suggestion: Suggestion): string {
+  return `${STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX}${suggestion.id}`;
 }
 
 /** Creates one Word artifact reference owned by the apply adapter. */
@@ -239,6 +245,7 @@ export class ApplySuggestionCommand {
   private async resolveReplaceAnnotationRange(
     context: Word.RequestContext,
     mutationRange: Word.Range,
+    wrapperRange: Word.Range,
   ): Promise<Word.Range | null> {
     const expectedCurrentText = this.suggestion.suggestedText ?? "";
     const reviewedMutationRange = await this.readReviewedText(
@@ -255,7 +262,7 @@ export class ApplySuggestionCommand {
 
     const directCandidate = await this.textLocator.locate({
       context,
-      container: mutationRange as unknown as WordSearchContainer,
+      container: wrapperRange as unknown as WordSearchContainer,
       searchText: expectedCurrentText,
     });
 
@@ -368,6 +375,49 @@ export class ApplySuggestionCommand {
     });
   }
 
+  /** Creates the external operational wrapper before Track Changes mutates the anchor. */
+  private async createOperationalWrapper(
+    context: Word.RequestContext,
+    anchorRange: Word.Range,
+  ): Promise<Word.ContentControl> {
+    context.document.load("changeTrackingMode");
+    await context.sync();
+
+    const previousTrackingMode = context.document.changeTrackingMode;
+    if (previousTrackingMode !== Word.ChangeTrackingMode.off) {
+      context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
+      await context.sync();
+    }
+
+    const wrapper = anchorRange.insertContentControl();
+    wrapper.tag = buildOperationalWrapperTag(this.suggestion);
+    wrapper.title = serializeReplaceIdentity(
+      buildReplaceIdentity(this.suggestion),
+    );
+    wrapper.appearance = "Hidden";
+    wrapper.cannotDelete = false;
+    await context.sync();
+
+    if (previousTrackingMode !== Word.ChangeTrackingMode.off) {
+      context.document.changeTrackingMode = previousTrackingMode;
+      await context.sync();
+    }
+
+    return wrapper;
+  }
+
+  /** Re-finds the anchor inside the operational wrapper so mutation scope matches the wrapper. */
+  private async resolveAnchorInsideWrapper(
+    context: Word.RequestContext,
+    wrapper: Word.ContentControl,
+  ): Promise<Word.Range | null> {
+    return this.textLocator.locate({
+      context,
+      container: wrapper.getRange() as unknown as WordSearchContainer,
+      searchText: this.suggestion.anchor,
+    });
+  }
+
   /**
    * Executes the command: searches for the anchor within its context and
    * replaces it with a native Word tracked change.
@@ -442,14 +492,35 @@ export class ApplySuggestionCommand {
           `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
         );
 
-        const insertedRange = range.insertText(
+        const operationalWrapper =
+          changeType === "replace"
+            ? await this.createOperationalWrapper(context, range)
+            : null;
+        const mutationRange = operationalWrapper
+          ? await this.resolveAnchorInsideWrapper(context, operationalWrapper)
+          : range;
+
+        if (!mutationRange) {
+          return {
+            success: false,
+            commandId: this.id,
+            error:
+              "No se pudo re-localizar el anchor dentro del wrapper operacional",
+          };
+        }
+
+        const insertedRange = mutationRange.insertText(
           this.suggestion.suggestedText ?? "",
           Word.InsertLocation.replace,
         );
 
         const annotationRange =
           changeType === "replace"
-            ? await this.resolveReplaceAnnotationRange(context, insertedRange)
+            ? await this.resolveReplaceAnnotationRange(
+                context,
+                insertedRange,
+                operationalWrapper!.getRange(),
+              )
             : insertedRange;
 
         if (!annotationRange) {

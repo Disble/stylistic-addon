@@ -1,4 +1,4 @@
-import type { ReplaceTrackedChangeSide } from "./ReplaceResolutionStrategyContext";
+type ReplaceTrackedChangeSide = "Added" | "Deleted";
 
 /** Compact tracked-change payload used in observability snapshots. */
 export type TrackedChangeLogEntry = {

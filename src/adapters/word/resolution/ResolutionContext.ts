@@ -3,7 +3,6 @@ import type {
   ReplaceSuggestionIdentity,
   SuggestionObservationStatus,
 } from "../../../domain/types";
-import type { ReplaceTrackedChangeSide } from "./ReplaceResolutionStrategyContext";
 
 /** Terminal success states produced by resolution workflows. */
 export type ResolutionStatus =
@@ -24,10 +23,18 @@ export type ColocatedCommentContext = {
 export type ReplaceObservationContext = {
   identity?: ReplaceSuggestionIdentity;
   trackedChanges: Word.TrackedChange[];
+  trackedChangesCollection?: ResolutionTrackedChangeCollection;
   observationStatus: SuggestionObservationStatus;
   debugMetadata?: ResolutionObservationDebugMetadata;
-  semanticCandidates?: ReplaceSemanticCandidateMap;
   group?: OperationalWrapperGroup;
+};
+
+/** Executable tracked-change collection owned by one operational scope. */
+export type ResolutionTrackedChangeCollection = {
+  items: Word.TrackedChange[];
+  load: (options?: unknown) => void;
+  acceptAll: () => void;
+  rejectAll: () => void;
 };
 
 /** One wrapper selected as part of an explicit operational replace group. */
@@ -42,18 +49,6 @@ export type OperationalWrapperGroup = {
   members: OperationalWrapperGroupMember[];
   status: "single" | "contiguous" | "mixed" | "ambiguous";
 };
-
-/** One executable tracked-change candidate together with the evidence source that exposed it. */
-export type ReplaceTrackedChangeCandidate = {
-  trackedChange: Word.TrackedChange;
-  source: string;
-};
-
-/** Exhaustive tracked-change candidates grouped by semantic side. */
-export type ReplaceSemanticCandidateMap = Record<
-  ReplaceTrackedChangeSide,
-  ReplaceTrackedChangeCandidate[]
->;
 
 /** Primitive debug metadata captured during observation for telemetry/logging. */
 export type ResolutionObservationDebugMetadata = {
@@ -77,9 +72,9 @@ export type ResolutionObservation = {
   selectedCc: Word.ContentControl;
   selectedComment: ColocatedCommentContext | null;
   trackedChanges: Word.TrackedChange[];
+  trackedChangesCollection?: ResolutionTrackedChangeCollection;
   observationStatus: SuggestionObservationStatus;
   debugMetadata?: ResolutionObservationDebugMetadata;
-  semanticCandidates?: ReplaceSemanticCandidateMap;
   group?: OperationalWrapperGroup;
 };
 

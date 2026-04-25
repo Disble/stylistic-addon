@@ -88,6 +88,10 @@ export const MASTRA_POLL_BYPASS_ENABLED = true;
 /** Prefix used by all Stylistic Content Control tags persisted in Word. */
 export const STYLISTIC_TAG_PREFIX = "stylistic:";
 
+/** Tag prefix for external operational wrappers that own replace resolution scope. */
+export const STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX =
+  "stylistic-operational-wrapper:";
+
 /**
  * Storage marker for Content Control title metadata used by operational-wrapper
  * replace identities. The historical literal is kept as the persisted document

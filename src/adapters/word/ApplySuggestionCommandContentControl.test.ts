@@ -153,20 +153,9 @@ describe("ApplySuggestionCommand content-control recovery", () => {
 
   it("returns a localized mutation patch for replace suggestions", async () => {
     const paragraphText = "Antes texto original y después.";
-    const anchorRange = createRange({
-      text: "texto original",
-      paragraphText,
-    });
-    const contextRange = createRange({
-      text: paragraphText,
-      paragraphText,
-      searchSequence: [[anchorRange]],
-    });
-
     installWordContext({
       documentText: paragraphText,
       contextText: paragraphText,
-      contextSearchSequence: [[contextRange]],
     });
 
     const result = await new ApplySuggestionCommand(
@@ -269,7 +258,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
   });
 
   it("keeps legacy anchor titles for comment-only suggestions", async () => {
-    const env = installWordContext();
+    const env = installWordContext({ useOperationalWrapper: false });
 
     const result = await new ApplySuggestionCommand(
       makeSuggestion({

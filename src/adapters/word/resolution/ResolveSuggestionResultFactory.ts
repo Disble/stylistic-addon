@@ -92,10 +92,10 @@ export class ResolveSuggestionResultFactory {
     }
 
     if (status === "mixed-group") {
-      return "El grupo contiguo contiene decisiones mixtas; se abortó antes de modificar el documento.";
+      return "El grupo contiguo requiere resolución grupal coherente; se abortó antes de modificar el documento.";
     }
 
-    return "Word no expuso suficientes tracked changes para confirmar la resolución.";
+    return "Word no expuso suficiente evidencia operacional para confirmar la resolución.";
   }
 
   /** Builds a stable outer-catch error result. */

@@ -52,6 +52,13 @@ export type ApplyCommandTestContext = {
     appearance: string;
     cannotDelete: boolean;
   };
+  operationalWrapper: {
+    tag: string;
+    title: string;
+    appearance: string;
+    cannotDelete: boolean;
+    getRange: ReturnType<typeof vi.fn>;
+  };
 };
 
 function createRangeCollection(items: MockRange[]): RangeCollection {
@@ -194,12 +201,25 @@ export function installWordContext(options: {
     anchorRangeRef: { current: MockRange | null },
   ) => void;
   anchorRangeRef?: { current: MockRange | null };
+  useOperationalWrapper?: boolean;
 } = {}): ApplyCommandTestContext {
   const anchorText = options.anchorText ?? "texto original";
   const contextText = options.contextText ?? `Contexto con ${anchorText}.`;
   const documentText = options.documentText ?? contextText;
 
   const cc = { tag: "", title: "", appearance: "", cannotDelete: true };
+  const operationalWrapperRange = {
+    text: contextText,
+    load: vi.fn(),
+    search: vi.fn(),
+  };
+  const operationalWrapper = {
+    tag: "",
+    title: "",
+    appearance: "",
+    cannotDelete: true,
+    getRange: vi.fn(() => operationalWrapperRange),
+  };
   let insertedCurrentText = options.insertedRange?.reviewedCurrentText;
   const insertedRange = createRange({
     text: options.insertedRange?.text ?? (options.documentText ?? contextText),
@@ -217,6 +237,7 @@ export function installWordContext(options: {
   const anchorRange = createRange({
     text: anchorText,
     parentCC: options.anchorRangeParentCC,
+    paragraphText: contextText,
     insertTextImpl: (text: string) => {
       if (options.insertError) {
         throw options.insertError;
@@ -233,6 +254,13 @@ export function installWordContext(options: {
   });
 
   const anchorSearchSequence = options.anchorSearchSequence ?? [[anchorRange]];
+  const wrapperSearchSequence = [
+    [anchorRange],
+    ...(options.insertedRange?.searchSequence ?? [[insertedRange]]),
+  ];
+  operationalWrapperRange.search = createSearchMock(
+    wrapperSearchSequence,
+  ) as typeof operationalWrapperRange.search;
   const bodyRange = createRange({
     text: contextText,
     searchSequence: anchorSearchSequence,
@@ -290,8 +318,10 @@ export function installWordContext(options: {
     ),
   };
 
-  anchorRange.insertContentControl = vi.fn(() => cc);
-  bodyRange.insertContentControl = vi.fn(() => cc);
+  anchorRange.insertContentControl = vi.fn(() =>
+    options.useOperationalWrapper === false ? cc : operationalWrapper,
+  );
+  bodyRange.insertContentControl = vi.fn(() => operationalWrapper);
 
   const testContext: ApplyCommandTestContext = {
     context,
@@ -299,6 +329,7 @@ export function installWordContext(options: {
     anchorRange,
     insertedRange,
     cc,
+    operationalWrapper,
   };
 
   options.setupParagraphSearch?.(

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   installWordWithContext,
+  makeOperationalWrapperTag,
   makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
   makeSuggestion,
@@ -14,9 +15,9 @@ describe("SuggestionLocator", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccItems: [
-        { tag: "stylistic:track-change:s-1", title: "legacy title" },
+        { tag: makeOperationalWrapperTag("s-1"), title: "legacy title" },
         {
-          tag: "stylistic:track-change:s-1",
+          tag: makeOperationalWrapperTag("s-1"),
           title: makeOperationalWrapperTitle({
             suggestionId: suggestion.id,
             insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
@@ -48,8 +49,8 @@ describe("SuggestionLocator", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccItems: [
-        { tag: "stylistic:track-change:s-dup", title },
-        { tag: "stylistic:track-change:s-dup", title },
+        { tag: makeOperationalWrapperTag("s-dup"), title },
+        { tag: makeOperationalWrapperTag("s-dup"), title },
       ],
     });
     installWordWithContext(context);
@@ -67,7 +68,7 @@ describe("SuggestionLocator", () => {
     const locator = new SuggestionLocator(suggestion);
     const context = makeResolveSuggestionContext({
       ccFound: true,
-      ccItems: [{ tag: "stylistic:track-change:s-legacy", title: "legacy" }],
+      ccItems: [{ tag: makeOperationalWrapperTag("s-legacy"), title: "legacy" }],
     });
     installWordWithContext(context);
 

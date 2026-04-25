@@ -1,6 +1,7 @@
 import type { Suggestion } from "../../domain/types";
 
 const OPERATIONAL_WRAPPER_TITLE_PREFIX = "stylistic-meta-v2:";
+const OPERATIONAL_WRAPPER_TAG_PREFIX = "stylistic-operational-wrapper:";
 
 type MockTrackedChange = {
   id?: string;
@@ -14,6 +15,13 @@ type MockTrackedChange = {
 type MockRangeWithTrackedChanges = {
   compareLocationWith: ReturnType<typeof vi.fn>;
   getTrackedChanges: ReturnType<typeof vi.fn>;
+};
+
+type MockTrackedChangeCollection = {
+  items: MockTrackedChange[];
+  load: ReturnType<typeof vi.fn>;
+  acceptAll: ReturnType<typeof vi.fn>;
+  rejectAll: ReturnType<typeof vi.fn>;
 };
 
 type MockComment = {
@@ -129,6 +137,11 @@ export function makeOperationalWrapperTitle(options: {
   })}`;
 }
 
+/** Builds the external operational-wrapper tag used by live resolution. */
+export function makeOperationalWrapperTag(suggestionId = "s-1"): string {
+  return `${OPERATIONAL_WRAPPER_TAG_PREFIX}${suggestionId}`;
+}
+
 /**
  * Installs a `Word.run` mock that executes the callback with the provided context.
  */
@@ -181,7 +194,7 @@ export function installRejectingWord(error: Error) {
 export function makeResolveSuggestionContext({
   ccFound = true,
   ccTitle,
-  ccTag = "stylistic:track-change:s-1",
+  ccTag = makeOperationalWrapperTag("s-1"),
   ccItems,
   spanTCItems = [] as MockTrackedChange[],
   rangeTCItems = [] as MockTrackedChange[],
@@ -215,8 +228,12 @@ export function makeResolveSuggestionContext({
   operationalAnchorText?: string;
   operationalAnchorRangeTCItems?: MockTrackedChange[];
 }): ResolveSuggestionContext {
-  const mutableSpanTCItems = [...spanTCItems];
-  const mutableRangeTCItems = [...rangeTCItems];
+  const effectiveSpanTCItems =
+    spanTCItems.length > 0 ? spanTCItems : rangeTCItems;
+  const effectiveRangeTCItems =
+    rangeTCItems.length > 0 ? rangeTCItems : effectiveSpanTCItems;
+  const mutableSpanTCItems = [...effectiveSpanTCItems];
+  const mutableRangeTCItems = [...effectiveRangeTCItems];
   const mutableBodyTCItems = [...bodyTCItems];
   const mutableDeletedSideRangeTCItems = [...deletedSideRangeTCItems];
   const mutableOperationalAnchorRangeTCItems = [...operationalAnchorRangeTCItems];
@@ -283,16 +300,33 @@ export function makeResolveSuggestionContext({
 
   const ccTagParts = ccTag.split(":");
   const inferredSuggestionId = ccTagParts[ccTagParts.length - 1] ?? "s-1";
-  const rangeTCCollection = { items: mutableRangeTCItems, load: vi.fn() };
-  const bodyTCCollection = { items: mutableBodyTCItems, load: vi.fn() };
-  const operationalAnchorRangeTCCollection = {
-    items: mutableOperationalAnchorRangeTCItems,
+  const buildTrackedChangeCollection = (
+    items: MockTrackedChange[],
+  ): MockTrackedChangeCollection => ({
+    items,
     load: vi.fn(),
-  };
-  const deletedSideRangeTCCollection = {
-    items: mutableDeletedSideRangeTCItems,
-    load: vi.fn(),
-  };
+    acceptAll: vi.fn(() => {
+      for (const trackedChange of [...items]) {
+        const accept = trackedChange.accept as (() => unknown) | undefined;
+        accept?.();
+      }
+    }),
+    rejectAll: vi.fn(() => {
+      for (const trackedChange of [...items]) {
+        const reject = trackedChange.reject as (() => unknown) | undefined;
+        reject?.();
+      }
+    }),
+  });
+
+  const rangeTCCollection = buildTrackedChangeCollection(mutableRangeTCItems);
+  const bodyTCCollection = buildTrackedChangeCollection(mutableBodyTCItems);
+  const operationalAnchorRangeTCCollection = buildTrackedChangeCollection(
+    mutableOperationalAnchorRangeTCItems,
+  );
+  const deletedSideRangeTCCollection = buildTrackedChangeCollection(
+    mutableDeletedSideRangeTCItems,
+  );
 
   const buildCc = (options?: {
     title?: string;
@@ -321,14 +355,8 @@ export function makeResolveSuggestionContext({
       wrapTrackedChangeMutation(trackedChange);
     }
 
-    const thisSpanTCCollection = {
-      items: thisSpanTCItems,
-      load: vi.fn(),
-    };
-    const thisRangeTCCollection = {
-      items: thisRangeTCItems,
-      load: vi.fn(),
-    };
+    const thisSpanTCCollection = buildTrackedChangeCollection(thisSpanTCItems);
+    const thisRangeTCCollection = buildTrackedChangeCollection(thisRangeTCItems);
     const thisCcRange: MockRangeWithTrackedChanges = {
       compareLocationWith: vi.fn(() => ({
         value: options?.rangeRelationWithNext ?? "AdjacentBefore",
@@ -340,10 +368,10 @@ export function makeResolveSuggestionContext({
       title:
         options?.title ??
         ccTitle ??
-        (thisTag.startsWith("stylistic:track-change:")
+        (thisTag.startsWith(OPERATIONAL_WRAPPER_TAG_PREFIX)
           ? makeOperationalWrapperTitle({
               suggestionId: inferredSuggestionId,
-              insertedTag: thisTag,
+              insertedTag: `stylistic:track-change:${inferredSuggestionId}`,
             })
           : "texto original"),
       tag: thisTag,
@@ -368,10 +396,9 @@ export function makeResolveSuggestionContext({
     trackedChange.getRange = vi.fn(() => bodyTrackedChangeRanges[index]);
   }
 
-  const commentRangeTCCollections = comments.map((_, index) => ({
-    items: mutableCommentRangeTCItems[index] ?? [],
-    load: vi.fn(),
-  }));
+  const commentRangeTCCollections = comments.map((_, index) =>
+    buildTrackedChangeCollection(mutableCommentRangeTCItems[index] ?? []),
+  );
 
   comments.forEach((comment, index) => {
     const originalRange = {

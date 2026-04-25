@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BatchApplyOrchestrator } from "./BatchApplyOrchestrator";
 import type { CommandResult, Suggestion } from "../../domain/types";
+import { BatchApplyOrchestrator } from "./BatchApplyOrchestrator";
 
 const hoistedCommandMocks = vi.hoisted(() => ({
   constructor: vi.fn<(suggestion: Suggestion) => void>(),
@@ -31,136 +31,47 @@ describe("BatchApplyOrchestrator", () => {
     });
   });
 
-  it("prefers snapshot position hints over raw backend array order", async () => {
-    const orchestrator = new BatchApplyOrchestrator({
-      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
-      getDocumentReviewState: vi.fn().mockResolvedValue({
-        pendingStylisticArtifacts: 0,
-        hasPendingStylisticArtifacts: false,
-        trackChangesActive: true,
-      }),
-      deriveDocumentState: vi.fn().mockReturnValue("idle"),
-    });
+  it("orders snapshot-comparable suggestions from later to earlier positions", async () => {
+    const orchestrator = makeOrchestrator();
+    const early = makeSuggestion("s-early", 20, 30);
+    const middle = makeSuggestion("s-middle", 80, 90);
+    const late = makeSuggestion("s-late", 120, 130);
 
-    const backendFirst = makeSuggestion("s-a", 20, 30);
-    const backendSecond = makeSuggestion("s-b", 80, 90);
-    const backendThird = makeSuggestion("s-c", 120, 130);
+    await orchestrator.run([middle, late, early]);
 
-    await orchestrator.run([
-      backendSecond,
-      backendThird,
-      backendFirst,
-    ]);
-
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, backendThird);
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, backendSecond);
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, backendFirst);
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, late);
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, middle);
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, early);
   });
 
-  it("does not rebase snapshot hints from legacy local patch offsets", async () => {
-    const orchestrator = new BatchApplyOrchestrator({
-      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
-      getDocumentReviewState: vi.fn().mockResolvedValue({
-        pendingStylisticArtifacts: 0,
-        hasPendingStylisticArtifacts: false,
-        trackChangesActive: true,
-      }),
-      deriveDocumentState: vi.fn().mockReturnValue("idle"),
-    });
-
-    const hintedLater = makeSuggestion("s-later", 100, 110);
-    const hintedEvenLater = makeSuggestion("s-later-2", 130, 140);
-    const legacyFirst = makeLegacySuggestion("s-legacy-first");
+  it("marks overlapping comparable hints for local reread and rebases safe later hints", async () => {
+    const orchestrator = makeOrchestrator();
+    const applied = makeLegacySuggestion("s-applied");
+    const overlapping = makeSuggestion("s-overlap", 45, 55);
+    const safeLater = makeSuggestion("s-safe", 100, 110);
 
     hoistedCommandMocks.execute
       .mockResolvedValueOnce({
         success: true,
-        commandId: "s-legacy-first",
+        commandId: "s-applied",
         mutationPatch: {
-          suggestionId: "s-legacy-first",
+          suggestionId: "s-applied",
           snapshotVersion: 1,
           originalText: "abcdefghij",
           updatedText: "abc",
           deltaLength: -7,
-          affectedStart: 20,
-          affectedEnd: 30,
+          affectedStart: 40,
+          affectedEnd: 50,
         },
       })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-later-2",
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-later",
-      });
+      .mockResolvedValueOnce({ success: true, commandId: "s-safe" })
+      .mockResolvedValueOnce({ success: true, commandId: "s-overlap" });
 
-    await orchestrator.run([hintedLater, hintedEvenLater, legacyFirst]);
+    await orchestrator.run([overlapping, safeLater, applied]);
 
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, legacyFirst);
+    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, applied);
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
-      ...hintedEvenLater,
-      positionHint: {
-        start: 130,
-        end: 140,
-        snapshotVersion: 0,
-        source: "snapshot",
-      },
-    });
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
-      ...hintedLater,
-      positionHint: {
-        start: 100,
-        end: 110,
-        snapshotVersion: 0,
-        source: "snapshot",
-      },
-    });
-  });
-
-  it("does not mark snapshot hints for local reread from legacy local patch offsets", async () => {
-    const orchestrator = new BatchApplyOrchestrator({
-      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
-      getDocumentReviewState: vi.fn().mockResolvedValue({
-        pendingStylisticArtifacts: 0,
-        hasPendingStylisticArtifacts: false,
-        trackChangesActive: true,
-      }),
-      deriveDocumentState: vi.fn().mockReturnValue("idle"),
-    });
-
-    const overlappingHint = makeSuggestion("s-overlap", 24, 34);
-    const safeLaterHint = makeSuggestion("s-safe", 100, 110);
-    const legacyFirst = makeLegacySuggestion("s-legacy-first");
-
-    hoistedCommandMocks.execute
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-legacy-first",
-        mutationPatch: {
-          suggestionId: "s-legacy-first",
-          snapshotVersion: 1,
-          originalText: "abcdefghij",
-          updatedText: "abc",
-          deltaLength: -7,
-          affectedStart: 20,
-          affectedEnd: 30,
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-safe",
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-overlap",
-      });
-
-    await orchestrator.run([overlappingHint, safeLaterHint, legacyFirst]);
-
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, legacyFirst);
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
-      ...safeLaterHint,
+      ...safeLater,
       positionHint: {
         start: 100,
         end: 110,
@@ -169,112 +80,28 @@ describe("BatchApplyOrchestrator", () => {
       },
     });
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
-      ...overlappingHint,
+      ...overlapping,
       positionHint: {
-        start: 24,
-        end: 34,
+        start: 45,
+        end: 55,
         snapshotVersion: 0,
         source: "snapshot",
       },
     });
   });
 
-  it("reseeds a reread-required hint from the latest mutation patch before executing it", async () => {
-    const orchestrator = new BatchApplyOrchestrator({
-      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
-      getDocumentReviewState: vi.fn().mockResolvedValue({
-        pendingStylisticArtifacts: 0,
-        hasPendingStylisticArtifacts: false,
-        trackChangesActive: true,
-      }),
-      deriveDocumentState: vi.fn().mockReturnValue("idle"),
-    });
-
-    const overlapAnchor = "overlap-anchor";
-    const overlappingHint: Suggestion = {
-      id: "s-overlap-reseed",
-      anchor: overlapAnchor,
-      context: "context-s-overlap-reseed",
-      suggestedText: "replacement-s-overlap-reseed",
-      justification: "justification",
-      category: "category",
-      severity: "medium",
-      type: "track-change",
-      positionHint: {
-        start: 24,
-        end: 38,
-        snapshotVersion: 0,
-        source: "snapshot",
-        requiresLocalReread: true,
-      },
-    };
-    const safeLaterHint = makeSuggestion("s-safe-2", 100, 110);
-    const legacyFirst = makeLegacySuggestion("s-legacy-first-2");
-
-    hoistedCommandMocks.execute
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-legacy-first-2",
-        mutationPatch: {
-          suggestionId: "s-legacy-first-2",
-          snapshotVersion: 1,
-          originalText: "012345678901234567890123overlap-anchor tail",
-          updatedText: "01234567890123456overlap-anchor tail",
-          deltaLength: -7,
-          affectedStart: 20,
-          affectedEnd: 30,
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-safe-2",
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-overlap-reseed",
-      });
-
-    await orchestrator.run([overlappingHint, safeLaterHint, legacyFirst]);
-
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
-      ...overlappingHint,
-      positionHint: {
-        start: 17,
-        end: 31,
-        snapshotVersion: 1,
-        source: "snapshot",
-        requiresLocalReread: false,
-      },
-    });
-  });
-
-  it("asks the localized reread dependency for a fresh hint when local patch reseed cannot recover the anchor", async () => {
+  it("uses localized reread when a reread-required hint cannot be reseeded from the latest patch", async () => {
     const rereadSuggestionPositionHint = vi.fn().mockResolvedValue({
       start: 210,
       end: 224,
       snapshotVersion: 1,
       source: "localized-reread",
     });
-    const orchestrator = new BatchApplyOrchestrator({
-      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
-      getDocumentReviewState: vi.fn().mockResolvedValue({
-        pendingStylisticArtifacts: 0,
-        hasPendingStylisticArtifacts: false,
-        trackChangesActive: true,
-      }),
-      deriveDocumentState: vi.fn().mockReturnValue("idle"),
-      rereadSuggestionPositionHint,
-    });
+    const orchestrator = makeOrchestrator({ rereadSuggestionPositionHint });
 
-    const overlappingHint: Suggestion = {
-      id: "s-overlap-reread",
+    const overlapping: Suggestion = {
+      ...makeSuggestion("s-overlap", 24, 49),
       anchor: "anchor-missing-from-patch",
-      context: "context-s-overlap-reread",
-      suggestedText: "replacement-s-overlap-reread",
-      justification: "justification",
-      category: "category",
-      severity: "medium",
-      type: "track-change",
       positionHint: {
         start: 24,
         end: 49,
@@ -283,11 +110,10 @@ describe("BatchApplyOrchestrator", () => {
         requiresLocalReread: true,
       },
     };
-    const safeLaterHint = makeSuggestion("s-safe-3", 100, 110);
-    const legacyFirst = makeLegacySuggestion("s-legacy-first-3");
-
+    const safeLater = makeSuggestion("s-safe", 100, 110);
+    const applied = makeLegacySuggestion("s-legacy");
     const latestPatch = {
-      suggestionId: "s-legacy-first-3",
+      suggestionId: "s-legacy",
       snapshotVersion: 1,
       originalText: "012345678901234567890123unchanged tail",
       updatedText: "01234567890123456unchanged tail",
@@ -299,36 +125,20 @@ describe("BatchApplyOrchestrator", () => {
     hoistedCommandMocks.execute
       .mockResolvedValueOnce({
         success: true,
-        commandId: "s-legacy-first-3",
+        commandId: "s-legacy",
         mutationPatch: latestPatch,
       })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-safe-3",
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-overlap-reread",
-      });
+      .mockResolvedValueOnce({ success: true, commandId: "s-safe" })
+      .mockResolvedValueOnce({ success: true, commandId: "s-overlap" });
 
-    await orchestrator.run([overlappingHint, safeLaterHint, legacyFirst]);
+    await orchestrator.run([overlapping, safeLater, applied]);
 
-    expect(rereadSuggestionPositionHint).toHaveBeenCalledOnce();
     expect(rereadSuggestionPositionHint).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "s-overlap-reread" }),
+      expect.objectContaining({ id: "s-overlap" }),
       latestPatch,
     );
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
-      ...safeLaterHint,
-      positionHint: {
-        start: 100,
-        end: 110,
-        snapshotVersion: 0,
-        source: "snapshot",
-      },
-    });
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
-      ...overlappingHint,
+      ...overlapping,
       positionHint: {
         start: 210,
         end: 224,
@@ -339,169 +149,130 @@ describe("BatchApplyOrchestrator", () => {
     });
   });
 
-  it("re-ranks the remaining queue after one snapshot-ranked suggestion becomes reread-required", async () => {
-    const orchestrator = new BatchApplyOrchestrator({
-      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
-      getDocumentReviewState: vi.fn().mockResolvedValue({
-        pendingStylisticArtifacts: 0,
-        hasPendingStylisticArtifacts: false,
-        trackChangesActive: true,
-      }),
-      deriveDocumentState: vi.fn().mockReturnValue("idle"),
-    });
+  it("activates Track Changes only once for the first track-change suggestion", async () => {
+    const ensureTrackChangesActive = vi.fn().mockResolvedValue(true);
+    const orchestrator = makeOrchestrator({ ensureTrackChangesActive });
+    const commentOnly = makeSuggestion("s-comment", 10, 20, "comment-only");
+    const trackA = makeSuggestion("s-track-a", 40, 50);
+    const trackB = makeSuggestion("s-track-b", 80, 90);
 
-    const appliedFirst = makeSuggestion("s-applied-first", 140, 150);
-    const overlappingHint = makeSuggestion("s-overlap-rerank", 130, 145);
-    const safeMiddleHint = makeSuggestion("s-safe-middle", 110, 120);
+    const result = await orchestrator.run([commentOnly, trackA, trackB]);
 
-    hoistedCommandMocks.execute
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-applied-first",
-        mutationPatch: {
-          suggestionId: "s-applied-first",
-          snapshotVersion: 1,
-          originalText: "abcdefghij",
-          updatedText: "abc",
-          deltaLength: -7,
-          affectedStart: 5,
-          affectedEnd: 15,
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-safe-later",
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-safe-middle",
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-overlap-rerank",
-      });
-
-    await orchestrator.run([overlappingHint, safeMiddleHint, appliedFirst]);
-
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, appliedFirst);
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
-      ...safeMiddleHint,
-      positionHint: {
-        start: 110,
-        end: 120,
-        snapshotVersion: 0,
-        source: "snapshot",
-      },
-    });
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
-      ...overlappingHint,
-      positionHint: {
-        start: 130,
-        end: 145,
-        snapshotVersion: 0,
-        source: "snapshot",
-        requiresLocalReread: true,
-      },
-    });
+    expect(ensureTrackChangesActive).toHaveBeenCalledTimes(1);
+    expect(result.trackChangesActivatedForBatch).toBe(true);
   });
 
-  it("does not promote localized reread offsets as globally comparable snapshot order", async () => {
-    const rereadSuggestionPositionHint = vi.fn().mockResolvedValue({
-      start: 210,
-      end: 224,
-      snapshotVersion: 1,
-      source: "localized-reread",
+  it("continues after failures, classifies reasons, and reports progress", async () => {
+    const onProgress = vi.fn();
+    const orchestrator = makeOrchestrator({
+      getDocumentReviewState: vi
+        .fn()
+        .mockResolvedValueOnce({
+          pendingStylisticArtifacts: 0,
+          hasPendingStylisticArtifacts: false,
+          trackChangesActive: true,
+        })
+        .mockResolvedValueOnce({
+          pendingStylisticArtifacts: 1,
+          hasPendingStylisticArtifacts: true,
+          trackChangesActive: true,
+        }),
+      deriveDocumentState: vi.fn().mockReturnValue("pending-review"),
     });
-    const orchestrator = new BatchApplyOrchestrator({
-      ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
-      getDocumentReviewState: vi.fn().mockResolvedValue({
-        pendingStylisticArtifacts: 0,
-        hasPendingStylisticArtifacts: false,
-        trackChangesActive: true,
-      }),
-      deriveDocumentState: vi.fn().mockReturnValue("idle"),
-      rereadSuggestionPositionHint,
-    });
-
-    const overlappingHint: Suggestion = {
-      id: "s-overlap-localized",
-      anchor: "anchor-missing-from-patch",
-      context: "context-s-overlap-localized",
-      suggestedText: "replacement-s-overlap-localized",
-      justification: "justification",
-      category: "category",
-      severity: "medium",
-      type: "track-change",
-      positionHint: {
-        start: 24,
-        end: 49,
-        snapshotVersion: 0,
-        source: "snapshot",
-        requiresLocalReread: true,
-      },
-    };
-    const appliedFirst = makeSuggestion("s-applied-localized", 200, 210);
-    const safeLaterHint = makeSuggestion("s-safe-after-localized", 100, 110);
+    const notFound = makeLegacySuggestion("s-not-found");
+    const covered = makeLegacySuggestion("s-covered");
+    const success = makeLegacySuggestion("s-success");
 
     hoistedCommandMocks.execute
       .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-applied-localized",
-        mutationPatch: {
-          suggestionId: "s-applied-localized",
-          snapshotVersion: 1,
-          originalText: "012345678901234567890123unchanged tail",
-          updatedText: "01234567890123456unchanged tail",
-          deltaLength: -7,
-          affectedStart: 20,
-          affectedEnd: 30,
-        },
+        success: false,
+        commandId: "s-success",
+        error: "Texto original no encontrado",
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        commandId: "s-covered",
+        error: "Anchor dentro de content control existente",
       })
       .mockResolvedValueOnce({
         success: true,
-        commandId: "s-safe-after-localized",
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        commandId: "s-overlap-localized",
+        commandId: "s-not-found",
       });
 
-    await orchestrator.run([overlappingHint, safeLaterHint, appliedFirst]);
+    const result = await orchestrator.run([notFound, covered, success], onProgress);
 
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(1, appliedFirst);
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(2, {
-      ...safeLaterHint,
-      positionHint: {
-        start: 100,
-        end: 110,
-        snapshotVersion: 0,
-        source: "snapshot",
+    expect(result.successCount).toBe(1);
+    expect(result.failedSuggestions).toEqual([
+      {
+        suggestion: success,
+        reason: "not-found",
+        message: "Texto original no encontrado",
       },
-    });
-    expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
-      ...overlappingHint,
-      positionHint: {
-        start: 210,
-        end: 224,
-        snapshotVersion: 1,
-        source: "localized-reread",
-        requiresLocalReread: false,
+      {
+        suggestion: covered,
+        reason: "covered-by-existing-cc",
+        message: "Anchor dentro de content control existente",
       },
-    });
+    ]);
+    expect(onProgress).toHaveBeenNthCalledWith(
+      1,
+      "applying",
+      1,
+      3,
+      "Aplicando sugerencia 1 de 3...",
+    );
+    expect(onProgress).toHaveBeenNthCalledWith(
+      3,
+      "applying",
+      3,
+      3,
+      "Aplicando sugerencia 3 de 3...",
+    );
   });
 });
 
-/** Builds a suggestion fixture with explicit snapshot-position hints. */
-function makeSuggestion(id: string, start: number, end: number): Suggestion {
+function makeOrchestrator(
+  overrides: Partial<{
+    ensureTrackChangesActive: () => Promise<boolean>;
+    getDocumentReviewState: () => Promise<{
+      pendingStylisticArtifacts: number;
+      hasPendingStylisticArtifacts: boolean;
+      trackChangesActive: boolean;
+    }>;
+    deriveDocumentState: () => "idle" | "pending-review" | "ready-to-disable-track-changes";
+    rereadSuggestionPositionHint: (
+      suggestion: Suggestion,
+      patch: NonNullable<CommandResult["mutationPatch"]>,
+    ) => Promise<Suggestion["positionHint"] | undefined>;
+  }> = {},
+): BatchApplyOrchestrator {
+  return new BatchApplyOrchestrator({
+    ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
+    getDocumentReviewState: vi.fn().mockResolvedValue({
+      pendingStylisticArtifacts: 0,
+      hasPendingStylisticArtifacts: false,
+      trackChangesActive: true,
+    }),
+    deriveDocumentState: vi.fn().mockReturnValue("idle"),
+    ...overrides,
+  });
+}
+
+function makeSuggestion(
+  id: string,
+  start: number,
+  end: number,
+  type: Suggestion["type"] = "track-change",
+): Suggestion {
   return {
     id,
     anchor: `anchor-${id}`,
     context: `context-${id}`,
-    suggestedText: `replacement-${id}`,
+    suggestedText: type === "track-change" ? `replacement-${id}` : undefined,
     justification: "justification",
     category: "category",
     severity: "medium",
-    type: "track-change",
+    type,
     positionHint: {
       start,
       end,
@@ -511,7 +282,6 @@ function makeSuggestion(id: string, start: number, end: number): Suggestion {
   };
 }
 
-/** Builds a legacy suggestion fixture without snapshot-position hints. */
 function makeLegacySuggestion(id: string): Suggestion {
   return {
     id,

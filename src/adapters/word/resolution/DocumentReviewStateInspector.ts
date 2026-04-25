@@ -3,7 +3,10 @@ import {
   type DocumentReviewUiState,
 } from "../../../domain/review/DocumentReviewStateMachine";
 import type { DocumentReviewState } from "../../../domain/types";
-import { STYLISTIC_TAG_PREFIX } from "../../../infrastructure/config";
+import {
+  STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
+  STYLISTIC_TAG_PREFIX,
+} from "../../../infrastructure/config";
 
 /** Creates document-derived review snapshots and reuses them safely. */
 export class DocumentReviewStateInspector {
@@ -36,8 +39,10 @@ export class DocumentReviewStateInspector {
     context.document.load("changeTrackingMode");
     await context.sync();
 
-    const pendingStylisticArtifacts = allCCs.items.filter((cc) =>
-      cc.tag.startsWith(STYLISTIC_TAG_PREFIX),
+    const pendingStylisticArtifacts = allCCs.items.filter(
+      (cc) =>
+        cc.tag.startsWith(STYLISTIC_TAG_PREFIX) &&
+        !cc.tag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX),
     ).length;
     const trackChangesActive =
       context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;

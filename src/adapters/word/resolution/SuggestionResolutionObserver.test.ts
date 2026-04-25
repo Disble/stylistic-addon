@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Suggestion } from "../../../domain/types";
+import {
+  makeOperationalWrapperTag,
+  makeOperationalWrapperTitle,
+  makeResolveSuggestionContext,
+} from "../WordAdapterActionTestHelper";
+import { SuggestionLocator } from "./SuggestionLocator";
 import { SuggestionResolutionObserver } from "./SuggestionResolutionObserver";
-import type { ReplaceObservationContext } from "./ResolutionContext";
 
-type ObserverTestDouble = {
-  observeResolutionCandidate: (
-    context: Word.RequestContext,
-    cc: Word.ContentControl,
-  ) => Promise<ReplaceObservationContext>;
-};
-
-/** Builds one minimal track-change suggestion for observer-focused regressions. */
 function makeTrackChangeSuggestion(): Suggestion {
   return {
     id: "chunk0-0",
@@ -25,91 +22,89 @@ function makeTrackChangeSuggestion(): Suggestion {
 }
 
 describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
-  it("keeps the last observed tracked-change evidence when a later candidate throws", async () => {
+  it("observes the wrapper range collection as the executable operational scope", async () => {
     const suggestion = makeTrackChangeSuggestion();
-    const locator = {
-      findColocatedStylisticComment: vi.fn().mockResolvedValue(null),
-    };
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: makeOperationalWrapperTag("chunk0-0"),
+      ccTitle: makeOperationalWrapperTitle({
+        suggestionId: "chunk0-0",
+        insertedTag: "stylistic:track-change:chunk0-0",
+        deletedValue: "ni Shu",
+        anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+      }),
+      rangeTCItems: [
+        { id: "tc-added", type: "Added", accept: vi.fn(), reject: vi.fn() },
+        { id: "tc-deleted", type: "Deleted", accept: vi.fn(), reject: vi.fn() },
+      ],
+      comments: [],
+    });
+    const locator = new SuggestionLocator(suggestion);
     const observer = new SuggestionResolutionObserver(
       suggestion,
-      locator as never,
+      locator,
       {} as never,
-    );
-
-    const firstCandidate = {
-      tag: "stylistic:track-change:chunk0-0",
-    } as Word.ContentControl;
-    const secondCandidate = {
-      tag: "stylistic:track-change:chunk0-0-shadow",
-    } as Word.ContentControl;
-    const deletedTrackedChange = {
-      type: "Deleted",
-    } as Word.TrackedChange;
-    const firstObservation: ReplaceObservationContext = {
-      trackedChanges: [deletedTrackedChange],
-      observationStatus: "unobservable",
-      semanticCandidates: {
-        Deleted: [
-          {
-            trackedChange: deletedTrackedChange,
-            source: "cc",
-          },
-        ],
-        Added: [],
-      },
-    };
-
-    const observeResolutionCandidateSpy = vi.spyOn(
-      observer as unknown as ObserverTestDouble,
-      "observeResolutionCandidate",
-    );
-    observeResolutionCandidateSpy.mockResolvedValueOnce(firstObservation);
-    observeResolutionCandidateSpy.mockRejectedValueOnce(
-      new Error("GeneralException"),
     );
 
     const result = await observer.observeResolutionCandidates(
-      {} as Word.RequestContext,
-      [firstCandidate, secondCandidate],
-      firstCandidate,
+      context as never,
+      context._ccItems as never,
+      context._cc as never,
     );
 
-    expect(result.selectedCc).toBe(firstCandidate);
-    expect(result.trackedChanges).toEqual([deletedTrackedChange]);
-    expect(result.observationStatus).toBe("unobservable");
-    expect(result.semanticCandidates?.Deleted).toHaveLength(1);
-    expect(locator.findColocatedStylisticComment).toHaveBeenCalledTimes(2);
+    expect(result.observationStatus).toBe("confirmed-pending");
+    expect(result.trackedChanges).toHaveLength(2);
+    expect(result.trackedChangesCollection).toBeDefined();
   });
 
-  it("still propagates the failure when no prior candidate produced evidence", async () => {
+  it("fails closed as mixed-group when the wrapper belongs to a contiguous group", async () => {
     const suggestion = makeTrackChangeSuggestion();
-    const locator = {
-      findColocatedStylisticComment: vi.fn().mockResolvedValue(null),
-    };
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: makeOperationalWrapperTag("chunk0-0"),
+      ccItems: [
+        {
+          tag: makeOperationalWrapperTag("chunk0-0"),
+          title: makeOperationalWrapperTitle({
+            suggestionId: "chunk0-0",
+            insertedTag: "stylistic:track-change:chunk0-0",
+            deletedValue: "ni Shu",
+            anchorValue: "No sabían si venía de ni Shu o de otro sitio.",
+            groupId: "group-a",
+            groupIndex: 0,
+            groupSize: 2,
+          }),
+          rangeRelationWithNext: "AdjacentBefore",
+        },
+        {
+          tag: makeOperationalWrapperTag("chunk0-1"),
+          title: makeOperationalWrapperTitle({
+            suggestionId: "chunk0-1",
+            insertedTag: "stylistic:track-change:chunk0-1",
+            deletedValue: "otro",
+            anchorValue: "Otro contexto.",
+            groupId: "group-a",
+            groupIndex: 1,
+            groupSize: 2,
+          }),
+        },
+      ],
+      comments: [],
+    });
+    const locator = new SuggestionLocator(suggestion);
     const observer = new SuggestionResolutionObserver(
       suggestion,
-      locator as never,
+      locator,
       {} as never,
     );
 
-    const candidate = {
-      tag: "stylistic:track-change:chunk0-0",
-    } as Word.ContentControl;
-
-    const observeResolutionCandidateSpy = vi.spyOn(
-      observer as unknown as ObserverTestDouble,
-      "observeResolutionCandidate",
-    );
-    observeResolutionCandidateSpy.mockRejectedValueOnce(
-      new Error("GeneralException"),
+    const result = await observer.observeResolutionCandidates(
+      context as never,
+      context._ccItems as never,
+      context._ccItems[0] as never,
     );
 
-    await expect(
-      observer.observeResolutionCandidates(
-        {} as Word.RequestContext,
-        [candidate],
-        candidate,
-      ),
-    ).rejects.toThrow("GeneralException");
+    expect(result.observationStatus).toBe("mixed-group");
+    expect(result.trackedChanges).toEqual([]);
   });
 });
