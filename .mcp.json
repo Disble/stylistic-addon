@@ -1,0 +1,6 @@
+{
+  "console-ninja": {
+    "command": "cmd.exe",
+    "args": ["/c", "node", "%USERPROFILE%/.console-ninja/mcp/"]
+  }
+}
