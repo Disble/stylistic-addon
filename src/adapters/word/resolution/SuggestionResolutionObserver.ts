@@ -5,13 +5,14 @@ import type {
 } from "../../../domain/types";
 import {
   getOperationalAnchorLocator,
-  isValidCompoundReplaceIdentity,
+  isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "../ReplaceIdentityParser";
 import type {
   TextLocator,
   WordSearchContainer,
 } from "../WordTextLocatorContext";
+import { OperationalWrapperGroupResolver } from "./OperationalWrapperGroupResolver";
 import type { ReplaceTrackedChangeSide } from "./ReplaceResolutionStrategyContext";
 import type {
   ColocatedCommentContext,
@@ -23,20 +24,9 @@ import type {
 } from "./ResolutionContext";
 import type { SuggestionLocator } from "./SuggestionLocator";
 
-const RESOLUTION_RELATED_RELATIONS = new Set([
-  "Contains",
-  "ContainedIn",
-  "OverlapsBefore",
-  "OverlapsAfter",
-  "Equal",
-  "AdjacentBefore",
-  "AdjacentAfter",
-]);
-
 type ReplaceTrackedChangeSources = {
   ccTrackedChanges: Word.TrackedChange[];
   ccRangeTrackedChanges: Word.TrackedChange[];
-  bodyRelatedTrackedChanges: Word.TrackedChange[];
   operationalAnchorTrackedChanges: Word.TrackedChange[];
   commentTrackedChanges: Word.TrackedChange[];
 };
@@ -48,12 +38,14 @@ type LoadedReplaceObservationSources = {
     ResolutionObservationDebugMetadata,
     | "ccTrackedChangesCount"
     | "ccRangeTrackedChangesCount"
-    | "bodyTrackedChangesCount"
-    | "bodyRelatedTrackedChangesCount"
     | "operationalAnchorTrackedChangesCount"
     | "operationalAnchorFound"
     | "commentTrackedChangesCount"
   >;
+};
+
+type LoadedOperationalWrapperMemberSources = LoadedReplaceObservationSources & {
+  identity: ReplaceSuggestionIdentity;
 };
 
 type SerializedOfficeErrorDiagnostics = {
@@ -65,18 +57,10 @@ type SerializedOfficeErrorDiagnostics = {
   stackPreview?: string[];
 };
 
-type BodyTrackedChangeCandidateDiagnostic = {
-  index: number;
-  trackedChangeType: string;
-  rangeObtained: boolean;
-  comparisonQueued: boolean;
-  rangeTextSnippet: string | null;
-  relationValue?: string;
-  related?: boolean;
-};
-
 /** Collects and classifies host evidence for one resolution workflow. */
 export class SuggestionResolutionObserver {
+  private readonly groupResolver = new OperationalWrapperGroupResolver();
+
   constructor(
     private readonly suggestion: Suggestion,
     private readonly locator: SuggestionLocator,
@@ -195,27 +179,6 @@ export class SuggestionResolutionObserver {
     }
   }
 
-  /** Builds one compact body tracked-change diagnostic row for compareLocationWith tracing. */
-  private buildBodyTrackedChangeCandidateDiagnostic(
-    trackedChange: Word.TrackedChange,
-    index: number,
-    range: Word.Range | null,
-    comparisonQueued: boolean,
-    relationValue?: string,
-    related?: boolean,
-  ): BodyTrackedChangeCandidateDiagnostic {
-    const diagnostic: BodyTrackedChangeCandidateDiagnostic = {
-      index,
-      trackedChangeType: trackedChange.type ?? "unknown",
-      rangeObtained: range !== null,
-      comparisonQueued,
-      rangeTextSnippet: this.getLoadedRangeTextSnippet(range),
-    };
-    if (relationValue !== undefined) diagnostic.relationValue = relationValue;
-    if (related !== undefined) diagnostic.related = related;
-    return diagnostic;
-  }
-
   /** Builds one tracked-change diagnostic entry with its selected evidence source when known. */
   private describeTrackedChange(
     trackedChange: Word.TrackedChange,
@@ -264,10 +227,6 @@ export class SuggestionResolutionObserver {
             ),
             ccRangeTrackedChanges: this.describeTrackedChanges(
               loadedSources.sources.ccRangeTrackedChanges,
-              loadedSources.sources,
-            ),
-            bodyRelatedTrackedChanges: this.describeTrackedChanges(
-              loadedSources.sources.bodyRelatedTrackedChanges,
               loadedSources.sources,
             ),
             operationalAnchorTrackedChanges: this.describeTrackedChanges(
@@ -327,10 +286,6 @@ export class SuggestionResolutionObserver {
       return "comment";
     }
 
-    if (belongsToSource(sources.bodyRelatedTrackedChanges)) {
-      return "bodyRelated";
-    }
-
     return "unknown";
   }
 
@@ -365,126 +320,6 @@ export class SuggestionResolutionObserver {
     return false;
   }
 
-  /**
-   * Classifies which body tracked-changes are spatially related to the CC range.
-   *
-   * Word desktop sometimes throws `InvalidRibbonDefinition` (a misnamed
-   * Office.js error code) from `compareLocationWith` when one of the body
-   * tracked-change proxies references an invalidated range — typically
-   * orphaned tracked-changes left by a prior failed reject. We isolate the
-   * comparison sync so a single bad proxy cannot abort the entire observation;
-   * we still have the ccTrackedChanges and ccRangeTrackedChanges evidence to
-   * fall back on.
-   */
-  private async classifyBodyRelatedTrackedChanges(
-    context: Word.RequestContext,
-    candidates: Word.TrackedChange[],
-    candidateRanges: Word.Range[],
-    comparisons: OfficeExtension.ClientResult<string>[],
-  ): Promise<Word.TrackedChange[]> {
-    if (candidates.length === 0) {
-      this.logObserveBefore("body related tracked changes skipped", {
-        suggestionId: this.suggestion.id,
-        candidateCount: 0,
-      });
-      return [];
-    }
-
-    const queuedCandidateDiagnostics = candidates.map((candidate, index) =>
-      this.buildBodyTrackedChangeCandidateDiagnostic(
-        candidate,
-        index,
-        candidateRanges[index] ?? null,
-        comparisons[index] !== undefined,
-      ),
-    );
-
-    this.logObserveBefore(
-      "before flushing body compareLocationWith comparisons",
-      {
-        suggestionId: this.suggestion.id,
-        candidateCount: candidates.length,
-        candidates: queuedCandidateDiagnostics,
-      },
-    );
-
-    // 56d18f2 behavior: do NOT swallow compareLocationWith sync failures.
-    // The c3060d5 defensive try/catch returned [] silently, which forced the
-    // selector to fall back to ccRange + deletedSide proxies that are stale
-    // duplicates of the Deleted side, leading to ItemNotFound at accept().
-    // Let the exception bubble up so the observation legitimately fails and
-    // the higher-level command can retry/recover with fresh state.
-    try {
-      await context.sync();
-    } catch (error) {
-      this.warnObserveBefore("body compareLocationWith sync failed", {
-        suggestionId: this.suggestion.id,
-        candidateCount: candidates.length,
-        candidates: queuedCandidateDiagnostics,
-        error: this.serializeUnknownError(error),
-      });
-      throw error;
-    }
-
-    this.logObserveBefore(
-      "after flushing body compareLocationWith comparisons",
-      {
-        suggestionId: this.suggestion.id,
-        candidateCount: candidates.length,
-        candidates: queuedCandidateDiagnostics,
-      },
-    );
-
-    const related: Word.TrackedChange[] = [];
-    const resolvedCandidateDiagnostics: BodyTrackedChangeCandidateDiagnostic[] =
-      [];
-    for (let index = 0; index < candidates.length; index += 1) {
-      let relationValue: string | undefined;
-      try {
-        relationValue = comparisons[index].value;
-      } catch (error) {
-        this.warnObserveBefore(
-          "reading body compareLocationWith result failed",
-          {
-            suggestionId: this.suggestion.id,
-            candidate: this.buildBodyTrackedChangeCandidateDiagnostic(
-              candidates[index],
-              index,
-              candidateRanges[index] ?? null,
-              comparisons[index] !== undefined,
-            ),
-            error: this.serializeUnknownError(error),
-          },
-        );
-        continue;
-      }
-      const isRelated = RESOLUTION_RELATED_RELATIONS.has(relationValue);
-      resolvedCandidateDiagnostics.push(
-        this.buildBodyTrackedChangeCandidateDiagnostic(
-          candidates[index],
-          index,
-          candidateRanges[index] ?? null,
-          comparisons[index] !== undefined,
-          relationValue,
-          isRelated,
-        ),
-      );
-
-      if (isRelated) {
-        related.push(candidates[index]);
-      }
-    }
-
-    this.logObserveBefore("after classifying body related tracked changes", {
-      suggestionId: this.suggestion.id,
-      candidateCount: candidates.length,
-      relatedCount: related.length,
-      candidates: resolvedCandidateDiagnostics,
-    });
-
-    return related;
-  }
-
   /** Resolves all tracked changes semantically tied to a suggestion CC. */
   private async collectTrackedChangesForContentControl(
     context: Word.RequestContext,
@@ -493,13 +328,9 @@ export class SuggestionResolutionObserver {
     trackedChanges: Word.TrackedChange[];
     ccTrackedChanges: Word.TrackedChange[];
     ccRangeTrackedChanges: Word.TrackedChange[];
-    bodyRelatedTrackedChanges: Word.TrackedChange[];
     debugMetadata: Pick<
       ResolutionObservationDebugMetadata,
-      | "ccTrackedChangesCount"
-      | "ccRangeTrackedChangesCount"
-      | "bodyTrackedChangesCount"
-      | "bodyRelatedTrackedChangesCount"
+      "ccTrackedChangesCount" | "ccRangeTrackedChangesCount"
     >;
   }> {
     const ccRange = cc.getRange();
@@ -522,9 +353,6 @@ export class SuggestionResolutionObserver {
       suggestionId: this.suggestion.id,
       ccTag: cc.tag,
     });
-    const bodyTrackedChanges = context.document.body.getTrackedChanges();
-    bodyTrackedChanges.load({ select: "type,id" });
-
     await context.sync();
 
     this.logObserveBefore("after collecting CC tracked changes", {
@@ -537,12 +365,6 @@ export class SuggestionResolutionObserver {
       ccTag: cc.tag,
       ccRangeTrackedChangesCount: rangeTrackedChanges.items.length,
     });
-    this.logObserveBefore("after collecting body tracked changes", {
-      suggestionId: this.suggestion.id,
-      ccTag: cc.tag,
-      bodyTrackedChangesCount: bodyTrackedChanges.items.length,
-    });
-
     const trackedChangesById = new Map<string, Word.TrackedChange>();
     const trackedChangesWithoutId: Word.TrackedChange[] = [];
 
@@ -563,78 +385,6 @@ export class SuggestionResolutionObserver {
       addTrackedChange(tc);
     }
 
-    const candidateBodyTrackedChanges = bodyTrackedChanges.items.filter(
-      (tc) => {
-        const id = String((tc as { id?: string | number }).id ?? "");
-        return (
-          tc.type === "Deleted" ||
-          id.length === 0 ||
-          !trackedChangesById.has(id)
-        );
-      },
-    );
-
-    this.logObserveBefore(
-      "before queuing body compareLocationWith comparisons",
-      {
-        suggestionId: this.suggestion.id,
-        ccTag: cc.tag,
-        candidateCount: candidateBodyTrackedChanges.length,
-        candidates: candidateBodyTrackedChanges.map((candidate, index) =>
-          this.buildBodyTrackedChangeCandidateDiagnostic(
-            candidate,
-            index,
-            null,
-            false,
-          ),
-        ),
-      },
-    );
-    const candidateRanges = candidateBodyTrackedChanges.map((tc) =>
-      tc.getRange(),
-    );
-    const comparisons = candidateRanges.map((range) =>
-      range.compareLocationWith(ccRange),
-    );
-
-    this.logObserveBefore(
-      "after queuing body compareLocationWith comparisons",
-      {
-        suggestionId: this.suggestion.id,
-        ccTag: cc.tag,
-        candidateCount: candidateBodyTrackedChanges.length,
-        candidates: candidateBodyTrackedChanges.map((candidate, index) =>
-          this.buildBodyTrackedChangeCandidateDiagnostic(
-            candidate,
-            index,
-            candidateRanges[index] ?? null,
-            comparisons[index] !== undefined,
-          ),
-        ),
-      },
-    );
-
-    this.logObserveBefore("before collecting body related tracked changes", {
-      suggestionId: this.suggestion.id,
-      ccTag: cc.tag,
-      candidateCount: candidateBodyTrackedChanges.length,
-    });
-    const bodyRelatedTrackedChanges =
-      await this.classifyBodyRelatedTrackedChanges(
-        context,
-        candidateBodyTrackedChanges,
-        candidateRanges,
-        comparisons,
-      );
-    this.logObserveBefore("after collecting body related tracked changes", {
-      suggestionId: this.suggestion.id,
-      ccTag: cc.tag,
-      bodyRelatedTrackedChangesCount: bodyRelatedTrackedChanges.length,
-    });
-    for (const tc of bodyRelatedTrackedChanges) {
-      addTrackedChange(tc);
-    }
-
     const trackedChanges = [
       ...Array.from(trackedChangesById.values()),
       ...trackedChangesWithoutId,
@@ -644,17 +394,14 @@ export class SuggestionResolutionObserver {
       trackedChanges,
       ccTrackedChanges: ccTrackedChanges.items,
       ccRangeTrackedChanges: rangeTrackedChanges.items,
-      bodyRelatedTrackedChanges,
       debugMetadata: {
         ccTrackedChangesCount: ccTrackedChanges.items.length,
         ccRangeTrackedChangesCount: rangeTrackedChanges.items.length,
-        bodyTrackedChangesCount: bodyTrackedChanges.items.length,
-        bodyRelatedTrackedChangesCount: bodyRelatedTrackedChanges.length,
       },
     };
   }
 
-  /** Builds the fallback debug metadata for identity-lost and legacy observations. */
+  /** Builds debug metadata for fail-closed observations. */
   private buildEmptyReplaceDebugMetadata(
     cc: Word.ContentControl,
     colocatedComment: ColocatedCommentContext | null,
@@ -664,7 +411,7 @@ export class SuggestionResolutionObserver {
     return {
       selectedCcTag: cc.tag,
       selectedCcTitleKind: (cc.title ?? "").startsWith("stylistic-meta-v2:")
-        ? "compound-v2"
+        ? "operational-wrapper-v1"
         : "invalid-or-missing",
       selectedCommentFound: Boolean(colocatedComment),
       observationStatus,
@@ -672,7 +419,7 @@ export class SuggestionResolutionObserver {
     };
   }
 
-  /** Builds one identity-lost replace observation for structurally invalid compound-v2 metadata. */
+  /** Builds one identity-lost replace observation for structurally invalid metadata. */
   private buildIdentityLostReplaceObservation(
     cc: Word.ContentControl,
     colocatedComment: ColocatedCommentContext | null,
@@ -719,8 +466,6 @@ export class SuggestionResolutionObserver {
       sources: {
         ccTrackedChanges: contentControlObservation.ccTrackedChanges,
         ccRangeTrackedChanges: contentControlObservation.ccRangeTrackedChanges,
-        bodyRelatedTrackedChanges:
-          contentControlObservation.bodyRelatedTrackedChanges,
         operationalAnchorTrackedChanges,
         commentTrackedChanges,
       },
@@ -730,15 +475,176 @@ export class SuggestionResolutionObserver {
           contentControlObservation.debugMetadata.ccTrackedChangesCount,
         ccRangeTrackedChangesCount:
           contentControlObservation.debugMetadata.ccRangeTrackedChangesCount,
-        bodyTrackedChangesCount:
-          contentControlObservation.debugMetadata.bodyTrackedChangesCount,
-        bodyRelatedTrackedChangesCount:
-          contentControlObservation.debugMetadata
-            .bodyRelatedTrackedChangesCount,
         operationalAnchorTrackedChangesCount:
           operationalAnchorTrackedChanges.length,
         operationalAnchorFound: Boolean(operationalAnchorRange),
         commentTrackedChangesCount: commentTrackedChanges.length,
+      },
+    };
+  }
+
+  /** Loads replace evidence per group member so mixed-decision states can be detected before mutation. */
+  private async loadOperationalWrapperGroupMemberSources(
+    context: Word.RequestContext,
+    group: NonNullable<ReplaceObservationContext["group"]>,
+    colocatedComment: ColocatedCommentContext | null,
+  ): Promise<LoadedOperationalWrapperMemberSources[]> {
+    const memberSources: LoadedOperationalWrapperMemberSources[] = [];
+
+    for (const member of group.members) {
+      const loadedSources = await this.loadReplaceObservationSources(
+        context,
+        member.cc,
+        member.cc === group.members[0]?.cc ? colocatedComment : null,
+        member.identity,
+      );
+
+      memberSources.push({
+        ...loadedSources,
+        identity: member.identity,
+      });
+    }
+
+    return memberSources;
+  }
+
+  /** Merges member evidence into the legacy source shape consumed by semantic candidate selection. */
+  private mergeOperationalWrapperMemberSources(
+    memberSources: LoadedOperationalWrapperMemberSources[],
+  ): LoadedReplaceObservationSources {
+    let merged: LoadedReplaceObservationSources | null = null;
+
+    for (const loadedSources of memberSources) {
+      if (!merged) {
+        merged = {
+          sources: {
+            ccTrackedChanges: [...loadedSources.sources.ccTrackedChanges],
+            ccRangeTrackedChanges: [
+              ...loadedSources.sources.ccRangeTrackedChanges,
+            ],
+            operationalAnchorTrackedChanges: [
+              ...loadedSources.sources.operationalAnchorTrackedChanges,
+            ],
+            commentTrackedChanges: [
+              ...loadedSources.sources.commentTrackedChanges,
+            ],
+          },
+          operationalAnchorFound: loadedSources.operationalAnchorFound,
+          baseDebugMetadata: { ...loadedSources.baseDebugMetadata },
+        };
+        continue;
+      }
+
+      merged.sources.ccTrackedChanges.push(
+        ...loadedSources.sources.ccTrackedChanges,
+      );
+      merged.sources.ccRangeTrackedChanges.push(
+        ...loadedSources.sources.ccRangeTrackedChanges,
+      );
+      merged.sources.operationalAnchorTrackedChanges.push(
+        ...loadedSources.sources.operationalAnchorTrackedChanges,
+      );
+      merged.sources.commentTrackedChanges.push(
+        ...loadedSources.sources.commentTrackedChanges,
+      );
+      merged.operationalAnchorFound ||= loadedSources.operationalAnchorFound;
+      merged.baseDebugMetadata.ccTrackedChangesCount =
+        (merged.baseDebugMetadata.ccTrackedChangesCount ?? 0) +
+        (loadedSources.baseDebugMetadata.ccTrackedChangesCount ?? 0);
+      merged.baseDebugMetadata.ccRangeTrackedChangesCount =
+        (merged.baseDebugMetadata.ccRangeTrackedChangesCount ?? 0) +
+        (loadedSources.baseDebugMetadata.ccRangeTrackedChangesCount ?? 0);
+      merged.baseDebugMetadata.operationalAnchorTrackedChangesCount =
+        (merged.baseDebugMetadata.operationalAnchorTrackedChangesCount ?? 0) +
+        (loadedSources.baseDebugMetadata.operationalAnchorTrackedChangesCount ??
+          0);
+      merged.baseDebugMetadata.commentTrackedChangesCount =
+        (merged.baseDebugMetadata.commentTrackedChangesCount ?? 0) +
+        (loadedSources.baseDebugMetadata.commentTrackedChangesCount ?? 0);
+    }
+
+    return (
+      merged ?? {
+        sources: {
+          ccTrackedChanges: [],
+          ccRangeTrackedChanges: [],
+          operationalAnchorTrackedChanges: [],
+          commentTrackedChanges: [],
+        },
+        operationalAnchorFound: false,
+        baseDebugMetadata: {},
+      }
+    );
+  }
+
+  /**
+   * Detects mixed user decisions in a contiguous group before any executor call.
+   *
+   * A healthy grouped replace member still exposes both `Deleted` and `Added`.
+   * When one member exposes only one semantic side while another member exposes
+   * the opposite side or a complete pair, Word has already observed incompatible
+   * per-member decisions. The workflow must degrade to `mixed-group` instead of
+   * trying to auto-complete the group with partial evidence.
+   */
+  private hasMixedGroupDecision(
+    group: NonNullable<ReplaceObservationContext["group"]>,
+    memberSources: LoadedOperationalWrapperMemberSources[],
+  ): boolean {
+    if (group.status !== "contiguous" || memberSources.length <= 1) {
+      return false;
+    }
+
+    const memberSides = memberSources.map((memberSource) => {
+      const semanticCandidates = this.buildReplaceSemanticCandidates(
+        memberSource.sources,
+      );
+      return {
+        hasDeleted: semanticCandidates.Deleted.length > 0,
+        hasAdded: semanticCandidates.Added.length > 0,
+      };
+    });
+
+    const hasCompleteMember = memberSides.some(
+      (sides) => sides.hasDeleted && sides.hasAdded,
+    );
+    const hasOnlyDeletedMember = memberSides.some(
+      (sides) => sides.hasDeleted && !sides.hasAdded,
+    );
+    const hasOnlyAddedMember = memberSides.some(
+      (sides) => sides.hasAdded && !sides.hasDeleted,
+    );
+
+    return (
+      (hasOnlyDeletedMember && hasOnlyAddedMember) ||
+      (hasCompleteMember && (hasOnlyDeletedMember || hasOnlyAddedMember))
+    );
+  }
+
+  /** Builds a fail-closed observation for incompatible decisions inside one explicit group. */
+  private buildMixedGroupObservation(
+    cc: Word.ContentControl,
+    colocatedComment: ColocatedCommentContext | null,
+    parsedIdentity: ReplaceSuggestionIdentity,
+    group: NonNullable<ReplaceObservationContext["group"]>,
+  ): ReplaceObservationContext {
+    return {
+      identity: parsedIdentity,
+      trackedChanges: [],
+      observationStatus: "mixed-group",
+      debugMetadata: {
+        ...this.buildEmptyReplaceDebugMetadata(
+          cc,
+          colocatedComment,
+          "mixed-group",
+          parsedIdentity.version,
+        ),
+        wrapperGroupId: group.groupId,
+        wrapperGroupSize: group.members.length,
+        wrapperGroupStatus: "mixed",
+      },
+      group: {
+        ...group,
+        status: "mixed",
       },
     };
   }
@@ -790,7 +696,7 @@ export class SuggestionResolutionObserver {
 
     return {
       selectedCcTag: cc.tag,
-      selectedCcTitleKind: "compound-v2",
+      selectedCcTitleKind: "operational-wrapper-v1",
       selectedCommentFound: Boolean(colocatedComment),
       observationStatus,
       identityVersion: parsedIdentity.version,
@@ -811,7 +717,7 @@ export class SuggestionResolutionObserver {
 
     return {
       selectedCcTag: cc.tag,
-      selectedCcTitleKind: "compound-v2",
+      selectedCcTitleKind: "operational-wrapper-v1",
       selectedCommentFound: Boolean(colocatedComment),
       observationStatus,
       identityVersion: parsedIdentity.version,
@@ -829,10 +735,6 @@ export class SuggestionResolutionObserver {
     return [
       { source: "cc", trackedChanges: sources.ccTrackedChanges },
       { source: "ccRange", trackedChanges: sources.ccRangeTrackedChanges },
-      {
-        source: "bodyRelated",
-        trackedChanges: sources.bodyRelatedTrackedChanges,
-      },
       {
         source: "operationalAnchor",
         trackedChanges: sources.operationalAnchorTrackedChanges,
@@ -933,7 +835,7 @@ export class SuggestionResolutionObserver {
     );
   }
 
-  /** Relocates the operational anchor range persisted in compound-v2 metadata. */
+  /** Relocates the operational anchor range persisted in operational-wrapper metadata. */
   private async resolveOperationalAnchorRange(
     context: Word.RequestContext,
     identity: ReplaceSuggestionIdentity,
@@ -951,7 +853,7 @@ export class SuggestionResolutionObserver {
     });
   }
 
-  /** Observes replace suggestion evidence through compound-v2 metadata only. */
+  /** Observes replace suggestion evidence through strict operational-wrapper metadata only. */
   private async observeReplaceSuggestion(
     context: Word.RequestContext,
     cc: Word.ContentControl,
@@ -966,16 +868,16 @@ export class SuggestionResolutionObserver {
     if (!(cc.title ?? "").startsWith("stylistic-meta-v2:")) {
       return {
         trackedChanges: [],
-        observationStatus: "unobservable",
+        observationStatus: "ambiguous-location",
         debugMetadata: this.buildEmptyReplaceDebugMetadata(
           cc,
           colocatedComment,
-          "unobservable",
+          "ambiguous-location",
         ),
       };
     }
 
-    if (!isValidCompoundReplaceIdentity(parsedIdentity, this.suggestion)) {
+    if (!isValidOperationalReplaceIdentity(parsedIdentity, this.suggestion)) {
       return this.buildIdentityLostReplaceObservation(
         cc,
         colocatedComment,
@@ -983,12 +885,44 @@ export class SuggestionResolutionObserver {
       );
     }
 
-    const loadedSources = await this.loadReplaceObservationSources(
-      context,
-      cc,
-      colocatedComment,
-      parsedIdentity,
-    );
+    const group = await this.groupResolver.resolve(context, cc, parsedIdentity);
+    if (group.status === "ambiguous") {
+      return {
+        identity: parsedIdentity,
+        trackedChanges: [],
+        observationStatus: "ambiguous-location",
+        debugMetadata: {
+          ...this.buildEmptyReplaceDebugMetadata(
+            cc,
+            colocatedComment,
+            "ambiguous-location",
+            parsedIdentity.version,
+          ),
+          wrapperGroupId: group.groupId,
+          wrapperGroupSize: group.members.length,
+          wrapperGroupStatus: group.status,
+        },
+        group,
+      };
+    }
+
+    const groupMemberSources =
+      await this.loadOperationalWrapperGroupMemberSources(
+        context,
+        group,
+        colocatedComment,
+      );
+    if (this.hasMixedGroupDecision(group, groupMemberSources)) {
+      return this.buildMixedGroupObservation(
+        cc,
+        colocatedComment,
+        parsedIdentity,
+        group,
+      );
+    }
+
+    const loadedSources =
+      this.mergeOperationalWrapperMemberSources(groupMemberSources);
     this.logReplaceSourceDiagnostics(cc, loadedSources);
     const semanticCandidates = this.buildReplaceSemanticCandidates(
       loadedSources.sources,
@@ -1019,6 +953,7 @@ export class SuggestionResolutionObserver {
       observationStatus: debugMetadata.observationStatus ?? "unobservable",
       debugMetadata,
       semanticCandidates,
+      group,
     };
   }
 
@@ -1038,16 +973,16 @@ export class SuggestionResolutionObserver {
     if (!(cc.title ?? "").startsWith("stylistic-meta-v2:")) {
       return {
         trackedChanges: [],
-        observationStatus: "unobservable",
+        observationStatus: "ambiguous-location",
         debugMetadata: this.buildEmptyReplaceDebugMetadata(
           cc,
           colocatedComment,
-          "unobservable",
+          "ambiguous-location",
         ),
       };
     }
 
-    if (!isValidCompoundReplaceIdentity(parsedIdentity, this.suggestion)) {
+    if (!isValidOperationalReplaceIdentity(parsedIdentity, this.suggestion)) {
       return this.buildIdentityLostReplaceObservation(
         cc,
         colocatedComment,
@@ -1055,12 +990,44 @@ export class SuggestionResolutionObserver {
       );
     }
 
-    const loadedSources = await this.loadReplaceObservationSources(
-      context,
-      cc,
-      colocatedComment,
-      parsedIdentity,
-    );
+    const group = await this.groupResolver.resolve(context, cc, parsedIdentity);
+    if (group.status === "ambiguous") {
+      return {
+        identity: parsedIdentity,
+        trackedChanges: [],
+        observationStatus: "ambiguous-location",
+        debugMetadata: {
+          ...this.buildEmptyReplaceDebugMetadata(
+            cc,
+            colocatedComment,
+            "ambiguous-location",
+            parsedIdentity.version,
+          ),
+          wrapperGroupId: group.groupId,
+          wrapperGroupSize: group.members.length,
+          wrapperGroupStatus: group.status,
+        },
+        group,
+      };
+    }
+
+    const groupMemberSources =
+      await this.loadOperationalWrapperGroupMemberSources(
+        context,
+        group,
+        colocatedComment,
+      );
+    if (this.hasMixedGroupDecision(group, groupMemberSources)) {
+      return this.buildMixedGroupObservation(
+        cc,
+        colocatedComment,
+        parsedIdentity,
+        group,
+      );
+    }
+
+    const loadedSources =
+      this.mergeOperationalWrapperMemberSources(groupMemberSources);
     const semanticCandidates = this.buildReplaceSemanticCandidates(
       loadedSources.sources,
     );
@@ -1092,6 +1059,7 @@ export class SuggestionResolutionObserver {
       observationStatus: debugMetadata.observationStatus ?? "unobservable",
       debugMetadata,
       semanticCandidates,
+      group,
     };
   }
 
@@ -1111,13 +1079,14 @@ export class SuggestionResolutionObserver {
       observationStatus: observation.observationStatus,
       debugMetadata: observation.debugMetadata,
       semanticCandidates: observation.semanticCandidates,
+      group: observation.group,
     };
   }
 
   /** Chooses the best observed candidate by scanning ranked CCs until evidence is conclusive. */
   async observeResolutionCandidates(
     context: Word.RequestContext,
-    rankedCandidates: Word.ContentControl[],
+    candidates: Word.ContentControl[],
     initialCc: Word.ContentControl,
   ): Promise<ResolutionObservation> {
     const observation: ResolutionObservation = {
@@ -1127,7 +1096,7 @@ export class SuggestionResolutionObserver {
       observationStatus: "unobservable",
     };
 
-    for (const [candidateIndex, candidate] of rankedCandidates.entries()) {
+    for (const [candidateIndex, candidate] of candidates.entries()) {
       this.logObserveBefore("selected CC observation start", {
         suggestionId: this.suggestion.id,
         candidateIndex,
@@ -1167,9 +1136,12 @@ export class SuggestionResolutionObserver {
         observation.debugMetadata = candidateObservation.debugMetadata;
         observation.semanticCandidates =
           candidateObservation.semanticCandidates;
+        observation.group = candidateObservation.group;
 
         if (
           candidateObservation.observationStatus === "identity-lost" ||
+          candidateObservation.observationStatus === "ambiguous-location" ||
+          candidateObservation.observationStatus === "mixed-group" ||
           (candidateObservation.observationStatus === "confirmed-pending" &&
             candidateObservation.trackedChanges.length > 0)
         ) {
@@ -1199,7 +1171,7 @@ export class SuggestionResolutionObserver {
   /** Re-observes only one remaining replace side after one semantic step already succeeded. */
   async observeResolutionCandidatesForSemanticSide(
     context: Word.RequestContext,
-    rankedCandidates: Word.ContentControl[],
+    candidates: Word.ContentControl[],
     initialCc: Word.ContentControl,
     trackedChangeType: ReplaceTrackedChangeSide,
   ): Promise<ResolutionObservation> {
@@ -1210,7 +1182,7 @@ export class SuggestionResolutionObserver {
       observationStatus: "unobservable",
     };
 
-    for (const candidate of rankedCandidates) {
+    for (const candidate of candidates) {
       const colocatedComment = await this.locator.findColocatedStylisticComment(
         context,
         candidate,
@@ -1229,9 +1201,12 @@ export class SuggestionResolutionObserver {
       observation.observationStatus = candidateObservation.observationStatus;
       observation.debugMetadata = candidateObservation.debugMetadata;
       observation.semanticCandidates = candidateObservation.semanticCandidates;
+      observation.group = candidateObservation.group;
 
       if (
         candidateObservation.observationStatus === "identity-lost" ||
+        candidateObservation.observationStatus === "ambiguous-location" ||
+        candidateObservation.observationStatus === "mixed-group" ||
         (candidateObservation.observationStatus === "confirmed-pending" &&
           candidateObservation.trackedChanges.length > 0)
       ) {

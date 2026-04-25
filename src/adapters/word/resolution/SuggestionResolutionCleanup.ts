@@ -65,45 +65,4 @@ export class SuggestionResolutionCleanup {
   ): Promise<boolean> {
     return this.deleteLocatedStylisticComment(context, colocatedComment);
   }
-
-  /**
-   * Deletes the resolved CC anchor as part of atomic cleanup.
-   *
-   * Tolerates `GeneralException` for the same reason as
-   * `deleteLocatedStylisticComment`: when the preceding tracked-change
-   * resolution already collapsed the CC (e.g. rejecting the inserted-side
-   * tracked change inside the CC), the host invalidates the CC proxy and
-   * `cc.delete()` raises `GeneralException`. The CC is gone from the user's
-   * perspective, so this is a soft success — surfacing it as a workflow error
-   * would leave the taskpane card stuck.
-   */
-  async cleanupResolvedSuggestionAnchor(
-    context: Word.RequestContext,
-    cc: Word.ContentControl,
-  ): Promise<void> {
-    console.log(
-      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-start tag="${cc.tag}"`,
-    );
-    try {
-      cc.delete(true);
-      await context.sync();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const code = (error as { code?: string } | null)?.code ?? "";
-      const isGeneralException =
-        code === "GeneralException" || message.includes("GeneralException");
-
-      if (isGeneralException) {
-        console.warn(
-          `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-soft-success tag="${cc.tag}" (host invalidated CC proxy after prior mutation: ${message})`,
-        );
-        return;
-      }
-
-      throw error;
-    }
-    console.log(
-      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" anchor=delete-done tag="${cc.tag}"`,
-    );
-  }
 }

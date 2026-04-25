@@ -46,9 +46,8 @@ import {
   getCleanupPreview,
 } from "./cleanup/CommentCleanup";
 import {
-  isValidCompoundReplaceIdentity,
+  isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
-  scoreCompoundReplaceIdentityMatch,
 } from "./ReplaceIdentityParser";
 import { ResolveSuggestionCommand } from "./ResolveSuggestionCommand";
 import {
@@ -140,7 +139,7 @@ export class WordAdapter implements IDocumentPort {
     return DocumentReviewStateMachine.deriveState(reviewState);
   }
 
-  /** Chooses the best navigation CC candidate when multiple artifacts share a tag. */
+  /** Chooses a strict operational-wrapper navigation CC without ranking fallback. */
   private selectNavigationContentControl(
     ccs: Word.ContentControl[],
     suggestion: Suggestion,
@@ -149,25 +148,12 @@ export class WordAdapter implements IDocumentPort {
       return null;
     }
 
-    const ranked = [...ccs].sort((left, right) => {
-      const leftScore = scoreCompoundReplaceIdentityMatch(
-        parseReplaceIdentityTitle(left.title),
-        suggestion,
-      );
-      const rightScore = scoreCompoundReplaceIdentityMatch(
-        parseReplaceIdentityTitle(right.title),
-        suggestion,
-      );
-
-      return rightScore - leftScore;
-    });
-
-    const v2Candidate = ranked.find((cc) => {
+    const validCandidates = ccs.filter((cc) => {
       const identity = parseReplaceIdentityTitle(cc.title);
-      return isValidCompoundReplaceIdentity(identity, suggestion);
+      return isValidOperationalReplaceIdentity(identity, suggestion);
     });
 
-    return v2Candidate ?? ranked[0] ?? null;
+    return validCandidates.length === 1 ? validCandidates[0] : null;
   }
 
   /** Searches a body or range through the shared Word text locator. */

@@ -108,7 +108,12 @@ export type SuggestionObservationStatus =
   | "confirmed-pending"
   | "confirmed-resolved"
   | "unobservable"
-  | "identity-lost";
+  | "identity-lost"
+  | "ambiguous-location"
+  | "mixed-group";
+
+/** Fail-closed reasons emitted before a replace resolution mutates Word. */
+export type ResolutionAbortReason = "ambiguous-location" | "mixed-group";
 
 /**
  * A Word-host reference that helps re-locate one side of a review suggestion.
@@ -131,15 +136,15 @@ export interface WordArtifactRef {
 /**
  * Versioned identity for replace suggestions.
  *
- * `compound-v2` records richer Word references without assuming the inserted-
- * side Content Control is the whole identity.
+ * `operational-wrapper-v1` records strict Word references without assuming the
+ * inserted-side Content Control is the whole identity.
  */
 export interface ReplaceSuggestionIdentity {
   /** Stable frontend/domain suggestion identifier. */
   suggestionId: string;
 
-  /** Serialized identity version. */
-  version: "compound-v2";
+  /** Serialized identity version for strict operational-wrapper resolution. */
+  version: "operational-wrapper-v1";
 
   /** Primary inserted-side Word reference. */
   insertedSideRef: WordArtifactRef;
@@ -149,6 +154,15 @@ export interface ReplaceSuggestionIdentity {
 
   /** Optional operational anchor for fallback re-location. */
   anchorRef?: WordArtifactRef;
+
+  /** Explicit contiguous wrapper group identity. Defaults to the suggestion id. */
+  groupId: string;
+
+  /** Position of this wrapper inside its explicit contiguous group. */
+  groupIndex: number;
+
+  /** Number of wrappers expected in the explicit contiguous group. */
+  groupSize: number;
 }
 
 /**
@@ -648,7 +662,7 @@ export interface PipelineResult {
  * - "unobservable": Word did not expose enough evidence to confirm the review
  *   state. Non-terminal — user may retry once the host state becomes visible.
  * - "identity-lost": Word exposed corrupt or incomplete v2 metadata, so the
- *   adapter cannot safely continue with compound identity semantics.
+ *   adapter cannot safely continue with operational-wrapper identity semantics.
  * - "error": Word API call failed. Non-terminal — user may retry.
  */
 export type SuggestionState =
@@ -658,6 +672,8 @@ export type SuggestionState =
   | "rejected"
   | "unobservable"
   | "identity-lost"
+  | "ambiguous-location"
+  | "mixed-group"
   | "error";
 
 /** Ordered phases emitted by the resolution workflow for observability. */
@@ -780,6 +796,8 @@ export interface SuggestionActionResult {
     | "rejected"
     | "unobservable"
     | "identity-lost"
+    | "ambiguous-location"
+    | "mixed-group"
     | "cc-not-found"
     | "not-found"
     | "error";

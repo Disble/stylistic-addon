@@ -24,6 +24,8 @@ describe("domain types (compile-time checks)", () => {
       | "rejected"
       | "unobservable"
       | "identity-lost"
+      | "ambiguous-location"
+      | "mixed-group"
       | "error"
     >();
   });
@@ -34,6 +36,8 @@ describe("domain types (compile-time checks)", () => {
       | "confirmed-resolved"
       | "unobservable"
       | "identity-lost"
+      | "ambiguous-location"
+      | "mixed-group"
     >();
   });
 
@@ -46,7 +50,7 @@ describe("domain types (compile-time checks)", () => {
 
     const replaceIdentity: ReplaceSuggestionIdentity = {
       suggestionId: "s1",
-      version: "compound-v2",
+      version: "operational-wrapper-v1",
       insertedSideRef: artifactRef,
       deletedSideRef: {
         kind: "anchor",
@@ -58,6 +62,9 @@ describe("domain types (compile-time checks)", () => {
         role: "operational-anchor",
         value: "Contexto con texto original.",
       },
+      groupId: "s1",
+      groupIndex: 0,
+      groupSize: 1,
     };
 
     expectTypeOf(artifactRef).toEqualTypeOf<WordArtifactRef>();

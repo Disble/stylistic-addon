@@ -58,9 +58,7 @@ export class ReplaceResolutionWorkflow {
 
       activeObservation = stepResult.observation;
 
-      if (stepResult.completed) {
-        completed += 1;
-      }
+      completed += stepResult.completedCount;
 
       if (stepResult.error) {
         return {
@@ -110,7 +108,7 @@ export class ReplaceResolutionWorkflow {
     workflowAttemptId: string,
   ): Promise<{
     observation: ResolutionObservation;
-    completed: boolean;
+    completedCount: number;
     error?: string;
   }> {
     const initialCandidates = this.getSemanticCandidates(
@@ -121,7 +119,7 @@ export class ReplaceResolutionWorkflow {
     if (initialCandidates.length === 0) {
       return {
         observation,
-        completed: false,
+        completedCount: 0,
         error: `Word no reexpuso el tracked change ${trackedChangeType} requerido para resolver el replace.`,
       };
     }
@@ -136,7 +134,7 @@ export class ReplaceResolutionWorkflow {
     if (initialAttempt.completed) {
       return {
         observation,
-        completed: true,
+        completedCount: initialAttempt.report.completed,
       };
     }
 
@@ -156,7 +154,7 @@ export class ReplaceResolutionWorkflow {
 
     return {
       observation,
-      completed: false,
+      completedCount: initialAttempt.report.completed,
       error: initialErrorMessage,
     };
   }
@@ -167,7 +165,7 @@ export class ReplaceResolutionWorkflow {
     trackedChangeType: ReplaceTrackedChangeSide,
     preferredCc?: Word.ContentControl,
   ): Promise<{
-    rankedCandidates: Word.ContentControl[];
+    candidates: Word.ContentControl[];
     observation: ResolutionObservation;
   } | null> {
     const relocated = await this.locator.locateResolutionArtifacts(context);
@@ -176,11 +174,11 @@ export class ReplaceResolutionWorkflow {
     }
 
     const resolvedPreferredCc = resolveFreshPreferredCandidate(
-      relocated.rankedCandidates,
+      relocated.candidates,
       preferredCc,
     );
     const preferredCandidates = prioritizeFreshPreferredCandidate(
-      relocated.rankedCandidates,
+      relocated.candidates,
       resolvedPreferredCc,
     );
 
@@ -193,7 +191,7 @@ export class ReplaceResolutionWorkflow {
       );
 
     return {
-      rankedCandidates: relocated.rankedCandidates,
+      candidates: relocated.candidates,
       observation: reobserved,
     };
   }
@@ -218,6 +216,21 @@ export class ReplaceResolutionWorkflow {
     report: ResolutionExecutionReport;
   }> {
     let lastReport: ResolutionExecutionReport | undefined;
+
+    console.log(
+      `🧪 [ResolveSuggestionCommand] workflowAttemptId="${workflowAttemptId}" replace-step=${trackedChangeType} execute candidates=${candidates.length} status=${observation.observationStatus} trackedChanges=${observation.trackedChanges.length} types=${formatTrackedChangeTypesForLog(observation.trackedChanges)}`,
+    );
+
+    if (observation.group?.status === "contiguous") {
+      const report = await this.executor.apply(
+        context,
+        candidates.map((candidate) => candidate.trackedChange),
+      );
+      return {
+        completed: this.isExecutionReportSemanticallyVerified(report),
+        report,
+      };
+    }
 
     for (const candidate of candidates) {
       console.log(

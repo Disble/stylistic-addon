@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "./WordAdapter";
 import {
   installWordWithContext,
-  makeCompoundV2Title,
+  makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
   makeSuggestion,
 } from "./WordAdapterActionTestHelper";
@@ -37,7 +37,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:s-ordered-accept",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "s-ordered-accept",
         insertedTag: "stylistic:track-change:s-ordered-accept",
         deletedValue: "desde allí",
@@ -88,7 +88,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:s-sync-accept",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "s-sync-accept",
         insertedTag: "stylistic:track-change:s-sync-accept",
         deletedValue: "desde allí",
@@ -163,6 +163,47 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(context._cc.getTrackedChanges).not.toHaveBeenCalled();
   });
 
+  it("returns ambiguous-location before executor mutation when duplicate valid wrappers match one suggestion", async () => {
+    const suggestion = makeSuggestion({ id: "s-ambiguous-command" });
+    const unexpectedAccept = vi.fn();
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-ambiguous-command",
+      ccItems: [
+        {
+          tag: "stylistic:track-change:s-ambiguous-command",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-ambiguous-command",
+            insertedTag: "stylistic:track-change:s-ambiguous-command",
+          }),
+          spanTCItems: [
+            { id: "tc-added-a", type: "Added", accept: unexpectedAccept, reject: vi.fn() },
+          ],
+        },
+        {
+          tag: "stylistic:track-change:s-ambiguous-command",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-ambiguous-command",
+            insertedTag: "stylistic:track-change:s-ambiguous-command",
+          }),
+          spanTCItems: [
+            { id: "tc-added-b", type: "Added", accept: unexpectedAccept, reject: vi.fn() },
+          ],
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("ambiguous-location");
+    expect(result.trackedChangesAffected).toBe(0);
+    expect(unexpectedAccept).not.toHaveBeenCalled();
+    expect(context._ccItems[0].getTrackedChanges).not.toHaveBeenCalled();
+    expect(context._ccItems[1].getTrackedChanges).not.toHaveBeenCalled();
+  });
+
   it("re-observes the remaining Deleted side with fresh proxies after the first sync", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-fresh-reobserve-accept",
@@ -190,7 +231,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-fresh-reobserve-accept",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-fresh-reobserve-accept",
         insertedTag: "stylistic:track-change:chunk0-fresh-reobserve-accept",
         deletedValue: "ni Shu",
@@ -267,7 +308,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(deletedAcceptFresh).toHaveBeenCalledOnce();
   });
 
-  it("tries the bodyRelated Deleted proxy even when ccRange exposes the same tracked-change id", async () => {
+  it("does not fall back to body-level Deleted proxies after the operational wrapper candidate fails", async () => {
     const suggestion = makeSuggestion({
       id: "chunk0-bodyrelated-deleted-reobserve-accept",
       anchor: "ni Shu",
@@ -290,15 +331,15 @@ describe("WordAdapter.acceptSuggestion", () => {
       callOrder.push("accept-deleted-ccRange-stale");
       throw new Error("ItemNotFound");
     });
-    const deletedAcceptBodyRelated = vi.fn(() => {
-      callOrder.push("accept-deleted-bodyRelated");
+    const deletedAcceptBodyLevel = vi.fn(() => {
+      callOrder.push("unexpected-accept-deleted-body-level");
       phase = 2;
     });
 
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-bodyrelated-deleted-reobserve-accept",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-bodyrelated-deleted-reobserve-accept",
         insertedTag:
           "stylistic:track-change:chunk0-bodyrelated-deleted-reobserve-accept",
@@ -331,7 +372,7 @@ describe("WordAdapter.acceptSuggestion", () => {
         {
           id: "tc-deleted-shared",
           type: "Deleted",
-          accept: deletedAcceptBodyRelated,
+          accept: deletedAcceptBodyLevel,
           reject: vi.fn(),
         },
       ],
@@ -383,15 +424,14 @@ describe("WordAdapter.acceptSuggestion", () => {
 
     const result = await adapter.acceptSuggestion(suggestion);
 
-    expect(result.status).toBe("accepted");
-    expect(result.trackedChangesAffected).toBe(2);
+    expect(result.status).toBe("error");
+    expect(result.trackedChangesAffected).toBe(1);
     expect(callOrder).toEqual([
       "accept-added-initial",
       "accept-deleted-ccRange-stale",
-      "accept-deleted-bodyRelated",
     ]);
     expect(deletedAcceptCcRangeStale).toHaveBeenCalledOnce();
-    expect(deletedAcceptBodyRelated).toHaveBeenCalledOnce();
+    expect(deletedAcceptBodyLevel).not.toHaveBeenCalled();
   });
 
   it("returns error and skips cleanup when a replace still appears pending after execution", async () => {
@@ -413,7 +453,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-half-after-success",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-half-after-success",
         insertedTag: "stylistic:track-change:chunk0-half-after-success",
         deletedValue: "ni Shu",
@@ -520,7 +560,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-post-execute-full-pair-still-pending-accept",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-post-execute-full-pair-still-pending-accept",
         insertedTag:
           "stylistic:track-change:chunk0-post-execute-full-pair-still-pending-accept",
@@ -617,5 +657,127 @@ describe("WordAdapter.acceptSuggestion", () => {
       "accept-added-initial",
       "accept-deleted-initial",
     ]);
+  });
+
+  it("accepts every tracked change in an adjacent operational-wrapper group all-or-nothing", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-group-1",
+      anchor: "primer texto",
+      suggestedText: "primer cambio",
+      context: "primer texto segundo texto",
+    });
+    const callOrder: string[] = [];
+    const firstAddedAccept = vi.fn(() => callOrder.push("accept-added-1"));
+    const secondAddedAccept = vi.fn(() => callOrder.push("accept-added-2"));
+    const firstDeletedAccept = vi.fn(() => callOrder.push("accept-deleted-1"));
+    const secondDeletedAccept = vi.fn(() => callOrder.push("accept-deleted-2"));
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-group-1",
+      ccItems: [
+        {
+          tag: "stylistic:track-change:s-group-1",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-group-1",
+            insertedTag: "stylistic:track-change:s-group-1",
+            deletedValue: "primer texto",
+            anchorValue: "primer texto segundo texto",
+            groupId: "group-a",
+            groupIndex: 0,
+            groupSize: 2,
+          }),
+          spanTCItems: [
+            { id: "tc-added-1", type: "Added", accept: firstAddedAccept, reject: vi.fn() },
+            { id: "tc-deleted-1", type: "Deleted", accept: firstDeletedAccept, reject: vi.fn() },
+          ],
+          rangeRelationWithNext: "AdjacentBefore",
+        },
+        {
+          tag: "stylistic:track-change:s-group-2",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-group-2",
+            insertedTag: "stylistic:track-change:s-group-2",
+            deletedValue: "segundo texto",
+            anchorValue: "primer texto segundo texto",
+            groupId: "group-a",
+            groupIndex: 1,
+            groupSize: 2,
+          }),
+          spanTCItems: [
+            { id: "tc-added-2", type: "Added", accept: secondAddedAccept, reject: vi.fn() },
+            { id: "tc-deleted-2", type: "Deleted", accept: secondDeletedAccept, reject: vi.fn() },
+          ],
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.trackedChangesAffected).toBe(4);
+    expect(callOrder).toEqual([
+      "accept-added-1",
+      "accept-added-2",
+      "accept-deleted-1",
+      "accept-deleted-2",
+    ]);
+  });
+
+  it("returns mixed-group without mutating when adjacent group members expose incompatible decisions", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-mixed-1",
+      anchor: "primer texto",
+      suggestedText: "primer cambio",
+      context: "primer texto segundo texto",
+    });
+    const unexpectedAccept = vi.fn();
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-mixed-1",
+      ccItems: [
+        {
+          tag: "stylistic:track-change:s-mixed-1",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-mixed-1",
+            insertedTag: "stylistic:track-change:s-mixed-1",
+            deletedValue: "primer texto",
+            anchorValue: "primer texto segundo texto",
+            groupId: "group-mixed",
+            groupIndex: 0,
+            groupSize: 2,
+          }),
+          spanTCItems: [
+            { id: "tc-added-1", type: "Added", accept: unexpectedAccept, reject: vi.fn() },
+          ],
+          rangeRelationWithNext: "AdjacentBefore",
+        },
+        {
+          tag: "stylistic:track-change:s-mixed-2",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-mixed-2",
+            insertedTag: "stylistic:track-change:s-mixed-2",
+            deletedValue: "segundo texto",
+            anchorValue: "primer texto segundo texto",
+            groupId: "group-mixed",
+            groupIndex: 1,
+            groupSize: 2,
+          }),
+          spanTCItems: [
+            { id: "tc-deleted-2", type: "Deleted", accept: unexpectedAccept, reject: vi.fn() },
+          ],
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("mixed-group");
+    expect(result.trackedChangesAffected).toBe(0);
+    expect(unexpectedAccept).not.toHaveBeenCalled();
   });
 });

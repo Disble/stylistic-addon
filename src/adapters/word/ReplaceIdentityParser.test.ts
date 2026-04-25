@@ -2,18 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   getDeletedSideLocator,
   getOperationalAnchorLocator,
-  isValidCompoundReplaceIdentity,
+  isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
-  scoreCompoundReplaceIdentityMatch,
 } from "./ReplaceIdentityParser";
 import {
-  makeCompoundV2Title,
+  makeOperationalWrapperTitle,
   makeSuggestion,
 } from "./WordAdapterActionTestHelper";
 
 describe("ReplaceIdentityParser", () => {
-  it("parses a persisted compound-v2 title payload", () => {
-    const title = makeCompoundV2Title({
+  it("parses a persisted operational-wrapper title payload", () => {
+    const title = makeOperationalWrapperTitle({
       suggestionId: "s-42",
       insertedTag: "stylistic:track-change:s-42",
       deletedValue: "texto original",
@@ -24,7 +23,7 @@ describe("ReplaceIdentityParser", () => {
 
     expect(parsed).toEqual({
       suggestionId: "s-42",
-      version: "compound-v2",
+      version: "operational-wrapper-v1",
       insertedSideRef: {
         kind: "content-control",
         role: "inserted-side",
@@ -40,6 +39,9 @@ describe("ReplaceIdentityParser", () => {
         role: "operational-anchor",
         value: "Contexto con texto original.",
       },
+      groupId: "s-42",
+      groupIndex: 0,
+      groupSize: 1,
     });
   });
 
@@ -53,14 +55,14 @@ describe("ReplaceIdentityParser", () => {
     ).toBeNull();
   });
 
-  it("accepts a valid compound-v2 identity for the matching suggestion", () => {
+  it("accepts a valid operational-wrapper identity for the matching suggestion", () => {
     const suggestion = makeSuggestion({
       id: "s-42",
       anchor: "texto original",
       context: "Contexto con texto original.",
     });
     const identity = parseReplaceIdentityTitle(
-      makeCompoundV2Title({
+      makeOperationalWrapperTitle({
         suggestionId: suggestion.id,
         insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
         deletedValue: suggestion.anchor,
@@ -68,17 +70,17 @@ describe("ReplaceIdentityParser", () => {
       }),
     );
 
-    expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(true);
+    expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(true);
   });
 
-  it("accepts identities whose deleted-side and anchor values drift while the inserted-side tag stays valid", () => {
+  it("rejects identities whose deleted-side or anchor values drift", () => {
     const suggestion = makeSuggestion({
       id: "s-42",
       anchor: "texto original",
       context: "Contexto con texto original.",
     });
     const identity = parseReplaceIdentityTitle(
-      makeCompoundV2Title({
+      makeOperationalWrapperTitle({
         suggestionId: suggestion.id,
         insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
         deletedValue: "texto original con drift del host",
@@ -86,19 +88,19 @@ describe("ReplaceIdentityParser", () => {
       }),
     );
 
-    expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(true);
+    expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(false);
   });
 
   it("rejects identities whose inserted-side tag does not match the suggestion", () => {
     const suggestion = makeSuggestion({ id: "s-42" });
     const identity = parseReplaceIdentityTitle(
-      makeCompoundV2Title({
+      makeOperationalWrapperTitle({
         suggestionId: suggestion.id,
         insertedTag: "stylistic:track-change:other",
       }),
     );
 
-    expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(false);
+    expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(false);
   });
 
   it("rejects identities whose deleted-side or anchor metadata is structurally empty", () => {
@@ -108,41 +110,14 @@ describe("ReplaceIdentityParser", () => {
       context: "Contexto con texto original.",
     });
     const identity = parseReplaceIdentityTitle(
-      makeCompoundV2Title({
+      makeOperationalWrapperTitle({
         suggestionId: suggestion.id,
         deletedValue: "",
         anchorValue: "",
       }),
     );
 
-    expect(isValidCompoundReplaceIdentity(identity, suggestion)).toBe(false);
-  });
-
-  it("scores exact deleted-side and anchor matches above structurally valid drifted identities", () => {
-    const suggestion = makeSuggestion({
-      id: "s-42",
-      anchor: "texto original",
-      context: "Contexto con texto original.",
-    });
-    const exactIdentity = parseReplaceIdentityTitle(
-      makeCompoundV2Title({
-        suggestionId: suggestion.id,
-        insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
-        deletedValue: suggestion.anchor,
-        anchorValue: suggestion.context,
-      }),
-    );
-    const driftedIdentity = parseReplaceIdentityTitle(
-      makeCompoundV2Title({
-        suggestionId: suggestion.id,
-        insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
-        deletedValue: "texto original con drift del host",
-        anchorValue: "Contexto más largo rehidratado por Word.",
-      }),
-    );
-
-    expect(scoreCompoundReplaceIdentityMatch(exactIdentity, suggestion)).toBe(3);
-    expect(scoreCompoundReplaceIdentityMatch(driftedIdentity, suggestion)).toBe(1);
+    expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(false);
   });
 
   it("returns explicit deleted-side and operational-anchor locators for valid identities", () => {
@@ -152,19 +127,19 @@ describe("ReplaceIdentityParser", () => {
       context: "Contexto con texto original.",
     });
     const identity = parseReplaceIdentityTitle(
-      makeCompoundV2Title({
+      makeOperationalWrapperTitle({
         suggestionId: suggestion.id,
         insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
-        deletedValue: "texto borrado persistido",
-        anchorValue: "Contexto operativo persistido.",
+        deletedValue: suggestion.anchor,
+        anchorValue: suggestion.context,
       }),
     );
 
     expect(getDeletedSideLocator(identity, suggestion)).toBe(
-      "texto borrado persistido",
+      suggestion.anchor,
     );
     expect(getOperationalAnchorLocator(identity, suggestion)).toBe(
-      "Contexto operativo persistido.",
+      suggestion.context,
     );
   });
 });

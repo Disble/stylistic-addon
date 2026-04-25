@@ -89,8 +89,10 @@ export const MASTRA_POLL_BYPASS_ENABLED = true;
 export const STYLISTIC_TAG_PREFIX = "stylistic:";
 
 /**
- * Prefix for versioned Content Control title metadata used by compound replace
- * identities. The raw JSON payload is appended after this marker.
+ * Storage marker for Content Control title metadata used by operational-wrapper
+ * replace identities. The historical literal is kept as the persisted document
+ * marker only; the JSON payload version (`operational-wrapper-v1`) is the active
+ * identity contract, and no legacy resolution branch is attached to this prefix.
  */
 export const STYLISTIC_IDENTITY_TITLE_PREFIX = "stylistic-meta-v2:";
 

@@ -174,11 +174,43 @@ describe("SuggestionResolutionWorkflow", () => {
         trackedChangesAffected: 0,
         commentDeleted: false,
         error:
-          "La metadata compound-v2 de la sugerencia está incompleta o corrupta.",
+          "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.",
       }),
     );
 
     const result = await workflow.acceptSuggestion(makeSuggestion());
+
+    expect(result.feedbackStatus).toBe("skipped");
+    expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  it("skips feedback for ambiguous-location results", async () => {
+    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+      makeActionResult({
+        status: "ambiguous-location",
+        trackedChangesAffected: 0,
+        commentDeleted: false,
+        error: "La ubicacion de la sugerencia es ambigua.",
+      }),
+    );
+
+    const result = await workflow.acceptSuggestion(makeSuggestion());
+
+    expect(result.feedbackStatus).toBe("skipped");
+    expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
+  });
+
+  it("skips feedback for mixed-group results", async () => {
+    vi.mocked(documentPort.rejectSuggestion).mockResolvedValue(
+      makeActionResult({
+        status: "mixed-group",
+        trackedChangesAffected: 0,
+        commentDeleted: false,
+        error: "El grupo tiene decisiones mixtas.",
+      }),
+    );
+
+    const result = await workflow.rejectSuggestion(makeSuggestion());
 
     expect(result.feedbackStatus).toBe("skipped");
     expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();

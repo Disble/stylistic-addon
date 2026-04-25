@@ -4,7 +4,7 @@ import type { TextLocator } from "./WordTextLocatorContext";
 import {
   installRejectingWord,
   installWordWithContext,
-  makeCompoundV2Title,
+  makeOperationalWrapperTitle,
   makeSuggestion,
 } from "./WordAdapterActionTestHelper";
 
@@ -27,7 +27,7 @@ describe("WordAdapter.navigateToText", () => {
       items: [
         {
           tag: "stylistic:track-change:s-1",
-          title: '{"version":"compound-v2","suggestionId":"s-1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s-1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"fragmento exacto"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con fragmento exacto."}}',
+          title: 'stylistic-meta-v2:{"version":"operational-wrapper-v1","suggestionId":"s-1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s-1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"fragmento exacto"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con fragmento exacto."},"groupId":"s-1","groupIndex":0,"groupSize":1}',
           getRange: vi.fn(() => selectedRange),
         },
       ],
@@ -135,14 +135,14 @@ describe("WordAdapter.navigateToText", () => {
     expect(anchorSelect).toHaveBeenCalledOnce();
   });
 
-  it("prefers the compound-v2 CC whose metadata best matches the current suggestion", async () => {
+  it("selects the unique valid operational-wrapper CC and ignores stale drifted metadata", async () => {
     const staleSelect = vi.fn();
     const currentSelect = vi.fn();
     const ccResult = {
       items: [
         {
           tag: "stylistic:track-change:chunk0-0",
-          title: makeCompoundV2Title({
+          title: makeOperationalWrapperTitle({
             suggestionId: "chunk0-0",
             insertedTag: "stylistic:track-change:chunk0-0",
             deletedValue: "anchor viejo",
@@ -152,7 +152,7 @@ describe("WordAdapter.navigateToText", () => {
         },
         {
           tag: "stylistic:track-change:chunk0-0",
-          title: makeCompoundV2Title({
+          title: makeOperationalWrapperTitle({
             suggestionId: "chunk0-0",
             insertedTag: "stylistic:track-change:chunk0-0",
             deletedValue: "fragmento actual",

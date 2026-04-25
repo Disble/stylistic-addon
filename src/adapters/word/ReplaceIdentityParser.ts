@@ -5,8 +5,8 @@ import {
 } from "../../infrastructure/config";
 
 /**
- * Parses persisted compound-v2 replace identity metadata from a Content Control
- * title payload.
+ * Parses persisted operational-wrapper replace identity metadata from a Content
+ * Control title payload.
  *
  * Returns `null` when the title does not carry a valid Stylistic identity
  * prefix or when the JSON payload is malformed.
@@ -32,7 +32,7 @@ export function parseReplaceIdentityTitle(
 }
 
 /**
- * Validates the minimum compound-v2 replace identity contract required for
+ * Validates the minimum operational-wrapper replace identity contract required for
  * safe resolution and navigation.
  *
  * IMPORTANT:
@@ -41,11 +41,11 @@ export function parseReplaceIdentityTitle(
  * and both deleted-side plus operational-anchor refs must exist structurally so
  * the adapter can re-localize the replace without fuzzy fallback heuristics.
  */
-export function isValidCompoundReplaceIdentity(
+export function isValidOperationalReplaceIdentity(
   identity: ReplaceSuggestionIdentity | null,
   suggestion: Suggestion,
 ): identity is ReplaceSuggestionIdentity {
-  if (identity?.version !== "compound-v2") {
+  if (identity?.version !== "operational-wrapper-v1") {
     return false;
   }
 
@@ -57,62 +57,61 @@ export function isValidCompoundReplaceIdentity(
     identity.insertedSideRef.role === "inserted-side" &&
     identity.insertedSideRef.value === expectedTag &&
     identity.deletedSideRef?.role === "deleted-side" &&
-    identity.deletedSideRef.value.trim().length > 0 &&
+    identity.deletedSideRef.value === suggestion.anchor &&
     identity.anchorRef?.role === "operational-anchor" &&
-    identity.anchorRef.value.trim().length > 0
+    identity.anchorRef.value === suggestion.context &&
+    identity.groupId.trim().length > 0 &&
+    Number.isInteger(identity.groupIndex) &&
+    identity.groupIndex >= 0 &&
+    Number.isInteger(identity.groupSize) &&
+    identity.groupSize >= 1 &&
+    identity.groupIndex < identity.groupSize
   );
 }
 
-/** Returns the persisted deleted-side locator when the compound-v2 identity is valid. */
+/** Validates versioned operational-wrapper metadata without binding it to one suggestion id. */
+export function isStructurallyValidOperationalWrapperIdentity(
+  identity: ReplaceSuggestionIdentity | null,
+): identity is ReplaceSuggestionIdentity {
+  return (
+    identity?.version === "operational-wrapper-v1" &&
+    identity.suggestionId.trim().length > 0 &&
+    identity.insertedSideRef?.kind === "content-control" &&
+    identity.insertedSideRef.role === "inserted-side" &&
+    identity.insertedSideRef.value.trim().length > 0 &&
+    identity.deletedSideRef?.role === "deleted-side" &&
+    identity.deletedSideRef.value.trim().length > 0 &&
+    identity.anchorRef?.role === "operational-anchor" &&
+    identity.anchorRef.value.trim().length > 0 &&
+    identity.groupId.trim().length > 0 &&
+    Number.isInteger(identity.groupIndex) &&
+    identity.groupIndex >= 0 &&
+    Number.isInteger(identity.groupSize) &&
+    identity.groupSize >= 1 &&
+    identity.groupIndex < identity.groupSize
+  );
+}
+
+/** Returns the persisted deleted-side locator when the operational-wrapper identity is valid. */
 export function getDeletedSideLocator(
   identity: ReplaceSuggestionIdentity | null,
   suggestion: Suggestion,
 ): string | null {
-  if (!isValidCompoundReplaceIdentity(identity, suggestion)) {
+  if (!isValidOperationalReplaceIdentity(identity, suggestion)) {
     return null;
   }
 
   return identity.deletedSideRef.value.trim() || null;
 }
 
-/** Returns the persisted operational-anchor locator when the compound-v2 identity is valid. */
+/** Returns the persisted operational-anchor locator when the operational-wrapper identity is valid. */
 export function getOperationalAnchorLocator(
   identity: ReplaceSuggestionIdentity | null,
   suggestion: Suggestion,
 ): string | null {
-  if (!isValidCompoundReplaceIdentity(identity, suggestion)) {
+  if (!isValidOperationalReplaceIdentity(identity, suggestion)) {
     return null;
   }
 
   return identity.anchorRef.value.trim() || null;
-}
-
-/**
- * Scores how specifically one structurally valid compound-v2 identity matches
- * the current suggestion payload.
- *
- * The inserted-side CC tag remains the primary truth. Exact deleted/anchor text
- * matches are treated as affinity signals so the runtime can prefer the most
- * up-to-date artifact when duplicate CCs exist, without rejecting recoverable
- * host drift outright.
- */
-export function scoreCompoundReplaceIdentityMatch(
-  identity: ReplaceSuggestionIdentity | null,
-  suggestion: Suggestion,
-): number {
-  if (!isValidCompoundReplaceIdentity(identity, suggestion)) {
-    return -1;
-  }
-
-  let score = 1;
-
-  if (identity.deletedSideRef?.value === suggestion.anchor) {
-    score += 1;
-  }
-
-  if (identity.anchorRef?.value === suggestion.context) {
-    score += 1;
-  }
-
-  return score;
 }

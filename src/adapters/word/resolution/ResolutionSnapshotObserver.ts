@@ -54,7 +54,7 @@ export class ResolutionSnapshotObserver {
             replaceSuggestion: true,
           },
           {
-            relocatedCandidateCount: relocated.rankedCandidates.length,
+            relocatedCandidateCount: relocated.candidates.length,
             relocatedSelectedCc: null,
           },
         );
@@ -62,11 +62,11 @@ export class ResolutionSnapshotObserver {
       }
 
       const resolvedPreferredCc = resolveFreshPreferredCandidate(
-        relocated.rankedCandidates,
+        relocated.candidates,
         preferredCc,
       );
       const preferredCandidates = prioritizeFreshPreferredCandidate(
-        relocated.rankedCandidates,
+        relocated.candidates,
         resolvedPreferredCc,
       );
       const observation = await this.observer.observeResolutionCandidates(
@@ -83,7 +83,7 @@ export class ResolutionSnapshotObserver {
           observationStatus: observation.observationStatus,
         },
         {
-          relocatedCandidateCount: relocated.rankedCandidates.length,
+          relocatedCandidateCount: relocated.candidates.length,
           relocatedSelectedCc: relocated.selectedCc.tag,
           preferredCcResolved: resolvedPreferredCc?.tag ?? null,
           trackedChangesObserved: observation.trackedChanges.length,

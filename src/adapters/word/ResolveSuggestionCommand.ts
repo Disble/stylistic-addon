@@ -4,10 +4,9 @@
  * ResolveSuggestionCommand — Command pattern for accepting/rejecting suggestions.
  *
  * Encapsulates the complete logic for resolving a single `Suggestion` in Word:
- * finding the Content Control, observing tracked changes through multiple
- * evidence sources (CC-scoped, CC-range, body-level, operational anchor,
- * colocated comment range), applying the terminal action, and cleaning up
- * artifacts.
+ * finding the operational wrapper, observing tracked changes through strict
+ * wrapper evidence sources (CC-scoped, CC-range, operational anchor, colocated
+ * comment range), applying the terminal action, and cleaning up artifacts.
  *
  * Parallel to `ApplySuggestionCommand` which handles *applying* suggestions.
  * This command handles *resolving* them after the user accepts or rejects.
@@ -244,19 +243,47 @@ export class ResolveSuggestionCommand {
     await this.observabilityReporter.emitPhase("locate", "started", {
       suggestionType: this.suggestion.type,
     });
-    const { rankedCandidates, selectedCc: cc } =
-      await this.locator.locateResolutionArtifacts(context);
+    const {
+      candidates,
+      selectedCc: cc,
+      locateStatus,
+    } = await this.locator.locateResolutionArtifacts(context);
     console.log(
-      `🔎 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" locate candidates=${rankedCandidates.length} selectedCc=${cc?.tag ?? "none"}`,
+      `🔎 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" locate candidates=${candidates.length} selectedCc=${cc?.tag ?? "none"} status=${locateStatus}`,
     );
     await this.observabilityReporter.emitPhase(
       "locate",
       cc ? "succeeded" : "failed",
       {
-        candidateCount: rankedCandidates.length,
+        candidateCount: candidates.length,
         selectedCcFound: Boolean(cc),
+        locateStatus,
       },
     );
+
+    if (
+      locateStatus === "ambiguous-location" ||
+      locateStatus === "identity-lost"
+    ) {
+      this.transitionExecuteState("completed");
+      const pendingBefore = await this.stateInspector.inspect(context);
+      const result = await this.resultFactory.buildObservationFailureResult(
+        context,
+        locateStatus,
+        pendingBefore,
+      );
+      return {
+        outcome: {
+          status: result.status,
+          trackedChangesAffected: result.trackedChangesAffected,
+          commentDeleted: result.commentDeleted,
+          pendingBefore,
+          pendingAfter: result.pendingAfter,
+          error: result.error,
+          executionReport: result.executionReport,
+        },
+      };
+    }
 
     if (!cc) {
       this.transitionExecuteState("completed");
@@ -282,7 +309,7 @@ export class ResolveSuggestionCommand {
       suggestionId: this.suggestion.id,
       action: this.action,
       selectedCcTag: cc.tag,
-      rankedCandidateCount: rankedCandidates.length,
+      rankedCandidateCount: candidates.length,
       suggestionType: this.suggestion.type,
     });
     await this.observabilityReporter.emitPhase("observe-before", "started", {
@@ -355,7 +382,7 @@ export class ResolveSuggestionCommand {
     try {
       observation = await this.observer.observeResolutionCandidates(
         context,
-        rankedCandidates,
+        candidates,
         cc,
       );
     } catch (error) {
@@ -366,7 +393,7 @@ export class ResolveSuggestionCommand {
           suggestionId: this.suggestion.id,
           action: this.action,
           selectedCcTag: cc.tag,
-          rankedCandidateCount: rankedCandidates.length,
+          rankedCandidateCount: candidates.length,
           error: this.errorSerializer.serialize(error),
         },
       );
@@ -387,19 +414,23 @@ export class ResolveSuggestionCommand {
       },
     );
 
-    if (observation.observationStatus === "identity-lost") {
+    if (
+      observation.observationStatus === "identity-lost" ||
+      observation.observationStatus === "ambiguous-location" ||
+      observation.observationStatus === "mixed-group"
+    ) {
       this.transitionExecuteState("completed");
       await this.observabilityReporter.emitPhase(
         "observe-before",
         "failed",
         this.observabilityReporter.mergeMetadata(
-          { reason: "identity-lost" },
+          { reason: observation.observationStatus },
           observation.debugMetadata,
         ),
       );
       const result = await this.resultFactory.buildObservationFailureResult(
         context,
-        "identity-lost",
+        observation.observationStatus,
         pendingBefore,
       );
       return {
@@ -482,15 +513,8 @@ export class ResolveSuggestionCommand {
     });
 
     this.transitionExecuteState("cleaning-anchor");
-    console.log(
-      `🧹 [ResolveSuggestionCommand] workflowAttemptId="${this.workflowAttemptId}" cleanup-anchor cc="${observation.selectedCc.tag}"`,
-    );
-    await this.cleanup.cleanupResolvedSuggestionAnchor(
-      context,
-      observation.selectedCc,
-    );
     await this.observabilityReporter.emitPhase("cleanup-anchor", "succeeded", {
-      anchorDeleted: true,
+      anchorDeleted: false,
     });
 
     this.transitionExecuteState("inspecting-after");
@@ -623,10 +647,8 @@ export class ResolveSuggestionCommand {
       return executionReport;
     }
 
-    // A post-execute snapshot may include adjacent-neighbor TCs via
-    // `bodyRelated` (AdjacentBefore/AdjacentAfter). Those belong to other
-    // suggestions and must NOT be reported as this suggestion's pending
-    // remainder. Only CC-scoped TCs (inside cc or ccRange) count.
+    // A post-execute snapshot must only count CC-scoped TCs (inside cc or
+    // ccRange) as this suggestion's pending remainder.
     const ccScopedRemaining =
       (postExecuteObservation.debugMetadata?.ccTrackedChangesCount ?? 0) +
       (postExecuteObservation.debugMetadata?.ccRangeTrackedChangesCount ?? 0);

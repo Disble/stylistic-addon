@@ -1,25 +1,8 @@
-# Spec: Replace Resolution Workflow
+# Delta for Replace Resolution Workflow
 
-## Requirements
-
-### Requirement: Replace semantic policy SHALL come from one shared source
-
-The adapter SHALL define replace action policy from one shared strategy source so `accept` and `reject` keep the same external behavior without duplicating semantic-order decisions across command and executor layers.
-
-#### Scenario: Accept replace still resolves inserted side first
-- **GIVEN** a replace suggestion with a confirmed pending semantic pair
-- **WHEN** the user accepts the suggestion
-- **THEN** the adapter SHALL execute `Added` before `Deleted`
-- **AND** command and executor SHALL derive that order from the same replace policy source
-
-#### Scenario: Reject replace still resolves deleted side first
-- **GIVEN** a replace suggestion with a confirmed pending semantic pair
-- **WHEN** the user rejects the suggestion
-- **THEN** the adapter SHALL execute `Deleted` before `Added`
-- **AND** command and executor SHALL derive that order from the same replace policy source
+## ADDED Requirements
 
 ### Requirement: Operational Wrapper Identity Validation
-
 The system SHALL use operational wrapper metadata as the explicit resolution identity. The system MUST NOT rely on fallback heuristics, full-body candidate matching, or duplicate-CC scoring.
 
 #### Scenario: Ambiguous Location Abort
@@ -29,7 +12,6 @@ The system SHALL use operational wrapper metadata as the explicit resolution ide
 - AND the system SHALL NOT mutate the document or fall back to legacy discovery heuristics
 
 ### Requirement: Contiguous Suggestion Grouping
-
 The system SHALL process contiguous or adjacent replace suggestions as explicit, unified groups for an all-or-nothing resolution.
 
 #### Scenario: All-or-nothing group resolution
@@ -39,7 +21,6 @@ The system SHALL process contiguous or adjacent replace suggestions as explicit,
 - AND the system SHALL NOT use legacy candidate ranking for individual parts
 
 ### Requirement: Mixed Decisions Degradation
-
 The system SHALL degrade unobservable or mixed states explicitly rather than attempting automated resolution.
 
 #### Scenario: Mixed user decisions within a group
@@ -49,7 +30,6 @@ The system SHALL degrade unobservable or mixed states explicitly rather than att
 - AND the system SHALL NOT attempt to auto-resolve or route to a preserved legacy fallback
 
 ### Requirement: Comments-Only Cleanup
-
 The system SHALL restrict post-resolution cleanup strictly to comment residues related to the replace operation, preserving wrapper and inserted-side CC metadata.
 
 #### Scenario: Preserving unrelated changes
@@ -59,7 +39,6 @@ The system SHALL restrict post-resolution cleanup strictly to comment residues r
 - AND the system SHALL leave non-Stylistic tracked changes entirely untouched
 
 ### Requirement: Mandatory No-Legacy Validation
-
 The system SHALL NOT contain any dormant, reachable, or hidden legacy accept/reject workflow code. The implementation MUST demonstrably delete legacy paths rather than bypassing them.
 
 #### Scenario: Static and runtime validation of legacy removal
@@ -68,3 +47,8 @@ The system SHALL NOT contain any dormant, reachable, or hidden legacy accept/rej
 - THEN no legacy full-body fallback branches or compatibility shims SHALL remain
 - AND tests asserting legacy behavior MUST be deleted or rewritten to assert the new wrapper model
 - AND unsupported legacy states SHALL degrade explicitly rather than routing to a preserved fallback path
+
+## REMOVED Requirements
+
+### Requirement: Strategy extraction SHALL preserve the current workflow skeleton
+(Reason: The current workflow skeleton is conceptually flawed and built on ad-hoc observation and duplicate-CC scoring. We are aggressively tearing out the legacy workflow in favor of a clean architectural replacement based on first-class operational lineage, treating legacy code as technical debt.)

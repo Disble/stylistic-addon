@@ -52,17 +52,18 @@ export class ResolveSuggestionResultFactory {
     };
   }
 
-  /** Builds an observation failure result for identity-lost or unobservable evidence. */
+  /** Builds an observation failure result for fail-closed host evidence. */
   async buildObservationFailureResult(
     context: Word.RequestContext,
-    status: "identity-lost" | "unobservable",
+    status:
+      | "identity-lost"
+      | "unobservable"
+      | "ambiguous-location"
+      | "mixed-group",
     pendingBefore: DocumentReviewState,
   ): Promise<SuggestionActionResult> {
     const pendingAfter = await this.stateInspector.inspect(context);
-    const error =
-      status === "identity-lost"
-        ? "La metadata compound-v2 de la sugerencia está incompleta o corrupta."
-        : "Word no expuso suficientes tracked changes para confirmar la resolución.";
+    const error = this.buildObservationFailureMessage(status);
 
     return this.buildResolutionResult(
       status,
@@ -72,6 +73,29 @@ export class ResolveSuggestionResultFactory {
       pendingAfter,
       error,
     );
+  }
+
+  /** Converts explicit observation failure status into user-facing Spanish copy. */
+  private buildObservationFailureMessage(
+    status:
+      | "identity-lost"
+      | "unobservable"
+      | "ambiguous-location"
+      | "mixed-group",
+  ): string {
+    if (status === "identity-lost") {
+      return "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.";
+    }
+
+    if (status === "ambiguous-location") {
+      return "La ubicación de la sugerencia es ambigua; se abortó antes de modificar el documento.";
+    }
+
+    if (status === "mixed-group") {
+      return "El grupo contiguo contiene decisiones mixtas; se abortó antes de modificar el documento.";
+    }
+
+    return "Word no expuso suficientes tracked changes para confirmar la resolución.";
   }
 
   /** Builds a stable outer-catch error result. */

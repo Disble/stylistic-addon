@@ -34,7 +34,7 @@ export function formatTrackedChangeTypesForLog(
 
 /** Resolves one stale preferred CC to its fresh logical equivalent from the current locate pass. */
 export function resolveFreshPreferredCandidate(
-  rankedCandidates: Word.ContentControl[],
+  candidates: Word.ContentControl[],
   preferredCc?: Word.ContentControl,
 ): Word.ContentControl | null {
   if (!preferredCc) {
@@ -45,7 +45,7 @@ export function resolveFreshPreferredCandidate(
   const preferredTitle = preferredCc.title ?? "";
 
   return (
-    rankedCandidates.find(
+    candidates.find(
       (candidate) =>
         candidate.tag === preferredTag &&
         (candidate.title ?? "") === preferredTitle,
@@ -55,16 +55,16 @@ export function resolveFreshPreferredCandidate(
 
 /** Keeps the fresh logical successor first without ever reusing the old proxy object. */
 export function prioritizeFreshPreferredCandidate(
-  rankedCandidates: Word.ContentControl[],
+  candidates: Word.ContentControl[],
   preferredCc: Word.ContentControl | null,
 ): Word.ContentControl[] {
   if (!preferredCc) {
-    return rankedCandidates;
+    return candidates;
   }
 
   return [
     preferredCc,
-    ...rankedCandidates.filter((candidate) => candidate !== preferredCc),
+    ...candidates.filter((candidate) => candidate !== preferredCc),
   ];
 }
 

@@ -430,16 +430,20 @@ function applySuggestionCardState(
       break;
 
     case "identity-lost":
+    case "ambiguous-location":
+    case "mixed-group":
       li.querySelector(".result-actions")?.remove();
-      li.classList.add("result-identity-lost");
+      li.classList.add(`result-${state}`);
       appendNote(
         li,
-        "(metadata inconsistente; reanalizá la sugerencia)",
-        "result-identity-lost-note",
+        state === "identity-lost"
+          ? "(metadata inconsistente; reanalizá la sugerencia)"
+          : "(resolución ambigua; reanalizá la sugerencia)",
+        `result-${state}-note`,
       );
       showStatus(
         errorMessage ??
-          "La identidad persistida de la sugerencia quedó inconsistente en Word.",
+          "La identidad persistida de la sugerencia no permite resolver con seguridad.",
         "error",
       );
       moveSuggestionCardToEnd(li);

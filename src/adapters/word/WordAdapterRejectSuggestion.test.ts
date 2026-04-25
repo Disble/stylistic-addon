@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "./WordAdapter";
 import {
   installWordWithContext,
-  makeCompoundV2Title,
+  makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
   makeSuggestion,
 } from "./WordAdapterActionTestHelper";
@@ -37,7 +37,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:s-ordered-reject",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "s-ordered-reject",
         insertedTag: "stylistic:track-change:s-ordered-reject",
         deletedValue: "desde allí",
@@ -88,7 +88,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:s-sync-reject",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "s-sync-reject",
         insertedTag: "stylistic:track-change:s-sync-reject",
         deletedValue: "desde allí",
@@ -166,7 +166,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-fresh-reobserve-reject",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-fresh-reobserve-reject",
         insertedTag: "stylistic:track-change:chunk0-fresh-reobserve-reject",
         deletedValue: "ni Shu",
@@ -260,7 +260,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-no-recovery-reject",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-no-recovery-reject",
         insertedTag: "stylistic:track-change:chunk0-no-recovery-reject",
         deletedValue: "ni Shu",
@@ -342,7 +342,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-preferred-fresh-proxy-reject",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-preferred-fresh-proxy-reject",
         insertedTag:
           "stylistic:track-change:chunk0-preferred-fresh-proxy-reject",
@@ -464,7 +464,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     const context = makeResolveSuggestionContext({
       ccFound: true,
       ccTag: "stylistic:track-change:chunk0-half-after-reject",
-      ccTitle: makeCompoundV2Title({
+      ccTitle: makeOperationalWrapperTitle({
         suggestionId: "chunk0-half-after-reject",
         insertedTag: "stylistic:track-change:chunk0-half-after-reject",
         deletedValue: "ni Shu",
@@ -546,5 +546,72 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(1);
     expect(result.error).toContain("falso success");
     expect(context._cc.delete).not.toHaveBeenCalled();
+  });
+
+  it("rejects every tracked change in an adjacent operational-wrapper group all-or-nothing", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-group-reject-1",
+      anchor: "primer texto",
+      suggestedText: "primer cambio",
+      context: "primer texto segundo texto",
+    });
+    const callOrder: string[] = [];
+    const firstAddedReject = vi.fn(() => callOrder.push("reject-added-1"));
+    const secondAddedReject = vi.fn(() => callOrder.push("reject-added-2"));
+    const firstDeletedReject = vi.fn(() => callOrder.push("reject-deleted-1"));
+    const secondDeletedReject = vi.fn(() => callOrder.push("reject-deleted-2"));
+
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: "stylistic:track-change:s-group-reject-1",
+      ccItems: [
+        {
+          tag: "stylistic:track-change:s-group-reject-1",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-group-reject-1",
+            insertedTag: "stylistic:track-change:s-group-reject-1",
+            deletedValue: "primer texto",
+            anchorValue: "primer texto segundo texto",
+            groupId: "group-reject-a",
+            groupIndex: 0,
+            groupSize: 2,
+          }),
+          spanTCItems: [
+            { id: "tc-added-r1", type: "Added", accept: vi.fn(), reject: firstAddedReject },
+            { id: "tc-deleted-r1", type: "Deleted", accept: vi.fn(), reject: firstDeletedReject },
+          ],
+          rangeRelationWithNext: "AdjacentBefore",
+        },
+        {
+          tag: "stylistic:track-change:s-group-reject-2",
+          title: makeOperationalWrapperTitle({
+            suggestionId: "s-group-reject-2",
+            insertedTag: "stylistic:track-change:s-group-reject-2",
+            deletedValue: "segundo texto",
+            anchorValue: "primer texto segundo texto",
+            groupId: "group-reject-a",
+            groupIndex: 1,
+            groupSize: 2,
+          }),
+          spanTCItems: [
+            { id: "tc-added-r2", type: "Added", accept: vi.fn(), reject: secondAddedReject },
+            { id: "tc-deleted-r2", type: "Deleted", accept: vi.fn(), reject: secondDeletedReject },
+          ],
+        },
+      ],
+      comments: [],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.rejectSuggestion(suggestion);
+
+    expect(result.status).toBe("rejected");
+    expect(result.trackedChangesAffected).toBe(4);
+    expect(callOrder).toEqual([
+      "reject-deleted-1",
+      "reject-deleted-2",
+      "reject-added-1",
+      "reject-added-2",
+    ]);
   });
 });

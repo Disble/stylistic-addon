@@ -1,6 +1,6 @@
 import type { Suggestion } from "../../domain/types";
 
-const COMPOUND_V2_TITLE_PREFIX = "stylistic-meta-v2:";
+const OPERATIONAL_WRAPPER_TITLE_PREFIX = "stylistic-meta-v2:";
 
 type MockTrackedChange = {
   id?: string;
@@ -93,17 +93,20 @@ export function makeSuggestion(
   };
 }
 
-/** Serializes a default compound-v2 title payload for replace-suggestion tests. */
-export function makeCompoundV2Title(options: {
+/** Serializes a default operational-wrapper title payload for replace-suggestion tests. */
+export function makeOperationalWrapperTitle(options: {
   suggestionId?: string;
   insertedTag?: string;
   deletedValue?: string;
   anchorValue?: string;
+  groupId?: string;
+  groupIndex?: number;
+  groupSize?: number;
   overrides?: Record<string, unknown>;
 } = {}): string {
-  return `${COMPOUND_V2_TITLE_PREFIX}${JSON.stringify({
+  return `${OPERATIONAL_WRAPPER_TITLE_PREFIX}${JSON.stringify({
     suggestionId: options.suggestionId ?? "s-1",
-    version: "compound-v2",
+    version: "operational-wrapper-v1",
     insertedSideRef: {
       kind: "content-control",
       role: "inserted-side",
@@ -119,6 +122,9 @@ export function makeCompoundV2Title(options: {
       role: "operational-anchor",
       value: options.anchorValue ?? "Contexto con texto original.",
     },
+    groupId: options.groupId ?? options.suggestionId ?? "s-1",
+    groupIndex: options.groupIndex ?? 0,
+    groupSize: options.groupSize ?? 1,
     ...options.overrides,
   })}`;
 }
@@ -196,6 +202,7 @@ export function makeResolveSuggestionContext({
     tag?: string;
     spanTCItems?: MockTrackedChange[];
     rangeTCItems?: MockTrackedChange[];
+    rangeRelationWithNext?: string;
   }>;
   spanTCItems?: MockTrackedChange[];
   rangeTCItems?: MockTrackedChange[];
@@ -292,6 +299,7 @@ export function makeResolveSuggestionContext({
     tag?: string;
     spanTCItems?: MockTrackedChange[];
     rangeTCItems?: MockTrackedChange[];
+    rangeRelationWithNext?: string;
   }) => {
     const thisTag = options?.tag ?? ccTag;
     const thisSpanTCItems = options?.spanTCItems ?? mutableSpanTCItems;
@@ -322,7 +330,9 @@ export function makeResolveSuggestionContext({
       load: vi.fn(),
     };
     const thisCcRange: MockRangeWithTrackedChanges = {
-      compareLocationWith: vi.fn(),
+      compareLocationWith: vi.fn(() => ({
+        value: options?.rangeRelationWithNext ?? "AdjacentBefore",
+      })),
       getTrackedChanges: vi.fn(() => thisRangeTCCollection),
     };
 
@@ -331,7 +341,7 @@ export function makeResolveSuggestionContext({
         options?.title ??
         ccTitle ??
         (thisTag.startsWith("stylistic:track-change:")
-          ? makeCompoundV2Title({
+          ? makeOperationalWrapperTitle({
               suggestionId: inferredSuggestionId,
               insertedTag: thisTag,
             })
@@ -382,7 +392,7 @@ export function makeResolveSuggestionContext({
   const documentContentControls = {
     getByTag: vi.fn(() => ccsCollection),
     load: vi.fn(),
-    items: ccFound ? [{ tag: ccTag }] : [],
+    items: allCcItems,
   };
 
   const commentsCollection = { items: comments, load: vi.fn() };

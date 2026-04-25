@@ -618,7 +618,7 @@ describe("taskpane suggestion resolution guardrails", () => {
         trackChangesActive: true,
       },
       documentState: "pending-review",
-      error: "La metadata compound-v2 de la sugerencia está incompleta o corrupta.",
+      error: "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.",
       feedbackStatus: "skipped",
       taskpaneState: {
         documentState: "pending-review",
@@ -643,6 +643,76 @@ describe("taskpane suggestion resolution guardrails", () => {
     );
     expect(getRequiredElement(doc, "results-summary").textContent).toBe(
       "Ya no te quedan sugerencias aplicadas por revisar. 1 requiere(n) revisión manual.",
+    );
+    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+  });
+
+  it("renders ambiguous-location as terminal manual-review UI and skips feedback", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "ambiguous-location",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      error: "La ubicacion de la sugerencia es ambigua.",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
+    });
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-ambiguous-location" });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    getRequiredChild(li, '[data-action="accept"]').click();
+    await flushTaskpaneWork();
+
+    expect(li.classList.contains("result-ambiguous-location")).toBe(true);
+    expect(li.querySelector(".result-actions")).toBeNull();
+    expect(li.querySelector(".result-ambiguous-location-note")?.textContent).toBe(
+      "(resolución ambigua; reanalizá la sugerencia)",
+    );
+    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+  });
+
+  it("renders mixed-group as terminal manual-review UI and skips feedback", async () => {
+    taskpaneMocks.acceptSuggestion.mockResolvedValue({
+      status: "mixed-group",
+      trackedChangesAffected: 0,
+      commentDeleted: false,
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      error: "El grupo tiene decisiones mixtas.",
+      feedbackStatus: "skipped",
+      taskpaneState: {
+        documentState: "pending-review",
+        showDisableTrackChangesCta: false,
+        showCleanupSection: false,
+      },
+    });
+
+    const doc = createTaskpaneDocument();
+    const suggestion = makeSuggestion({ id: "s-mixed-group" });
+
+    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    getRequiredChild(li, '[data-action="accept"]').click();
+    await flushTaskpaneWork();
+
+    expect(li.classList.contains("result-mixed-group")).toBe(true);
+    expect(li.querySelector(".result-actions")).toBeNull();
+    expect(li.querySelector(".result-mixed-group-note")?.textContent).toBe(
+      "(resolución ambigua; reanalizá la sugerencia)",
     );
     expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });

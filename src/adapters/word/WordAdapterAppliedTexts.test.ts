@@ -44,7 +44,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
     expect(context.sync).toHaveBeenCalledTimes(1);
   });
 
-  it("SR-DG-01: collects comment-only titles and only compound-v2 track-change refs", async () => {
+  it("SR-DG-01: collects comment-only titles and only operational-wrapper track-change refs", async () => {
     const rangeTC = { load: vi.fn(), text: "originalText1" };
     const rangeCO = { load: vi.fn(), text: "originalText2" };
     const rangeOther = { load: vi.fn(), text: "should not appear" };
@@ -56,7 +56,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
             {
               tag: "stylistic:track-change:s1",
               title:
-                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"originalText1"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con texto original."}}',
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"operational-wrapper-v1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"originalText1"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con texto original."},"groupId":"s1","groupIndex":0,"groupSize":1}',
               getRange: vi.fn(() => rangeTC),
             },
             {
@@ -93,13 +93,13 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
             {
               tag: "stylistic:track-change:s1",
               title:
-                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto duplicado"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto 1"}}',
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"operational-wrapper-v1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto duplicado"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto 1"},"groupId":"s1","groupIndex":0,"groupSize":1}',
               getRange: vi.fn(() => range1),
             },
             {
               tag: "stylistic:track-change:s2",
               title:
-                'stylistic-meta-v2:{"suggestionId":"s2","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s2"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto duplicado"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto 2"}}',
+                'stylistic-meta-v2:{"suggestionId":"s2","version":"operational-wrapper-v1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s2"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto duplicado"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto 2"},"groupId":"s2","groupIndex":0,"groupSize":1}',
               getRange: vi.fn(() => range2),
             },
             { tag: "stylistic:comment-only:s3", getRange: vi.fn(() => range3) },
@@ -129,7 +129,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
             {
               tag: "stylistic:track-change:s1",
               title:
-                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"parece que es la"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con parece que es la."}}',
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"operational-wrapper-v1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"parece que es la"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con parece que es la."},"groupId":"s1","groupIndex":0,"groupSize":1}',
               getRange: vi.fn(() => mutatedReplaceRange),
             },
             {
@@ -153,7 +153,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
     expect(mutatedCommentOnlyRange.load).not.toHaveBeenCalledWith("text");
   });
 
-  it("ignores track-change content controls without compound-v2 metadata", async () => {
+  it("ignores track-change content controls without operational-wrapper metadata", async () => {
     const legacyRange = { load: vi.fn(), text: "texto legado" };
 
     const context = {
@@ -180,7 +180,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
     expect(legacyRange.load).not.toHaveBeenCalledWith("text");
   });
 
-  it("prefers deleted-side refs from compound-v2 metadata when collecting already applied originals", async () => {
+  it("prefers deleted-side refs from operational-wrapper metadata when collecting already applied originals", async () => {
     const context = {
       document: {
         contentControls: {
@@ -188,7 +188,7 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
             {
               tag: "stylistic:track-change:s1",
               title:
-                'stylistic-meta-v2:{"suggestionId":"s1","version":"compound-v2","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto original v2"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con texto original v2."}}',
+                'stylistic-meta-v2:{"suggestionId":"s1","version":"operational-wrapper-v1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"texto original v2"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con texto original v2."},"groupId":"s1","groupIndex":0,"groupSize":1}',
               getRange: vi.fn(),
             },
           ],

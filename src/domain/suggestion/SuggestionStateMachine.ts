@@ -13,7 +13,7 @@
  * - `accepted`         → User accepted from taskpane. Terminal.
  * - `rejected`         → User rejected from taskpane. Terminal.
  * - `unobservable`     → Word did not expose enough evidence to confirm resolution. Non-terminal.
- * - `identity-lost`    → Word exposed corrupt/incomplete compound identity metadata. Terminal warning.
+ * - `identity-lost`    → Word exposed corrupt/incomplete operational-wrapper metadata. Terminal warning.
  * - `error`            → Word API threw. Non-terminal — user may retry.
  *
  * @module SuggestionStateMachine
@@ -23,11 +23,21 @@ import type { SuggestionActionResult, SuggestionState } from "../types";
 
 const TRANSITIONS: Record<SuggestionState, SuggestionState[]> = {
   pending: ["resolving"],
-  resolving: ["accepted", "rejected", "unobservable", "identity-lost", "error"],
+  resolving: [
+    "accepted",
+    "rejected",
+    "unobservable",
+    "identity-lost",
+    "ambiguous-location",
+    "mixed-group",
+    "error",
+  ],
   accepted: [],
   rejected: [],
   unobservable: ["resolving"],
   "identity-lost": [],
+  "ambiguous-location": [],
+  "mixed-group": [],
   error: ["resolving"],
 };
 
@@ -114,6 +124,10 @@ export function mapResultStatusToState(
       return "unobservable";
     case "identity-lost":
       return "identity-lost";
+    case "ambiguous-location":
+      return "ambiguous-location";
+    case "mixed-group":
+      return "mixed-group";
     case "cc-not-found":
       return "error";
     case "not-found":

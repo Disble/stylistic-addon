@@ -65,7 +65,7 @@ function serializeReplaceIdentity(identity: ReplaceSuggestionIdentity): string {
 }
 
 /**
- * Builds compound v2 metadata for replace suggestions.
+ * Builds strict operational-wrapper metadata for replace suggestions.
  *
  * The inserted-side Content Control remains an operational reference, not the
  * whole domain identity. Deleted/original-side and anchor references are stored
@@ -76,7 +76,7 @@ function buildReplaceIdentity(
 ): ReplaceSuggestionIdentity {
   return {
     suggestionId: suggestion.id,
-    version: "compound-v2",
+    version: "operational-wrapper-v1",
     insertedSideRef: createArtifactRef(
       "content-control",
       "inserted-side",
@@ -92,6 +92,9 @@ function buildReplaceIdentity(
       "operational-anchor",
       suggestion.context,
     ),
+    groupId: suggestion.id,
+    groupIndex: 0,
+    groupSize: 1,
   };
 }
 
@@ -140,58 +143,6 @@ function stringifyUnknownError(error: unknown): string {
   } catch {
     return Object.prototype.toString.call(error);
   }
-}
-
-/** Detects Word's invalid/too-long search failures. */
-function isSearchInvalidError(error: unknown): boolean {
-  return stringifyUnknownError(error).includes("SearchStringInvalidOrTooLong");
-}
-
-/** Normalizes one character for local paragraph-context scoring. */
-function normalizeContextScoreChar(char: string): string {
-  if (char === "\u201C" || char === "\u201D") {
-    return '"';
-  }
-
-  if (char === "\u2018" || char === "\u2019") {
-    return "'";
-  }
-
-  if (char >= "\u0013" && char <= "\u0015") {
-    return "";
-  }
-
-  return char.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-/** Normalizes text for paragraph-context similarity scoring. */
-function normalizeForContextScore(text: string): string {
-  return Array.from(text.toLowerCase())
-    .map((char) => normalizeContextScoreChar(char))
-    .join("")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Scores how well one paragraph aligns with the original backend context. */
-function scoreParagraphAgainstContext(
-  paragraphText: string,
-  contextText: string,
-): number {
-  const paragraphTokens = new Set(
-    normalizeForContextScore(paragraphText)
-      .split(" ")
-      .filter((token) => token.length >= 3),
-  );
-  const contextTokens = normalizeForContextScore(contextText)
-    .split(" ")
-    .filter((token) => token.length >= 3);
-
-  return contextTokens.reduce(
-    (score, token) => score + (paragraphTokens.has(token) ? 1 : 0),
-    0,
-  );
 }
 
 /** Builds a localized mutation patch from one successful anchor replacement. */
@@ -361,9 +312,9 @@ export class ApplySuggestionCommand {
     });
     if (!contextRange) {
       console.log(
-        `🔬 [ApplySuggestionCommand] "${this.id}": context not found — retrying anchor search in full body`,
+        `🔬 [ApplySuggestionCommand] "${this.id}": context not found — ambiguous-location abort before mutation`,
       );
-      return this.resolveBestBodyAnchorFallback(context, body);
+      return null;
     }
 
     contextRange.load("text");
@@ -417,114 +368,6 @@ export class ApplySuggestionCommand {
     });
   }
 
-  /** Selects the best full-body anchor candidate when context re-location fails. */
-  private async resolveBestBodyAnchorFallback(
-    context: Word.RequestContext,
-    body: Word.Body,
-  ): Promise<Word.Range | null> {
-    const searchOptions = { matchCase: true, matchWholeWord: false };
-    const relaxedOptions = {
-      matchCase: true,
-      matchWholeWord: false,
-      ignorePunct: true,
-      ignoreSpace: true,
-    };
-
-    try {
-      const exactResults = body.search(this.suggestion.anchor, searchOptions);
-      exactResults.load("items");
-      await context.sync();
-
-      if (exactResults.items.length === 1) {
-        return exactResults.items[0] ?? null;
-      }
-
-      if (exactResults.items.length > 1) {
-        return this.selectBestAnchorCandidateByContext(
-          context,
-          exactResults.items,
-        );
-      }
-
-      const relaxedResults = body.search(
-        this.suggestion.anchor,
-        relaxedOptions,
-      );
-      relaxedResults.load("items");
-      await context.sync();
-
-      if (relaxedResults.items.length === 1) {
-        return relaxedResults.items[0] ?? null;
-      }
-
-      if (relaxedResults.items.length > 1) {
-        return this.selectBestAnchorCandidateByContext(
-          context,
-          relaxedResults.items,
-        );
-      }
-    } catch (error) {
-      if (!isSearchInvalidError(error)) {
-        throw error;
-      }
-    }
-
-    return this.textLocator.locate({
-      context,
-      container: body as WordSearchContainer,
-      searchText: this.suggestion.anchor,
-    });
-  }
-
-  /** Chooses the anchor whose paragraph best matches the stale backend context. */
-  private async selectBestAnchorCandidateByContext(
-    context: Word.RequestContext,
-    candidates: Word.Range[],
-  ): Promise<Word.Range | null> {
-    const paragraphs = candidates.map((candidate) => ({
-      candidate,
-      paragraph: candidate.paragraphs.getFirst().getRange("Whole"),
-    }));
-
-    for (const entry of paragraphs) {
-      entry.paragraph.load("text");
-    }
-    await context.sync();
-
-    const scored = paragraphs
-      .map(({ candidate, paragraph }) => ({
-        candidate,
-        score: scoreParagraphAgainstContext(
-          paragraph.text,
-          this.suggestion.context,
-        ),
-      }))
-      .sort((left, right) => right.score - left.score);
-
-    const best = scored[0];
-    const secondBest = scored[1];
-
-    if (!best || best.score <= 0) {
-      console.log(
-        `🔬 [ApplySuggestionCommand] "${this.id}": ambiguous full-body anchor fallback without contextual winner`,
-      );
-      return null;
-    }
-
-    if (secondBest && secondBest.score === best.score) {
-      console.log(
-        `🔬 [ApplySuggestionCommand] "${this.id}": ambiguous full-body anchor fallback tie (${best.score})`,
-      );
-      return null;
-    }
-
-    console.log(
-      `🔬 [ApplySuggestionCommand] "${this.id}": disambiguated full-body fallback with contextual score ${best.score}`,
-    );
-
-    return best.candidate;
-  }
-
   /**
    * Executes the command: searches for the anchor within its context and
    * replaces it with a native Word tracked change.
@@ -557,7 +400,7 @@ export class ApplySuggestionCommand {
     try {
       return await Word.run(async (context) => {
         const body = context.document.body;
-        let range = await this.resolveAnchorRange(context, body);
+        const range = await this.resolveAnchorRange(context, body);
         if (!range) {
           console.warn(
             `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado`,
@@ -580,24 +423,13 @@ export class ApplySuggestionCommand {
 
         if (isAlreadyCovered) {
           console.log(
-            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — eliminando wrapper y reinsertando`,
+            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — covered-by-existing-cc abort before mutation`,
           );
-          // keepContent: true = remove CC wrapper only, text stays in document
-          // keepContent: false = remove CC wrapper AND DELETE its content ← DANGER
-          parentCC.delete(true);
-          await context.sync();
-
-          range = await this.resolveAnchorRange(context, body);
-          if (!range) {
-            console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado tras eliminar CC existente`,
-            );
-            return {
-              success: false,
-              commandId: this.id,
-              error: "Anchor no encontrado en el contexto",
-            };
-          }
+          return {
+            success: false,
+            commandId: this.id,
+            error: "Anchor cubierto por un Content Control existente",
+          };
         }
 
         const containingParagraph = range.paragraphs

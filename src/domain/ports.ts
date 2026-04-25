@@ -88,7 +88,7 @@ export interface IDocumentPort {
    * Result contract:
    * - `accepted` means tracked changes and Stylistic cleanup completed atomically
    * - `unobservable` means Word could not prove the suggestion state yet
-   * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
+   * - `identity-lost` means operational-wrapper metadata exists but is incomplete/corrupt
    */
   acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
 
@@ -100,7 +100,7 @@ export interface IDocumentPort {
    * Result contract:
    * - `rejected` means tracked changes and Stylistic cleanup completed atomically
    * - `unobservable` means Word could not prove the suggestion state yet
-   * - `identity-lost` means compound v2 metadata exists but is incomplete/corrupt
+   * - `identity-lost` means operational-wrapper metadata exists but is incomplete/corrupt
    */
   rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult>;
 

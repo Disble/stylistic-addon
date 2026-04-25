@@ -30,7 +30,7 @@ describe("ResolveSuggestionResultFactory", () => {
     );
 
     expect(result.status).toBe("identity-lost");
-    expect(result.error).toContain("compound-v2");
+    expect(result.error).toContain("operational-wrapper");
     expect(result.pendingAfter).toBe(pendingAfter);
   });
 

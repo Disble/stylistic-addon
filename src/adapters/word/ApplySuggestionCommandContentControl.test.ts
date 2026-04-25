@@ -37,7 +37,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     expect(env.anchorRange.insertContentControl).toHaveBeenCalledOnce();
   });
 
-  it("re-resolves the anchor after removing an existing stylistic content control", async () => {
+  it("aborts before mutation when an existing stylistic content control covers the anchor", async () => {
     const coveredParentCC: ParentCC = {
       tag: "stylistic:track-change:s1",
       isNullObject: false,
@@ -67,13 +67,13 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       textLocator,
     ).execute();
 
-    expect(result).toMatchObject({ success: true, commandId: "s1" });
-    expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
-    expect(env.context.document.body.search).toHaveBeenCalledTimes(2);
-    expect(freshAnchor.insertText).toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false, commandId: "s1" });
+    expect(coveredParentCC.delete).not.toHaveBeenCalled();
+    expect(env.context.document.body.search).toHaveBeenCalledTimes(1);
+    expect(freshAnchor.insertText).not.toHaveBeenCalled();
   });
 
-  it("re-resolves the anchor after removing a chunk wrapper that still covers the text", async () => {
+  it("aborts before mutation when a chunk wrapper covers the anchor", async () => {
     const coveredParentCC: ParentCC = {
       tag: "chunk0-0",
       isNullObject: false,
@@ -103,12 +103,12 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       textLocator,
     ).execute();
 
-    expect(result).toMatchObject({ success: true, commandId: "s1" });
-    expect(coveredParentCC.delete).toHaveBeenCalledWith(true);
-    expect(freshAnchor.insertText).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ success: false, commandId: "s1" });
+    expect(coveredParentCC.delete).not.toHaveBeenCalled();
+    expect(freshAnchor.insertText).not.toHaveBeenCalled();
   });
 
-  it("persists compound v2 replace metadata for replace suggestions", async () => {
+  it("persists operational-wrapper replace metadata for replace suggestions", async () => {
     const env = installWordContext();
 
     const result = await new ApplySuggestionCommand(
@@ -129,7 +129,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     const payload = JSON.parse(env.cc.title.slice(IDENTITY_TITLE_PREFIX.length));
     expect(payload).toEqual({
       suggestionId: "replace-1",
-      version: "compound-v2",
+      version: "operational-wrapper-v1",
       insertedSideRef: {
         kind: "content-control",
         role: "inserted-side",
@@ -145,6 +145,9 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         role: "operational-anchor",
         value: "Contexto con texto original.",
       },
+      groupId: "replace-1",
+      groupIndex: 0,
+      groupSize: 1,
     });
   });
 

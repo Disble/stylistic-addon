@@ -193,6 +193,8 @@ function mapActionStatusToProgressState(
     case "rejected":
       return "resolved";
     case "identity-lost":
+    case "ambiguous-location":
+    case "mixed-group":
     case "cc-not-found":
       return "needs-attention";
     case "unobservable":

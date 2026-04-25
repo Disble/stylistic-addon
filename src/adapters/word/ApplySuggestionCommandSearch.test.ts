@@ -776,7 +776,7 @@ describe("ApplySuggestionCommand search behavior", () => {
     );
   });
 
-  it("recovers 'sola. Sin' when the full backend context is no longer locatable after a nearby replacement", async () => {
+  it("aborts before mutation when the backend context is no longer locatable", async () => {
     const backendContext =
       "Pasó mucho tiempo pensando lo tranquilizador que sería comer alguna vez sola. Sin nadie gritando, ni preocupada de verse envuelta en algún problema";
     const documentParagraph =
@@ -805,17 +805,14 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toMatchObject({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: false, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining("context not found — retrying anchor search in full body"),
+      expect.stringContaining("context not found — ambiguous-location abort before mutation"),
     );
-    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
-      "sola, sin",
-      "Replace",
-    );
+    expect(env.anchorRange.insertText).not.toHaveBeenCalled();
   });
 
-  it("does not misapply an ambiguous full-body anchor fallback to an earlier heading match", async () => {
+  it("aborts ambiguous-location instead of resolving a full-body tie-break", async () => {
     const backendContext =
       "A Mei le gustaba pedir un sánduche en la cafetería después de clase.";
     const documentText =
@@ -853,14 +850,11 @@ describe("ApplySuggestionCommand search behavior", () => {
       textLocator,
     ).execute();
 
-    expect(result).toMatchObject({ success: true, commandId: "s1" });
+    expect(result).toMatchObject({ success: false, commandId: "s1" });
     expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining("context not found — retrying anchor search in full body"),
-    );
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining("disambiguated full-body fallback with contextual score"),
+      expect.stringContaining("context not found — ambiguous-location abort before mutation"),
     );
     expect(headingRange.insertText).not.toHaveBeenCalled();
-    expect(bodySentenceRange.insertText).toHaveBeenCalledWith("sánguche", "Replace");
+    expect(bodySentenceRange.insertText).not.toHaveBeenCalled();
   });
 });

@@ -188,7 +188,7 @@ describe("taskpane feedback controls", () => {
         trackChangesActive: true,
       },
       documentState: "pending-review",
-      error: "La metadata compound-v2 de la sugerencia está incompleta o corrupta.",
+      error: "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.",
       feedbackStatus: "skipped",
       taskpaneState: {
         documentState: "pending-review",
