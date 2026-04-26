@@ -123,10 +123,18 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     ).execute();
 
     expect(result).toMatchObject({ success: true, commandId: "replace-1" });
+    expect(env.operationalWrapper.tag).toBe(
+      "stylistic-operational-wrapper:replace-1",
+    );
+    expect(env.operationalWrapper.title.startsWith(IDENTITY_TITLE_PREFIX)).toBe(
+      true,
+    );
     expect(env.cc.tag).toBe("stylistic:track-change:replace-1");
-    expect(env.cc.title.startsWith(IDENTITY_TITLE_PREFIX)).toBe(true);
+    expect(env.cc.title).toBe("texto original");
 
-    const payload = JSON.parse(env.cc.title.slice(IDENTITY_TITLE_PREFIX.length));
+    const payload = JSON.parse(
+      env.operationalWrapper.title.slice(IDENTITY_TITLE_PREFIX.length),
+    );
     expect(payload).toEqual({
       suggestionId: "replace-1",
       version: "operational-wrapper-v1",
@@ -149,6 +157,103 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       groupIndex: 0,
       groupSize: 1,
     });
+  });
+
+  it("reuses an existing matching operational wrapper instead of creating a duplicate", async () => {
+    const env = installWordContext({
+      anchorRangeParentCC: {
+        tag: "stylistic-operational-wrapper:replace-existing",
+        isNullObject: false,
+        load: vi.fn(),
+        delete: vi.fn(),
+      },
+    });
+
+    env.anchorRange.parentContentControlOrNullObject.tag =
+      "stylistic-operational-wrapper:replace-existing";
+    env.anchorRange.parentContentControlOrNullObject.isNullObject = false;
+    env.anchorRange.parentContentControlOrNullObject.title =
+      env.operationalWrapper.title;
+    env.anchorRange.parentContentControlOrNullObject.getRange =
+      env.operationalWrapper.getRange;
+    env.operationalWrapper.tag = "stylistic-operational-wrapper:replace-existing";
+    env.operationalWrapper.title = `${IDENTITY_TITLE_PREFIX}${JSON.stringify({
+      suggestionId: "replace-existing",
+      version: "operational-wrapper-v1",
+      insertedSideRef: {
+        kind: "content-control",
+        role: "inserted-side",
+        value: "stylistic:track-change:replace-existing",
+      },
+      deletedSideRef: {
+        kind: "anchor",
+        role: "deleted-side",
+        value: "texto original",
+      },
+      anchorRef: {
+        kind: "anchor",
+        role: "operational-anchor",
+        value: "Contexto con texto original.",
+      },
+      groupId: "replace-existing",
+      groupIndex: 0,
+      groupSize: 1,
+    })}`;
+    env.anchorRange.parentContentControlOrNullObject.title =
+      env.operationalWrapper.title;
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "replace-existing",
+        anchor: "texto original",
+        suggestedText: "texto sugerido",
+        context: "Contexto con texto original.",
+        type: "track-change",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toMatchObject({ success: true, commandId: "replace-existing" });
+    expect(env.anchorRange.insertContentControl).not.toHaveBeenCalled();
+    expect(env.operationalWrapper.getRange).toHaveBeenCalled();
+  });
+
+  it("aborts before mutation when the anchor is covered by a duplicated operational wrapper", async () => {
+    const coveredParentCC: ParentCC = {
+      tag: "stylistic-operational-wrapper:replace-dup",
+      isNullObject: false,
+      load: vi.fn(),
+      delete: vi.fn(),
+    };
+    const coveredAnchor = createRange({
+      text: "texto original",
+      parentCC: coveredParentCC,
+    });
+    const coveredContext = createRange({
+      text: "Contexto con texto original.",
+      searchSequence: [[coveredAnchor]],
+    });
+
+    installWordContext({
+      contextSearchSequence: [[coveredContext]],
+    });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "replace-dup",
+        anchor: "texto original",
+        suggestedText: "texto sugerido",
+        context: "Contexto con texto original.",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({
+      success: false,
+      commandId: "replace-dup",
+      error: "Anchor cubierto por un Content Control existente",
+    });
+    expect(coveredAnchor.insertText).not.toHaveBeenCalled();
   });
 
   it("returns a localized mutation patch for replace suggestions", async () => {

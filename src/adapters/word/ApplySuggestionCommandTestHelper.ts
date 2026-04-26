@@ -5,6 +5,8 @@ export type ParentCC = {
   isNullObject: boolean;
   load: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
+  title?: string;
+  getRange?: ReturnType<typeof vi.fn>;
 };
 
 export type MockRange = {

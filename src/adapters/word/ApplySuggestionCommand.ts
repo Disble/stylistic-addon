@@ -38,6 +38,10 @@ import {
   STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
   STYLISTIC_TAG_PREFIX,
 } from "../../infrastructure/config";
+import {
+  isValidOperationalReplaceIdentity,
+  parseReplaceIdentityTitle,
+} from "./ReplaceIdentityParser";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
 import type {
   TextLocator,
@@ -107,14 +111,7 @@ function buildReplaceIdentity(
 /**
  * Chooses the persisted Content Control title payload for one suggestion.
  */
-function buildContentControlTitle(
-  suggestion: Suggestion,
-  changeType: ChangeType,
-): string {
-  if (suggestion.type === "track-change" && changeType === "replace") {
-    return serializeReplaceIdentity(buildReplaceIdentity(suggestion));
-  }
-
+function buildContentControlTitle(suggestion: Suggestion): string {
   return suggestion.anchor;
 }
 
@@ -406,6 +403,56 @@ export class ApplySuggestionCommand {
     return wrapper;
   }
 
+  /** Reuses a valid parent operational wrapper or returns a fail-closed error. */
+  private async resolveOperationalWrapper(
+    context: Word.RequestContext,
+    anchorRange: Word.Range,
+  ): Promise<
+    | { wrapper: Word.ContentControl; error?: undefined }
+    | { wrapper?: undefined; error: string }
+  > {
+    const parentCC =
+      anchorRange.parentContentControlOrNullObject as Word.ContentControl & {
+        tag?: string;
+        title?: string;
+        getRange?: () => Word.Range;
+      };
+    parentCC.load("tag,title");
+    await context.sync();
+
+    if (parentCC.isNullObject) {
+      return {
+        wrapper: await this.createOperationalWrapper(context, anchorRange),
+      };
+    }
+
+    const existingTag = parentCC.tag ?? "";
+    const isStylisticArtifact =
+      existingTag.startsWith(STYLISTIC_TAG_PREFIX) ||
+      /^chunk\d+-\d+$/.test(existingTag);
+
+    if (!existingTag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX)) {
+      if (isStylisticArtifact) {
+        return { error: "Anchor cubierto por un Content Control existente" };
+      }
+
+      return {
+        wrapper: await this.createOperationalWrapper(context, anchorRange),
+      };
+    }
+
+    const existingIdentity = parseReplaceIdentityTitle(parentCC.title);
+    const canReuseWrapper =
+      isValidOperationalReplaceIdentity(existingIdentity, this.suggestion) &&
+      typeof parentCC.getRange === "function";
+
+    if (!canReuseWrapper) {
+      return { error: "Anchor cubierto por un Content Control existente" };
+    }
+
+    return { wrapper: parentCC };
+  }
+
   /** Re-finds the anchor inside the operational wrapper so mutation scope matches the wrapper. */
   private async resolveAnchorInsideWrapper(
     context: Word.RequestContext,
@@ -462,24 +509,42 @@ export class ApplySuggestionCommand {
           };
         }
 
-        const parentCC = range.parentContentControlOrNullObject;
-        parentCC.load("tag");
-        await context.sync();
+        const operationalWrapperResult =
+          changeType === "replace"
+            ? await this.resolveOperationalWrapper(context, range)
+            : null;
 
-        const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
-        const isAlreadyCovered =
-          existingTag.startsWith("stylistic:") ||
-          /^chunk\d+-\d+$/.test(existingTag);
-
-        if (isAlreadyCovered) {
+        if (operationalWrapperResult?.error) {
           console.log(
             `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — covered-by-existing-cc abort before mutation`,
           );
           return {
             success: false,
             commandId: this.id,
-            error: "Anchor cubierto por un Content Control existente",
+            error: operationalWrapperResult.error,
           };
+        }
+
+        if (changeType !== "replace") {
+          const parentCC = range.parentContentControlOrNullObject;
+          parentCC.load("tag");
+          await context.sync();
+
+          const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
+          const isAlreadyCovered =
+            existingTag.startsWith(STYLISTIC_TAG_PREFIX) ||
+            /^chunk\d+-\d+$/.test(existingTag);
+
+          if (isAlreadyCovered) {
+            console.log(
+              `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — covered-by-existing-cc abort before mutation`,
+            );
+            return {
+              success: false,
+              commandId: this.id,
+              error: "Anchor cubierto por un Content Control existente",
+            };
+          }
         }
 
         const containingParagraph = range.paragraphs
@@ -494,7 +559,7 @@ export class ApplySuggestionCommand {
 
         const operationalWrapper =
           changeType === "replace"
-            ? await this.createOperationalWrapper(context, range)
+            ? (operationalWrapperResult?.wrapper ?? null)
             : null;
         const mutationRange = operationalWrapper
           ? await this.resolveAnchorInsideWrapper(context, operationalWrapper)
@@ -540,7 +605,7 @@ export class ApplySuggestionCommand {
 
         const cc = annotationRange.insertContentControl();
         cc.tag = buildSuggestionTag(this.suggestion);
-        cc.title = buildContentControlTitle(this.suggestion, changeType);
+        cc.title = buildContentControlTitle(this.suggestion);
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
