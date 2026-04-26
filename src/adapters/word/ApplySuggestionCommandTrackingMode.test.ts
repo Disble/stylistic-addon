@@ -52,16 +52,14 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
       error: "insert failed",
     });
     expect(env.context.document.changeTrackingMode).toBe("off");
-    expect(env.context.document.load).not.toHaveBeenCalledWith(
-      "changeTrackingMode",
-    );
+    expect(env.context.document.load).toHaveBeenCalledWith("changeTrackingMode");
   });
 
-  it("does not load or read changeTrackingMode for track-change suggestions", async () => {
+  it("does not load or read changeTrackingMode for non-replace track-change suggestions", async () => {
     const env = installWordContext({ initialTrackingMode: "trackMine" });
 
     const result = await new ApplySuggestionCommand(
-      makeSuggestion(),
+      makeSuggestion({ suggestedText: "" }),
       textLocator,
     ).execute();
 

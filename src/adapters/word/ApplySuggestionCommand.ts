@@ -25,159 +25,16 @@
  * @module ApplySuggestionCommand
  */
 
-import type {
-  ApplyMutationPatch,
-  ChangeType,
-  CommandResult,
-} from "../../domain/DocumentApplication.types";
-import type {
-  ReplaceSuggestionIdentity,
-  Suggestion,
-  WordArtifactRef,
-} from "../../domain/suggestion/Suggestion.types";
-import {
-  STYLISTIC_IDENTITY_TITLE_PREFIX,
-  STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
-  STYLISTIC_TAG_PREFIX,
-} from "../../infrastructure/config";
-import {
-  isValidOperationalReplaceIdentity,
-  parseReplaceIdentityTitle,
-} from "./ReplaceIdentityParser";
+import type { CommandResult } from "../../domain/DocumentApplication.types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import { STYLISTIC_TAG_PREFIX } from "../../infrastructure/config";
+import { ApplySuggestionAnchorResolver } from "./apply-suggestion/ApplySuggestionAnchorResolver";
+import { ApplySuggestionIdentityBuilder } from "./apply-suggestion/ApplySuggestionIdentityBuilder";
+import { ApplySuggestionMutationPatchBuilder } from "./apply-suggestion/ApplySuggestionMutationPatchBuilder";
+import { ApplySuggestionOperationalWrapperResolver } from "./apply-suggestion/ApplySuggestionOperationalWrapperResolver";
+import { ApplySuggestionReplaceRangeResolver } from "./apply-suggestion/ApplySuggestionReplaceRangeResolver";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
-import type {
-  TextLocator,
-  WordSearchContainer,
-} from "./WordTextLocatorContext";
-
-/** Returns the canonical Stylistic tag for one suggestion. */
-function buildSuggestionTag(suggestion: Suggestion): string {
-  return `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
-}
-
-/** Returns the external operational-wrapper tag for one replace suggestion. */
-function buildOperationalWrapperTag(suggestion: Suggestion): string {
-  return `${STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX}${suggestion.id}`;
-}
-
-/** Creates one Word artifact reference owned by the apply adapter. */
-function createArtifactRef(
-  kind: WordArtifactRef["kind"],
-  role: WordArtifactRef["role"],
-  value: string,
-): WordArtifactRef {
-  return { kind, role, value };
-}
-
-/**
- * Serializes versioned replace identity metadata into the Content Control title.
- */
-function serializeReplaceIdentity(identity: ReplaceSuggestionIdentity): string {
-  return `${STYLISTIC_IDENTITY_TITLE_PREFIX}${JSON.stringify(identity)}`;
-}
-
-/**
- * Builds strict operational-wrapper metadata for replace suggestions.
- *
- * The inserted-side Content Control remains an operational reference, not the
- * whole domain identity. Deleted/original-side and anchor references are stored
- * explicitly so later observation can distinguish legacy vs v2 behavior.
- */
-function buildReplaceIdentity(
-  suggestion: Suggestion,
-): ReplaceSuggestionIdentity {
-  return {
-    suggestionId: suggestion.id,
-    version: "operational-wrapper-v1",
-    insertedSideRef: createArtifactRef(
-      "content-control",
-      "inserted-side",
-      buildSuggestionTag(suggestion),
-    ),
-    deletedSideRef: createArtifactRef(
-      "anchor",
-      "deleted-side",
-      suggestion.anchor,
-    ),
-    anchorRef: createArtifactRef(
-      "anchor",
-      "operational-anchor",
-      suggestion.context,
-    ),
-    groupId: suggestion.id,
-    groupIndex: 0,
-    groupSize: 1,
-  };
-}
-
-/**
- * Chooses the persisted Content Control title payload for one suggestion.
- */
-function buildContentControlTitle(suggestion: Suggestion): string {
-  return suggestion.anchor;
-}
-
-/**
- * Determines the type of tracked change operation for a suggestion.
- * Strategy pattern: selects insert / delete / replace based on text content.
- *
- * Must only be called for `"track-change"` suggestions where `suggestedText`
- * is defined. Comment-only suggestions are handled by a separate branch in
- * `execute()` and never reach this function.
- */
-function classifyChange(suggestion: Suggestion): ChangeType {
-  const hasOriginal = suggestion.anchor.length > 0;
-  const hasSuggested = (suggestion.suggestedText?.length ?? 0) > 0;
-  if (hasOriginal && !hasSuggested) return "delete";
-  if (!hasOriginal && hasSuggested) return "insert";
-  return "replace";
-}
-
-/**
- * Converts unknown error values into a stable, readable log message.
- */
-function stringifyUnknownError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return Object.prototype.toString.call(error);
-  }
-}
-
-/** Builds a localized mutation patch from one successful anchor replacement. */
-function buildApplyMutationPatch(
-  suggestion: Suggestion,
-  containerText: string,
-): ApplyMutationPatch | undefined {
-  const replacement = suggestion.suggestedText ?? "";
-  const affectedStart = containerText.indexOf(suggestion.anchor);
-
-  if (affectedStart < 0) {
-    return undefined;
-  }
-
-  const affectedEnd = affectedStart + suggestion.anchor.length;
-
-  return {
-    suggestionId: suggestion.id,
-    snapshotVersion: (suggestion.positionHint?.snapshotVersion ?? 0) + 1,
-    paragraphId: suggestion.positionHint?.paragraphId,
-    originalText: containerText,
-    updatedText:
-      containerText.slice(0, affectedStart) +
-      replacement +
-      containerText.slice(affectedEnd),
-    deltaLength: replacement.length - suggestion.anchor.length,
-    affectedStart,
-    affectedEnd,
-  };
-}
+import type { TextLocator } from "./WordTextLocatorContext";
 
 /**
  * A Command that applies one `Suggestion` as a tracked change in Word.
@@ -187,6 +44,11 @@ function buildApplyMutationPatch(
 export class ApplySuggestionCommand {
   readonly id: string;
   readonly description: string;
+  private readonly identityBuilder: ApplySuggestionIdentityBuilder;
+  private readonly mutationPatchBuilder: ApplySuggestionMutationPatchBuilder;
+  private readonly anchorResolver: ApplySuggestionAnchorResolver;
+  private readonly replaceRangeResolver: ApplySuggestionReplaceRangeResolver;
+  private readonly operationalWrapperResolver: ApplySuggestionOperationalWrapperResolver;
 
   constructor(
     private readonly suggestion: Suggestion,
@@ -194,277 +56,24 @@ export class ApplySuggestionCommand {
   ) {
     this.id = suggestion.id;
     this.description = `Apply suggestion [${suggestion.type}]: "${suggestion.anchor.substring(0, 40)}" → "${(suggestion.suggestedText ?? "").substring(0, 40)}"`;
-  }
-
-  /** Reads current/original reviewed text for one Word range. */
-  private async readReviewedText(
-    context: Word.RequestContext,
-    range: Word.Range,
-  ): Promise<{ current: string; original: string }> {
-    const current = range.getReviewedText("Current");
-    const original = range.getReviewedText("Original");
-    await context.sync();
-
-    return {
-      current: current.value,
-      original: original.value,
-    };
-  }
-
-  /**
-   * Verifies whether a candidate range represents only the current inserted side.
-   *
-   * For replace suggestions under Track Changes, the host may return a range that
-   * still spans both the inserted/current text and the deleted/original text. A
-   * safe annotation range must expose the expected current text while exposing no
-   * original reviewed text.
-   */
-  private async isCurrentOnlyReviewedRange(
-    context: Word.RequestContext,
-    candidate: Word.Range,
-    expectedCurrentText: string,
-  ): Promise<boolean> {
-    const reviewedText = await this.readReviewedText(context, candidate);
-
-    return (
-      reviewedText.current === expectedCurrentText &&
-      reviewedText.original.length === 0
+    this.identityBuilder = new ApplySuggestionIdentityBuilder();
+    this.mutationPatchBuilder = new ApplySuggestionMutationPatchBuilder();
+    this.anchorResolver = new ApplySuggestionAnchorResolver(
+      suggestion,
+      this.textLocator,
+      this.id,
     );
-  }
-
-  /**
-   * Re-locates the current inserted side for replace suggestions.
-   *
-   * Office.js only guarantees that `insertText(..., replace)` returns a `Range`;
-   * it does NOT guarantee that the returned range is already isolated to the
-   * inserted/current side while Track Changes is on. When Word returns a hybrid
-   * replace span, annotating that span directly can wrap both semantic sides and
-   * create the duplicated/overlapped artifacts reported by QA.
-   */
-  private async resolveReplaceAnnotationRange(
-    context: Word.RequestContext,
-    mutationRange: Word.Range,
-    wrapperRange: Word.Range,
-  ): Promise<Word.Range | null> {
-    const expectedCurrentText = this.suggestion.suggestedText ?? "";
-    const reviewedMutationRange = await this.readReviewedText(
-      context,
-      mutationRange,
+    this.replaceRangeResolver = new ApplySuggestionReplaceRangeResolver(
+      suggestion,
+      this.textLocator,
+      this.id,
     );
-
-    if (
-      reviewedMutationRange.current === expectedCurrentText &&
-      reviewedMutationRange.original.length === 0
-    ) {
-      return mutationRange;
-    }
-
-    const directCandidate = await this.textLocator.locate({
-      context,
-      container: wrapperRange as unknown as WordSearchContainer,
-      searchText: expectedCurrentText,
-    });
-
-    if (
-      directCandidate &&
-      (await this.isCurrentOnlyReviewedRange(
-        context,
-        directCandidate,
-        expectedCurrentText,
-      ))
-    ) {
-      return directCandidate;
-    }
-
-    const paragraphRange = mutationRange.paragraphs
-      .getFirst()
-      .getRange("Whole");
-    const paragraphCandidate = await this.textLocator.locate({
-      context,
-      container: paragraphRange as unknown as WordSearchContainer,
-      searchText: expectedCurrentText,
-    });
-
-    if (
-      paragraphCandidate &&
-      (await this.isCurrentOnlyReviewedRange(
-        context,
-        paragraphCandidate,
-        expectedCurrentText,
-      ))
-    ) {
-      return paragraphCandidate;
-    }
-
-    console.warn(
-      `⚠️ [ApplySuggestionCommand] "${this.id}": no se pudo aislar el rango insertado actual (current="${reviewedMutationRange.current}", original="${reviewedMutationRange.original}")`,
-    );
-
-    return null;
-  }
-
-  /**
-   * Resolves the exact anchor range by first locating the surrounding context,
-   * then searching the anchor within that context range.
-   */
-  private async resolveAnchorRange(
-    context: Word.RequestContext,
-    body: Word.Body,
-  ): Promise<Word.Range | null> {
-    const contextRange = await this.textLocator.locate({
-      context,
-      container: body as WordSearchContainer,
-      searchText: this.suggestion.context,
-    });
-    if (!contextRange) {
-      console.log(
-        `🔬 [ApplySuggestionCommand] "${this.id}": context not found — ambiguous-location abort before mutation`,
+    this.operationalWrapperResolver =
+      new ApplySuggestionOperationalWrapperResolver(
+        suggestion,
+        this.textLocator,
+        this.identityBuilder,
       );
-      return null;
-    }
-
-    contextRange.load("text");
-    const containingParagraph = contextRange.paragraphs
-      .getFirst()
-      .getRange("Whole");
-    containingParagraph.load("text");
-    await context.sync();
-
-    const matchText = contextRange.text;
-    console.log(
-      `🔬 [ApplySuggestionCommand] "${this.id}": contextMatchLen=${matchText.length}, paragraphLen=${containingParagraph.text.length}, anchorIndexInMatch=${matchText.indexOf(this.suggestion.anchor)}, anchorIndexInParagraph=${containingParagraph.text.indexOf(this.suggestion.anchor)}`,
-    );
-
-    const shouldExpandToParagraph =
-      !matchText.includes(this.suggestion.anchor) &&
-      matchText.length < this.suggestion.context.length - 20;
-    const shouldRetryInParagraphAfterMiss =
-      !shouldExpandToParagraph &&
-      matchText.length < this.suggestion.context.length - 20 &&
-      containingParagraph.text.length > matchText.length;
-
-    const searchContainer = shouldExpandToParagraph
-      ? (containingParagraph as unknown as WordSearchContainer)
-      : (contextRange as unknown as WordSearchContainer);
-
-    if (shouldExpandToParagraph) {
-      console.log(
-        `🔬 [ApplySuggestionCommand] "${this.id}": context match (${matchText.length} chars) does not contain anchor — expanding to paragraph (${containingParagraph.text.length} chars)`,
-      );
-    }
-
-    const anchorRange = await this.textLocator.locate({
-      context,
-      container: searchContainer,
-      searchText: this.suggestion.anchor,
-    });
-
-    if (anchorRange || !shouldRetryInParagraphAfterMiss) {
-      return anchorRange;
-    }
-
-    console.log(
-      `🔬 [ApplySuggestionCommand] "${this.id}": anchor not found inside partial context match (${matchText.length} chars) — retrying in paragraph (${containingParagraph.text.length} chars)`,
-    );
-
-    return this.textLocator.locate({
-      context,
-      container: containingParagraph as unknown as WordSearchContainer,
-      searchText: this.suggestion.anchor,
-    });
-  }
-
-  /** Creates the external operational wrapper before Track Changes mutates the anchor. */
-  private async createOperationalWrapper(
-    context: Word.RequestContext,
-    anchorRange: Word.Range,
-  ): Promise<Word.ContentControl> {
-    context.document.load("changeTrackingMode");
-    await context.sync();
-
-    const previousTrackingMode = context.document.changeTrackingMode;
-    if (previousTrackingMode !== Word.ChangeTrackingMode.off) {
-      context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
-      await context.sync();
-    }
-
-    const wrapper = anchorRange.insertContentControl();
-    wrapper.tag = buildOperationalWrapperTag(this.suggestion);
-    wrapper.title = serializeReplaceIdentity(
-      buildReplaceIdentity(this.suggestion),
-    );
-    wrapper.appearance = "Hidden";
-    wrapper.cannotDelete = false;
-    await context.sync();
-
-    if (previousTrackingMode !== Word.ChangeTrackingMode.off) {
-      context.document.changeTrackingMode = previousTrackingMode;
-      await context.sync();
-    }
-
-    return wrapper;
-  }
-
-  /** Reuses a valid parent operational wrapper or returns a fail-closed error. */
-  private async resolveOperationalWrapper(
-    context: Word.RequestContext,
-    anchorRange: Word.Range,
-  ): Promise<
-    | { wrapper: Word.ContentControl; error?: undefined }
-    | { wrapper?: undefined; error: string }
-  > {
-    const parentCC =
-      anchorRange.parentContentControlOrNullObject as Word.ContentControl & {
-        tag?: string;
-        title?: string;
-        getRange?: () => Word.Range;
-      };
-    parentCC.load("tag,title");
-    await context.sync();
-
-    if (parentCC.isNullObject) {
-      return {
-        wrapper: await this.createOperationalWrapper(context, anchorRange),
-      };
-    }
-
-    const existingTag = parentCC.tag ?? "";
-    const isStylisticArtifact =
-      existingTag.startsWith(STYLISTIC_TAG_PREFIX) ||
-      /^chunk\d+-\d+$/.test(existingTag);
-
-    if (!existingTag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX)) {
-      if (isStylisticArtifact) {
-        return { error: "Anchor cubierto por un Content Control existente" };
-      }
-
-      return {
-        wrapper: await this.createOperationalWrapper(context, anchorRange),
-      };
-    }
-
-    const existingIdentity = parseReplaceIdentityTitle(parentCC.title);
-    const canReuseWrapper =
-      isValidOperationalReplaceIdentity(existingIdentity, this.suggestion) &&
-      typeof parentCC.getRange === "function";
-
-    if (!canReuseWrapper) {
-      return { error: "Anchor cubierto por un Content Control existente" };
-    }
-
-    return { wrapper: parentCC };
-  }
-
-  /** Re-finds the anchor inside the operational wrapper so mutation scope matches the wrapper. */
-  private async resolveAnchorInsideWrapper(
-    context: Word.RequestContext,
-    wrapper: Word.ContentControl,
-  ): Promise<Word.Range | null> {
-    return this.textLocator.locate({
-      context,
-      container: wrapper.getRange() as unknown as WordSearchContainer,
-      searchText: this.suggestion.anchor,
-    });
   }
 
   /**
@@ -483,7 +92,9 @@ export class ApplySuggestionCommand {
       return this.executeCommentOnly();
     }
 
-    const changeType = classifyChange(this.suggestion);
+    const changeType = this.mutationPatchBuilder.classifyChange(
+      this.suggestion,
+    );
 
     if (changeType === "insert") {
       console.warn(
@@ -499,7 +110,10 @@ export class ApplySuggestionCommand {
     try {
       return await Word.run(async (context) => {
         const body = context.document.body;
-        const range = await this.resolveAnchorRange(context, body);
+        const range = await this.anchorResolver.resolveAnchorRange(
+          context,
+          body,
+        );
         if (!range) {
           console.warn(
             `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado`,
@@ -513,7 +127,10 @@ export class ApplySuggestionCommand {
 
         const operationalWrapperResult =
           changeType === "replace"
-            ? await this.resolveOperationalWrapper(context, range)
+            ? await this.operationalWrapperResolver.resolveOperationalWrapper(
+                context,
+                range,
+              )
             : null;
 
         if (operationalWrapperResult?.error) {
@@ -564,7 +181,10 @@ export class ApplySuggestionCommand {
             ? (operationalWrapperResult?.wrapper ?? null)
             : null;
         const mutationRange = operationalWrapper
-          ? await this.resolveAnchorInsideWrapper(context, operationalWrapper)
+          ? await this.operationalWrapperResolver.resolveAnchorInsideWrapper(
+              context,
+              operationalWrapper,
+            )
           : range;
 
         if (!mutationRange) {
@@ -583,7 +203,7 @@ export class ApplySuggestionCommand {
 
         const annotationRange =
           changeType === "replace"
-            ? await this.resolveReplaceAnnotationRange(
+            ? await this.replaceRangeResolver.resolveReplaceAnnotationRange(
                 context,
                 insertedRange,
                 operationalWrapper!.getRange(),
@@ -606,8 +226,10 @@ export class ApplySuggestionCommand {
         );
 
         const cc = annotationRange.insertContentControl();
-        cc.tag = buildSuggestionTag(this.suggestion);
-        cc.title = buildContentControlTitle(this.suggestion);
+        cc.tag = this.identityBuilder.buildSuggestionTag(this.suggestion);
+        cc.title = this.identityBuilder.buildContentControlTitle(
+          this.suggestion,
+        );
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
@@ -619,14 +241,14 @@ export class ApplySuggestionCommand {
         return {
           success: true,
           commandId: this.id,
-          mutationPatch: buildApplyMutationPatch(
+          mutationPatch: this.mutationPatchBuilder.buildApplyMutationPatch(
             this.suggestion,
             containingParagraph.text,
           ),
         };
       });
     } catch (error) {
-      const message = stringifyUnknownError(error);
+      const message = this.mutationPatchBuilder.stringifyUnknownError(error);
       console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": ${message}`);
       return { success: false, commandId: this.id, error: message };
     }
@@ -645,7 +267,7 @@ export class ApplySuggestionCommand {
     try {
       return await Word.run(async (context) => {
         const body = context.document.body;
-        let range = await this.resolveAnchorRange(context, body);
+        let range = await this.anchorResolver.resolveAnchorRange(context, body);
         if (!range) {
           console.warn(
             `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado (comment-only)`,
@@ -673,7 +295,7 @@ export class ApplySuggestionCommand {
           parentCC.delete(true);
           await context.sync();
 
-          range = await this.resolveAnchorRange(context, body);
+          range = await this.anchorResolver.resolveAnchorRange(context, body);
           if (!range) {
             console.warn(
               `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado tras eliminar CC existente (comment-only)`,
@@ -698,8 +320,10 @@ export class ApplySuggestionCommand {
         );
 
         const cc = range.insertContentControl();
-        cc.tag = buildSuggestionTag(this.suggestion);
-        cc.title = this.suggestion.anchor;
+        cc.tag = this.identityBuilder.buildSuggestionTag(this.suggestion);
+        cc.title = this.identityBuilder.buildContentControlTitle(
+          this.suggestion,
+        );
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
@@ -711,7 +335,7 @@ export class ApplySuggestionCommand {
         return { success: true, commandId: this.id };
       });
     } catch (error) {
-      const message = stringifyUnknownError(error);
+      const message = this.mutationPatchBuilder.stringifyUnknownError(error);
       console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": ${message}`);
       return { success: false, commandId: this.id, error: message };
     }
