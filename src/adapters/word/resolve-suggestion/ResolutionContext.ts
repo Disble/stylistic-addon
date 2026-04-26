@@ -3,6 +3,24 @@ import type {
   ReplaceSuggestionIdentity,
   SuggestionObservationStatus,
 } from "../../../domain/suggestion/Suggestion.types";
+import type {
+  ResolutionExecutionReport,
+  SuggestionActionResult,
+} from "../../../domain/suggestion/SuggestionResolutionWorkflow.types";
+
+/** Shared action label used by resolve-suggestion workflows. */
+export type ResolveSuggestionAction = "accept" | "reject";
+
+/** Internal workflow outcome that keeps before/after review snapshots together. */
+export type ResolveSuggestionOutcome = {
+  status: SuggestionActionResult["status"];
+  trackedChangesAffected: number;
+  commentDeleted: boolean;
+  pendingBefore: DocumentReviewState;
+  pendingAfter: DocumentReviewState;
+  executionReport?: ResolutionExecutionReport;
+  error?: string;
+};
 
 /** Terminal success states produced by resolution workflows. */
 export type ResolutionStatus =

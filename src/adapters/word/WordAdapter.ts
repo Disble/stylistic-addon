@@ -28,7 +28,7 @@ import {
   cleanupResolvedComments,
   getCleanupPreview,
 } from "./cleanup/CommentCleanup";
-import { ResolveSuggestionCommand } from "./ResolveSuggestionCommand";
+import { ResolveSuggestionCommand } from "./resolve-suggestion/ResolveSuggestionCommand";
 import { WordAppliedSuggestionInspector } from "./WordAppliedSuggestionInspector";
 import { WordSuggestionNavigationAdapter } from "./WordSuggestionNavigationAdapter";
 import {
