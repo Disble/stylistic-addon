@@ -3,7 +3,7 @@ import {
   DocumentReviewStateMachine,
   InvalidDocumentReviewTransitionError,
 } from "./DocumentReviewStateMachine";
-import type { DocumentReviewState } from "../types";
+import type { DocumentReviewState } from "./DocumentReviewStateMachine.types";
 
 function makeReviewState(
   overrides: Partial<DocumentReviewState> = {},

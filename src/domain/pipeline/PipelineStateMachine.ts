@@ -21,7 +21,9 @@
  * @module PipelineStateMachine
  */
 
-import type { PipelineState } from "../types";
+import type { PipelineState } from "./PipelineStateMachine.types";
+
+export type { PipelineState } from "./PipelineStateMachine.types";
 
 const TRANSITIONS: Record<PipelineState, PipelineState[]> = {
   idle: ["reading"],

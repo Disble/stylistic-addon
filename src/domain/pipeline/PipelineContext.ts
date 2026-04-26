@@ -11,8 +11,10 @@
  * @module PipelineContext
  */
 
+import type { TextChunk } from "../chunking/TextChunk.types";
+import type { ApplySuggestionsResult } from "../DocumentApplication.types";
 import type { IAnalysisPort, IDocumentPort } from "../ports";
-import type { ApplySuggestionsResult, Suggestion, TextChunk } from "../types";
+import type { Suggestion } from "../suggestion/Suggestion.types";
 import type { PipelineEventEmitter } from "./PipelineEvents";
 
 /**

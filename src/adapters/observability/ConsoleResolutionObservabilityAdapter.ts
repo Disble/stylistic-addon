@@ -4,7 +4,7 @@ import type { IResolutionObservabilityPort } from "../../domain/ports";
 import type {
   ResolutionObservabilityEvent,
   ResolutionObservabilitySnapshot,
-} from "../../domain/types";
+} from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
 
 /** Emits best-effort structured resolution observability to the console. */
 export class ConsoleResolutionObservabilityAdapter

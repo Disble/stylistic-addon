@@ -1,7 +1,7 @@
 /* global console */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SuggestionState } from "../types";
+import type { SuggestionState } from "./Suggestion.types";
 import {
   InvalidSuggestionTransitionError,
   mapResultStatusToState,

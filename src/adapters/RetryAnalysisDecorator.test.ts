@@ -1,9 +1,9 @@
 import type { IAnalysisPort } from "../domain/ports";
+import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import type {
   ChunkPollResult,
   ChunkSubmitResult,
-  TextChunk,
-} from "../domain/types";
+} from "../domain/mastra/MastraWorkflow.types";
 import { RetryAnalysisDecorator } from "./RetryAnalysisDecorator";
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import type { ReplaceSuggestionIdentity } from "../../../domain/types";
+import type { ReplaceSuggestionIdentity } from "../../../domain/suggestion/Suggestion.types";
 import {
   isStructurallyValidOperationalWrapperIdentity,
   parseReplaceIdentityTitle,

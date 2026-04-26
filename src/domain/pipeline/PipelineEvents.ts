@@ -10,11 +10,9 @@
  * @module PipelineEvents
  */
 
-import type {
-  ApplySuggestionsResult,
-  PipelineState,
-  Suggestion,
-} from "../types";
+import type { ApplySuggestionsResult } from "../DocumentApplication.types";
+import type { Suggestion } from "../suggestion/Suggestion.types";
+import type { PipelineState } from "./PipelineStateMachine.types";
 
 // ---------------------------------------------------------------------------
 // Observer interface

@@ -1,5 +1,5 @@
 import type { DocumentReviewUiState } from "../../../domain/review/DocumentReviewStateMachine";
-import type { DocumentReviewState } from "../../../domain/types";
+import type { DocumentReviewState } from "../../../domain/review/DocumentReviewStateMachine.types";
 import { describe, expect, it, vi } from "vitest";
 import { ResolveSuggestionResultFactory } from "./ResolveSuggestionResultFactory";
 

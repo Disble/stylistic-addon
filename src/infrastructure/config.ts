@@ -8,7 +8,7 @@
  * @module config
  */
 
-import type { Profile } from "../domain/types";
+import type { Profile } from "../domain/Profile.types";
 
 // ---------------------------------------------------------------------------
 // Mastra Backend

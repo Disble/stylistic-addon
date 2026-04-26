@@ -1,4 +1,7 @@
-import type { ReplaceSuggestionIdentity, Suggestion } from "../../domain/types";
+import type {
+  ReplaceSuggestionIdentity,
+  Suggestion,
+} from "../../domain/suggestion/Suggestion.types";
 import {
   STYLISTIC_IDENTITY_TITLE_PREFIX,
   STYLISTIC_TAG_PREFIX,

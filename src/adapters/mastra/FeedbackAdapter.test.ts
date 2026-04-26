@@ -1,7 +1,7 @@
 /* global console */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FeedbackPayload } from "../../domain/types";
+import type { FeedbackPayload } from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
 
 // ---------------------------------------------------------------------------
 // Mock @mastra/client-js using vi.hoisted so mocks are available at module init time

@@ -1,4 +1,5 @@
-import type { CommandResult, Suggestion } from "../../domain/types";
+import type { CommandResult } from "../../domain/DocumentApplication.types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 
 const hoistedCommandMocks = vi.hoisted(() => ({
   constructor: vi.fn<(suggestion: Suggestion) => void>(),

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CommandResult, Suggestion } from "../../domain/types";
+import type { CommandResult } from "../../domain/DocumentApplication.types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import { BatchApplyOrchestrator } from "./BatchApplyOrchestrator";
 
 const hoistedCommandMocks = vi.hoisted(() => ({

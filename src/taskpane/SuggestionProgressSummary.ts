@@ -9,11 +9,9 @@
  * @module SuggestionProgressSummary
  */
 
-import type {
-  ApplySuggestionsResult,
-  Suggestion,
-  SuggestionActionResult,
-} from "../domain/types";
+import type { ApplySuggestionsResult } from "../domain/DocumentApplication.types";
+import type { Suggestion } from "../domain/suggestion/Suggestion.types";
+import type { SuggestionActionResult } from "../domain/suggestion/SuggestionResolutionWorkflow.types";
 
 /** Terminal progress buckets for suggestions already applied to the document. */
 type AppliedSuggestionProgressState =

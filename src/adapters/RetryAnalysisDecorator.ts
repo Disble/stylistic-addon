@@ -28,12 +28,12 @@
  * @module RetryAnalysisDecorator
  */
 
-import type { IAnalysisPort } from "../domain/ports";
+import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import type {
   ChunkPollResult,
   ChunkSubmitResult,
-  TextChunk,
-} from "../domain/types";
+} from "../domain/mastra/MastraWorkflow.types";
+import type { IAnalysisPort } from "../domain/ports";
 
 export class RetryAnalysisDecorator implements IAnalysisPort {
   constructor(

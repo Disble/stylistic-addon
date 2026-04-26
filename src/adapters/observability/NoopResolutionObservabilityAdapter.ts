@@ -2,7 +2,7 @@ import type { IResolutionObservabilityPort } from "../../domain/ports";
 import type {
   ResolutionObservabilityEvent,
   ResolutionObservabilitySnapshot,
-} from "../../domain/types";
+} from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
 
 /** Swallows resolution observability records when no concrete adapter is wired. */
 export class NoopResolutionObservabilityAdapter

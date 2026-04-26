@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Suggestion } from "../../../domain/types";
+import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import {
   makeOperationalWrapperTag,
   makeOperationalWrapperTitle,

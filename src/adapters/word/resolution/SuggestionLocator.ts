@@ -1,7 +1,7 @@
 import type {
   Suggestion,
   SuggestionObservationStatus,
-} from "../../../domain/types";
+} from "../../../domain/suggestion/Suggestion.types";
 import { STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX } from "../../../infrastructure/config";
 import { OVERLAPPING_RELATIONS } from "../cleanup/CommentCleanup";
 import {

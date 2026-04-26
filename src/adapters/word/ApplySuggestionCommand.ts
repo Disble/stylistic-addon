@@ -29,10 +29,12 @@ import type {
   ApplyMutationPatch,
   ChangeType,
   CommandResult,
+} from "../../domain/DocumentApplication.types";
+import type {
   ReplaceSuggestionIdentity,
   Suggestion,
   WordArtifactRef,
-} from "../../domain/types";
+} from "../../domain/suggestion/Suggestion.types";
 import {
   STYLISTIC_IDENTITY_TITLE_PREFIX,
   STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,

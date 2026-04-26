@@ -1,4 +1,4 @@
-import type { WorkflowOutput } from "../../domain/types";
+import type { WorkflowOutput } from "../../domain/mastra/MastraWorkflow.types";
 
 /**
  * Deterministic development output returned when the Mastra poll bypass is

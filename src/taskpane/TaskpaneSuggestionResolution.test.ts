@@ -1,4 +1,4 @@
-import type { SuggestionResolutionMediatorResult } from "../domain/types";
+import type { SuggestionResolutionMediatorResult } from "../domain/suggestion/SuggestionResolutionWorkflow.types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createTaskpaneDocument,

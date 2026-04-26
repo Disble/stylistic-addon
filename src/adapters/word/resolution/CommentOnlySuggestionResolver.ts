@@ -1,4 +1,4 @@
-import type { SuggestionActionResult } from "../../../domain/types";
+import type { SuggestionActionResult } from "../../../domain/suggestion/SuggestionResolutionWorkflow.types";
 import type { DocumentReviewStateInspector } from "./DocumentReviewStateInspector";
 import type { CommentOnlyResolutionRequest } from "./ResolutionContext";
 import type { ResolveSuggestionResultFactory } from "./ResolveSuggestionResultFactory";

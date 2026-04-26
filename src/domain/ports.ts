@@ -16,20 +16,22 @@
  * @module ports
  */
 
+import type { TextChunk } from "./chunking/TextChunk.types";
+import type { ApplySuggestionsResult } from "./DocumentApplication.types";
 import type {
-  ApplySuggestionsResult,
   ChunkPollResult,
   ChunkSubmitResult,
-  DocumentReviewState,
+} from "./mastra/MastraWorkflow.types";
+import type { ProgressCallback } from "./pipeline/PipelineEvents.types";
+import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
+import type { Suggestion } from "./suggestion/Suggestion.types";
+import type {
   FeedbackPayload,
-  ProgressCallback,
   ResolutionObservabilityEvent,
   ResolutionObservabilitySnapshot,
-  Suggestion,
   SuggestionActionResult,
-  TextChunk,
-  TextSource,
-} from "./types";
+} from "./suggestion/SuggestionResolutionWorkflow.types";
+import type { TextSource } from "./TextSource.types";
 
 // ---------------------------------------------------------------------------
 // Document Port

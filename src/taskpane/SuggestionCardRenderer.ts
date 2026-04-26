@@ -12,17 +12,19 @@
  * @module SuggestionCardRenderer
  */
 
+import type {
+  ApplySuggestionsResult,
+  SuggestionApplicationFailure,
+} from "../domain/DocumentApplication.types";
+import type {
+  Suggestion,
+  SuggestionState,
+} from "../domain/suggestion/Suggestion.types";
+import type { SuggestionResolutionMediatorResult } from "../domain/suggestion/SuggestionResolutionWorkflow.types";
 import {
   mapResultStatusToState,
   SuggestionStateMachine,
 } from "../domain/suggestion/SuggestionStateMachine";
-import type {
-  ApplySuggestionsResult,
-  Suggestion,
-  SuggestionApplicationFailure,
-  SuggestionResolutionMediatorResult,
-  SuggestionState,
-} from "../domain/types";
 import { SUGGESTION_CARD_REORDER_ANIMATION_MS } from "../infrastructure/config";
 import {
   applySuggestionProgressOutcome,

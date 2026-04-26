@@ -1,9 +1,7 @@
 import type { IAnalysisPort, IDocumentPort } from "../../ports";
-import type {
-  ApplySuggestionsResult,
-  ProgressCallback,
-  Suggestion,
-} from "../../types";
+import type { ApplySuggestionsResult } from "../../DocumentApplication.types";
+import type { Suggestion } from "../../suggestion/Suggestion.types";
+import type { ProgressCallback } from "../PipelineEvents.types";
 import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";
 import { ApplySuggestionsHandler } from "./ApplySuggestionsHandler";

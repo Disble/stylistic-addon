@@ -14,8 +14,8 @@
  * @module ApplySuggestionsHandler
  */
 
-import type { AnalysisPhase, ProgressCallback } from "../../types";
 import type { PipelineContext } from "../PipelineContext";
+import type { AnalysisPhase, ProgressCallback } from "../PipelineEvents.types";
 import type { PipelineHandler } from "./ReadTextHandler";
 
 export class ApplySuggestionsHandler implements PipelineHandler {

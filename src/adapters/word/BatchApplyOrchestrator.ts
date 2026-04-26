@@ -16,16 +16,16 @@
  * @module BatchApplyOrchestrator
  */
 
-import type { DocumentReviewUiState } from "../../domain/review/DocumentReviewStateMachine";
 import type {
   ApplySuggestionsResult,
   CommandResult,
-  DocumentReviewState,
-  ProgressCallback,
-  Suggestion,
   SuggestionApplicationFailure,
   SuggestionApplicationFailureReason,
-} from "../../domain/types";
+} from "../../domain/DocumentApplication.types";
+import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.types";
+import type { DocumentReviewUiState } from "../../domain/review/DocumentReviewStateMachine";
+import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
 import { getDefaultTextLocator } from "./WordTextLocatorContext";
 

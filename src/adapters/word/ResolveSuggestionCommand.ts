@@ -1,12 +1,12 @@
 /* global Word, console */
 
 import type { IResolutionObservabilityPort } from "../../domain/ports";
+import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import type {
-  DocumentReviewState,
   ResolutionExecutionReport,
-  Suggestion,
   SuggestionActionResult,
-} from "../../domain/types";
+} from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
 import { NoopResolutionObservabilityAdapter } from "../observability/NoopResolutionObservabilityAdapter";
 import { CommentOnlySuggestionResolver } from "./resolution/CommentOnlySuggestionResolver";
 import { DocumentReviewStateInspector } from "./resolution/DocumentReviewStateInspector";

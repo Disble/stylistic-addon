@@ -1,18 +1,20 @@
 import { describe, expectTypeOf, it } from "vitest";
+import type { ApplySuggestionsResult } from "./DocumentApplication.types";
+import type { WorkflowSuggestion } from "./mastra/MastraWorkflow.types";
 import type { IDocumentPort, IFeedbackPort } from "./ports";
+import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
 import type {
-  ApplySuggestionsResult,
-  DocumentReviewState,
-  FeedbackPayload,
   ReplaceSuggestionIdentity,
   Suggestion,
-  SuggestionActionResult,
   SuggestionObservationStatus,
-  SuggestionResolutionWorkflowResult,
   SuggestionState,
   WordArtifactRef,
-  WorkflowSuggestion,
-} from "./types";
+} from "./suggestion/Suggestion.types";
+import type {
+  FeedbackPayload,
+  SuggestionActionResult,
+  SuggestionResolutionWorkflowResult,
+} from "./suggestion/SuggestionResolutionWorkflow.types";
 import type { DocumentReviewUiState } from "./review/DocumentReviewStateMachine";
 
 describe("domain types (compile-time checks)", () => {

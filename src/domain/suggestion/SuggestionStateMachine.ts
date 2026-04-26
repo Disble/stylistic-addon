@@ -19,7 +19,8 @@
  * @module SuggestionStateMachine
  */
 
-import type { SuggestionActionResult, SuggestionState } from "../types";
+import type { SuggestionState } from "./Suggestion.types";
+import type { SuggestionActionResult } from "./SuggestionResolutionWorkflow.types";
 
 const TRANSITIONS: Record<SuggestionState, SuggestionState[]> = {
   pending: ["resolving"],

@@ -1,8 +1,8 @@
+import type { DocumentReviewState } from "../../../domain/review/DocumentReviewStateMachine.types";
 import type {
-  DocumentReviewState,
   ReplaceSuggestionIdentity,
   SuggestionObservationStatus,
-} from "../../../domain/types";
+} from "../../../domain/suggestion/Suggestion.types";
 
 /** Terminal success states produced by resolution workflows. */
 export type ResolutionStatus =

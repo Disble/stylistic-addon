@@ -14,13 +14,11 @@
  */
 
 import type { IDocumentPort, IFeedbackPort } from "../ports";
+import type { Suggestion } from "../suggestion/Suggestion.types";
 import { SuggestionResolutionWorkflow } from "../suggestion/SuggestionResolutionWorkflow";
-import type {
-  ReviewTaskpaneState,
-  Suggestion,
-  SuggestionResolutionMediatorResult,
-} from "../types";
+import type { SuggestionResolutionMediatorResult } from "../suggestion/SuggestionResolutionWorkflow.types";
 import { DocumentReviewStateMachine } from "./DocumentReviewStateMachine";
+import type { ReviewTaskpaneState } from "./DocumentReviewStateMachine.types";
 
 type ResolutionAction = "accept" | "reject";
 

@@ -12,13 +12,13 @@
 
 import { DEFAULT_AUTHOR_SLUG } from "../../infrastructure/config";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
+import type { Suggestion } from "./Suggestion.types";
 import type {
   FeedbackDispatchStatus,
   FeedbackPayload,
-  Suggestion,
   SuggestionActionResult,
   SuggestionResolutionWorkflowResult,
-} from "../types";
+} from "./SuggestionResolutionWorkflow.types";
 
 type ResolutionAction = "accept" | "reject";
 

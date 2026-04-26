@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
 import { SuggestionResolutionWorkflow } from "../suggestion/SuggestionResolutionWorkflow";
-import type { Suggestion, SuggestionActionResult } from "../types";
+import type { Suggestion } from "../suggestion/Suggestion.types";
+import type { SuggestionActionResult } from "../suggestion/SuggestionResolutionWorkflow.types";
 import { ReviewSessionMediator } from "./ReviewSessionMediator";
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {

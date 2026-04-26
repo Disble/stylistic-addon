@@ -18,21 +18,18 @@
  * @module DocumentReviewStateMachine
  */
 
-import type { DocumentReviewState } from "../types";
+import type {
+  DocumentReviewState,
+  DocumentReviewTransition,
+  DocumentReviewUiState,
+} from "./DocumentReviewStateMachine.types";
 
-/** Explicit document-review states consumed by the taskpane/workflows. */
-export type DocumentReviewUiState =
-  | "idle"
-  | "pending-review"
-  | "ready-to-disable-track-changes";
-
-/**
- * Transition metadata exposed to workflow/application callers.
- */
-export interface DocumentReviewTransition {
-  from: DocumentReviewUiState;
-  to: DocumentReviewUiState;
-}
+export type {
+  DocumentReviewState,
+  DocumentReviewTransition,
+  DocumentReviewUiState,
+  ReviewTaskpaneState,
+} from "./DocumentReviewStateMachine.types";
 
 const TRANSITIONS: Record<DocumentReviewUiState, DocumentReviewUiState[]> = {
   idle: ["idle", "pending-review", "ready-to-disable-track-changes"],

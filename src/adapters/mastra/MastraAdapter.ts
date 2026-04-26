@@ -14,17 +14,17 @@
  */
 
 import { MastraClient } from "@mastra/client-js";
-import type { IAnalysisPort } from "../../domain/ports";
+import type { TextChunk } from "../../domain/chunking/TextChunk.types";
 import type {
   ChunkAnalysisStatus,
   ChunkPollResult,
   ChunkSubmitResult,
-  Suggestion,
-  TextChunk,
   WorkflowInput,
   WorkflowOutput,
   WorkflowSuggestion,
-} from "../../domain/types";
+} from "../../domain/mastra/MastraWorkflow.types";
+import type { IAnalysisPort } from "../../domain/ports";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import {
   MASTRA_BASE_URL,
   MASTRA_POLL_BYPASS_ENABLED,

@@ -16,7 +16,7 @@ import {
   DEFAULT_AUTHOR_SLUG,
   POLL_INTERVAL_MS,
 } from "../../../infrastructure/config";
-import type { Suggestion } from "../../types";
+import type { Suggestion } from "../../suggestion/Suggestion.types";
 import type { PipelineContext } from "../PipelineContext";
 import type { PipelineHandler } from "./ReadTextHandler";
 

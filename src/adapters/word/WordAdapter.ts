@@ -19,6 +19,11 @@
  */
 
 import type {
+  ApplySuggestionsResult,
+  CommandResult,
+} from "../../domain/DocumentApplication.types";
+import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.types";
+import type {
   IDocumentPort,
   IResolutionObservabilityPort,
 } from "../../domain/ports";
@@ -26,15 +31,10 @@ import {
   DocumentReviewStateMachine,
   type DocumentReviewUiState,
 } from "../../domain/review/DocumentReviewStateMachine";
-import type {
-  ApplySuggestionsResult,
-  CommandResult,
-  DocumentReviewState,
-  ProgressCallback,
-  Suggestion,
-  SuggestionActionResult,
-  TextSource,
-} from "../../domain/types";
+import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type { SuggestionActionResult } from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
+import type { TextSource } from "../../domain/TextSource.types";
 import {
   STYLISTIC_IDENTITY_TITLE_PREFIX,
   STYLISTIC_TAG_PREFIX,

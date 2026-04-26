@@ -1,4 +1,5 @@
-import type { TextChunk, WorkflowSuggestion } from "../../domain/types";
+import type { TextChunk } from "../../domain/chunking/TextChunk.types";
+import type { WorkflowSuggestion } from "../../domain/mastra/MastraWorkflow.types";
 import { MASTRA_BASE_URL, WORKFLOW_ID } from "../../infrastructure/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

@@ -1,4 +1,4 @@
-import type { Suggestion } from "../../domain/types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 
 const OPERATIONAL_WRAPPER_TITLE_PREFIX = "stylistic-meta-v2:";
 const OPERATIONAL_WRAPPER_TAG_PREFIX = "stylistic-operational-wrapper:";

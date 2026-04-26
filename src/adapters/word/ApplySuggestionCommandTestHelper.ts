@@ -1,4 +1,4 @@
-import type { Suggestion } from "../../domain/types";
+import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 
 export type ParentCC = {
   tag: string;

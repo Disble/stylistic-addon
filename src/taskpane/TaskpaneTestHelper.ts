@@ -2,9 +2,9 @@ import { vi } from "vitest";
 
 import type {
   ApplySuggestionsResult,
-  Suggestion,
   SuggestionApplicationFailure,
-} from "../domain/types";
+} from "../domain/DocumentApplication.types";
+import type { Suggestion } from "../domain/suggestion/Suggestion.types";
 
 const hoistedTaskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],

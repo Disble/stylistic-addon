@@ -1,6 +1,6 @@
 /* global console */
 
-import type { ResolutionPhase } from "../types";
+import type { ResolutionPhase } from "./SuggestionResolutionWorkflow.types";
 
 export type ExecuteResolutionState =
   | "idle"

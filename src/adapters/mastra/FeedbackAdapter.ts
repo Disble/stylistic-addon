@@ -14,7 +14,7 @@
 
 import { MastraClient } from "@mastra/client-js";
 import type { IFeedbackPort } from "../../domain/ports";
-import type { FeedbackPayload } from "../../domain/types";
+import type { FeedbackPayload } from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
 import {
   FEEDBACK_WORKFLOW_ID,
   MASTRA_BASE_URL,

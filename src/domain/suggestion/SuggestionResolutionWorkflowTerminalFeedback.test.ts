@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { IFeedbackPort, IDocumentPort } from "../ports";
-import type { Suggestion, SuggestionActionResult } from "../types";
+import type { Suggestion } from "./Suggestion.types";
+import type { SuggestionActionResult } from "./SuggestionResolutionWorkflow.types";
 import { SuggestionResolutionWorkflow } from "./SuggestionResolutionWorkflow";
 
 /** Builds a canonical resolution suggestion for terminal-feedback workflow tests. */

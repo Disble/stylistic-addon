@@ -1,5 +1,7 @@
 import type { IAnalysisPort, IDocumentPort } from "../../ports";
-import type { ChunkPollResult, Suggestion, TextChunk } from "../../types";
+import type { TextChunk } from "../../chunking/TextChunk.types";
+import type { ChunkPollResult } from "../../mastra/MastraWorkflow.types";
+import type { Suggestion } from "../../suggestion/Suggestion.types";
 import { DEFAULT_AUTHOR_SLUG } from "../../../infrastructure/config";
 import type { PipelineContext } from "../PipelineContext";
 import { PipelineEventEmitter } from "../PipelineEvents";

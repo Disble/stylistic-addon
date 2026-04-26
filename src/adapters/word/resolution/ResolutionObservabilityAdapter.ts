@@ -7,7 +7,7 @@ import type {
   ResolutionObservabilitySnapshot,
   ResolutionObservabilitySnapshotLabel,
   ResolutionPhase,
-} from "../../../domain/types";
+} from "../../../domain/suggestion/SuggestionResolutionWorkflow.types";
 
 /** Encapsulates best-effort resolution observability emission for one suggestion workflow. */
 export class ResolutionObservabilityReporter {

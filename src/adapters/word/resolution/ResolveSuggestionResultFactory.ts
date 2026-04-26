@@ -1,10 +1,10 @@
 import { DocumentReviewStateMachine } from "../../../domain/review/DocumentReviewStateMachine";
+import type { DocumentReviewState } from "../../../domain/review/DocumentReviewStateMachine.types";
 import type {
-  DocumentReviewState,
   ResolutionExecutionReport,
   ResolutionPhase,
   SuggestionActionResult,
-} from "../../../domain/types";
+} from "../../../domain/suggestion/SuggestionResolutionWorkflow.types";
 import type { ResolutionStatus } from "./ResolutionContext";
 
 /** Shapes stable taskpane-facing results for resolution workflows. */

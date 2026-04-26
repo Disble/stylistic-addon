@@ -13,7 +13,7 @@
  * @module chunker
  */
 
-import type { TextChunk } from "../domain/types";
+import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import { DEFAULT_MAX_CHUNK_SIZE } from "./config";
 
 /** Regex that matches paragraph separators: one or more blank lines. */

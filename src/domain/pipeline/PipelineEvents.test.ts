@@ -1,9 +1,9 @@
 import type {
   ApplySuggestionsResult,
-  PipelineState,
-  Suggestion,
   SuggestionApplicationFailure,
-} from "../types";
+} from "../DocumentApplication.types";
+import type { Suggestion } from "../suggestion/Suggestion.types";
+import type { PipelineState } from "./PipelineStateMachine.types";
 import { PipelineEventEmitter, type PipelineObserver } from "./PipelineEvents";
 
 // ---------------------------------------------------------------------------

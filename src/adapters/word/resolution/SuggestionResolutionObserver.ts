@@ -2,7 +2,7 @@ import type {
   ReplaceSuggestionIdentity,
   Suggestion,
   SuggestionObservationStatus,
-} from "../../../domain/types";
+} from "../../../domain/suggestion/Suggestion.types";
 import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,

@@ -15,7 +15,7 @@
  * @module DeduplicateHandler
  */
 
-import type { Suggestion } from "../../types";
+import type { Suggestion } from "../../suggestion/Suggestion.types";
 import type { PipelineContext } from "../PipelineContext";
 import type { PipelineHandler } from "./ReadTextHandler";
 
