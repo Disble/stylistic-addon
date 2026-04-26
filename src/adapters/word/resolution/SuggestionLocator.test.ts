@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   installWordWithContext,
+  makeCommentOnlyTag,
   makeOperationalWrapperTag,
   makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
@@ -78,6 +79,45 @@ describe("SuggestionLocator", () => {
 
     expect(located.selectedCc).toBeNull();
     expect(located.locateStatus).toBe("ambiguous-location");
+  });
+
+  it("locates a unique comment-only content control using the canonical comment-only tag", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-comment-only",
+      type: "comment-only",
+      suggestedText: undefined,
+    });
+    const locator = new SuggestionLocator(suggestion);
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccItems: [{ tag: makeCommentOnlyTag("s-comment-only"), title: suggestion.anchor }],
+    });
+    installWordWithContext(context);
+
+    const located = await Word.run((wordContext) =>
+      locator.locateCommentOnlyArtifacts(wordContext),
+    );
+
+    expect(located.selectedCc).toBe(context._ccItems[0]);
+    expect(located.locateStatus).toBe("confirmed-pending");
+  });
+
+  it("returns cc-not-found when comment-only lookup misses the canonical tag", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-comment-only-missing",
+      type: "comment-only",
+      suggestedText: undefined,
+    });
+    const locator = new SuggestionLocator(suggestion);
+    const context = makeResolveSuggestionContext({ ccFound: false });
+    installWordWithContext(context);
+
+    const located = await Word.run((wordContext) =>
+      locator.locateCommentOnlyArtifacts(wordContext),
+    );
+
+    expect(located.selectedCc).toBeNull();
+    expect(located.locateStatus).toBe("cc-not-found");
   });
 
   it("finds the colocated Stylistic comment that overlaps the selected content control", async () => {

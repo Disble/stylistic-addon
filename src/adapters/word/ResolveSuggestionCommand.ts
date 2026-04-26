@@ -121,6 +121,10 @@ export class ResolveSuggestionCommand {
       suggestionType: this.suggestion.type,
     });
 
+    if (this.suggestion.type === "comment-only") {
+      return this.executeCommentOnlyWithinContext(context);
+    }
+
     const { candidates, selectedCc, locateStatus } =
       await this.locator.locateResolutionArtifacts(context);
     const pendingBefore = await this.stateInspector.inspect(context);
@@ -155,10 +159,6 @@ export class ResolveSuggestionCommand {
         pendingBefore,
         pendingAfter: pendingBefore,
       };
-    }
-
-    if (this.suggestion.type === "comment-only") {
-      return this.resolveCommentOnly(context, selectedCc, pendingBefore);
     }
 
     if (!this.hasValidTrackChangeContract()) {
@@ -251,6 +251,46 @@ export class ResolveSuggestionCommand {
       pendingAfter,
       executionReport,
     };
+  }
+
+  /** Executes the dedicated comment-only resolution path before wrapper lookup. */
+  private async executeCommentOnlyWithinContext(
+    context: Word.RequestContext,
+  ): Promise<CohesiveResolutionOutcome> {
+    const { candidates, selectedCc, locateStatus } =
+      await this.locator.locateCommentOnlyArtifacts(context);
+    const pendingBefore = await this.stateInspector.inspect(context);
+
+    await this.observabilityReporter.emitPhase(
+      "locate",
+      selectedCc ? "succeeded" : "failed",
+      {
+        candidateCount: candidates.length,
+        selectedCcFound: Boolean(selectedCc),
+        locateStatus,
+      },
+    );
+
+    if (locateStatus === "ambiguous-location") {
+      const result = await this.resultFactory.buildObservationFailureResult(
+        context,
+        locateStatus,
+        pendingBefore,
+      );
+      return this.toOutcome(result, pendingBefore);
+    }
+
+    if (!selectedCc) {
+      return {
+        status: "cc-not-found",
+        trackedChangesAffected: 0,
+        commentDeleted: false,
+        pendingBefore,
+        pendingAfter: pendingBefore,
+      };
+    }
+
+    return this.resolveCommentOnly(context, selectedCc, pendingBefore);
   }
 
   /** Resolves comment-only suggestions without entering the tracked-change path. */

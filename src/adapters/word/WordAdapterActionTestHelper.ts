@@ -2,6 +2,7 @@ import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 
 const OPERATIONAL_WRAPPER_TITLE_PREFIX = "stylistic-meta-v2:";
 const OPERATIONAL_WRAPPER_TAG_PREFIX = "stylistic-operational-wrapper:";
+const COMMENT_ONLY_TAG_PREFIX = "stylistic:comment-only:";
 
 type MockTrackedChange = {
   id?: string;
@@ -140,6 +141,11 @@ export function makeOperationalWrapperTitle(options: {
 /** Builds the external operational-wrapper tag used by live resolution. */
 export function makeOperationalWrapperTag(suggestionId = "s-1"): string {
   return `${OPERATIONAL_WRAPPER_TAG_PREFIX}${suggestionId}`;
+}
+
+/** Builds the canonical comment-only tag used by live apply + resolution. */
+export function makeCommentOnlyTag(suggestionId = "s-1"): string {
+  return `${COMMENT_ONLY_TAG_PREFIX}${suggestionId}`;
 }
 
 /**

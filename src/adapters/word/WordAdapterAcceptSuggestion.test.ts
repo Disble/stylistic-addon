@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "./WordAdapter";
 import {
+  makeCommentOnlyTag,
   installWordWithContext,
   makeOperationalWrapperTag,
   makeOperationalWrapperTitle,
@@ -173,5 +174,40 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.status).toBe("mixed-group");
     expect(result.trackedChangesAffected).toBe(0);
     expect(unexpectedAccept).not.toHaveBeenCalled();
+  });
+
+  it("accepts a comment-only suggestion by locating the canonical comment-only content control", async () => {
+    const suggestion = makeSuggestion({
+      id: "s-comment-only-accept",
+      type: "comment-only",
+      anchor: "frase observada",
+      suggestedText: undefined,
+      context: "Contexto con frase observada.",
+    });
+    const deleteComment = vi.fn();
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: makeCommentOnlyTag("s-comment-only-accept"),
+      comments: [
+        {
+          authorName: "Usuario",
+          content: "[Claridad]\nObservación",
+          getRange: vi.fn(),
+          delete: deleteComment,
+        },
+      ],
+    });
+    installWordWithContext(context);
+
+    const result = await adapter.acceptSuggestion(suggestion);
+
+    expect(result.status).toBe("accepted");
+    expect(result.trackedChangesAffected).toBe(0);
+    expect(result.commentDeleted).toBe(true);
+    expect(context.document.contentControls.getByTag).toHaveBeenCalledWith(
+      makeCommentOnlyTag("s-comment-only-accept"),
+    );
+    expect(context._cc.delete).toHaveBeenCalledWith(true);
+    expect(deleteComment).toHaveBeenCalledOnce();
   });
 });

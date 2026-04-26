@@ -2,7 +2,10 @@ import type {
   Suggestion,
   SuggestionObservationStatus,
 } from "../../../domain/suggestion/Suggestion.types";
-import { STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX } from "../../../infrastructure/config";
+import {
+  STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
+  STYLISTIC_TAG_PREFIX,
+} from "../../../infrastructure/config";
 import { OVERLAPPING_RELATIONS } from "../cleanup/CommentCleanup";
 import {
   isValidOperationalReplaceIdentity,
@@ -18,17 +21,28 @@ import type {
 export class SuggestionLocator {
   constructor(private readonly suggestion: Suggestion) {}
 
+  /** Finds the unique comment-only anchor Content Control using its canonical tag. */
+  async locateCommentOnlyArtifacts(
+    context: Word.RequestContext,
+  ): Promise<LocatedSuggestionArtifacts> {
+    const commentOnlyTag = `${STYLISTIC_TAG_PREFIX}comment-only:${this.suggestion.id}`;
+    const result = await this.locateByTag(context, commentOnlyTag);
+
+    console.log(
+      `🎯 [SuggestionLocator] comment-only lookup suggestionId="${this.suggestion.id}" candidates=${result.candidates.length} status=${result.locateStatus}`,
+    );
+
+    return result;
+  }
+
   /** Finds a single strict operational wrapper and rejects ambiguous duplicates before mutation. */
   async locateResolutionArtifacts(
     context: Word.RequestContext,
   ): Promise<LocatedSuggestionArtifacts> {
-    const result = context.document.contentControls.getByTag(
+    const { candidates } = await this.locateByTag(
+      context,
       `${STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX}${this.suggestion.id}`,
     );
-    result.load("items/tag,items/title");
-    await context.sync();
-
-    const candidates = result.items;
     const validCandidates = candidates.filter((cc) =>
       isValidOperationalReplaceIdentity(
         parseReplaceIdentityTitle(cc.title),
@@ -43,6 +57,25 @@ export class SuggestionLocator {
     );
 
     return { candidates, selectedCc, locateStatus };
+  }
+
+  /** Loads all Content Controls matching one exact tag. */
+  private async locateByTag(
+    context: Word.RequestContext,
+    tag: string,
+  ): Promise<LocatedSuggestionArtifacts> {
+    const result = context.document.contentControls.getByTag(tag);
+    result.load("items/tag,items/title");
+    await context.sync();
+
+    const candidates = result.items;
+    const selectedCc = candidates.length === 1 ? candidates[0] : null;
+
+    return {
+      candidates,
+      selectedCc,
+      locateStatus: this.resolveStrictTagLocateStatus(candidates),
+    };
   }
 
   /** Classifies lookup results without ranking or compatibility fallback. */
@@ -68,6 +101,17 @@ export class SuggestionLocator {
     return hasMalformedOperationalMetadata
       ? "identity-lost"
       : "ambiguous-location";
+  }
+
+  /** Classifies exact-tag lookup for non-wrapper artifacts such as comment-only anchors. */
+  private resolveStrictTagLocateStatus(
+    candidates: Word.ContentControl[],
+  ): SuggestionObservationStatus | "cc-not-found" {
+    if (candidates.length === 0) {
+      return "cc-not-found";
+    }
+
+    return candidates.length === 1 ? "confirmed-pending" : "ambiguous-location";
   }
 
   /** Finds the Stylistic comment colocated with the suggestion CC range. */
