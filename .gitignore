@@ -45,3 +45,4 @@ Thumbs.db
 .env.*.local
 .claude/settings.local.json
 .claude/skills/mastra
+.ignore/
