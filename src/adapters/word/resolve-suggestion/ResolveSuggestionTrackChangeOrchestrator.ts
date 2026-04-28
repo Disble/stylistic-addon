@@ -127,12 +127,21 @@ export class ResolveSuggestionTrackChangeOrchestrator {
         context,
         observation.selectedComment,
       );
-    const pendingAfter =
-      await this.stateInspector.inspectAfterResolution(context);
-
     await this.observabilityReporter.emitPhase("cleanup-comment", "succeeded", {
       commentDeleted,
     });
+
+    const metadataCleanup = await this.cleanupMetadataAfterResolution(
+      context,
+      pendingBefore,
+      executionReport,
+    );
+    if (metadataCleanup) {
+      return metadataCleanup;
+    }
+
+    const pendingAfter =
+      await this.stateInspector.inspectAfterResolution(context);
     await this.observabilityReporter.emitPhase("inspect-after", "succeeded", {
       pendingArtifacts: pendingAfter.pendingStylisticArtifacts,
     });
@@ -145,6 +154,87 @@ export class ResolveSuggestionTrackChangeOrchestrator {
       pendingAfter,
       executionReport,
     };
+  }
+
+  /**
+   * Deletes resolved metadata before final state inspection so `pendingAfter`
+   * reflects the document the user actually has after the suggestion is gone.
+   * This phase is separate from comment cleanup because metadata residue is a
+   * document-state bug, not a cosmetic comment-cleanup concern.
+   */
+  private async cleanupMetadataAfterResolution(
+    context: Word.RequestContext,
+    pendingBefore: ResolveSuggestionOutcome["pendingBefore"],
+    executionReport: Awaited<
+      ReturnType<ResolveSuggestionOperationalExecutor["execute"]>
+    >,
+  ): Promise<ResolveSuggestionOutcome | null> {
+    await this.observabilityReporter.emitPhase("cleanup-metadata", "started", {
+      suggestionType: this.suggestion.type,
+    });
+
+    try {
+      const metadataCleanup =
+        await this.cleanup.deleteResolvedTrackChangeMetadata(context);
+
+      if (metadataCleanup.failedContentControls.length > 0) {
+        const error = `No se pudieron limpiar metadatos de track-change resuelta: ${metadataCleanup.failedContentControls
+          .map((failure) => `${failure.tag}: ${failure.error}`)
+          .join("; ")}`;
+
+        await this.observabilityReporter.emitPhase(
+          "cleanup-metadata",
+          "failed",
+          {
+            deletedContentControlCount:
+              metadataCleanup.deletedContentControls.length,
+            deletedContentControls:
+              metadataCleanup.deletedContentControls.join(","),
+            failedContentControlCount:
+              metadataCleanup.failedContentControls.length,
+            failedContentControls: metadataCleanup.failedContentControls
+              .map((failure) => `${failure.tag}:${failure.error}`)
+              .join("|"),
+          },
+        );
+
+        return this.toOutcome(
+          this.resultFactory.buildErrorResult(
+            error,
+            await this.stateInspector.inspect(context),
+            "cleanup-metadata",
+            executionReport,
+          ),
+          pendingBefore,
+        );
+      }
+
+      await this.observabilityReporter.emitPhase(
+        "cleanup-metadata",
+        "succeeded",
+        {
+          deletedContentControlCount:
+            metadataCleanup.deletedContentControls.length,
+          deletedContentControls:
+            metadataCleanup.deletedContentControls.join(","),
+        },
+      );
+      return null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await this.observabilityReporter.emitPhase("cleanup-metadata", "failed", {
+        error: message,
+      });
+      return this.toOutcome(
+        this.resultFactory.buildErrorResult(
+          message,
+          await this.stateInspector.inspect(context),
+          "cleanup-metadata",
+          executionReport,
+        ),
+        pendingBefore,
+      );
+    }
   }
 
   /** Observes the wrapper state and degrades non-terminal host evidence before mutation. */

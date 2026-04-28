@@ -165,6 +165,40 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 ## Comment Cleanup Issues
 
+### Accepted/rejected suggestions leave invisible Stylistic metadata
+
+**Symptom:** A suggestion appears accepted or rejected in Word, but later runs fail
+to insert or resolve nearby suggestions, or OOXML inspection still shows markers
+such as `stylistic:track-change:{id}` or
+`stylistic-operational-wrapper:{id}`.
+
+**Cause:** Native Word tracked-change resolution does not guarantee removal of
+the add-in-owned metadata Content Controls. If those wrappers are deleted while
+Track Changes is enabled, Word can preserve the cleanup itself as another pending
+revision, leaving metadata residue in the document package.
+
+**Expected production behavior:** After a `track-change` suggestion is accepted
+or rejected, the resolution workflow now:
+
+1. resolves the native tracked changes,
+2. deletes the colocated Stylistic comment,
+3. temporarily disables Track Changes,
+4. deletes exact metadata Content Controls for the resolved suggestion with
+   `delete(true)`,
+5. restores the previous Track Changes mode,
+6. only then computes the final document review state.
+
+This cleanup is exact-tag based and must not delete unrelated user comments,
+foreign Content Controls, or metadata for other pending Stylistic suggestions.
+
+**If residue persists:** Capture the browser console logs for the
+`cleanup-metadata` phase and inspect the reported `deletedContentControlCount`,
+`deletedContentControls`, and any failure metadata. Real Word evidence wins over
+green tests; update the mock model first if the host disproves the current
+contract.
+
+---
+
 ### "Limpiar comentarios" button doesn't appear
 
 **Symptom:** After applying suggestions, the cleanup button is not visible.

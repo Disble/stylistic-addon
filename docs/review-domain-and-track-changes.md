@@ -367,6 +367,35 @@ So the decision was:
 - do not show a two-button modal-style choice,
 - simply offer one explicit deactivation CTA when the condition becomes true.
 
+### 9.8 Metadata cleanup exception
+
+The add-in may temporarily set Track Changes to `off` during **post-resolution
+metadata cleanup** only.
+
+This is not an automatic deactivation policy. It is a bounded Word-host
+workaround used after a specific `track-change` suggestion has already been
+accepted or rejected semantically.
+
+The rule is:
+
+1. save the current `changeTrackingMode`,
+2. set Track Changes to `off`,
+3. delete only Stylistic-owned metadata Content Controls for the resolved
+   suggestion:
+   - `stylistic:track-change:{id}`,
+   - `stylistic-operational-wrapper:{id}`,
+4. use `delete(true)` so visible document text is preserved,
+5. restore the previously saved tracking mode immediately.
+
+Why this exception exists: real Word validation showed that deleting these
+metadata wrappers while Track Changes remains enabled can preserve the deletion
+as a new pending revision in OOXML. That leaves invisible Stylistic residue that
+can later conflict with new suggestion insertion.
+
+This exception must never be widened into “turn Track Changes off when the
+document looks clean”. The final user-facing deactivation remains the explicit
+`Desactivar control de cambios` CTA.
+
 ---
 
 ## 10. Architectural consequences of the requirement change

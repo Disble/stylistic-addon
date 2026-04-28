@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SuggestionResolutionCleanup } from "./SuggestionResolutionCleanup";
 import type { ColocatedCommentContext } from "./ResolutionContext";
 
@@ -12,7 +12,14 @@ function buildContextStub(): {
   syncMock: ReturnType<typeof vi.fn>;
 } {
   const syncMock = vi.fn(async () => undefined);
-  const context = { sync: syncMock } as unknown as Word.RequestContext;
+  const context = {
+    document: {
+      changeTrackingMode: "trackAll",
+      contentControls: { items: [], load: vi.fn() },
+      load: vi.fn(),
+    },
+    sync: syncMock,
+  } as unknown as Word.RequestContext;
   return { context, syncMock };
 }
 
@@ -25,9 +32,10 @@ type CleanupGraphTrackedChange = {
 
 type CleanupGraphContentControl = {
   id: string;
-  role: "operational-wrapper" | "inserted-side";
+  role: "operational-wrapper" | "inserted-side" | "foreign";
   tag: string;
   deleted: boolean;
+  modeAtDelete?: string;
   delete: ReturnType<typeof vi.fn>;
 };
 
@@ -55,6 +63,7 @@ type IntegratedCleanupHarness = {
   foreignCommentNode: CleanupGraphComment;
   wrapperContentControl: CleanupGraphContentControl;
   insertedSideContentControl: CleanupGraphContentControl;
+  foreignContentControl: CleanupGraphContentControl;
   foreignTrackedChange: CleanupGraphTrackedChange;
 };
 
@@ -86,9 +95,10 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
   const wrapperContentControl: CleanupGraphContentControl = {
     id: "cc-wrapper-1",
     role: "operational-wrapper",
-    tag: "stylistic:track-change:s-cleanup",
+    tag: "stylistic-operational-wrapper:s-cleanup",
     deleted: false,
     delete: vi.fn(() => {
+      wrapperContentControl.modeAtDelete = context.document.changeTrackingMode;
       wrapperContentControl.deleted = true;
       graph.contentControls = graph.contentControls.filter(
         (candidate) => candidate.id !== wrapperContentControl.id,
@@ -99,12 +109,27 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
   const insertedSideContentControl: CleanupGraphContentControl = {
     id: "cc-inserted-1",
     role: "inserted-side",
-    tag: "stylistic:track-change:s-cleanup:inserted",
+    tag: "stylistic:track-change:s-cleanup",
     deleted: false,
     delete: vi.fn(() => {
+      insertedSideContentControl.modeAtDelete = context.document.changeTrackingMode;
       insertedSideContentControl.deleted = true;
       graph.contentControls = graph.contentControls.filter(
         (candidate) => candidate.id !== insertedSideContentControl.id,
+      );
+    }),
+  };
+
+  const foreignContentControl: CleanupGraphContentControl = {
+    id: "cc-foreign-1",
+    role: "foreign",
+    tag: "stylistic:track-change:s-other",
+    deleted: false,
+    delete: vi.fn(() => {
+      foreignContentControl.modeAtDelete = context.document.changeTrackingMode;
+      foreignContentControl.deleted = true;
+      graph.contentControls = graph.contentControls.filter(
+        (candidate) => candidate.id !== foreignContentControl.id,
       );
     }),
   };
@@ -148,8 +173,22 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
     preservedCommentNode,
     foreignCommentNode,
   ];
-  graph.contentControls = [wrapperContentControl, insertedSideContentControl];
+  graph.contentControls = [
+    wrapperContentControl,
+    insertedSideContentControl,
+    foreignContentControl,
+  ];
   graph.trackedChanges = [foreignTrackedChange];
+
+  const contentControlsCollection = {
+    load: vi.fn(),
+    get items() {
+      return graph.contentControls;
+    },
+  };
+  Object.assign(context.document, {
+    contentControls: contentControlsCollection,
+  });
 
   return {
     context,
@@ -165,6 +204,7 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
     foreignCommentNode,
     wrapperContentControl,
     insertedSideContentControl,
+    foreignContentControl,
     foreignTrackedChange,
   };
 }
@@ -179,6 +219,16 @@ function makeColocatedComment(
 }
 
 describe("SuggestionResolutionCleanup soft-success contract", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { Word: { ChangeTrackingMode: Record<string, string> } }).Word = {
+      ChangeTrackingMode: {
+        off: "off",
+        trackAll: "trackAll",
+        trackMine: "trackMine",
+      },
+    };
+  });
+
   it("returns commentDeleted=true when comment.delete()/sync raises GeneralException after the host already invalidated the comment proxy", async () => {
     const cleanup = new SuggestionResolutionCleanup("s-1", "reject");
     const { context, syncMock } = buildContextStub();
@@ -208,10 +258,10 @@ describe("SuggestionResolutionCleanup soft-success contract", () => {
     ).rejects.toThrow("InvalidOperationInCellEdit");
   });
 
-  it("exposes comments-only cleanup and no API that deletes replace wrappers", () => {
+  it("exposes explicit metadata cleanup for resolved track-change wrappers", () => {
     const cleanup = new SuggestionResolutionCleanup("s-3", "reject");
 
-    expect("cleanupResolvedSuggestion" + "Anchor" in cleanup).toBe(false);
+    expect("deleteResolvedTrackChangeMetadata" in cleanup).toBe(true);
   });
 
   it("deletes only the located Stylistic comment from a shared document graph while preserving wrapper CCs, inserted-side CCs, and foreign tracked changes", async () => {
@@ -235,13 +285,65 @@ describe("SuggestionResolutionCleanup soft-success contract", () => {
     expect(harness.graph.contentControls.map((cc) => cc.id)).toEqual([
       harness.wrapperContentControl.id,
       harness.insertedSideContentControl.id,
+      harness.foreignContentControl.id,
     ]);
     expect(harness.wrapperContentControl.deleted).toBe(false);
     expect(harness.insertedSideContentControl.deleted).toBe(false);
+    expect(harness.foreignContentControl.deleted).toBe(false);
     expect(harness.wrapperContentControl.delete).not.toHaveBeenCalled();
     expect(harness.insertedSideContentControl.delete).not.toHaveBeenCalled();
+    expect(harness.foreignContentControl.delete).not.toHaveBeenCalled();
     expect(harness.graph.trackedChanges).toEqual([harness.foreignTrackedChange]);
     expect(harness.foreignTrackedChange.accept).not.toHaveBeenCalled();
     expect(harness.foreignTrackedChange.reject).not.toHaveBeenCalled();
+  });
+
+  it("deletes exact resolved track-change metadata with Track Changes temporarily disabled and visible text preserved", async () => {
+    const cleanup = new SuggestionResolutionCleanup("s-cleanup", "accept");
+    const harness = buildIntegratedCleanupHarness();
+
+    const result = await cleanup.deleteResolvedTrackChangeMetadata(
+      harness.context,
+    );
+
+    expect(result.deletedContentControls).toEqual([
+      harness.wrapperContentControl.tag,
+      harness.insertedSideContentControl.tag,
+    ]);
+    expect(result.failedContentControls).toEqual([]);
+    expect(harness.wrapperContentControl.delete).toHaveBeenCalledWith(true);
+    expect(harness.insertedSideContentControl.delete).toHaveBeenCalledWith(true);
+    expect(harness.wrapperContentControl.modeAtDelete).toBe("off");
+    expect(harness.insertedSideContentControl.modeAtDelete).toBe("off");
+    expect(harness.context.document.changeTrackingMode).toBe("trackAll");
+    expect(harness.graph.contentControls.map((cc) => cc.id)).toEqual([
+      harness.foreignContentControl.id,
+    ]);
+    expect(harness.foreignContentControl.delete).not.toHaveBeenCalled();
+    expect(harness.graph.comments).toHaveLength(3);
+    expect(harness.graph.trackedChanges).toEqual([harness.foreignTrackedChange]);
+  });
+
+  it("treats absent inserted-side metadata as an idempotent resolved reject cleanup", async () => {
+    const cleanup = new SuggestionResolutionCleanup("s-cleanup", "reject");
+    const harness = buildIntegratedCleanupHarness();
+    harness.graph.contentControls = harness.graph.contentControls.filter(
+      (cc) => cc.id !== harness.insertedSideContentControl.id,
+    );
+
+    const result = await cleanup.deleteResolvedTrackChangeMetadata(
+      harness.context,
+    );
+
+    expect(result.deletedContentControls).toEqual([
+      harness.wrapperContentControl.tag,
+    ]);
+    expect(result.failedContentControls).toEqual([]);
+    expect(harness.wrapperContentControl.delete).toHaveBeenCalledWith(true);
+    expect(harness.insertedSideContentControl.delete).not.toHaveBeenCalled();
+    expect(harness.context.document.changeTrackingMode).toBe("trackAll");
+    expect(harness.graph.contentControls.map((cc) => cc.id)).toEqual([
+      harness.foreignContentControl.id,
+    ]);
   });
 });

@@ -43,6 +43,7 @@ export type ResolutionPhase =
   | "observe-before"
   | "execute"
   | "cleanup-comment"
+  | "cleanup-metadata"
   | "cleanup-anchor"
   | "inspect-after";
 

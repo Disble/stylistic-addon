@@ -615,15 +615,28 @@ Current Phase 4 status:
 Owns cleanup policy after a confirmed resolution:
 
 - delete the colocated comment when safe,
-- delete the resolved anchor content control when safe,
+- delete the resolved comment-only anchor content control when safe,
+- delete resolved track-change metadata by exact tag after semantic resolution,
+- temporarily disable Track Changes only around metadata deletion so Word does
+  not preserve the cleanup itself as a new pending revision,
 - tolerate reject-side invalidation where that is expected,
 - keep cleanup semantics separate from observation semantics.
 
 Current Phase 4 status:
 
-- `SuggestionResolutionCleanup.ts` now owns comment and anchor cleanup policy.
+- `SuggestionResolutionCleanup.ts` now owns comment, comment-only anchor, and
+  resolved track-change metadata cleanup policy.
+- Track-change metadata cleanup re-locates fresh Content Controls by exact tags:
+  `stylistic:track-change:{id}` and
+  `stylistic-operational-wrapper:{id}`. It uses `delete(true)` to preserve user
+  text, restores the user's previous Track Changes mode immediately afterward,
+  and runs before final document-state inspection.
 - `TrackedChangeResolutionExecutor.ts` now owns the terminal tracked-change
   mutation step.
+
+This temporary Track Changes toggle is **not** lifecycle ownership. It is a
+bounded housekeeping guard around deleting add-in-owned metadata after Word has
+already accepted or rejected the native tracked changes.
 
 #### `DocumentReviewStateInspector`
 

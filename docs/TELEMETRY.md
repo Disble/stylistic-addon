@@ -79,20 +79,33 @@ Guidelines:
 
 For suggestion resolution, telemetry SHOULD map to explicit workflow phases:
 
-1. `observe-before`
-2. `execute`
-3. `reconcile`
-4. `cleanup`
-5. `inspect-after`
+1. `locate`
+2. `observe-before`
+3. `execute`
+4. `cleanup-comment`
+5. `cleanup-metadata`
+6. `cleanup-anchor`
+7. `inspect-after`
 
 Why this matters:
 
+- `locate` tells us whether the right Word artifact was found and whether
+  duplicate/corrupt identity metadata affected selection,
 - `execute` tells us what the host mutation attempted,
-- `reconcile` tells us whether semantic truth changed after a failure,
-- `cleanup` tells us whether comments/CCs were left behind,
+- `cleanup-comment` tells us whether the colocated Stylistic comment was removed
+  or whether Word invalidated the comment proxy after a successful mutation,
+- `cleanup-metadata` tells us whether resolved inserted-side and operational
+  wrapper Content Controls were removed before the final state snapshot,
+- `cleanup-anchor` tells us whether comment-only anchors were removed while
+  preserving visible text,
 - `inspect-after` tells us whether the final document-derived state was observable.
 
 If these phases collapse into one generic `error`, debugging becomes guesswork.
+
+`cleanup-metadata` metadata must stay primitive because the current event
+contract is `Record<string, string | number | boolean>`. Prefer counts and
+serialized tag lists such as `deletedContentControlCount` and
+`deletedContentControls` over raw arrays.
 
 ---
 
