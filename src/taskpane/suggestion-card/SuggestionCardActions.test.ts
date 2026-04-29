@@ -10,7 +10,10 @@ import {
 } from "../TaskpaneTestHelper";
 import type { ResultsPanelDeps } from "../SuggestionCardRenderer.types";
 import { createSuggestionCard } from "./SuggestionCardElements";
-import { handleAcceptSuggestion } from "./SuggestionCardActions";
+import {
+  handleAcceptSuggestion,
+  wireSuggestionCardInteractions,
+} from "./SuggestionCardActions";
 
 /** Builds a compact accepted mediator result for card-action tests. */
 function makeAcceptedResult(): SuggestionResolutionMediatorResult {
@@ -57,7 +60,7 @@ describe("SuggestionCardActions", () => {
     ) as HTMLButtonElement | null;
     const summaryElement = document.createElement("div");
     const deps: ResultsPanelDeps = {
-      navigateToText: vi.fn(),
+      navigateToText: vi.fn().mockResolvedValue({ status: "navigated" }),
       acceptSuggestion: vi.fn().mockResolvedValue(makeAcceptedResult()),
       rejectSuggestion: vi.fn(),
     };
@@ -108,5 +111,46 @@ describe("SuggestionCardActions", () => {
       "Ya no te quedan sugerencias aplicadas por revisar.",
     );
     expect(summaryElement.textContent).toContain("1 ya resuelta.");
+  });
+
+  it("shows an informational note when safe navigation cannot locate the suggestion", async () => {
+    const suggestion = makeSuggestion({ id: "s-navigation" });
+    const card = createSuggestionCard(suggestion, []);
+    const deps: ResultsPanelDeps = {
+      navigateToText: vi.fn().mockResolvedValue({
+        status: "ambiguous",
+        reason: "multiple-artifacts",
+      }),
+      acceptSuggestion: vi.fn(),
+      rejectSuggestion: vi.fn(),
+    };
+
+    wireSuggestionCardInteractions(card.li, suggestion, deps, {
+      summaryModel: createSuggestionProgressSummaryModel(
+        [suggestion],
+        {
+          successCount: 1,
+          failedSuggestions: [],
+          pendingAfter: {
+            pendingStylisticArtifacts: 1,
+            hasPendingStylisticArtifacts: true,
+            trackChangesActive: true,
+          },
+          documentState: "pending-review",
+          trackChangesActivatedForBatch: false,
+        },
+        [],
+      ),
+      summaryElement: document.createElement("div"),
+      isSelection: false,
+    });
+
+    card.li.querySelector<HTMLElement>(".card-clickable-area")?.click();
+    await Promise.resolve();
+
+    const note = card.li.querySelector(".result-navigation-note");
+    expect(note?.textContent).toContain(
+      "no se pudo ubicar la sugerencia de forma segura",
+    );
   });
 });

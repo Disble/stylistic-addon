@@ -1,40 +1,41 @@
 /* global Word */
 
-import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
-import { STYLISTIC_TAG_PREFIX } from "../../infrastructure/config";
-import {
-  isValidOperationalReplaceIdentity,
-  parseReplaceIdentityTitle,
-} from "./ReplaceIdentityParser";
+import type {
+  Suggestion,
+  SuggestionNavigationResult,
+  SuggestionObservationStatus,
+} from "../../domain/suggestion/Suggestion.types";
+import { SuggestionArtifactLocator } from "./location/SuggestionArtifactLocator";
+import { SuggestionTextRangeLocator } from "./location/SuggestionTextRangeLocator";
 import type {
   TextLocator,
   WordSearchContainer,
 } from "./WordTextLocatorContext";
 
-/** Handles artifact-first navigation and resilient fallback search in Word. */
+/**
+ * Handles read-only suggestion navigation in Word.
+ *
+ * Navigation is intentionally stricter than a generic text search because a
+ * wrong selection is a user-visible defect: the cursor appears to validate the
+ * wrong occurrence. The adapter therefore uses the same safe localization
+ * strategies as the mutating workflows, but never executes those workflows:
+ *
+ * 1. Prefer the persisted Word artifact for the suggestion.
+ * 2. Fall back only to `context -> anchor` textual localization.
+ * 3. Never search `anchor` globally when `context` is missing.
+ * 4. Return a semantic no-navigation result for ambiguity or host failures.
+ */
 export class WordSuggestionNavigationAdapter {
-  constructor(private readonly textLocator: TextLocator) {}
+  private readonly artifactLocator: SuggestionArtifactLocator;
+  private readonly textRangeLocator: SuggestionTextRangeLocator;
 
-  /** Returns the canonical Stylistic tag for one suggestion. */
-  buildSuggestionTag(suggestion: Suggestion): string {
-    return `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
-  }
-
-  /** Chooses a strict operational-wrapper navigation CC without ranking fallback. */
-  selectNavigationContentControl(
-    ccs: Word.ContentControl[],
-    suggestion: Suggestion,
-  ): Word.ContentControl | null {
-    if (ccs.length === 0) {
-      return null;
-    }
-
-    const validCandidates = ccs.filter((cc) => {
-      const identity = parseReplaceIdentityTitle(cc.title);
-      return isValidOperationalReplaceIdentity(identity, suggestion);
-    });
-
-    return validCandidates.length === 1 ? validCandidates[0] : null;
+  constructor(
+    private readonly textLocator: TextLocator,
+    artifactLocator = new SuggestionArtifactLocator(),
+    textRangeLocator = new SuggestionTextRangeLocator(textLocator),
+  ) {
+    this.artifactLocator = artifactLocator;
+    this.textRangeLocator = textRangeLocator;
   }
 
   /** Searches a body or range through the shared Word text locator. */
@@ -46,38 +47,25 @@ export class WordSuggestionNavigationAdapter {
     return this.textLocator.locate({ context, container, searchText });
   }
 
-  /** Re-locates a suggestion by contextual anchor when direct artifact lookup fails. */
+  /**
+   * Re-locates a suggestion by contextual anchor when direct artifact lookup is
+   * missing.
+   *
+   * This method deliberately delegates to `SuggestionTextRangeLocator` instead
+   * of searching the anchor directly in the body. A global anchor search can
+   * select a table-of-contents or heading occurrence that merely shares the same
+   * word, which is worse than not navigating.
+   */
   async resolveSuggestionFallbackRange(
     context: Word.RequestContext,
     suggestion: Suggestion,
   ): Promise<Word.Range | null> {
-    const body = context.document.body as unknown as WordSearchContainer;
-    const contextRange = await this.searchWithFallback(
+    return this.textRangeLocator.locateAnchorInContext(
       context,
-      body,
-      suggestion.context,
+      context.document.body,
+      suggestion,
+      { logPrefix: "🧭 [WordSuggestionNavigationAdapter]" },
     );
-
-    if (!contextRange) {
-      return this.searchWithFallback(context, body, suggestion.anchor);
-    }
-
-    contextRange.load("text");
-    const containingParagraph = contextRange.paragraphs
-      .getFirst()
-      .getRange("Whole");
-    containingParagraph.load("text");
-    await context.sync();
-
-    const shouldExpandToParagraph =
-      !contextRange.text.includes(suggestion.anchor) &&
-      contextRange.text.length < suggestion.context.length - 20;
-
-    const searchContainer = shouldExpandToParagraph
-      ? (containingParagraph as unknown as WordSearchContainer)
-      : (contextRange as unknown as WordSearchContainer);
-
-    return this.searchWithFallback(context, searchContainer, suggestion.anchor);
   }
 
   /** Selects a range if present so Word scrolls the viewport to it. */
@@ -93,44 +81,96 @@ export class WordSuggestionNavigationAdapter {
     await context.sync();
   }
 
-  /** Navigates to the real suggestion artifact or falls back to text search. */
-  async navigateToText(target: Suggestion | string): Promise<void> {
+  /**
+   * Navigates to the real suggestion artifact or strict contextual fallback.
+   *
+   * The method never throws to the taskpane. Instead it returns a semantic
+   * result so the UI can tell the user when navigation was unsafe, ambiguous, or
+   * blocked by Word.
+   */
+  async navigateToText(
+    target: Suggestion | string,
+  ): Promise<SuggestionNavigationResult> {
     try {
-      await Word.run(async (context) => {
+      return await Word.run(async (context) => {
         if (typeof target !== "string") {
-          const ccResult = context.document.contentControls.getByTag(
-            this.buildSuggestionTag(target),
-          );
-          ccResult.load("items/tag,items/title");
-          await context.sync();
-
-          const selectedCc = this.selectNavigationContentControl(
-            ccResult.items,
-            target,
-          );
-          if (selectedCc) {
-            await this.selectRange(context, selectedCc.getRange());
-            return;
-          }
-
-          await this.selectRange(
-            context,
-            await this.resolveSuggestionFallbackRange(context, target),
-          );
-          return;
+          return this.navigateToSuggestion(context, target);
         }
 
-        await this.selectRange(
+        const range = await this.searchWithFallback(
           context,
-          await this.searchWithFallback(
-            context,
-            context.document.body as unknown as WordSearchContainer,
-            target,
-          ),
+          context.document.body as unknown as WordSearchContainer,
+          target,
         );
+
+        if (!range) {
+          return { status: "not-found", reason: "plain-text-not-found" };
+        }
+
+        await this.selectRange(context, range);
+        return { status: "navigated" };
       });
     } catch {
-      // Navigation is best-effort — silently ignore all failures
+      return { status: "failed", reason: "word-error" };
     }
+  }
+
+  /**
+   * Navigates to one suggestion using artifact identity before textual fallback.
+   *
+   * Track-change suggestions use the operational wrapper identity. Comment-only
+   * suggestions use the canonical comment-only Content Control. Textual fallback
+   * runs only when no artifact exists; malformed or ambiguous artifacts fail
+   * closed and do not fall through to fuzzy text matching.
+   */
+  private async navigateToSuggestion(
+    context: Word.RequestContext,
+    suggestion: Suggestion,
+  ): Promise<SuggestionNavigationResult> {
+    const artifact =
+      suggestion.type === "comment-only"
+        ? await this.artifactLocator.locateCommentOnlyArtifact(
+            context,
+            suggestion,
+          )
+        : await this.artifactLocator.locateOperationalWrapper(
+            context,
+            suggestion,
+          );
+
+    if (artifact.selectedCc) {
+      await this.selectRange(context, artifact.selectedCc.getRange());
+      return { status: "navigated" };
+    }
+
+    if (artifact.locateStatus !== "cc-not-found") {
+      return this.toAmbiguousNavigationResult(artifact.locateStatus);
+    }
+
+    const fallbackRange = await this.resolveSuggestionFallbackRange(
+      context,
+      suggestion,
+    );
+    if (!fallbackRange) {
+      return { status: "not-found", reason: "context-not-found" };
+    }
+
+    await this.selectRange(context, fallbackRange);
+    return { status: "navigated" };
+  }
+
+  /** Converts strict artifact lookup failures into navigation-safe no-op results. */
+  private toAmbiguousNavigationResult(
+    locateStatus: SuggestionObservationStatus | "cc-not-found",
+  ): SuggestionNavigationResult {
+    if (locateStatus === "identity-lost") {
+      return { status: "ambiguous", reason: "identity-lost" };
+    }
+
+    if (locateStatus === "mixed-group") {
+      return { status: "ambiguous", reason: "mixed-group" };
+    }
+
+    return { status: "ambiguous", reason: "multiple-artifacts" };
   }
 }

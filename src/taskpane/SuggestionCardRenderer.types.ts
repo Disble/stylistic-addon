@@ -1,10 +1,15 @@
-import type { Suggestion } from "../domain/suggestion/Suggestion.types";
+import type {
+  Suggestion,
+  SuggestionNavigationResult,
+} from "../domain/suggestion/Suggestion.types";
 import type { SuggestionResolutionMediatorResult } from "../domain/suggestion/SuggestionResolutionWorkflow.types";
 import type { SuggestionProgressSummaryModel } from "./SuggestionProgressSummary";
 
 /** Business-layer capabilities needed to render and interact with cards. */
 export type ResultsPanelDeps = {
-  navigateToText: (target: Suggestion | string) => Promise<void>;
+  navigateToText: (
+    target: Suggestion | string,
+  ) => Promise<SuggestionNavigationResult>;
   acceptSuggestion: (
     suggestion: Suggestion,
     comment?: string,

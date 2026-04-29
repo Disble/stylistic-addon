@@ -249,12 +249,12 @@ long as the dependency stays inside the Word adapter boundary.
 ## 4. Why some features were robust and others were fragile
 
 The recent bug pattern was not “Word search is bad” in the abstract. The real
-issue was an internal asymmetry:
+issue was unsafe localization boundaries:
 
-- **apply** used a robust search fallback,
-- **navigate** preferred persisted artifacts before text search,
-- **resolve** reimplemented a weaker fallback and concentrated too many
-  responsibilities in one place.
+- **apply** needs a precise text range before it mutates,
+- **navigate** must never select a plausible-but-wrong occurrence,
+- **resolve** must fail closed before accept/reject mutations,
+- shared lookup logic must be reused without coupling the workflows together.
 
 ### 4.1 Robust path: apply
 
@@ -273,10 +273,22 @@ That is why apply was comparatively resilient in real documents.
 ### 4.2 Robust path: navigation
 
 `WordAdapter.navigateToText()` first tries to relocate the real Word artifact
-through persisted identity (`ContentControl` tag plus `compound-v2` title
-metadata). Only if artifact lookup fails does it fall back to text search. That
-artifact-first, search-second behavior makes navigation more robust than raw text
-matching.
+through persisted identity:
+
+- `track-change` suggestions use the operational wrapper tag
+  `stylistic-operational-wrapper:{id}` plus `compound-v2` title metadata,
+- `comment-only` suggestions use the canonical tag
+  `stylistic:comment-only:{id}`.
+
+Only when the artifact is absent does navigation fall back to text. That fallback
+is deliberately strict: locate `context` first, then locate `anchor` inside that
+localized scope. Navigation must **never** search `anchor` globally when
+`context` is missing, because selecting a table-of-contents or heading occurrence
+is worse than refusing to navigate.
+
+If artifact lookup is ambiguous, metadata is corrupt, the context cannot be
+localized, or Word throws, the adapter returns a semantic navigation result and
+the taskpane informs the user instead of silently pretending navigation worked.
 
 ### 4.3 Historically fragile path: resolution
 
@@ -296,12 +308,13 @@ fallback. It mixed:
 That asymmetry is now removed. Resolution search goes through the same shared
 locator capability used by apply and navigation.
 
-### 4.4 Diagnostic diagram: current asymmetry
+### 4.4 Diagnostic diagram: shared localization boundaries
 
 ```mermaid
 flowchart TB
   subgraph APPLY["Apply path"]
-    A1["ApplySuggestionCommand"] --> A2["WordTextLocatorAdapter"]
+    A1["ApplySuggestionCommand"] --> A0["SuggestionTextRangeLocator"]
+    A0 --> A2["WordTextLocatorAdapter"]
     A2 --> A3["exact search"]
     A2 --> A4["ignorePunct + ignoreSpace"]
     A2 --> A5["TextSearchCore fallback"]
@@ -311,21 +324,24 @@ flowchart TB
   end
 
   subgraph NAV["Navigation path"]
-    N1["WordAdapter.navigateToText"] --> N2["artifact lookup by tag/title"]
-    N2 --> N3["valid compound-v2 candidate preferred"]
-    N3 --> N4["fallback via WordTextLocatorAdapter"]
+    N1["WordAdapter.navigateToText"] --> N2["SuggestionArtifactLocator"]
+    N2 --> N3["select safe artifact range"]
+    N2 --> N4["missing artifact only"]
+    N4 --> N5["SuggestionTextRangeLocator"]
+    N5 --> N6["context -> anchor"]
+    N2 --> N7["ambiguous / identity-lost => no navigation"]
   end
 
   subgraph RESOLVE["Resolution path"]
-    R1["ResolveSuggestionCommand"] --> R2["SuggestionResolutionObserver"]
-    R2 --> R3["WordTextLocatorAdapter"]
-    R3 --> R4["TextSearchCore"]
-    R1 --> R5["split collaborators by responsibility"]
+    R1["ResolveSuggestionCommand"] --> R2["SuggestionArtifactLocator"]
+    R2 --> R3["SuggestionResolutionObserver"]
+    R3 --> R4["tracked-change evidence"]
+    R1 --> R5["accept/reject executor"]
   end
 ```
 
-This asymmetry explains why some features behaved well while resolution remained
-the hotspot.
+The key rule is: reuse localization services, not complete workflows. Navigation
+selects only; apply inserts text; resolution accepts/rejects tracked changes.
 
 ---
 
@@ -573,19 +589,47 @@ Current implementation status:
 - `WordTextLocatorContext.ts` is still a real boundary file, not a barrel: it
   owns the shared types plus the currently authorized default-locator wiring.
 
+#### `SuggestionTextRangeLocator`
+
+Owns suggestion-level textual localization:
+
+- find the backend-provided `context` in the Word body,
+- load the localized context and containing paragraph,
+- find `anchor` only inside the localized context or its paragraph,
+- return `null` instead of widening to a global body-wide anchor search.
+
+This locator is shared by apply and navigation. Apply uses the resulting range as
+a mutation target; navigation uses it only as a fallback selection target when no
+persisted artifact exists.
+
+#### `SuggestionArtifactLocator`
+
+Owns persisted Stylistic artifact lookup:
+
+- track-change suggestions: exact operational wrapper tag
+  `stylistic-operational-wrapper:{id}` plus valid `compound-v2` metadata,
+- comment-only suggestions: exact canonical tag `stylistic:comment-only:{id}`,
+- duplicate valid wrappers become `ambiguous-location`,
+- malformed Stylistic metadata becomes `identity-lost`,
+- no selected artifact is returned unless the lookup is unique and safe.
+
+This locator is shared by navigation and accept/reject resolution. Navigation
+selects the safe artifact range. Resolution continues with tracked-change
+observation and mutation after the artifact is located.
+
 #### `SuggestionLocator`
 
-Owns artifact lookup and candidate ranking:
+Owns resolution-specific artifact orchestration:
 
-- find content controls by canonical tag,
-- rank candidates with valid `compound-v2` identity first,
+- delegate base artifact lookup to `SuggestionArtifactLocator`,
 - find colocated stylistic comments when required,
 - return one located artifact bundle to the resolution workflow.
 
 Current Phase 4 status:
 
-- `SuggestionLocator.ts` now exists and owns content-control lookup, candidate
-  ranking, and colocated comment discovery.
+- `SuggestionLocator.ts` now delegates content-control lookup and candidate
+  classification to `SuggestionArtifactLocator`; it keeps colocated comment
+  discovery because that is resolution-specific.
 - `ResolveSuggestionCommand.ts` no longer performs tag lookup or duplicate-tag
   ranking itself.
 

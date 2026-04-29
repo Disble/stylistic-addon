@@ -4,7 +4,10 @@ import type {
   ApplySuggestionsResult,
   SuggestionApplicationFailure,
 } from "../domain/DocumentApplication.types";
-import type { Suggestion } from "../domain/suggestion/Suggestion.types";
+import type {
+  Suggestion,
+  SuggestionNavigationResult,
+} from "../domain/suggestion/Suggestion.types";
 
 const hoistedTaskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],
@@ -24,7 +27,9 @@ const hoistedTaskpaneMocks = vi.hoisted(() => ({
   acceptSuggestion: vi.fn(),
   rejectSuggestion: vi.fn(),
   disableTrackChanges: vi.fn<() => Promise<void>>(),
-  navigateToText: vi.fn<(target: Suggestion | string) => Promise<void>>(),
+  navigateToText: vi.fn<
+    (target: Suggestion | string) => Promise<SuggestionNavigationResult>
+  >(),
   mastraAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
   feedbackSendFeedback: vi.fn<(payload: any) => Promise<void>>(),
@@ -526,6 +531,7 @@ export function resetTaskpaneHarness() {
   });
   taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
   taskpaneMocks.disableTrackChanges.mockResolvedValue(undefined);
+  taskpaneMocks.navigateToText.mockResolvedValue({ status: "navigated" });
   taskpaneMocks.acceptSuggestion.mockResolvedValue({
     status: "accepted",
     trackedChangesAffected: 2,

@@ -19,7 +19,10 @@ import type {
   IResolutionObservabilityPort,
 } from "../../domain/ports";
 import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
-import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type {
+  Suggestion,
+  SuggestionNavigationResult,
+} from "../../domain/suggestion/Suggestion.types";
 import type { SuggestionActionResult } from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
 import type { TextSource } from "../../domain/TextSource.types";
 import { NoopResolutionObservabilityAdapter } from "../observability/NoopResolutionObservabilityAdapter";
@@ -192,7 +195,9 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /** Navigates to the real suggestion artifact when available. */
-  async navigateToText(target: Suggestion | string): Promise<void> {
-    await this.suggestionNavigationAdapter.navigateToText(target);
+  async navigateToText(
+    target: Suggestion | string,
+  ): Promise<SuggestionNavigationResult> {
+    return this.suggestionNavigationAdapter.navigateToText(target);
   }
 }

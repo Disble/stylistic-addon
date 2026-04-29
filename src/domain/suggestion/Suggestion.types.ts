@@ -64,6 +64,23 @@ export interface Suggestion {
   positionHint?: SuggestionBatchPositionHint;
 }
 
+/** User-visible result of trying to move the Word selection to a suggestion. */
+export type SuggestionNavigationResult =
+  | { status: "navigated" }
+  | {
+      status: "not-found";
+      reason:
+        | "artifact-not-found"
+        | "context-not-found"
+        | "anchor-not-found"
+        | "plain-text-not-found";
+    }
+  | {
+      status: "ambiguous";
+      reason: "multiple-artifacts" | "identity-lost" | "mixed-group";
+    }
+  | { status: "failed"; reason: "word-error" };
+
 /** Observation confidence for a suggestion materialized in Word. */
 export type SuggestionObservationStatus =
   | "confirmed-pending"

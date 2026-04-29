@@ -1,4 +1,7 @@
-import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type {
+  Suggestion,
+  SuggestionNavigationResult,
+} from "../../domain/suggestion/Suggestion.types";
 import {
   mapResultStatusToState,
   SuggestionStateMachine,
@@ -19,6 +22,26 @@ import {
   applySuggestionCardState,
   updateResultsSummaryAfterResolution,
 } from "./SuggestionCardStateRenderer";
+
+const NAVIGATION_NOTE_CLASS = "result-navigation-note";
+
+/** Renders a single informational note when safe navigation is not possible. */
+function renderNavigationResult(
+  li: HTMLElement,
+  result: SuggestionNavigationResult,
+): void {
+  li.querySelector(`.${NAVIGATION_NOTE_CLASS}`)?.remove();
+
+  if (result.status === "navigated") {
+    return;
+  }
+
+  appendNote(
+    li,
+    "(no se pudo ubicar la sugerencia de forma segura)",
+    NAVIGATION_NOTE_CLASS,
+  );
+}
 
 /** Handles an accept action for one suggestion card. */
 export async function handleAcceptSuggestion(
@@ -116,7 +139,9 @@ export function wireSuggestionCardInteractions(
   ) as HTMLElement | null;
   if (clickableEl) {
     clickableEl.addEventListener("click", () => {
-      void deps.navigateToText(suggestion);
+      void deps
+        .navigateToText(suggestion)
+        .then((result) => renderNavigationResult(li, result));
     });
   }
 

@@ -161,10 +161,17 @@ interface WorkflowOutput {
 
 ## Critical Constraint: context.includes(anchor)
 
-The `anchor` in every suggestion **must** be an exact, character-for-character substring of the `context`. The frontend uses Word's `body.search()` API with `matchCase: true` to locate the context, then searches for the anchor within that context. If the anchor doesn't match exactly:
+The `anchor` in every suggestion **must** be an exact, character-for-character substring of the `context`. The frontend locates the context first, then searches for the anchor within that localized scope. If the anchor doesn't match exactly:
 
 - The suggestion will silently fail (reported as "not found")
 - No tracked change will be inserted for that suggestion
+- Later cursor navigation may refuse to move because the add-in will not fall
+  back to a global anchor search
+
+This strictness is intentional. A global anchor search can select an unrelated
+occurrence in a table of contents, heading, or repeated paragraph. The backend
+contract must therefore provide enough context to make `context -> anchor`
+localization safe.
 
 **Do:**
 - Return `"completamente necesario"` (exact match from input)

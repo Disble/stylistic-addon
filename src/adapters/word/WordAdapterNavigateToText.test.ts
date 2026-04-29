@@ -5,6 +5,7 @@ import {
   installRejectingWord,
   installWordWithContext,
   makeOperationalWrapperTitle,
+  makeOperationalWrapperTag,
   makeSuggestion,
 } from "./WordAdapterActionTestHelper";
 
@@ -26,8 +27,11 @@ describe("WordAdapter.navigateToText", () => {
     const ccResult = {
       items: [
         {
-          tag: "stylistic:track-change:s-1",
-          title: 'stylistic-meta-v2:{"version":"operational-wrapper-v1","suggestionId":"s-1","insertedSideRef":{"kind":"content-control","role":"inserted-side","value":"stylistic:track-change:s-1"},"deletedSideRef":{"kind":"anchor","role":"deleted-side","value":"fragmento exacto"},"anchorRef":{"kind":"anchor","role":"operational-anchor","value":"Contexto con fragmento exacto."},"groupId":"s-1","groupIndex":0,"groupSize":1}',
+          tag: makeOperationalWrapperTag("s-1"),
+          title: makeOperationalWrapperTitle({
+            deletedValue: "fragmento exacto",
+            anchorValue: "Contexto con fragmento exacto.",
+          }),
           getRange: vi.fn(() => selectedRange),
         },
       ],
@@ -54,10 +58,10 @@ describe("WordAdapter.navigateToText", () => {
           context: "Contexto con fragmento exacto.",
         }),
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ status: "navigated" });
 
     expect(context.document.contentControls.getByTag).toHaveBeenCalledWith(
-      "stylistic:track-change:s-1",
+      makeOperationalWrapperTag("s-1"),
     );
     expect(select).toHaveBeenCalledOnce();
     expect(context.document.body.search).not.toHaveBeenCalled();
@@ -122,7 +126,7 @@ describe("WordAdapter.navigateToText", () => {
           context: "Contexto con fragmento exacto.",
         }),
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ status: "navigated" });
 
     expect(body.search).toHaveBeenCalledWith("Contexto con fragmento exacto.", {
       matchCase: true,
@@ -141,7 +145,7 @@ describe("WordAdapter.navigateToText", () => {
     const ccResult = {
       items: [
         {
-          tag: "stylistic:track-change:chunk0-0",
+          tag: makeOperationalWrapperTag("chunk0-0"),
           title: makeOperationalWrapperTitle({
             suggestionId: "chunk0-0",
             insertedTag: "stylistic:track-change:chunk0-0",
@@ -151,7 +155,7 @@ describe("WordAdapter.navigateToText", () => {
           getRange: vi.fn(() => ({ select: staleSelect })),
         },
         {
-          tag: "stylistic:track-change:chunk0-0",
+          tag: makeOperationalWrapperTag("chunk0-0"),
           title: makeOperationalWrapperTitle({
             suggestionId: "chunk0-0",
             insertedTag: "stylistic:track-change:chunk0-0",
@@ -185,7 +189,7 @@ describe("WordAdapter.navigateToText", () => {
           context: "Contexto con fragmento actual.",
         }),
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ status: "navigated" });
 
     expect(currentSelect).toHaveBeenCalledOnce();
     expect(staleSelect).not.toHaveBeenCalled();
@@ -209,7 +213,9 @@ describe("WordAdapter.navigateToText", () => {
 
     installWordWithContext(context);
 
-    await expect(adapter.navigateToText("fragmento exacto")).resolves.toBeUndefined();
+    await expect(adapter.navigateToText("fragmento exacto")).resolves.toEqual({
+      status: "navigated",
+    });
 
     expect(context.document.body.search).toHaveBeenCalledWith("fragmento exacto", {
       matchCase: true,
@@ -238,7 +244,9 @@ describe("WordAdapter.navigateToText", () => {
     installWordWithContext(context);
     adapter = new WordAdapter(textLocator);
 
-    await expect(adapter.navigateToText("fragmento exacto")).resolves.toBeUndefined();
+    await expect(adapter.navigateToText("fragmento exacto")).resolves.toEqual({
+      status: "navigated",
+    });
 
     expect(locate).toHaveBeenCalledOnce();
     expect(locate).toHaveBeenCalledWith({
@@ -294,7 +302,9 @@ describe("WordAdapter.navigateToText", () => {
       context: "Contexto con fragmento exacto.",
     });
 
-    await expect(adapter.navigateToText(suggestion)).resolves.toBeUndefined();
+    await expect(adapter.navigateToText(suggestion)).resolves.toEqual({
+      status: "navigated",
+    });
 
     expect(locate).toHaveBeenCalledTimes(2);
     expect(locate).toHaveBeenNthCalledWith(1, {
@@ -329,7 +339,10 @@ describe("WordAdapter.navigateToText", () => {
 
     installWordWithContext(context);
 
-    await expect(adapter.navigateToText("ausente")).resolves.toBeUndefined();
+    await expect(adapter.navigateToText("ausente")).resolves.toEqual({
+      status: "not-found",
+      reason: "plain-text-not-found",
+    });
 
     expect(results.load).toHaveBeenCalledWith("items");
     expect(context.document.body.load).toHaveBeenCalledWith("text");
@@ -339,7 +352,10 @@ describe("WordAdapter.navigateToText", () => {
   it("swallows Word host failures because navigation is best-effort", async () => {
     const run = installRejectingWord(new Error("Office host unavailable"));
 
-    await expect(adapter.navigateToText("fragmento exacto")).resolves.toBeUndefined();
+    await expect(adapter.navigateToText("fragmento exacto")).resolves.toEqual({
+      status: "failed",
+      reason: "word-error",
+    });
 
     expect(run).toHaveBeenCalledOnce();
   });

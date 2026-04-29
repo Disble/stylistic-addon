@@ -562,7 +562,7 @@ The project discovered an important modeling problem:
 
 - some behaviors currently rely on frontend-generated IDs,
 - others rely on `context + anchor`,
-- others rely only on `anchor`,
+- legacy paths used to rely only on `anchor`,
 - persisted Word tags also carry their own operational identifier form.
 
 That is an identity policy spread across accidental implementation details.
@@ -575,6 +575,20 @@ The corrected direction is:
 This document does not finalize the exact identity serialization yet, but it does record the principle:
 
 > One suggestion = one domain identity. Word artifact handles are references, not competing identities.
+
+### Navigation identity and localization rule
+
+Suggestion navigation now follows the same identity principle:
+
+1. use the persisted Word artifact as an operational reference when it is unique
+   and valid,
+2. if the artifact is missing, fall back only to `context + anchor`,
+3. never use `anchor` alone as a navigation identity.
+
+This is a user-experience rule, not just an implementation detail. Selecting the
+wrong repeated word in Word is worse than refusing to navigate, so ambiguous or
+unsafe navigation returns a semantic no-navigation result for the taskpane to
+display.
 
 ### Important extension for replace suggestions
 

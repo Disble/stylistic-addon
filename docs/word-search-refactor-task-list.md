@@ -225,12 +225,13 @@ Phase 3 is now complete.
   it now depends on `TextLocator` by injection.
 - `BatchApplyOrchestrator.ts` is the current apply composition point for the
   default locator.
-- `WordAdapter.ts` now routes navigation fallback search through the injected
-  `TextLocator`, so apply and navigation share the same Office.js location
-  strategy.
+- Navigation no longer calls the injected `TextLocator` as a loose fallback by
+  itself. It routes suggestion fallback through `SuggestionTextRangeLocator`,
+  which composes the same `TextLocator` but enforces `context -> anchor` scope
+  and forbids global anchor search.
 - The navigation regression suite now proves both the default path and the
-  injected-locator path, closing the adapter contract/migration evidence for
-  Phase 3.
+  injected-locator path, including the no-global-anchor regression that prevents
+  selecting unrelated TOC/heading occurrences.
 - The next bounded slice should move into Phase 4 and start splitting
   `ResolveSuggestionCommand` from the outside in.
 

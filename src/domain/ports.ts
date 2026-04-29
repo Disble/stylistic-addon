@@ -24,7 +24,10 @@ import type {
 } from "./mastra/MastraWorkflow.types";
 import type { ProgressCallback } from "./pipeline/PipelineEvents.types";
 import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
-import type { Suggestion } from "./suggestion/Suggestion.types";
+import type {
+  Suggestion,
+  SuggestionNavigationResult,
+} from "./suggestion/Suggestion.types";
 import type {
   FeedbackPayload,
   ResolutionObservabilityEvent,
@@ -120,11 +123,16 @@ export interface IDocumentPort {
 
   /**
    * Navigates the document view to the real Word artifact for one suggestion.
-   * Prefers persisted Stylistic identity and falls back to text search only when
-   * the artifact can no longer be re-located directly.
-   * Never throws — silently no-ops if the target is not found.
+   * Prefers persisted Stylistic identity and falls back only to strict
+   * `context -> anchor` text localization when the artifact no longer exists.
+   * It must never use global anchor search for suggestions because selecting the
+   * wrong occurrence is more harmful than refusing to navigate.
+   * Never throws. Returns a semantic result so the UI can inform the user when
+   * no safe navigation target exists.
    */
-  navigateToText(target: Suggestion | string): Promise<void>;
+  navigateToText(
+    target: Suggestion | string,
+  ): Promise<SuggestionNavigationResult>;
 }
 
 // ---------------------------------------------------------------------------

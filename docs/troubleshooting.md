@@ -163,6 +163,32 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 ---
 
+### Clicking a suggestion does not move the cursor
+
+**Symptom:** Clicking a suggestion card in the taskpane leaves the Word cursor in
+place and the card shows an informational note similar to
+`(no se pudo ubicar la sugerencia de forma segura)`.
+
+**Expected behavior.** Navigation is now intentionally conservative. The add-in
+will only move the cursor when it can locate a safe target:
+
+1. for `track-change`, the operational wrapper Content Control with valid
+   `compound-v2` metadata,
+2. for `comment-only`, the canonical comment-only Content Control,
+3. if the artifact is missing, the exact `anchor` inside the localized `context`.
+
+If the artifact is ambiguous/corrupt, Word cannot be queried, or the context
+cannot be localized, the add-in refuses to navigate. This prevents the older bug
+where a global anchor search could select an unrelated occurrence in the table of
+contents or a heading.
+
+**What to inspect:** Check whether the document still contains the Stylistic
+Content Controls for the suggestion. If metadata is missing, verify that the
+backend suggestion still satisfies `context.includes(anchor)` and that the
+context text exists in the document after user edits.
+
+---
+
 ## Comment Cleanup Issues
 
 ### Accepted/rejected suggestions leave invisible Stylistic metadata
