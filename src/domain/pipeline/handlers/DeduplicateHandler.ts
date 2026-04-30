@@ -3,9 +3,10 @@
 /**
  * DeduplicateHandler — Phase 5 of the analysis pipeline.
  *
- * Removes suggestions with duplicate `(context, anchor)` pairs that arise when
- * the same suggestion is returned more than once across chunks. Only the first
- * occurrence is kept (case-insensitive comparison).
+ * Removes duplicate suggestions that arise when the same semantic issue is
+ * returned more than once across chunks. Track-change suggestions use their
+ * mutating `(context, anchor)` target; comment-only suggestions use the exact
+ * visible comment identity, not their transport id.
  *
  * Deduplication is a data integrity step: applying the same anchor inside the
  * same context twice would search for text that is no longer present after the
@@ -38,20 +39,37 @@ export class DeduplicateHandler implements PipelineHandler {
     await next();
   }
 
-  /** Deduplicates track-change suggestions by a composite `context:anchor` key. */
+  /** Deduplicates suggestions by the semantic identity that would hit Word. */
   private deduplicateByContextAnchor(suggestions: Suggestion[]): Suggestion[] {
     const seen = new Set<string>();
     return suggestions.filter((s) => {
-      // comment-only suggestions are never deduplicated against each other:
-      // each one is unique per backend response (keyed by id) and targeting
-      // the same anchor with a comment is valid across analysis runs.
-      const key =
-        s.type === "comment-only"
-          ? s.id
-          : `${s.context}:${s.anchor}`.toLowerCase();
+      const key = this.buildDeduplicationKey(s);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+  }
+
+  /** Builds the deduplication key without treating transport ids as identity. */
+  private buildDeduplicationKey(suggestion: Suggestion): string {
+    if (suggestion.type === "comment-only") {
+      return [
+        suggestion.type,
+        suggestion.context,
+        suggestion.anchor,
+        suggestion.justification,
+        suggestion.category,
+        suggestion.severity,
+      ]
+        .map((part) => this.normalizeKeyPart(part))
+        .join(":");
+    }
+
+    return `${suggestion.context}:${suggestion.anchor}`.toLowerCase();
+  }
+
+  /** Normalizes free-text fields so cosmetic casing/spacing cannot bypass dedupe. */
+  private normalizeKeyPart(part: string | undefined): string {
+    return (part ?? "").trim().replace(/\s+/g, " ").toLowerCase();
   }
 }

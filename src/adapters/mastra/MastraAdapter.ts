@@ -282,6 +282,22 @@ export class MastraAdapter implements IAnalysisPort {
     chunkIndex: number,
     runId: string,
   ): ChunkPollResult {
+    // The bypass fixture represents one backend response, not one response per
+    // chunk. Returning it only for chunk 0 keeps multi-chunk document tests from
+    // multiplying the same mock suggestions into hundreds of Word mutations.
+    if (chunkIndex !== 0) {
+      console.log(
+        `🧪 [MastraAdapter] Poll bypass activo para chunk #${chunkIndex} → 0 sugerencias mockeadas`,
+      );
+
+      return {
+        chunkIndex,
+        runId,
+        status: "success",
+        suggestions: [],
+      };
+    }
+
     const suggestions = this.mapSuggestions(
       MOCK_MASTRA_POLL_OUTPUT.suggestions,
       chunkIndex,

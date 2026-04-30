@@ -131,6 +131,37 @@ describe("MastraAdapter", () => {
     expect(mastraMocks.getWorkflow).not.toHaveBeenCalled();
   });
 
+  it("returns the bypass mock only for the first chunk", async () => {
+    vi.doUnmock("../../infrastructure/config");
+    vi.doMock("../../infrastructure/config", async () => {
+      const actual = await vi.importActual<typeof import("../../infrastructure/config")>(
+        "../../infrastructure/config",
+      );
+
+      return {
+        ...actual,
+        MASTRA_POLL_BYPASS_ENABLED: true,
+      };
+    });
+
+    const { MastraAdapter } = await importAdapterModule();
+    const adapter = new MastraAdapter();
+
+    const firstChunk = await adapter.pollChunkAnalysis(0, "bypass-run-0");
+    const laterChunk = await adapter.pollChunkAnalysis(1, "bypass-run-1");
+
+    expect(firstChunk.status).toBe("success");
+    expect(firstChunk.suggestions).toHaveLength(23);
+    expect(firstChunk.suggestions[0].id).toBe("chunk0-0");
+    expect(laterChunk).toEqual({
+      chunkIndex: 1,
+      runId: "bypass-run-1",
+      status: "success",
+      suggestions: [],
+    });
+    expect(mastraMocks.getWorkflow).not.toHaveBeenCalled();
+  });
+
   it("submits chunk analysis with workflow input and returns the created runId", async () => {
     const { MastraAdapter } = await importAdapterModule();
     const adapter = new MastraAdapter();

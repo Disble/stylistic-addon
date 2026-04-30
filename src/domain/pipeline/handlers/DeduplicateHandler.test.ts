@@ -363,7 +363,7 @@ describe("DeduplicateHandler", () => {
   });
 
   // -----------------------------------------------------------------------
-  // comment-only suggestions — never deduplicated by anchor
+  // comment-only suggestions — deduplicated by exact semantic identity
   // -----------------------------------------------------------------------
 
   describe("comment-only deduplication behavior", () => {
@@ -396,7 +396,7 @@ describe("DeduplicateHandler", () => {
     });
 
     it("should deduplicate track-change while keeping all comment-only when both share the same anchor", async () => {
-      // track-change duplicates are still deduplicated; comment-only are not
+      // track-change duplicates are still deduplicated; comment-only with different content are kept
       const suggestions = [
         makeSuggestion({ id: "tc1", anchor: "frase compartida", context: "Contexto compartido" }),
         makeSuggestion({ id: "tc2", anchor: "frase compartida", context: "Contexto compartido" }), // dup — removed
@@ -424,37 +424,50 @@ describe("DeduplicateHandler", () => {
       ]);
     });
 
-    it("should use suggestion id as the dedup key for comment-only, not anchor", async () => {
-      // Two comment-only with different ids but same anchor → both kept
+    it("should deduplicate exact semantic comment-only duplicates even with different ids", async () => {
       const s1 = makeCommentOnlySuggestion({
-        id: "unique-id-1",
+        id: "chunk0-9",
         anchor: "shared",
-        context: "Contexto shared uno",
+        context: "Contexto shared",
+        justification: "Misma observación",
+        category: "estilo",
       });
       const s2 = makeCommentOnlySuggestion({
-        id: "unique-id-2",
+        id: "chunk1-9",
         anchor: "shared",
-        context: "Contexto shared dos",
+        context: "Contexto shared",
+        justification: "Misma observación",
+        category: "estilo",
       });
       const ctx = makePipelineContext([s1, s2]);
 
       await handler.handle(ctx, next);
 
-      expect(ctx.uniqueSuggestions).toHaveLength(2);
+      expect(ctx.uniqueSuggestions).toHaveLength(1);
+      expect(ctx.uniqueSuggestions?.[0].id).toBe("chunk0-9");
     });
 
-    it("should remove a comment-only suggestion only if its id is repeated (exact duplicate object)", async () => {
-        // Same id means it truly is the exact same backend suggestion seen twice
+    it("should keep comment-only suggestions on the same anchor when the comment differs", async () => {
       const suggestions = [
-        makeCommentOnlySuggestion({ id: "same-id", anchor: "frase", context: "Contexto frase uno" }),
-        makeCommentOnlySuggestion({ id: "same-id", anchor: "frase", context: "Contexto frase dos" }), // exact dup — removed
+        makeCommentOnlySuggestion({
+          id: "c1",
+          anchor: "shared",
+          context: "Contexto shared",
+          justification: "Primera observación",
+        }),
+        makeCommentOnlySuggestion({
+          id: "c2",
+          anchor: "shared",
+          context: "Contexto shared",
+          justification: "Segunda observación",
+        }),
       ];
       const ctx = makePipelineContext(suggestions);
 
       await handler.handle(ctx, next);
 
-      expect(ctx.uniqueSuggestions).toHaveLength(1);
-      expect(ctx.uniqueSuggestions?.[0].id).toBe("same-id");
+      expect(ctx.uniqueSuggestions).toHaveLength(2);
+      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual(["c1", "c2"]);
     });
   });
 });
