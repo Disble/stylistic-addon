@@ -5,6 +5,7 @@ import {
   STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
   STYLISTIC_TAG_PREFIX,
 } from "../../../infrastructure/config";
+import { applySuggestionObservability } from "../../observability/ConsoleApplySuggestionObservabilityAdapter";
 import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
@@ -57,6 +58,11 @@ export class ApplySuggestionOperationalWrapperResolver {
     await context.sync();
 
     const previousTrackingMode = context.document.changeTrackingMode;
+    applySuggestionObservability.logCreatingOperationalWrapper(
+      this.suggestion.id,
+      { previousTrackingMode },
+    );
+
     if (previousTrackingMode !== Word.ChangeTrackingMode.off) {
       context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
       await context.sync();
@@ -91,6 +97,12 @@ export class ApplySuggestionOperationalWrapperResolver {
     parentCC.load("tag,title");
     await context.sync();
 
+    applySuggestionObservability.logParentContentControl(this.suggestion.id, {
+      hasParentContentControl: !parentCC.isNullObject,
+      tag: parentCC.isNullObject ? "" : (parentCC.tag ?? ""),
+      title: parentCC.isNullObject ? "" : (parentCC.title ?? ""),
+    });
+
     if (parentCC.isNullObject) {
       return {
         wrapper: await this.createOperationalWrapper(context, anchorRange),
@@ -104,6 +116,10 @@ export class ApplySuggestionOperationalWrapperResolver {
 
     if (!existingTag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX)) {
       if (isStylisticArtifact) {
+        applySuggestionObservability.warnNonOperationalStylisticContentControl(
+          this.suggestion.id,
+          { existingTag },
+        );
         return { error: "Anchor cubierto por un Content Control existente" };
       }
 
@@ -118,8 +134,17 @@ export class ApplySuggestionOperationalWrapperResolver {
       typeof parentCC.getRange === "function";
 
     if (!canReuseWrapper) {
+      applySuggestionObservability.warnOperationalWrapperIdentityMismatch(
+        this.suggestion.id,
+        { existingTag, title: parentCC.title ?? "" },
+      );
       return { error: "Anchor cubierto por un Content Control existente" };
     }
+
+    applySuggestionObservability.logReusingOperationalWrapper(
+      this.suggestion.id,
+      { existingTag, title: parentCC.title ?? "" },
+    );
 
     return { wrapper: parentCC };
   }

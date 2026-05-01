@@ -1,6 +1,10 @@
 /* global Word, console */
 
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
+import {
+  type ApplySuggestionRangeCandidateDiagnostics,
+  applySuggestionObservability,
+} from "../../observability/ConsoleApplySuggestionObservabilityAdapter";
 import type {
   TextLocator,
   WordSearchContainer,
@@ -57,6 +61,41 @@ export class ApplySuggestionReplaceRangeResolver {
   }
 
   /**
+   * Captures the exact range shape Word exposes for one resolver candidate.
+   *
+   * These diagnostics are intentionally read-only. They exist to distinguish
+   * whether production failures come from the mutation range itself, wrapper
+   * fallback, or paragraph fallback selecting a non-current-only range.
+   */
+  private async inspectCandidate(
+    context: Word.RequestContext,
+    label: string,
+    candidate: Word.Range,
+    expectedCurrentText: string,
+  ): Promise<ApplySuggestionRangeCandidateDiagnostics> {
+    candidate.load("text");
+    const reviewedText = await this.readReviewedText(context, candidate);
+    await context.sync();
+
+    const diagnostics = {
+      text: candidate.text,
+      current: reviewedText.current,
+      original: reviewedText.original,
+      passes:
+        reviewedText.current === expectedCurrentText &&
+        reviewedText.original.length === 0,
+    };
+
+    applySuggestionObservability.logResolverCandidate(
+      this.commandId,
+      label,
+      diagnostics,
+    );
+
+    return diagnostics;
+  }
+
+  /**
    * Re-locates the current inserted side for replace suggestions.
    *
    * Office.js only guarantees that `insertText(..., replace)` returns a `Range`;
@@ -69,15 +108,18 @@ export class ApplySuggestionReplaceRangeResolver {
     wrapperRange: Word.Range,
   ): Promise<Word.Range | null> {
     const expectedCurrentText = this.suggestion.suggestedText ?? "";
-    const reviewedMutationRange = await this.readReviewedText(
+    const mutationDiagnostics = await this.inspectCandidate(
       context,
+      "mutationRange",
       mutationRange,
+      expectedCurrentText,
     );
 
-    if (
-      reviewedMutationRange.current === expectedCurrentText &&
-      reviewedMutationRange.original.length === 0
-    ) {
+    if (mutationDiagnostics.passes) {
+      applySuggestionObservability.logResolverSelected(
+        this.commandId,
+        "mutationRange",
+      );
       return mutationRange;
     }
 
@@ -87,15 +129,28 @@ export class ApplySuggestionReplaceRangeResolver {
       searchText: expectedCurrentText,
     });
 
-    if (
-      directCandidate &&
-      (await this.isCurrentOnlyReviewedRange(
+    if (!directCandidate) {
+      applySuggestionObservability.logResolverCandidateNotFound(
+        this.commandId,
+        "wrapperRange",
+      );
+    }
+
+    if (directCandidate) {
+      const directDiagnostics = await this.inspectCandidate(
         context,
+        "wrapperRange candidate",
         directCandidate,
         expectedCurrentText,
-      ))
-    ) {
-      return directCandidate;
+      );
+
+      if (directDiagnostics.passes) {
+        applySuggestionObservability.logResolverSelected(
+          this.commandId,
+          "wrapperRange candidate",
+        );
+        return directCandidate;
+      }
     }
 
     const paragraphRange = mutationRange.paragraphs
@@ -107,19 +162,32 @@ export class ApplySuggestionReplaceRangeResolver {
       searchText: expectedCurrentText,
     });
 
-    if (
-      paragraphCandidate &&
-      (await this.isCurrentOnlyReviewedRange(
+    if (!paragraphCandidate) {
+      applySuggestionObservability.logResolverCandidateNotFound(
+        this.commandId,
+        "paragraphRange",
+      );
+    }
+
+    if (paragraphCandidate) {
+      const paragraphDiagnostics = await this.inspectCandidate(
         context,
+        "paragraphRange candidate",
         paragraphCandidate,
         expectedCurrentText,
-      ))
-    ) {
-      return paragraphCandidate;
+      );
+
+      if (paragraphDiagnostics.passes) {
+        applySuggestionObservability.logResolverSelected(
+          this.commandId,
+          "paragraphRange candidate",
+        );
+        return paragraphCandidate;
+      }
     }
 
     console.warn(
-      `⚠️ [ApplySuggestionCommand] "${this.commandId}": no se pudo aislar el rango insertado actual (current="${reviewedMutationRange.current}", original="${reviewedMutationRange.original}")`,
+      `⚠️ [ApplySuggestionCommand] "${this.commandId}": no se pudo aislar el rango insertado actual (current="${mutationDiagnostics.current}", original="${mutationDiagnostics.original}")`,
     );
 
     return null;

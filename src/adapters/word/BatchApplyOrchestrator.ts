@@ -26,6 +26,7 @@ import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.type
 import type { DocumentReviewUiState } from "../../domain/review/DocumentReviewStateMachine";
 import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import { applySuggestionObservability } from "../observability/ConsoleApplySuggestionObservabilityAdapter";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
 import { getDefaultTextLocator } from "./WordTextLocatorContext";
 
@@ -94,6 +95,9 @@ export class BatchApplyOrchestrator {
     }
 
     let pendingSuggestions = this.sortByDocumentPosition([...suggestions]);
+    applySuggestionObservability.logPreparedApplicationOrder(
+      pendingSuggestions,
+    );
 
     const failedSuggestions: SuggestionApplicationFailure[] = [];
     let successCount = 0;

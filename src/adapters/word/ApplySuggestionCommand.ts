@@ -28,6 +28,7 @@
 import type { CommandResult } from "../../domain/DocumentApplication.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import { STYLISTIC_TAG_PREFIX } from "../../infrastructure/config";
+import { applySuggestionObservability } from "../observability/ConsoleApplySuggestionObservabilityAdapter";
 import { ApplySuggestionAnchorResolver } from "./apply-suggestion/ApplySuggestionAnchorResolver";
 import { ApplySuggestionIdentityBuilder } from "./apply-suggestion/ApplySuggestionIdentityBuilder";
 import { ApplySuggestionMutationPatchBuilder } from "./apply-suggestion/ApplySuggestionMutationPatchBuilder";
@@ -170,11 +171,20 @@ export class ApplySuggestionCommand {
           .getFirst()
           .getRange("Whole");
         containingParagraph.load("text");
+        context.document.load("changeTrackingMode");
         await context.sync();
 
         console.log(
           `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
         );
+        applySuggestionObservability.logPreMutationScope(this.id, {
+          changeType,
+          changeTrackingMode: context.document.changeTrackingMode,
+          anchor: this.suggestion.anchor,
+          suggestedText: this.suggestion.suggestedText ?? "",
+          paragraphLength: containingParagraph.text.length,
+          paragraphPreview: containingParagraph.text.substring(0, 180),
+        });
 
         const operationalWrapper =
           changeType === "replace"
@@ -196,10 +206,16 @@ export class ApplySuggestionCommand {
           };
         }
 
+        applySuggestionObservability.logMutationTargetResolved(this.id, {
+          usesOperationalWrapper: operationalWrapper !== null,
+          insertLocation: "replace",
+        });
+
         const insertedRange = mutationRange.insertText(
           this.suggestion.suggestedText ?? "",
           Word.InsertLocation.replace,
         );
+        applySuggestionObservability.logInsertTextIssued(this.id);
 
         const annotationRange =
           changeType === "replace"
@@ -211,6 +227,9 @@ export class ApplySuggestionCommand {
             : insertedRange;
 
         if (!annotationRange) {
+          applySuggestionObservability.warnPostMutationIsolationFailure(
+            this.id,
+          );
           return {
             success: false,
             commandId: this.id,
