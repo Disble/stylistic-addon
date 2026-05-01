@@ -109,7 +109,7 @@ export class ConsoleApplySuggestionObservabilityAdapter {
   /** Emits operational wrapper creation diagnostics. */
   logCreatingOperationalWrapper(
     commandId: string,
-    diagnostics: { previousTrackingMode: string },
+    diagnostics: { trackChangesOwnership: string },
   ): void {
     console.log(
       `🔎 [ApplySuggestionCommand] "${commandId}": creating operational wrapper`,

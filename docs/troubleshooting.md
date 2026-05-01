@@ -139,6 +139,17 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 2. **The suggestion matched and replaced identical text.** If `anchor` and `suggestedText` are the same after casing, Word won't show a change.
 3. **The tracking mode was already `TrackAll`.** The changes were made and are there — check the Review pane (**Review** > **Reviewing Pane**).
 
+**What to inspect in developer logs:** For a successful native replace, the
+pre-mutation scope should report `changeTrackingMode: 'TrackAll'`, and the
+annotation resolver should select a candidate whose `current` equals the
+suggested text and whose `original` is `''`. If the replacement is visible but
+`original` is also the suggested text, Word likely made an untracked replacement;
+that is a Track Changes lifecycle bug, not a display issue.
+
+Apply-time operational wrapper creation must not be used to toggle Track Changes
+off and back on. The wrapper only defines mutation/identity scope; the batch
+apply workflow owns Track Changes activation.
+
 ---
 
 ### "No se encontraron sugerencias editoriales"

@@ -8,19 +8,22 @@
  *
  * Each command:
  * 1. Searches the document for the original text (case-sensitive).
- * 2. Calls range.insertText(suggestedText, replace) — assuming the workflow
+ * 2. For replace suggestions, creates or reuses an operational wrapper without
+ *    changing Track Changes state.
+ * 3. Calls range.insertText(suggestedText, replace) — assuming the workflow
  *    layer already enabled Track Changes when appropriate.
- * 3. Re-locates a clean current-side range for replace suggestions when Word
+ * 4. Re-locates a clean current-side range for replace suggestions when Word
  *    returns a hybrid tracked-change span.
- * 4. Inserts a comment on the current inserted side with category + justification.
- * 5. Wraps that current inserted side in a ContentControl tagged
+ * 5. Inserts a comment on the current inserted side with category + justification.
+ * 6. Wraps that current inserted side in a ContentControl tagged
  *    `stylistic:{type}:{id}`.
  *
  * Each suggestion runs in its own `Word.run` context (per-suggestion isolation)
  * to avoid stale ranges after insertions shift document positions.
  *
  * This command intentionally does NOT own Track Changes lifecycle policy.
- * Global document review state is coordinated by the workflow/document layer.
+ * Global document review state is coordinated by the workflow/document layer;
+ * apply-time wrapper creation must not temporarily disable Track Changes.
  *
  * @module ApplySuggestionCommand
  */
@@ -171,15 +174,21 @@ export class ApplySuggestionCommand {
           .getFirst()
           .getRange("Whole");
         containingParagraph.load("text");
-        context.document.load("changeTrackingMode");
+        const shouldReadTrackingMode = changeType === "replace";
+        if (shouldReadTrackingMode) {
+          context.document.load("changeTrackingMode");
+        }
         await context.sync();
+        const preMutationTrackingMode = shouldReadTrackingMode
+          ? context.document.changeTrackingMode
+          : "not-read";
 
         console.log(
           `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
         );
         applySuggestionObservability.logPreMutationScope(this.id, {
           changeType,
-          changeTrackingMode: context.document.changeTrackingMode,
+          changeTrackingMode: preMutationTrackingMode,
           anchor: this.suggestion.anchor,
           suggestedText: this.suggestion.suggestedText ?? "",
           paragraphLength: containingParagraph.text.length,

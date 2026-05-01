@@ -396,6 +396,33 @@ This exception must never be widened into “turn Track Changes off when the
 document looks clean”. The final user-facing deactivation remains the explicit
 `Desactivar control de cambios` CTA.
 
+### 9.9 Apply-time operational wrapper rule
+
+Native replace suggestions use an operational wrapper Content Control to define
+the mutation scope and to persist the identity needed for later accept/reject
+resolution.
+
+That wrapper is **not** a Track Changes lifecycle boundary.
+
+During apply:
+
+1. the batch workflow enables Track Changes lazily before the first real
+   `track-change` suggestion,
+2. the operational wrapper is created or reused without changing
+   `changeTrackingMode`,
+3. the replacement mutation runs while Track Changes remains active,
+4. the inserted/current side is isolated and annotated.
+
+Real Word validation showed this shape produces the expected tracked-change
+evidence: successful replace mutations enter with `TrackAll`, and the annotation
+resolver sees `current === suggestedText` with `original === ""`.
+
+The previous idea of temporarily disabling Track Changes around apply-time
+wrapper creation is now rejected. If Word invalidates that path, later
+replacements can become visible but untracked, which breaks inserted-side
+isolation and makes the UI report false failures. Do **not** reintroduce this as
+a fallback or compatibility branch.
+
 ---
 
 ## 10. Architectural consequences of the requirement change
@@ -415,6 +442,12 @@ But it should no longer be the abstraction that decides:
 - when the user should be offered the final CTA.
 
 That responsibility is above the command level.
+
+For replace suggestions, this also means `ApplySuggestionCommand` may coordinate
+an operational wrapper, but neither the command nor
+`ApplySuggestionOperationalWrapperResolver` may temporarily disable Track
+Changes during apply. The command assumes the batch workflow has prepared the
+document-level review state.
 
 ### 10.2 The analysis flow must continue to use Chain of Responsibility
 
@@ -658,6 +691,8 @@ This section is not the final task plan, but a practical bridge between the arch
 7. Do not auto-disable Track Changes.
 8. Preserve fire-and-forget feedback semantics.
 9. Prepare accept/reject to become a true workflow with explicit application-layer orchestration.
+10. Keep apply-time operational wrapper creation free of `changeTrackingMode`
+    writes.
 
 ### Immediate anti-goals
 
@@ -665,6 +700,8 @@ This section is not the final task plan, but a practical bridge between the arch
 2. Do not let taskpane procedural code become the long-term owner of resolution workflow logic.
 3. Do not use taskpane visibility as the source of truth for pending state.
 4. Do not model debate as current feedback.
+5. Do not add a legacy fallback that disables Track Changes around apply-time
+   operational wrapper creation.
 
 ---
 

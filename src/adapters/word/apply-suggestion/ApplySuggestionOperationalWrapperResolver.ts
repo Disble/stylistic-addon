@@ -40,7 +40,13 @@ type ApplySuggestionOperationalWrapperResolution =
     };
 
 /**
- * Owns operational-wrapper creation, reuse, and in-wrapper re-location.
+ * Owns replace-suggestion operational-wrapper creation, reuse, and in-wrapper
+ * re-location.
+ *
+ * The wrapper defines the mutation and later resolution scope for native replace
+ * suggestions. It is not a Track Changes lifecycle boundary: enabling Track
+ * Changes belongs to the batch apply workflow, and cleanup-time temporary
+ * disabling belongs to the resolution cleanup workflow.
  */
 export class ApplySuggestionOperationalWrapperResolver {
   constructor(
@@ -49,24 +55,22 @@ export class ApplySuggestionOperationalWrapperResolver {
     private readonly identityBuilder: ApplySuggestionIdentityBuilder,
   ) {}
 
-  /** Creates the external operational wrapper before Track Changes mutates the anchor. */
+  /**
+   * Creates the external operational wrapper without owning Track Changes state.
+   *
+   * The batch-level apply workflow is responsible for enabling Track Changes before
+   * replacement mutations. Real Word validation showed wrapper creation works with
+   * Track Changes active; temporarily disabling it here can leave later replacement
+   * mutations untracked when Word invalidates the path.
+   */
   async createOperationalWrapper(
     context: Word.RequestContext,
     anchorRange: Word.Range,
   ): Promise<Word.ContentControl> {
-    context.document.load("changeTrackingMode");
-    await context.sync();
-
-    const previousTrackingMode = context.document.changeTrackingMode;
     applySuggestionObservability.logCreatingOperationalWrapper(
       this.suggestion.id,
-      { previousTrackingMode },
+      { trackChangesOwnership: "batch-apply-workflow" },
     );
-
-    if (previousTrackingMode !== Word.ChangeTrackingMode.off) {
-      context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
-      await context.sync();
-    }
 
     const wrapper = anchorRange.insertContentControl();
     wrapper.tag = this.identityBuilder.buildOperationalWrapperTag(
@@ -78,11 +82,6 @@ export class ApplySuggestionOperationalWrapperResolver {
     wrapper.appearance = "Hidden";
     wrapper.cannotDelete = false;
     await context.sync();
-
-    if (previousTrackingMode !== Word.ChangeTrackingMode.off) {
-      context.document.changeTrackingMode = previousTrackingMode;
-      await context.sync();
-    }
 
     return wrapper;
   }

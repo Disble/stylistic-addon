@@ -93,6 +93,8 @@ The current architecture already has several strong decisions in place:
 - Word document operations are hidden behind `IDocumentPort`,
 - Track Changes lifecycle is owned by `BatchApplyOrchestrator`, not by each
   apply command,
+- apply-time operational wrapper creation never disables Track Changes; wrappers
+  are identity/scope artifacts, not lifecycle toggles,
 - replace suggestions use `compound-v2` metadata to avoid false terminal
   certainty from weak observation,
 - ambiguous resolution states degrade to `unobservable` or `identity-lost`
@@ -269,6 +271,19 @@ uses `WordTextLocatorAdapter`, backed by `TextSearchCore`, to tolerate:
 - locator shortening when the exact slice is too long for Word.
 
 That is why apply was comparatively resilient in real documents.
+
+For native replace suggestions, apply also creates or reuses an operational
+wrapper Content Control before the replacement mutation. That wrapper defines the
+mutation scope and persists replace identity metadata, but it does **not** own
+Track Changes state. The batch apply workflow must already have enabled Track
+Changes when needed, and wrapper creation must not temporarily set
+`changeTrackingMode` to `off`.
+
+This rule is deliberately strict. Real Word validation showed that wrapper
+creation succeeds while Track Changes is active, and disabling Track Changes
+around wrapper creation can leave later replacements visible but untracked when
+Word invalidates the path. Do not reintroduce that behavior as a defensive
+fallback.
 
 ### 4.2 Robust path: navigation
 
@@ -681,6 +696,9 @@ Current Phase 4 status:
 This temporary Track Changes toggle is **not** lifecycle ownership. It is a
 bounded housekeeping guard around deleting add-in-owned metadata after Word has
 already accepted or rejected the native tracked changes.
+
+This exception must remain isolated to cleanup. It does not justify disabling
+Track Changes during apply-time operational wrapper creation.
 
 #### `DocumentReviewStateInspector`
 
