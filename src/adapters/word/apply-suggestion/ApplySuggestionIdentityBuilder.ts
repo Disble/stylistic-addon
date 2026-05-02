@@ -8,11 +8,14 @@ import {
   STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
   STYLISTIC_TAG_PREFIX,
 } from "../../../infrastructure/config";
+import { TrackChangeSubtypeResolver } from "./TrackChangeSubtypeResolver";
 
 /**
  * Builds persisted identity artifacts used by `ApplySuggestionCommand`.
  */
 export class ApplySuggestionIdentityBuilder {
+  private readonly subtypeResolver = new TrackChangeSubtypeResolver();
+
   /** Returns the canonical Stylistic tag for one suggestion. */
   buildSuggestionTag(suggestion: Suggestion): string {
     return `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
@@ -45,9 +48,51 @@ export class ApplySuggestionIdentityBuilder {
    * explicitly so later observation can distinguish legacy vs v2 behavior.
    */
   buildReplaceIdentity(suggestion: Suggestion): ReplaceSuggestionIdentity {
-    return {
+    const subtypeResolution = this.subtypeResolver.resolve(suggestion);
+    const subtype =
+      subtypeResolution.subtype === "insert"
+        ? "replace"
+        : subtypeResolution.subtype;
+    const baseIdentity = {
       suggestionId: suggestion.id,
+      version: "operational-wrapper-v1" as const,
+      anchorRef: this.createArtifactRef(
+        "anchor",
+        "operational-anchor",
+        suggestion.context,
+      ),
+      groupId: suggestion.id,
+      groupIndex: 0,
+      groupSize: 1,
+    };
+
+    if (subtype === "delete-only") {
+      return {
+        ...baseIdentity,
+        trackChangeSubtype: "delete-only",
+        deletedSideRef: this.createArtifactRef(
+          "anchor",
+          "delete-side",
+          suggestion.anchor,
+        ),
+      };
+    }
+
+    if (subtype === "formatting") {
+      return {
+        ...baseIdentity,
+        trackChangeSubtype: "formatting",
+        formatSideRef: this.createArtifactRef(
+          "content-control",
+          "format-side",
+          this.buildSuggestionTag(suggestion),
+        ),
+      };
+    }
+
+    return {
       version: "operational-wrapper-v1",
+      suggestionId: suggestion.id,
       insertedSideRef: this.createArtifactRef(
         "content-control",
         "inserted-side",

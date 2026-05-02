@@ -11,6 +11,7 @@ export type ParentCC = {
 
 export type MockRange = {
   text: string;
+  font: { italic: boolean; bold: boolean };
   load: ReturnType<typeof vi.fn>;
   search: ReturnType<typeof vi.fn>;
   insertText: ReturnType<typeof vi.fn>;
@@ -40,6 +41,8 @@ export type ApplyCommandTestContext = {
   bodyRange: MockRange;
   anchorRange: MockRange;
   insertedRange: {
+    text: string;
+    font: { italic: boolean; bold: boolean };
     getReviewedText: ReturnType<typeof vi.fn>;
     paragraphs: {
       getFirst: ReturnType<typeof vi.fn>;
@@ -61,6 +64,7 @@ export type ApplyCommandTestContext = {
     cannotDelete: boolean;
     getRange: ReturnType<typeof vi.fn>;
   };
+  operationalWrapperRange: MockRange;
 };
 
 function createRangeCollection(items: MockRange[]): RangeCollection {
@@ -129,6 +133,7 @@ export function createRange(options: {
 
   return {
     text: options.text,
+    font: { italic: false, bold: false },
     load: vi.fn(),
     search: createSearchMock(options.searchSequence ?? [[]]),
     insertText: vi.fn(
@@ -210,11 +215,10 @@ export function installWordContext(options: {
   const documentText = options.documentText ?? contextText;
 
   const cc = { tag: "", title: "", appearance: "", cannotDelete: true };
-  const operationalWrapperRange = {
+  const operationalWrapperRange = createRange({
     text: contextText,
-    load: vi.fn(),
-    search: vi.fn(),
-  };
+    paragraphText: contextText,
+  });
   const operationalWrapper = {
     tag: "",
     title: "",
@@ -332,6 +336,7 @@ export function installWordContext(options: {
     insertedRange,
     cc,
     operationalWrapper,
+    operationalWrapperRange,
   };
 
   options.setupParagraphSearch?.(

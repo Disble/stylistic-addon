@@ -333,6 +333,66 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     expect(isolatedInsertedRange.insertContentControl).toHaveBeenCalledOnce();
   });
 
+  it("annotates delete-only suggestions on the operational wrapper instead of an inserted side", async () => {
+    const env = installWordContext();
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "delete-only-1",
+        anchor: "texto original",
+        suggestedText: "",
+        context: "Contexto con texto original.",
+        type: "track-change",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toMatchObject({
+      success: true,
+      commandId: "delete-only-1",
+      mutationPatch: {
+        suggestionId: "delete-only-1",
+        snapshotVersion: 1,
+        originalText: "Contexto con texto original.",
+        updatedText: "Contexto con .",
+        deltaLength: -14,
+        affectedStart: 13,
+        affectedEnd: 27,
+      },
+    });
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith("", "Replace");
+    expect(env.operationalWrapperRange.insertComment).toHaveBeenCalledWith(
+      "[Estilo]\nMejora la claridad",
+    );
+    expect(env.operationalWrapperRange.insertContentControl).toHaveBeenCalledOnce();
+    expect(env.insertedRange.insertComment).not.toHaveBeenCalled();
+    expect(env.insertedRange.insertContentControl).not.toHaveBeenCalled();
+  });
+
+  it("applies markdown typography as native formatting without inserting literal asterisks", async () => {
+    const env = installWordContext();
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({
+        id: "format-italic-1",
+        anchor: "texto original",
+        suggestedText: "*texto original*",
+        context: "Contexto con texto original.",
+        type: "track-change",
+      }),
+      textLocator,
+    ).execute();
+
+    expect(result).toEqual({ success: true, commandId: "format-italic-1" });
+    expect(env.anchorRange.font.italic).toBe(true);
+    expect(env.anchorRange.font.bold).toBe(false);
+    expect(env.anchorRange.insertText).not.toHaveBeenCalled();
+    expect(env.anchorRange.insertComment).toHaveBeenCalledWith(
+      "[Estilo]\nMejora la claridad",
+    );
+    expect(env.anchorRange.insertContentControl).toHaveBeenCalledTimes(2);
+  });
+
   it("fails safely when it cannot isolate the current inserted side for a replace suggestion", async () => {
     installWordContext({
       insertedRange: {

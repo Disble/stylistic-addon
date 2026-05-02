@@ -107,4 +107,83 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
     expect(result.observationStatus).toBe("mixed-group");
     expect(result.trackedChanges).toEqual([]);
   });
+
+  it("accepts delete-only wrapper identities and treats wrapper tracked changes as pending evidence", async () => {
+    const suggestion = {
+      ...makeTrackChangeSuggestion(),
+      id: "delete-only-1",
+      anchor: " a pesar de eso",
+      context: "No obstante, siguió sosteniéndola del brazo a pesar de eso.",
+      suggestedText: "",
+    };
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: makeOperationalWrapperTag("delete-only-1"),
+      ccTitle: makeOperationalWrapperTitle({
+        suggestionId: "delete-only-1",
+        trackChangeSubtype: "delete-only",
+        deleteValue: " a pesar de eso",
+        anchorValue: "No obstante, siguió sosteniéndola del brazo a pesar de eso.",
+      }),
+      rangeTCItems: [
+        { id: "tc-delete", type: "Deleted", accept: vi.fn(), reject: vi.fn() },
+        { id: "tc-empty", type: "Added", accept: vi.fn(), reject: vi.fn() },
+      ],
+      comments: [],
+    });
+    const locator = new SuggestionLocator(suggestion);
+    const observer = new SuggestionResolutionObserver(
+      suggestion,
+      locator,
+      {} as never,
+    );
+
+    const result = await observer.observeResolutionCandidates(
+      context as never,
+      context._ccItems as never,
+      context._cc as never,
+    );
+
+    expect(result.observationStatus).toBe("confirmed-pending");
+    expect(result.trackedChanges).toHaveLength(2);
+  });
+
+  it("accepts formatting wrapper identities and treats Formatted changes as pending evidence", async () => {
+    const suggestion = {
+      ...makeTrackChangeSuggestion(),
+      id: "format-1",
+      anchor: "post mortem",
+      context: "Ese era el inicio del post mortem reportado por PRIME.",
+      suggestedText: "*post mortem*",
+    };
+    const context = makeResolveSuggestionContext({
+      ccFound: true,
+      ccTag: makeOperationalWrapperTag("format-1"),
+      ccTitle: makeOperationalWrapperTitle({
+        suggestionId: "format-1",
+        trackChangeSubtype: "formatting",
+        formatTag: "stylistic:track-change:format-1",
+        anchorValue: "Ese era el inicio del post mortem reportado por PRIME.",
+      }),
+      rangeTCItems: [
+        { id: "tc-format", type: "Formatted", accept: vi.fn(), reject: vi.fn() },
+      ],
+      comments: [],
+    });
+    const locator = new SuggestionLocator(suggestion);
+    const observer = new SuggestionResolutionObserver(
+      suggestion,
+      locator,
+      {} as never,
+    );
+
+    const result = await observer.observeResolutionCandidates(
+      context as never,
+      context._ccItems as never,
+      context._cc as never,
+    );
+
+    expect(result.observationStatus).toBe("confirmed-pending");
+    expect(result.trackedChanges).toHaveLength(1);
+  });
 });

@@ -264,6 +264,88 @@ describe("MastraAdapter", () => {
     });
   });
 
+  it("accepts delete-only track-change suggestions with empty suggestedText", async () => {
+    const suggestions: WorkflowSuggestion[] = [
+      {
+        context: "No obstante, siguió sosteniéndola del brazo a pesar de eso.",
+        anchor: " a pesar de eso",
+        suggestedText: "",
+        justification: "Eliminar redundancia final.",
+        category: "claridad",
+        severity: "medium",
+        type: "track-change",
+      },
+    ];
+    mastraMocks.runById.mockResolvedValueOnce({
+      status: "success",
+      result: { suggestions },
+    });
+
+    const { MastraAdapter } = await importAdapterModule();
+    const adapter = new MastraAdapter();
+
+    const result = await adapter.pollChunkAnalysis(5, "run-5");
+
+    expect(result).toEqual({
+      chunkIndex: 5,
+      runId: "run-5",
+      status: "success",
+      suggestions: [
+        {
+          id: "chunk5-0",
+          context: "No obstante, siguió sosteniéndola del brazo a pesar de eso.",
+          anchor: " a pesar de eso",
+          suggestedText: "",
+          justification: "Eliminar redundancia final.",
+          category: "claridad",
+          severity: "medium",
+          type: "track-change",
+        },
+      ],
+    });
+  });
+
+  it("accepts formatting track-change suggestions encoded as markdown", async () => {
+    const suggestions: WorkflowSuggestion[] = [
+      {
+        context: "Ese era el inicio del post mortem reportado por PRIME.",
+        anchor: "post mortem",
+        suggestedText: "*post mortem*",
+        justification: "Marcar latinismo en cursiva.",
+        category: "estilo",
+        severity: "low",
+        type: "track-change",
+      },
+    ];
+    mastraMocks.runById.mockResolvedValueOnce({
+      status: "success",
+      result: { suggestions },
+    });
+
+    const { MastraAdapter } = await importAdapterModule();
+    const adapter = new MastraAdapter();
+
+    const result = await adapter.pollChunkAnalysis(6, "run-6");
+
+    expect(result).toEqual({
+      chunkIndex: 6,
+      runId: "run-6",
+      status: "success",
+      suggestions: [
+        {
+          id: "chunk6-0",
+          context: "Ese era el inicio del post mortem reportado por PRIME.",
+          anchor: "post mortem",
+          suggestedText: "*post mortem*",
+          justification: "Marcar latinismo en cursiva.",
+          category: "estilo",
+          severity: "low",
+          type: "track-change",
+        },
+      ],
+    });
+  });
+
   it("fails closed when workflow enters a resume-only state", async () => {
     mastraMocks.runById.mockResolvedValueOnce({ status: "suspended" });
     const { MastraAdapter } = await importAdapterModule();

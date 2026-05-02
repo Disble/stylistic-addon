@@ -424,11 +424,10 @@ export class MastraAdapter implements IAnalysisPort {
 
     const type = value.type ?? "track-change";
 
-    // `suggestedText` is required only for track-change suggestions
-    if (
-      type === "track-change" &&
-      this.readNonEmptyString(value.suggestedText) === undefined
-    ) {
+    // `suggestedText` is required only for track-change suggestions. Empty
+    // string is valid for delete-only native Track Changes; markdown strings are
+    // also valid because apply-time formatting is decoded from transport text.
+    if (type === "track-change" && typeof value.suggestedText !== "string") {
       return false;
     }
 

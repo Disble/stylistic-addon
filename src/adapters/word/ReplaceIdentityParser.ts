@@ -6,6 +6,9 @@ import {
   STYLISTIC_IDENTITY_TITLE_PREFIX,
   STYLISTIC_TAG_PREFIX,
 } from "../../infrastructure/config";
+import { TrackChangeSubtypeResolver } from "./apply-suggestion/TrackChangeSubtypeResolver";
+
+const subtypeResolver = new TrackChangeSubtypeResolver();
 
 /**
  * Parses persisted operational-wrapper replace identity metadata from a Content
@@ -53,22 +56,59 @@ export function isValidOperationalReplaceIdentity(
   }
 
   const expectedTag = `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
+  const subtypeResolution = subtypeResolver.resolve(suggestion);
+  const expectedSubtype =
+    subtypeResolution.subtype === "insert"
+      ? "replace"
+      : subtypeResolution.subtype;
+  const persistedSubtype = identity.trackChangeSubtype ?? "replace";
 
-  return (
-    identity.suggestionId === suggestion.id &&
-    identity.insertedSideRef?.kind === "content-control" &&
-    identity.insertedSideRef.role === "inserted-side" &&
-    identity.insertedSideRef.value === expectedTag &&
-    identity.deletedSideRef?.role === "deleted-side" &&
-    identity.deletedSideRef.value === suggestion.anchor &&
-    identity.anchorRef?.role === "operational-anchor" &&
-    identity.anchorRef.value === suggestion.context &&
+  if (persistedSubtype !== expectedSubtype) {
+    return false;
+  }
+
+  const hasValidGroup =
     identity.groupId.trim().length > 0 &&
     Number.isInteger(identity.groupIndex) &&
     identity.groupIndex >= 0 &&
     Number.isInteger(identity.groupSize) &&
     identity.groupSize >= 1 &&
-    identity.groupIndex < identity.groupSize
+    identity.groupIndex < identity.groupSize;
+
+  if (!hasValidGroup) {
+    return false;
+  }
+
+  if (
+    identity.suggestionId !== suggestion.id ||
+    identity.anchorRef?.role !== "operational-anchor" ||
+    identity.anchorRef.value !== suggestion.context
+  ) {
+    return false;
+  }
+
+  if (expectedSubtype === "delete-only") {
+    return (
+      identity.deletedSideRef?.kind === "anchor" &&
+      identity.deletedSideRef.role === "delete-side" &&
+      identity.deletedSideRef.value === suggestion.anchor
+    );
+  }
+
+  if (expectedSubtype === "formatting") {
+    return (
+      identity.formatSideRef?.kind === "content-control" &&
+      identity.formatSideRef.role === "format-side" &&
+      identity.formatSideRef.value === expectedTag
+    );
+  }
+
+  return (
+    identity.insertedSideRef?.kind === "content-control" &&
+    identity.insertedSideRef.role === "inserted-side" &&
+    identity.insertedSideRef.value === expectedTag &&
+    identity.deletedSideRef?.role === "deleted-side" &&
+    identity.deletedSideRef.value === suggestion.anchor
   );
 }
 
@@ -76,14 +116,10 @@ export function isValidOperationalReplaceIdentity(
 export function isStructurallyValidOperationalWrapperIdentity(
   identity: ReplaceSuggestionIdentity | null,
 ): identity is ReplaceSuggestionIdentity {
-  return (
+  const subtype = identity?.trackChangeSubtype ?? "replace";
+  const hasValidCommonStructure =
     identity?.version === "operational-wrapper-v1" &&
     identity.suggestionId.trim().length > 0 &&
-    identity.insertedSideRef?.kind === "content-control" &&
-    identity.insertedSideRef.role === "inserted-side" &&
-    identity.insertedSideRef.value.trim().length > 0 &&
-    identity.deletedSideRef?.role === "deleted-side" &&
-    identity.deletedSideRef.value.trim().length > 0 &&
     identity.anchorRef?.role === "operational-anchor" &&
     identity.anchorRef.value.trim().length > 0 &&
     identity.groupId.trim().length > 0 &&
@@ -91,7 +127,34 @@ export function isStructurallyValidOperationalWrapperIdentity(
     identity.groupIndex >= 0 &&
     Number.isInteger(identity.groupSize) &&
     identity.groupSize >= 1 &&
-    identity.groupIndex < identity.groupSize
+    identity.groupIndex < identity.groupSize;
+
+  if (!hasValidCommonStructure) {
+    return false;
+  }
+
+  if (subtype === "delete-only") {
+    return (
+      identity.deletedSideRef?.kind === "anchor" &&
+      identity.deletedSideRef.role === "delete-side" &&
+      identity.deletedSideRef.value.trim().length > 0
+    );
+  }
+
+  if (subtype === "formatting") {
+    return (
+      identity.formatSideRef?.kind === "content-control" &&
+      identity.formatSideRef.role === "format-side" &&
+      identity.formatSideRef.value.trim().length > 0
+    );
+  }
+
+  return (
+    identity.insertedSideRef?.kind === "content-control" &&
+    identity.insertedSideRef.role === "inserted-side" &&
+    identity.insertedSideRef.value.trim().length > 0 &&
+    identity.deletedSideRef?.role === "deleted-side" &&
+    identity.deletedSideRef.value.trim().length > 0
   );
 }
 

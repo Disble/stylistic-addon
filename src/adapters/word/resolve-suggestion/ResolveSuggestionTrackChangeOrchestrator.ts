@@ -1,5 +1,6 @@
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import type { SuggestionActionResult } from "../../../domain/suggestion/SuggestionResolutionWorkflow.types";
+import { TrackChangeSubtypeResolver } from "../apply-suggestion/TrackChangeSubtypeResolver";
 import type { DocumentReviewStateInspector } from "./DocumentReviewStateInspector";
 import type {
   ResolutionObservation,
@@ -24,6 +25,7 @@ import type { SuggestionResolutionObserver } from "./SuggestionResolutionObserve
  */
 export class ResolveSuggestionTrackChangeOrchestrator {
   private readonly executor: ResolveSuggestionOperationalExecutor;
+  private readonly subtypeResolver = new TrackChangeSubtypeResolver();
 
   constructor(
     private readonly suggestion: Suggestion,
@@ -302,10 +304,11 @@ export class ResolveSuggestionTrackChangeOrchestrator {
 
   /** Returns true only when the suggestion satisfies the tracked-change replace contract. */
   private hasValidTrackChangeContract(): boolean {
+    const subtypeResolution = this.subtypeResolver.resolve(this.suggestion);
     return (
       this.suggestion.type === "track-change" &&
       this.suggestion.anchor.trim().length > 0 &&
-      (this.suggestion.suggestedText?.trim().length ?? 0) > 0
+      subtypeResolution.subtype !== "insert"
     );
   }
 

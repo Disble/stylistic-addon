@@ -79,6 +79,7 @@ describe("ApplySuggestionCommand tracking-mode guards", () => {
       "changeTrackingMode",
     );
     expect(env.context.document.changeTrackingMode).toBe("trackMine");
+    expect(env.anchorRange.insertContentControl).toHaveBeenCalledOnce();
   });
 
   it("does not load or mutate changeTrackingMode for comment-only suggestions", async () => {

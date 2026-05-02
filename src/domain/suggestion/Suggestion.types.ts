@@ -101,11 +101,22 @@ export interface WordArtifactRef {
   kind: "content-control" | "tracked-change" | "comment" | "anchor";
 
   /** Semantic role this artifact plays inside the suggestion identity. */
-  role: "inserted-side" | "deleted-side" | "operational-anchor";
+  role:
+    | "inserted-side"
+    | "deleted-side"
+    | "delete-side"
+    | "format-side"
+    | "operational-anchor";
 
   /** Opaque adapter-owned value used to relocate the artifact in Word. */
   value: string;
 }
+
+/** Supported native Track Changes operational subtypes. */
+export type TrackChangeSuggestionSubtype =
+  | "replace"
+  | "delete-only"
+  | "formatting";
 
 /** Versioned identity for replace suggestions. */
 export interface ReplaceSuggestionIdentity {
@@ -115,8 +126,19 @@ export interface ReplaceSuggestionIdentity {
   /** Serialized identity version for strict operational-wrapper resolution. */
   version: "operational-wrapper-v1";
 
+  /**
+   * Native Track Changes subtype represented by this wrapper.
+   *
+   * Omitted legacy payloads are interpreted as `replace` to preserve already
+   * persisted operational-wrapper identities.
+   */
+  trackChangeSubtype?: TrackChangeSuggestionSubtype;
+
   /** Primary inserted-side Word reference. */
-  insertedSideRef: WordArtifactRef;
+  insertedSideRef?: WordArtifactRef;
+
+  /** Primary formatting-side Word reference for formatting-only suggestions. */
+  formatSideRef?: WordArtifactRef;
 
   /** Optional deleted/original-side Word reference. */
   deletedSideRef?: WordArtifactRef;

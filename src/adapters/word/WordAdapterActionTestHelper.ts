@@ -108,6 +108,9 @@ export function makeOperationalWrapperTitle(options: {
   insertedTag?: string;
   deletedValue?: string;
   anchorValue?: string;
+  trackChangeSubtype?: "replace" | "delete-only" | "formatting";
+  deleteValue?: string;
+  formatTag?: string;
   groupId?: string;
   groupIndex?: number;
   groupSize?: number;
@@ -116,6 +119,9 @@ export function makeOperationalWrapperTitle(options: {
   return `${OPERATIONAL_WRAPPER_TITLE_PREFIX}${JSON.stringify({
     suggestionId: options.suggestionId ?? "s-1",
     version: "operational-wrapper-v1",
+    ...(options.trackChangeSubtype
+      ? { trackChangeSubtype: options.trackChangeSubtype }
+      : {}),
     insertedSideRef: {
       kind: "content-control",
       role: "inserted-side",
@@ -131,6 +137,24 @@ export function makeOperationalWrapperTitle(options: {
       role: "operational-anchor",
       value: options.anchorValue ?? "Contexto con texto original.",
     },
+    ...(options.deleteValue
+      ? {
+          deletedSideRef: {
+            kind: "anchor",
+            role: "delete-side",
+            value: options.deleteValue,
+          },
+        }
+      : {}),
+    ...(options.formatTag
+      ? {
+          formatSideRef: {
+            kind: "content-control",
+            role: "format-side",
+            value: options.formatTag,
+          },
+        }
+      : {}),
     groupId: options.groupId ?? options.suggestionId ?? "s-1",
     groupIndex: options.groupIndex ?? 0,
     groupSize: options.groupSize ?? 1,

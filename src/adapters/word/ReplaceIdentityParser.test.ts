@@ -142,4 +142,42 @@ describe("ReplaceIdentityParser", () => {
       suggestion.context,
     );
   });
+
+  it("accepts delete-only operational identities without inserted-side metadata", () => {
+    const suggestion = makeSuggestion({
+      id: "s-delete",
+      anchor: " a pesar de eso",
+      context: "No obstante, siguió sosteniéndola del brazo a pesar de eso.",
+      suggestedText: "",
+    });
+    const identity = parseReplaceIdentityTitle(
+      makeOperationalWrapperTitle({
+        suggestionId: suggestion.id,
+        trackChangeSubtype: "delete-only",
+        deleteValue: suggestion.anchor,
+        anchorValue: suggestion.context,
+      }),
+    );
+
+    expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(true);
+  });
+
+  it("accepts formatting operational identities bound to the format-side tag", () => {
+    const suggestion = makeSuggestion({
+      id: "s-format",
+      anchor: "post mortem",
+      context: "Ese era el inicio del post mortem reportado por PRIME.",
+      suggestedText: "*post mortem*",
+    });
+    const identity = parseReplaceIdentityTitle(
+      makeOperationalWrapperTitle({
+        suggestionId: suggestion.id,
+        trackChangeSubtype: "formatting",
+        formatTag: `stylistic:${suggestion.type}:${suggestion.id}`,
+        anchorValue: suggestion.context,
+      }),
+    );
+
+    expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(true);
+  });
 });
