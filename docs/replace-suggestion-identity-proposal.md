@@ -235,3 +235,25 @@ path for replace suggestions.
   `identity-lost` and feedback must be skipped,
 - artifacts that cannot satisfy compound-v2 resolution requirements are not
   treated as actionable replace identities.
+
+---
+
+## Production extension — operational-wrapper subtypes
+
+The replace identity correction generalized into a broader operational-wrapper
+model for native Track Changes suggestions.
+
+Replace remains the composed two-sided case: inserted/current side plus
+deleted/original side plus operational anchor. Delete-only and formatting are not
+forced into that shape because Word exposes them differently:
+
+- **delete-only** has no meaningful inserted-side identity; the backend sends
+  `suggestedText: ""`, Word performs `insertText("", replace)`, and the wrapper
+  range/delete side is the strong evidence scope.
+- **formatting** has unchanged reviewed text; the backend sends exact markdown
+  `*anchor*` / `**anchor**`, and the Word adapter applies native italic/bold font
+  mutations that Word exposes as `Formatted` tracked changes.
+
+The invariant stays the same: the add-in must not treat one incidental Word
+artifact as the whole suggestion. Each subtype persists the minimum explicit refs
+needed to locate and observe its own native Word evidence.

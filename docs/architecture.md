@@ -95,8 +95,10 @@ The current architecture already has several strong decisions in place:
   apply command,
 - apply-time operational wrapper creation never disables Track Changes; wrappers
   are identity/scope artifacts, not lifecycle toggles,
-- replace suggestions use `compound-v2` metadata to avoid false terminal
-  certainty from weak observation,
+- native Track Changes suggestions use operational-wrapper identity metadata to
+  avoid false terminal certainty from weak observation,
+- replace, delete-only, and formatting suggestions are explicit Word adapter
+  subtypes because Word exposes different evidence for each one,
 - ambiguous resolution states degrade to `unobservable` or `identity-lost`
   instead of pretending certainty.
 
@@ -272,12 +274,23 @@ uses `WordTextLocatorAdapter`, backed by `TextSearchCore`, to tolerate:
 
 That is why apply was comparatively resilient in real documents.
 
-For native replace suggestions, apply also creates or reuses an operational
-wrapper Content Control before the replacement mutation. That wrapper defines the
-mutation scope and persists replace identity metadata, but it does **not** own
-Track Changes state. The batch apply workflow must already have enabled Track
-Changes when needed, and wrapper creation must not temporarily set
-`changeTrackingMode` to `off`.
+For native Track Changes suggestions, apply creates or reuses an operational
+wrapper Content Control before the Word mutation. That wrapper defines the
+mutation scope and persists identity metadata, but it does **not** own Track
+Changes state. The batch apply workflow must already have enabled Track Changes
+when needed, and wrapper creation must not temporarily set `changeTrackingMode`
+to `off`.
+
+The Word adapter currently distinguishes three supported native subtypes:
+
+- **replace** — performs `insertText(suggestedText, replace)` and annotates the
+  isolated current/inserted side,
+- **delete-only** — treats `suggestedText: ""` as a deletion, performs
+  `insertText("", replace)`, and annotates the operational wrapper/delete side
+  because Word can expose an empty mutation range,
+- **formatting** — treats exact markdown `*anchor*` / `**anchor**` as transport
+  encoding for italic/bold and mutates `range.font` instead of inserting literal
+  asterisks.
 
 This rule is deliberately strict. Real Word validation showed that wrapper
 creation succeeds while Track Changes is active, and disabling Track Changes
@@ -291,7 +304,8 @@ fallback.
 through persisted identity:
 
 - `track-change` suggestions use the operational wrapper tag
-  `stylistic-operational-wrapper:{id}` plus `compound-v2` title metadata,
+  `stylistic-operational-wrapper:{id}` plus subtype-aware operational-wrapper
+  title metadata,
 - `comment-only` suggestions use the canonical tag
   `stylistic:comment-only:{id}`.
 
@@ -430,7 +444,7 @@ strengthen them instead of replacing them with ad-hoc glue.
 | Command | `ApplySuggestionCommand.ts`, `ResolveSuggestionCommand.ts` | Gives explicit mutation entry points for apply and resolve. |
 | Facade | `WordAdapter.ts` | Preserves the `IDocumentPort` boundary for the rest of the app. |
 | Decorator | `RetryAnalysisDecorator.ts` | Keeps retry behavior outside the backend transport adapter. |
-| Compound Identity | `ApplySuggestionCommand.ts` + replace identity docs | Corrects the false assumption that one inserted-side content control equals the whole replace suggestion. |
+| Operational Wrapper Identity | `ApplySuggestionCommand.ts` + identity parser docs | Corrects the false assumption that one inserted-side content control equals every Track Changes suggestion. |
 | Partial Success | pipeline and Word operations | Maximizes user value even when some chunks or suggestions fail. |
 
 The refactor approved for the next cycle introduces additional intentional
@@ -622,7 +636,8 @@ persisted artifact exists.
 Owns persisted Stylistic artifact lookup:
 
 - track-change suggestions: exact operational wrapper tag
-  `stylistic-operational-wrapper:{id}` plus valid `compound-v2` metadata,
+  `stylistic-operational-wrapper:{id}` plus valid operational-wrapper metadata
+  for the expected subtype,
 - comment-only suggestions: exact canonical tag `stylistic:comment-only:{id}`,
 - duplicate valid wrappers become `ambiguous-location`,
 - malformed Stylistic metadata becomes `identity-lost`,
@@ -652,11 +667,15 @@ Current Phase 4 status:
 
 Owns evidence gathering:
 
-- validate compound identity,
-- collect tracked changes from CC, CC range, body overlap, operational anchor,
-  and colocated comment range,
+- validate operational-wrapper identity,
+- collect tracked changes from the selected wrapper scope,
 - downgrade ambiguity to `unobservable`,
 - downgrade corrupt metadata to `identity-lost`.
+
+Evidence is subtype-specific. Replace evidence normally contains inserted and
+deleted sides; delete-only evidence may be a wrapper-scoped deletion with an
+empty mutation range; formatting evidence appears as `Formatted` tracked changes
+and unchanged reviewed text.
 
 This module owns epistemology: what can be proved, what cannot be proved, and
 what must remain conservative.
@@ -664,7 +683,7 @@ what must remain conservative.
 Current Phase 4 status:
 
 - `SuggestionResolutionObserver.ts` now exists and owns tracked-change evidence
-  gathering.
+  gathering from subtype-aware operational wrappers.
 - Resolution search now routes through the shared `TextLocator` contract,
   eliminating the weaker fallback path that used to live inside
   `ResolveSuggestionCommand.ts`.

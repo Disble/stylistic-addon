@@ -139,12 +139,22 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 2. **The suggestion matched and replaced identical text.** If `anchor` and `suggestedText` are the same after casing, Word won't show a change.
 3. **The tracking mode was already `TrackAll`.** The changes were made and are there — check the Review pane (**Review** > **Reviewing Pane**).
 
-**What to inspect in developer logs:** For a successful native replace, the
-pre-mutation scope should report `changeTrackingMode: 'TrackAll'`, and the
-annotation resolver should select a candidate whose `current` equals the
-suggested text and whose `original` is `''`. If the replacement is visible but
-`original` is also the suggested text, Word likely made an untracked replacement;
-that is a Track Changes lifecycle bug, not a display issue.
+**What to inspect in developer logs:** The expected evidence depends on the
+Track Changes subtype:
+
+- **replace:** pre-mutation scope should report `changeTrackingMode: 'TrackAll'`,
+  and the annotation resolver should select a candidate whose `current` equals
+  the suggested text and whose `original` is `''`. If the replacement is visible
+  but `original` is also the suggested text, Word likely made an untracked
+  replacement; that is a Track Changes lifecycle bug, not a display issue.
+- **delete-only:** `suggestedText` is `""`. The mutation range can be empty in
+  real Word; inspect the operational wrapper reviewed text/tracked changes
+  instead of expecting an inserted-side Content Control.
+- **formatting:** `suggestedText` may be markdown transport such as `*post
+  mortem*` or `**PRIME**`. Word should expose a `Formatted` tracked change and
+  the target range font state should change; `reviewedText.current` and
+  `reviewedText.original` usually remain equal because text content did not
+  change.
 
 Apply-time operational wrapper creation must not be used to toggle Track Changes
 off and back on. The wrapper only defines mutation/identity scope; the batch
@@ -184,7 +194,7 @@ place and the card shows an informational note similar to
 will only move the cursor when it can locate a safe target:
 
 1. for `track-change`, the operational wrapper Content Control with valid
-   `compound-v2` metadata,
+   subtype-aware operational-wrapper metadata,
 2. for `comment-only`, the canonical comment-only Content Control,
 3. if the artifact is missing, the exact `anchor` inside the localized `context`.
 

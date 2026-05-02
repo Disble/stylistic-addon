@@ -1,21 +1,25 @@
 /* global Word, console */
 
 /**
- * ApplySuggestionCommand — Command pattern for tracked-change insertion.
+ * ApplySuggestionCommand — Command pattern for applying one Word suggestion.
  *
  * Encapsulates the complete logic for applying a single `Suggestion` as a
- * native Word tracked change with an embedded justification comment.
+ * native Word review artifact with an embedded justification comment.
  *
  * Each command:
  * 1. Searches the document for the original text (case-sensitive).
- * 2. For replace suggestions, creates or reuses an operational wrapper without
- *    changing Track Changes state.
- * 3. Calls range.insertText(suggestedText, replace) — assuming the workflow
- *    layer already enabled Track Changes when appropriate.
- * 4. Re-locates a clean current-side range for replace suggestions when Word
- *    returns a hybrid tracked-change span.
- * 5. Inserts a comment on the current inserted side with category + justification.
- * 6. Wraps that current inserted side in a ContentControl tagged
+ * 2. For native `track-change` suggestions, creates or reuses an operational
+ *    wrapper without changing Track Changes state.
+ * 3. Resolves the concrete Track Changes subtype:
+ *    - replace: `range.insertText(suggestedText, replace)` and isolate the
+ *      current inserted side,
+ *    - delete-only: `range.insertText("", replace)` and annotate the wrapper
+ *      range because Word can expose an empty mutation range,
+ *    - formatting: decode backend markdown and mutate `range.font` instead of
+ *      inserting literal asterisks.
+ * 4. Inserts a comment on the subtype-specific annotation range with category +
+ *    justification.
+ * 5. Wraps that annotation range in a ContentControl tagged
  *    `stylistic:{type}:{id}`.
  *
  * Each suggestion runs in its own `Word.run` context (per-suggestion isolation)
@@ -88,7 +92,7 @@ export class ApplySuggestionCommand {
 
   /**
    * Executes the command: searches for the anchor within its context and
-   * replaces it with a native Word tracked change.
+   * materializes it as the correct Word review artifact.
    *
    * Returns `{ success: false }` for recoverable application failures such as
    * missing anchor text, missing search matches, or Office insertion errors.
@@ -349,6 +353,11 @@ export class ApplySuggestionCommand {
   /**
    * Applies the concrete native Word mutation for the resolved subtype and
    * returns the range that must receive comment + metadata annotation.
+   *
+   * Delete-only and formatting are intentionally not forced through the replace
+   * current-side resolver. Real Word evidence showed delete-only can leave an
+   * empty mutation range, while formatting leaves text unchanged and exposes a
+   * `Formatted` tracked change through the operational wrapper.
    */
   private async applyNativeTrackChangeMutation(
     context: Word.RequestContext,

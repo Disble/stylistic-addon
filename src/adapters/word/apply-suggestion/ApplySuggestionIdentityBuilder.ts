@@ -21,7 +21,7 @@ export class ApplySuggestionIdentityBuilder {
     return `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
   }
 
-  /** Returns the external operational-wrapper tag for one replace suggestion. */
+  /** Returns the external operational-wrapper tag for one track-change suggestion. */
   buildOperationalWrapperTag(suggestion: Suggestion): string {
     return `${STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX}${suggestion.id}`;
   }
@@ -35,17 +35,19 @@ export class ApplySuggestionIdentityBuilder {
     return { kind, role, value };
   }
 
-  /** Serializes versioned replace identity metadata into the Content Control title. */
+  /** Serializes versioned operational identity metadata into the Content Control title. */
   serializeReplaceIdentity(identity: ReplaceSuggestionIdentity): string {
     return `${STYLISTIC_IDENTITY_TITLE_PREFIX}${JSON.stringify(identity)}`;
   }
 
   /**
-   * Builds strict operational-wrapper metadata for replace suggestions.
+   * Builds strict operational-wrapper metadata for native Track Changes.
    *
-   * The inserted-side Content Control remains an operational reference, not the
-   * whole domain identity. Deleted/original-side and anchor references are stored
-   * explicitly so later observation can distinguish legacy vs v2 behavior.
+   * Replace keeps the inserted/deleted/anchor references used by the historical
+   * compound identity model. Delete-only and formatting use explicit subtype
+   * metadata because they do not have a full inserted-side replacement identity:
+   * delete-only is evidenced by the wrapper/delete side, and formatting is
+   * evidenced by the formatted range plus wrapper-local tracked changes.
    */
   buildReplaceIdentity(suggestion: Suggestion): ReplaceSuggestionIdentity {
     const subtypeResolution = this.subtypeResolver.resolve(suggestion);

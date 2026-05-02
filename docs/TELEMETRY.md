@@ -94,7 +94,7 @@ Why this matters:
 - `execute` tells us what the host mutation attempted,
 - `cleanup-comment` tells us whether the colocated Stylistic comment was removed
   or whether Word invalidated the comment proxy after a successful mutation,
-- `cleanup-metadata` tells us whether resolved inserted-side and operational
+- `cleanup-metadata` tells us whether resolved subtype metadata and operational
   wrapper Content Controls were removed before the final state snapshot,
 - `cleanup-anchor` tells us whether comment-only anchors were removed while
   preserving visible text,

@@ -11,8 +11,8 @@ import { TrackChangeSubtypeResolver } from "./apply-suggestion/TrackChangeSubtyp
 const subtypeResolver = new TrackChangeSubtypeResolver();
 
 /**
- * Parses persisted operational-wrapper replace identity metadata from a Content
- * Control title payload.
+ * Parses persisted operational-wrapper identity metadata from a Content Control
+ * title payload.
  *
  * Returns `null` when the title does not carry a valid Stylistic identity
  * prefix or when the JSON payload is malformed.
@@ -38,14 +38,15 @@ export function parseReplaceIdentityTitle(
 }
 
 /**
- * Validates the minimum operational-wrapper replace identity contract required for
- * safe resolution and navigation.
+ * Validates the minimum operational-wrapper identity contract required for safe
+ * resolution and navigation.
  *
  * IMPORTANT:
- * For replace resolution we now prefer explicit, deterministic references over
- * legacy host-drift tolerance. The inserted-side tag must match the suggestion,
- * and both deleted-side plus operational-anchor refs must exist structurally so
- * the adapter can re-localize the replace without fuzzy fallback heuristics.
+ * For replace resolution we prefer explicit, deterministic references over
+ * legacy host-drift tolerance. Delete-only and formatting are validated as
+ * first-class subtypes because Word exposes their evidence differently: the
+ * former through wrapper/delete-side state and the latter through `Formatted`
+ * tracked changes plus font state.
  */
 export function isValidOperationalReplaceIdentity(
   identity: ReplaceSuggestionIdentity | null,

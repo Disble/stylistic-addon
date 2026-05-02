@@ -45,7 +45,14 @@ export interface Suggestion {
   /** Exact substring within `context` targeted by the suggestion. */
   anchor: string;
 
-  /** Replacement text for tracked-change suggestions. */
+  /**
+   * Transport text for tracked-change suggestions.
+   *
+   * - replacement text for normal replace suggestions,
+   * - empty string for delete-only suggestions,
+   * - markdown `*anchor*` / `**anchor**` for typography suggestions decoded by
+   *   the Word adapter into native italic/bold formatting.
+   */
   suggestedText?: string;
 
   /** Human-readable reason for the suggestion, shown in the results panel. */
@@ -118,7 +125,7 @@ export type TrackChangeSuggestionSubtype =
   | "delete-only"
   | "formatting";
 
-/** Versioned identity for replace suggestions. */
+/** Versioned operational-wrapper identity for native Track Changes suggestions. */
 export interface ReplaceSuggestionIdentity {
   /** Stable frontend/domain suggestion identifier. */
   suggestionId: string;

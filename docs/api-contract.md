@@ -85,7 +85,15 @@ interface WorkflowOutput {
     /** Exact substring within `context` targeted by the suggestion. */
     anchor: string;
 
-    /** Replacement text. Required for "track-change", optional for "comment-only". */
+    /**
+     * Transport text for "track-change" suggestions.
+     *
+     * Required for "track-change" and optional for "comment-only".
+     * For track-change:
+     * - plain non-empty text means replace anchor with that text,
+     * - empty string means delete-only,
+     * - exact markdown `*anchor*` / `**anchor**` means italic/bold formatting.
+     */
     suggestedText?: string;
 
     /** Human-readable justification shown to the user. */
@@ -139,6 +147,24 @@ interface WorkflowOutput {
       "type": "track-change"
     },
     {
+      "context": "Ese era el inicio del post mortem reportado por PRIME.",
+      "anchor": "post mortem",
+      "suggestedText": "*post mortem*",
+      "justification": "Locución latina que debe ir en cursiva.",
+      "category": "Formato tipográfico",
+      "severity": "medium",
+      "type": "track-change"
+    },
+    {
+      "context": "El informe fue marcado por PRIME.",
+      "anchor": "PRIME",
+      "suggestedText": "**PRIME**",
+      "justification": "Sigla editorial que debe destacarse en negrita.",
+      "category": "Formato tipográfico",
+      "severity": "low",
+      "type": "track-change"
+    },
+    {
       "context": "Utilizar este periodo de tiempo con el objetivo de realizar la tarea.",
       "anchor": "con el objetivo de",
       "suggestedText": "para",
@@ -177,11 +203,19 @@ localization safe.
 - Return `"completamente necesario"` (exact match from input)
 - Ensure `context.includes(anchor)` is true
 - Include trailing punctuation/spaces if they're part of the replacement (e.g., `"Básicamente, "` to remove the comma and space)
+- Return `suggestedText: ""` only when the intended change is to delete the
+  exact anchor.
+- Return exact typography markdown only when the inner text equals the anchor:
+  `"*post mortem*"` for italic or `"**PRIME**"` for bold.
 
 **Don't:**
 - Return `"Completamente necesario"` (wrong capitalization)
 - Return `"completamente  necesario"` (extra space)
 - Return an anchor that is not contained in context
+- Return markdown with different inner text than the anchor; the frontend treats
+  that as a normal replacement, not a formatting instruction.
+- Return literal asterisks when the desired result is typography. Markdown is a
+  transport encoding for formatting, not visible document text.
 
 ## Genre (genero) Behavior
 

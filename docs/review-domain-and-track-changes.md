@@ -398,9 +398,9 @@ document looks clean”. The final user-facing deactivation remains the explicit
 
 ### 9.9 Apply-time operational wrapper rule
 
-Native replace suggestions use an operational wrapper Content Control to define
-the mutation scope and to persist the identity needed for later accept/reject
-resolution.
+Native `track-change` suggestions use an operational wrapper Content Control to
+define the mutation scope and to persist the identity needed for later
+accept/reject resolution.
 
 That wrapper is **not** a Track Changes lifecycle boundary.
 
@@ -410,18 +410,20 @@ During apply:
    `track-change` suggestion,
 2. the operational wrapper is created or reused without changing
    `changeTrackingMode`,
-3. the replacement mutation runs while Track Changes remains active,
-4. the inserted/current side is isolated and annotated.
+3. the native mutation runs while Track Changes remains active,
+4. the subtype-specific evidence range is annotated.
 
 Real Word validation showed this shape produces the expected tracked-change
-evidence: successful replace mutations enter with `TrackAll`, and the annotation
-resolver sees `current === suggestedText` with `original === ""`.
+evidence for each subtype: replace isolates the inserted/current side,
+delete-only uses wrapper/delete-side evidence because the mutation range can be
+empty, and formatting uses `Formatted` tracked changes plus font state because
+the reviewed text does not change.
 
 The previous idea of temporarily disabling Track Changes around apply-time
 wrapper creation is now rejected. If Word invalidates that path, later
-replacements can become visible but untracked, which breaks inserted-side
-isolation and makes the UI report false failures. Do **not** reintroduce this as
-a fallback or compatibility branch.
+mutations can become visible but untracked, which breaks subtype-specific
+observation and makes the UI report false failures. Do **not** reintroduce this
+as a fallback or compatibility branch.
 
 ---
 
@@ -659,6 +661,28 @@ Current rollout policy for replace suggestions:
 3. zero observed tracked changes downgrade to `unobservable`,
 4. corrupt/incomplete v2 metadata maps to `identity-lost`,
 5. neither `unobservable` nor `identity-lost` may emit feedback.
+
+### Extension: delete-only and formatting track changes
+
+The same operational-wrapper principle now applies beyond normal replacements.
+The backend still transports all native Word changes as `track-change`
+suggestions, but the frontend resolves an explicit adapter subtype:
+
+1. **replace** — `anchor` plus non-empty plain `suggestedText`; Word receives
+   `insertText(suggestedText, replace)` and the adapter annotates the inserted
+   side.
+2. **delete-only** — `anchor` plus `suggestedText: ""`; Word receives
+   `insertText("", replace)`, but the adapter treats the operational wrapper as
+   the annotation/evidence range because real Word can expose an empty mutation
+   range.
+3. **formatting** — `suggestedText` exactly wraps `anchor` with `*...*` or
+   `**...**`; the markdown is transport encoding only. The Word adapter mutates
+   `range.font.italic` or `range.font.bold` and must not insert literal
+   asterisks.
+
+This does not change the Track Changes lifecycle rule: apply-time wrapper
+creation still does not toggle `changeTrackingMode`, and observation failures
+still degrade to non-terminal states instead of terminal success.
 
 ---
 
