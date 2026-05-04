@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { create } from "zustand";
 
 export type TaskpaneStatusType = "success" | "error";
 
@@ -49,66 +49,53 @@ const INITIAL_STATE: TaskpaneShellState = {
   },
 };
 
-let shellState = INITIAL_STATE;
 let hideProgressTimeoutId: ReturnType<typeof setTimeout> | undefined;
 let hideStatusTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
-const listeners = new Set<() => void>();
-
-/** Subscribes React consumers to shell-state changes. */
-export function subscribeTaskpaneShellStore(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
+/** Zustand store holding the reactive taskpane shell state. */
+export const useTaskpaneShellStore = create<TaskpaneShellState>()(() => INITIAL_STATE);
 
 /** Returns the current immutable shell state snapshot. */
 export function getTaskpaneShellState(): TaskpaneShellState {
-  return shellState;
-}
-
-/** React hook for consuming the external taskpane shell store. */
-export function useTaskpaneShellState(): TaskpaneShellState {
-  return useSyncExternalStore(subscribeTaskpaneShellStore, getTaskpaneShellState);
+  return useTaskpaneShellStore.getState();
 }
 
 /** Sets the loading state for the analyze CTA and related shell controls. */
 export function setTaskpaneAnalyzeLoading(isAnalyzeLoading: boolean): void {
-  updateTaskpaneShellState({ isAnalyzeLoading });
+  useTaskpaneShellStore.setState({ isAnalyzeLoading });
 }
 
 /** Sets the selected analysis profile used by the composition root. */
 export function setTaskpaneSelectedGenero(selectedGenero: string): void {
-  updateTaskpaneShellState({ selectedGenero });
+  useTaskpaneShellStore.setState({ selectedGenero });
 }
 
 /** Sets the cleanup CTA visibility. */
 export function setTaskpaneCleanupVisible(cleanupVisible: boolean): void {
-  updateTaskpaneShellState({ cleanupVisible });
+  useTaskpaneShellStore.setState({ cleanupVisible });
 }
 
 /** Sets the loading state of the cleanup CTA. */
 export function setTaskpaneCleanupLoading(isCleanupLoading: boolean): void {
-  updateTaskpaneShellState({ isCleanupLoading });
+  useTaskpaneShellStore.setState({ isCleanupLoading });
 }
 
 /** Sets the Track Changes CTA visibility. */
 export function setTaskpaneDisableTrackChangesCtaVisible(
   disableTrackChangesCtaVisible: boolean
 ): void {
-  updateTaskpaneShellState({ disableTrackChangesCtaVisible });
+  useTaskpaneShellStore.setState({ disableTrackChangesCtaVisible });
 }
 
 /** Sets the loading state of the Track Changes CTA. */
 export function setTaskpaneDisableTrackChangesLoading(isDisableTrackChangesLoading: boolean): void {
-  updateTaskpaneShellState({ isDisableTrackChangesLoading });
+  useTaskpaneShellStore.setState({ isDisableTrackChangesLoading });
 }
 
 /** Updates the visible progress state. */
 export function updateTaskpaneProgress(current: number, total: number, message: string): void {
   clearTimeout(hideProgressTimeoutId);
-  updateTaskpaneShellState({
+  useTaskpaneShellStore.setState({
     progress: {
       current,
       total,
@@ -122,19 +109,19 @@ export function updateTaskpaneProgress(current: number, total: number, message: 
 export function hideTaskpaneProgress(): void {
   clearTimeout(hideProgressTimeoutId);
   hideProgressTimeoutId = setTimeout(() => {
-    updateTaskpaneShellState({
+    useTaskpaneShellStore.setState((state) => ({
       progress: {
-        ...shellState.progress,
+        ...state.progress,
         visible: false,
       },
-    });
+    }));
   }, HIDE_PROGRESS_DELAY_MS);
 }
 
 /** Shows a transient status-bar message and auto-hides it. */
 export function showTaskpaneStatus(message: string, type: TaskpaneStatusType): void {
   clearTimeout(hideStatusTimeoutId);
-  updateTaskpaneShellState({
+  useTaskpaneShellStore.setState({
     status: {
       message,
       type,
@@ -143,12 +130,12 @@ export function showTaskpaneStatus(message: string, type: TaskpaneStatusType): v
   });
 
   hideStatusTimeoutId = setTimeout(() => {
-    updateTaskpaneShellState({
+    useTaskpaneShellStore.setState((state) => ({
       status: {
-        ...shellState.status,
+        ...state.status,
         visible: false,
       },
-    });
+    }));
   }, STATUS_DISPLAY_MS);
 }
 
@@ -158,21 +145,5 @@ export function resetTaskpaneShellState(): void {
   clearTimeout(hideStatusTimeoutId);
   hideProgressTimeoutId = undefined;
   hideStatusTimeoutId = undefined;
-  shellState = INITIAL_STATE;
-
-  for (const listener of listeners) {
-    listener();
-  }
-}
-
-/** Applies a partial immutable state update and notifies all subscribers. */
-function updateTaskpaneShellState(partialState: Partial<TaskpaneShellState>): void {
-  shellState = {
-    ...shellState,
-    ...partialState,
-  };
-
-  for (const listener of listeners) {
-    listener();
-  }
+  useTaskpaneShellStore.setState(INITIAL_STATE, true);
 }

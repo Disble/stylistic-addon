@@ -7,11 +7,7 @@ import { ProgressPanel } from "../ProgressPanel";
 import { ResultsPanel } from "../ResultsPanel";
 import { StatusBar } from "../StatusBar";
 import { TaskpaneHeader } from "../TaskpaneHeader";
-import {
-  ANALYSIS_PROFILE_OPTIONS,
-  DEFAULT_APP_SUBTITLE,
-  DEFAULT_APP_TITLE,
-} from "./App.constants";
+import { ANALYSIS_PROFILE_OPTIONS, DEFAULT_APP_SUBTITLE, DEFAULT_APP_TITLE } from "./App.constants";
 import type { AppProps } from "./App.types";
 import { useApp } from "./useApp";
 

@@ -1,17 +1,15 @@
-import { useSyncExternalStore } from "react";
 import {
   acceptResultsPanelSuggestion,
-  getResultsPanelState,
   navigateResultsPanelSuggestion,
   rejectResultsPanelSuggestion,
   setResultsPanelFeedbackComment,
-  subscribeResultsPanelStore,
   toggleResultsPanelFeedback,
+  useResultsPanelStore,
 } from "../../ResultsPanelStore";
 
 /** React hook for the results-panel store and interaction commands. */
 export function useResultsPanel() {
-  const state = useSyncExternalStore(subscribeResultsPanelStore, getResultsPanelState);
+  const state = useResultsPanelStore();
 
   return {
     ...state,

@@ -1,3 +1,4 @@
+import { create } from "zustand";
 import type {
   ApplySuggestionsResult,
   SuggestionApplicationFailure,
@@ -45,37 +46,26 @@ export type ResultsPanelState = Readonly<{
   visible: boolean;
 }>;
 
-type ResultsPanelInternalState = {
-  deps?: ResultsPanelDeps;
-  isSelection: boolean;
-  publicState: ResultsPanelState;
-  summaryModel?: SuggestionProgressSummaryModel;
-};
-
-const INITIAL_PUBLIC_STATE: ResultsPanelState = {
+const INITIAL_STATE: ResultsPanelState = {
   cards: [],
   summaryText: "",
   visible: false,
 };
 
-let internalState: ResultsPanelInternalState = {
-  isSelection: false,
-  publicState: INITIAL_PUBLIC_STATE,
+type ResultsPanelContext = {
+  deps?: ResultsPanelDeps;
+  isSelection: boolean;
+  summaryModel?: SuggestionProgressSummaryModel;
 };
 
-const listeners = new Set<() => void>();
+let context: ResultsPanelContext = { isSelection: false };
 
-/** Subscribes React consumers to results-panel state changes. */
-export function subscribeResultsPanelStore(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
+/** Zustand store holding the reactive results-panel state. */
+export const useResultsPanelStore = create<ResultsPanelState>()(() => INITIAL_STATE);
 
 /** Returns the current public results-panel snapshot. */
 export function getResultsPanelState(): ResultsPanelState {
-  return internalState.publicState;
+  return useResultsPanelStore.getState();
 }
 
 /** Initializes the results-panel store from one pipeline completion payload. */
@@ -89,42 +79,30 @@ export function setResultsPanelData(
   const summaryModel = createSuggestionProgressSummaryModel(suggestions, result, chunkErrors);
   const cards = createInitialCards(suggestions, result.failedSuggestions);
 
-  internalState = {
-    deps,
-    isSelection,
-    summaryModel,
-    publicState: {
+  context = { deps, isSelection, summaryModel };
+  useResultsPanelStore.setState(
+    {
       cards: sortCards(cards),
       summaryText: buildSuggestionProgressSummaryText(summaryModel, isSelection),
       visible: true,
     },
-  };
+    true
+  );
 
   setTaskpaneDisableTrackChangesCtaVisible(
     result.documentState === "ready-to-disable-track-changes"
   );
-  emitResultsPanelChange();
 }
 
 /** Clears the panel back to its initial hidden state. */
 export function resetResultsPanelState(): void {
-  internalState = {
-    isSelection: false,
-    publicState: INITIAL_PUBLIC_STATE,
-  };
-  emitResultsPanelChange();
+  context = { isSelection: false };
+  useResultsPanelStore.setState(INITIAL_STATE, true);
 }
 
 /** Hides the panel while preserving the last rendered card snapshot. */
 export function hideResultsPanel(): void {
-  internalState = {
-    ...internalState,
-    publicState: {
-      ...internalState.publicState,
-      visible: false,
-    },
-  };
-  emitResultsPanelChange();
+  useResultsPanelStore.setState({ visible: false });
 }
 
 /** Toggles the feedback accordion for one card. */
@@ -145,7 +123,7 @@ export function setResultsPanelFeedbackComment(cardId: string, feedbackComment: 
 
 /** Handles safe navigation feedback for one suggestion card. */
 export async function navigateResultsPanelSuggestion(cardId: string): Promise<void> {
-  const deps = internalState.deps;
+  const deps = context.deps;
   const card = findResultsPanelCard(cardId);
   if (!deps || !card || card.isFailed) {
     return;
@@ -167,12 +145,6 @@ export async function acceptResultsPanelSuggestion(cardId: string): Promise<void
 /** Handles a reject action while preserving legacy workflow semantics. */
 export async function rejectResultsPanelSuggestion(cardId: string): Promise<void> {
   await resolveResultsPanelSuggestion(cardId, "reject");
-}
-
-function emitResultsPanelChange(): void {
-  for (const listener of listeners) {
-    listener();
-  }
 }
 
 function createInitialCards(
@@ -199,7 +171,7 @@ function createInitialCards(
 }
 
 function findResultsPanelCard(cardId: string): ResultsPanelCardState | undefined {
-  return internalState.publicState.cards.find((card) => card.suggestion.id === cardId);
+  return useResultsPanelStore.getState().cards.find((card) => card.suggestion.id === cardId);
 }
 
 function getNavigationNote(result: SuggestionNavigationResult): string | undefined {
@@ -248,7 +220,7 @@ async function resolveResultsPanelSuggestion(
   cardId: string,
   action: "accept" | "reject"
 ): Promise<void> {
-  const deps = internalState.deps;
+  const deps = context.deps;
   const card = findResultsPanelCard(cardId);
   if (!deps || !card || card.isFailed || card.isResolving || card.hideActions) {
     return;
@@ -292,8 +264,8 @@ async function resolveResultsPanelSuggestion(
 
   const nextState = mapResultStatusToState(result.status);
 
-  if (internalState.summaryModel) {
-    applySuggestionProgressOutcome(internalState.summaryModel, cardId, result.status);
+  if (context.summaryModel) {
+    applySuggestionProgressOutcome(context.summaryModel, cardId, result.status);
   }
 
   setTaskpaneDisableTrackChangesCtaVisible(result.taskpaneState.showDisableTrackChangesCta);
@@ -355,19 +327,15 @@ function getFeedbackComment(cardId: string): string | undefined {
 function updateResultsPanelCards(
   updater: (cards: readonly ResultsPanelCardState[]) => ResultsPanelCardState[]
 ): void {
-  const cards = updater(internalState.publicState.cards);
-  const summaryText = internalState.summaryModel
-    ? buildSuggestionProgressSummaryText(internalState.summaryModel, internalState.isSelection)
-    : internalState.publicState.summaryText;
+  useResultsPanelStore.setState((state) => {
+    const cards = updater(state.cards);
+    const summaryText = context.summaryModel
+      ? buildSuggestionProgressSummaryText(context.summaryModel, context.isSelection)
+      : state.summaryText;
 
-  internalState = {
-    ...internalState,
-    publicState: {
+    return {
       cards: sortCards(cards),
       summaryText,
-      visible: internalState.publicState.visible,
-    },
-  };
-
-  emitResultsPanelChange();
+    };
+  });
 }

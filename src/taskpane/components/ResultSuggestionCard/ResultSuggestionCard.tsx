@@ -72,7 +72,11 @@ export function ResultSuggestionCard({
                 <span className="result-actions">
                   <button
                     aria-label="Aceptar sugerencia"
-                    className={isCommentOnly ? "result-action-btn result-action-btn--text" : "result-action-btn"}
+                    className={
+                      isCommentOnly
+                        ? "result-action-btn result-action-btn--text"
+                        : "result-action-btn"
+                    }
                     data-action="accept"
                     data-suggestion-id={card.suggestion.id}
                     disabled={card.isResolving}
@@ -85,7 +89,11 @@ export function ResultSuggestionCard({
                   </button>
                   <button
                     aria-label="Rechazar sugerencia"
-                    className={isCommentOnly ? "result-action-btn result-action-btn--text" : "result-action-btn"}
+                    className={
+                      isCommentOnly
+                        ? "result-action-btn result-action-btn--text"
+                        : "result-action-btn"
+                    }
                     data-action="reject"
                     data-suggestion-id={card.suggestion.id}
                     disabled={card.isResolving}
