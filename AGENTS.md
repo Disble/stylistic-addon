@@ -14,6 +14,13 @@ When working in this project, IMMEDIATELY read the corresponding skill file befo
 
 - Always add documentation comments to functions, classes, and complex logic.
 
+## Package Manager
+
+This project uses Bun as its package manager.
+
+- Prefer `bun install` for dependency installation.
+- Prefer `bun run <script>` for package scripts, even if some legacy tooling or task labels still mention npm.
+
 ## Testing Knowledge Capture
 
 - When a bug escapes existing tests, update the relevant local testing skill with the new lesson.
