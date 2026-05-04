@@ -1,11 +1,9 @@
-/* global document, Office, console */
-
 /**
  * Task-pane — Composition Root and top-level event handlers.
  *
  * Responsibilities:
  * - Instantiate all adapters, decorators, mediators, and the pipeline.
- * - Initialize when Office.js confirms the host is Word.
+ * - Initialize after the React shell is mounted and Office confirms the host is Word.
  * - Bind top-level DOM event handlers (analyze, cleanup, disable TC).
  * - Register a `PipelineObserver` to relay pipeline events to the DOM.
  *
@@ -28,19 +26,12 @@ import { DeduplicateHandler } from "../domain/pipeline/handlers/DeduplicateHandl
 import { GuardAppliedHandler } from "../domain/pipeline/handlers/GuardAppliedHandler";
 import { ReadTextHandler } from "../domain/pipeline/handlers/ReadTextHandler";
 import type { PipelineContext } from "../domain/pipeline/PipelineContext";
-import {
-  PipelineEventEmitter,
-  type PipelineObserver,
-} from "../domain/pipeline/PipelineEvents";
+import { PipelineEventEmitter, type PipelineObserver } from "../domain/pipeline/PipelineEvents";
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
 import type { IFeedbackPort } from "../domain/ports";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
-import {
-  DEFAULT_MAX_CHUNK_SIZE,
-  MAX_RETRIES,
-  RETRY_BASE_DELAY_MS,
-} from "../infrastructure/config";
+import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 import {
   buildApplyStatusMessage,
   type ResultsPanelDeps,
@@ -58,11 +49,8 @@ import {
 } from "./TaskpaneUi";
 
 type OfficeLike = {
-  onReady(
-    callback: (info: { host: string }) => void,
-  ): Promise<unknown> | undefined;
   HostType?: {
-    Word?: string;
+    Word?: string | Office.HostType;
   };
 };
 
@@ -77,14 +65,11 @@ const documentPort = new WordAdapter(undefined, observabilityPort);
 const analysisPort = new RetryAnalysisDecorator(
   new MastraAdapter(),
   MAX_RETRIES,
-  RETRY_BASE_DELAY_MS,
+  RETRY_BASE_DELAY_MS
 );
 
 const feedbackPort: IFeedbackPort = new FeedbackAdapter();
-const reviewSessionMediator = new ReviewSessionMediator(
-  documentPort,
-  feedbackPort,
-);
+const reviewSessionMediator = new ReviewSessionMediator(documentPort, feedbackPort);
 
 const orchestrator = new PipelineOrchestrator([
   new ReadTextHandler(),
@@ -101,10 +86,8 @@ const stateMachine = new PipelineStateMachine();
 /** Deps injected into the card renderer — closures over module-level ports. */
 const cardRendererDeps: ResultsPanelDeps = {
   navigateToText: (target) => documentPort.navigateToText(target),
-  acceptSuggestion: (s, comment) =>
-    reviewSessionMediator.acceptSuggestion(s, comment),
-  rejectSuggestion: (s, comment) =>
-    reviewSessionMediator.rejectSuggestion(s, comment),
+  acceptSuggestion: (s, comment) => reviewSessionMediator.acceptSuggestion(s, comment),
+  rejectSuggestion: (s, comment) => reviewSessionMediator.rejectSuggestion(s, comment),
 };
 
 // ---------------------------------------------------------------------------
@@ -112,60 +95,41 @@ const cardRendererDeps: ResultsPanelDeps = {
 // ---------------------------------------------------------------------------
 
 /**
- * Entry point — called once Office.js confirms the host is Word.
+ * Initializes taskpane DOM bindings once the React shell already exists.
  * Hides the sideload message, shows the app body, and binds event handlers.
  */
 export function bootstrapTaskpane(
-  office: OfficeLike | undefined = globalThis.Office as unknown as
-    | OfficeLike
-    | undefined,
   doc: DocumentLike | undefined = globalThis.document,
+  office: OfficeLike | undefined = globalThis.Office as unknown as OfficeLike | undefined
 ): void {
-  if (!office?.onReady || !doc?.getElementById) {
+  if (!doc?.getElementById) {
     return;
   }
 
-  office.onReady((info) => {
-    const wordHost = office.HostType?.Word ?? "Word";
-    if (info.host !== wordHost) {
-      return;
-    }
+  const sideloadMessage = doc.getElementById("sideload-msg");
+  const appBody = doc.getElementById("app-body");
+  const analyzeButton = doc.getElementById("btn-analyze") as HTMLButtonElement | null;
+  const cleanupButton = doc.getElementById("btn-cleanup") as HTMLButtonElement | null;
+  const disableTrackChangesButton = doc.getElementById(
+    "btn-disable-track-changes"
+  ) as HTMLButtonElement | null;
 
-    const sideloadMessage = doc.getElementById("sideload-msg");
-    const appBody = doc.getElementById("app-body");
-    const analyzeButton = doc.getElementById(
-      "btn-analyze",
-    ) as HTMLButtonElement | null;
-    const cleanupButton = doc.getElementById(
-      "btn-cleanup",
-    ) as HTMLButtonElement | null;
-    const disableTrackChangesButton = doc.getElementById(
-      "btn-disable-track-changes",
-    ) as HTMLButtonElement | null;
+  if (
+    !(sideloadMessage && appBody && analyzeButton && cleanupButton && disableTrackChangesButton)
+  ) {
+    return;
+  }
 
-    if (
-      !(
-        sideloadMessage &&
-        appBody &&
-        analyzeButton &&
-        cleanupButton &&
-        disableTrackChangesButton
-      )
-    ) {
-      return;
-    }
-
-    sideloadMessage.style.display = "none";
-    appBody.style.display = "flex";
-    analyzeButton.onclick = handleAnalyze;
-    cleanupButton.onclick = handleCleanup;
-    disableTrackChangesButton.onclick = handleDisableTrackChanges;
-    void refreshCleanupVisibility();
-    void refreshTrackChangesCtaVisibility();
-  });
+  const wordHost = String(office?.HostType?.Word ?? "Word");
+  sideloadMessage.dataset.officeHost = wordHost;
+  sideloadMessage.style.display = "none";
+  appBody.style.display = "flex";
+  analyzeButton.onclick = handleAnalyze;
+  cleanupButton.onclick = handleCleanup;
+  disableTrackChangesButton.onclick = handleDisableTrackChanges;
+  void refreshCleanupVisibility();
+  void refreshTrackChangesCtaVisibility();
 }
-
-bootstrapTaskpane();
 
 // ---------------------------------------------------------------------------
 // Refresh helpers
@@ -185,10 +149,7 @@ async function refreshCleanupVisibility(): Promise<void> {
     const { deletable } = await documentPort.getCleanupPreview();
     cleanupSection.style.display = deletable > 0 ? "block" : "none";
   } catch (error) {
-    console.warn(
-      "⚠️ [Taskpane] No se pudo calcular la visibilidad de limpieza:",
-      error,
-    );
+    console.warn("⚠️ [Taskpane] No se pudo calcular la visibilidad de limpieza:", error);
   }
 }
 
@@ -202,7 +163,7 @@ async function refreshTrackChangesCtaVisibility(): Promise<void> {
   } catch (error) {
     console.warn(
       "⚠️ [Taskpane] No se pudo calcular la visibilidad del CTA de Track Changes:",
-      error,
+      error
     );
   }
 }
@@ -245,24 +206,15 @@ async function handleAnalyze(): Promise<void> {
     },
     onAbort(reason) {
       hideProgress();
-      showStatus(
-        reason,
-        (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success",
-      );
+      showStatus(reason, (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success");
     },
     onComplete(suggestions, result, chunkErrors, isSelection) {
       hideProgress();
-      renderResultsPanel(
-        suggestions,
-        result,
-        chunkErrors,
-        isSelection,
-        cardRendererDeps,
-      );
+      renderResultsPanel(suggestions, result, chunkErrors, isSelection, cardRendererDeps);
       void refreshCleanupVisibility();
       showStatus(
         buildApplyStatusMessage(result, isSelection),
-        result.successCount > 0 ? "success" : "error",
+        result.successCount > 0 ? "success" : "error"
       );
     },
   };
@@ -273,9 +225,7 @@ async function handleAnalyze(): Promise<void> {
   try {
     console.log("🚀 [Taskpane] Pipeline iniciado");
     await orchestrator.run(ctx);
-    console.log(
-      `✅ [Taskpane] Pipeline completado. Abortado: ${ctx.aborted ?? false}`,
-    );
+    console.log(`✅ [Taskpane] Pipeline completado. Abortado: ${ctx.aborted ?? false}`);
   } catch (error) {
     console.error("💥 [Taskpane] Error no capturado en pipeline:", error);
     hideProgress();
@@ -301,15 +251,9 @@ async function handleCleanup(): Promise<void> {
 
   try {
     const { deleted, kept } = await documentPort.cleanupResolvedComments();
-    console.log(
-      `🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`,
-    );
-    showStatus(
-      `${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`,
-      "success",
-    );
-    getRequiredElement("cleanup-section").style.display =
-      kept > 0 ? "block" : "none";
+    console.log(`🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`);
+    showStatus(`${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`, "success");
+    getRequiredElement("cleanup-section").style.display = kept > 0 ? "block" : "none";
   } catch (error) {
     showStatus(toUserMessage(error), "error");
   } finally {
@@ -323,9 +267,7 @@ async function handleCleanup(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function handleDisableTrackChanges(): Promise<void> {
-  const btn = document.getElementById(
-    "btn-disable-track-changes",
-  ) as HTMLButtonElement | null;
+  const btn = document.getElementById("btn-disable-track-changes") as HTMLButtonElement | null;
   const label = document.getElementById("btn-disable-track-changes-label");
 
   if (!(btn && label)) {

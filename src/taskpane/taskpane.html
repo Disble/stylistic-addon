@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-framework="react">
 
 <head>
     <meta charset="UTF-8" />
@@ -8,70 +8,24 @@
     <title>Stylistic</title>
 
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-    <link rel="stylesheet"
-        href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css" />
     <link href="taskpane.css" rel="stylesheet" type="text/css" />
 </head>
 
-<body class="ms-font-m ms-Fabric">
-    <section id="sideload-msg" class="sideload-msg">
-        <h2 class="ms-font-xl">Please <a target="_blank"
-                href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a>
-            your add-in to see app body.</h2>
-    </section>
+<body>
+    <div id="container"></div>
 
-    <main id="app-body" style="display: none;">
-        <header class="stylistic-header">
-            <h1 class="ms-font-xl">Stylistic</h1>
-            <p class="ms-font-s ms-fontColor-neutralSecondary">Sugerencias editoriales con Track Changes</p>
-        </header>
+    <div id="tridentmessage" style="display: none; padding: 10px;">
+        Esta versión de Stylistic requiere un webview moderno de Office. Actualizá Office a una versión compatible.
+    </div>
 
-        <div class="stylistic-section">
-            <label for="profile-select" class="stylistic-label ms-font-s">Perfil de análisis</label>
-            <select id="profile-select" class="stylistic-select ms-font-m">
-                <option value="narrativa-literaria" selected>Literatura de ficción</option>
-                <option value="general">General</option>
-                <option value="ensayo-academico">Ensayo académico</option>
-                <option value="periodismo-cultural">Periodismo cultural</option>
-            </select>
-        </div>
-
-        <div class="stylistic-section">
-            <button id="btn-analyze" type="button" class="stylistic-btn stylistic-btn--primary ms-font-m">
-                <i class="ms-Icon ms-Icon--AnalyticsView"></i>
-                <span id="btn-analyze-label">Analizar y sugerir</span>
-            </button>
-        </div>
-
-        <div id="progress-container" class="progress-container" style="display: none;">
-            <div class="progress-bar-track">
-                <div id="progress-bar" class="progress-bar-fill"></div>
-            </div>
-            <p id="progress-text" class="progress-text ms-font-s"></p>
-        </div>
-
-        <div id="results-panel" class="results-panel" style="display: none;">
-            <h2 class="ms-font-m-plus results-title">Resultados</h2>
-            <div id="results-summary" class="results-summary ms-font-s"></div>
-            <ul id="results-list" class="results-list ms-font-s"></ul>
-        </div>
-
-        <div class="stylistic-section" id="cleanup-section" style="display: none;">
-            <button id="btn-cleanup" type="button" class="stylistic-btn stylistic-btn--secondary ms-font-m">
-                <i class="ms-Icon ms-Icon--EraseTool"></i>
-                <span id="btn-cleanup-label">Limpiar comentarios resueltos</span>
-            </button>
-        </div>
-
-        <div class="stylistic-section" id="disable-track-changes-section" style="display: none;">
-            <button id="btn-disable-track-changes" type="button" class="stylistic-btn stylistic-btn--warning ms-font-m">
-                <i class="ms-Icon ms-Icon--Hide3"></i>
-                <span id="btn-disable-track-changes-label">Desactivar control de cambios</span>
-            </button>
-        </div>
-
-        <div id="status-bar" class="stylistic-status" style="display: none;"></div>
-    </main>
+    <script>
+        if ((navigator.userAgent.indexOf("Trident") !== -1) || (navigator.userAgent.indexOf("Edge") !== -1)) {
+            var tridentMessage = document.getElementById("tridentmessage");
+            var normalContainer = document.getElementById("container");
+            tridentMessage.style.display = "block";
+            normalContainer.style.display = "none";
+        }
+    </script>
 </body>
 
 </html>
