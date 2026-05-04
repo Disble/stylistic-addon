@@ -76,7 +76,6 @@ describe("taskpane entrypoint", () => {
     await flushTaskpaneWork();
 
     expect(reactMocks.render).not.toHaveBeenCalled();
-    expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("block");
     expect(doc.getElementById("btn-analyze")?.onclick).toBeNull();
 
     officeHarness.triggerReady({ host: "Word" });
@@ -89,8 +88,6 @@ describe("taskpane entrypoint", () => {
       MAX_RETRIES,
       RETRY_BASE_DELAY_MS
     );
-    expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("none");
-    expect(getRequiredElement(doc, "app-body").style.display).toBe("flex");
     expect(doc.getElementById("btn-analyze")?.onclick).toEqual(expect.any(Function));
     expect(doc.getElementById("btn-cleanup")?.onclick).toEqual(expect.any(Function));
     expect(doc.getElementById("btn-disable-track-changes")?.onclick).toEqual(expect.any(Function));

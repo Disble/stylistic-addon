@@ -97,7 +97,7 @@ const cardRendererDeps: ResultsPanelDeps = {
 
 /**
  * Initializes taskpane DOM bindings once the React shell already exists.
- * Hides the sideload message, shows the app body, and binds event handlers.
+ * Binds top-level event handlers and rehydrates shell visibility from document state.
  */
 export function bootstrapTaskpane(
   doc: DocumentLike | undefined = globalThis.document,
@@ -107,24 +107,18 @@ export function bootstrapTaskpane(
     return;
   }
 
-  const sideloadMessage = doc.getElementById("sideload-msg");
-  const appBody = doc.getElementById("app-body");
   const analyzeButton = doc.getElementById("btn-analyze") as HTMLButtonElement | null;
   const cleanupButton = doc.getElementById("btn-cleanup") as HTMLButtonElement | null;
   const disableTrackChangesButton = doc.getElementById(
     "btn-disable-track-changes"
   ) as HTMLButtonElement | null;
 
-  if (
-    !(sideloadMessage && appBody && analyzeButton && cleanupButton && disableTrackChangesButton)
-  ) {
+  if (!(analyzeButton && cleanupButton && disableTrackChangesButton)) {
     return;
   }
 
   const wordHost = String(office?.HostType?.Word ?? "Word");
-  sideloadMessage.dataset.officeHost = wordHost;
-  sideloadMessage.style.display = "none";
-  appBody.style.display = "flex";
+  analyzeButton.dataset.officeHost = wordHost;
   analyzeButton.onclick = handleAnalyze;
   cleanupButton.onclick = handleCleanup;
   disableTrackChangesButton.onclick = handleDisableTrackChanges;

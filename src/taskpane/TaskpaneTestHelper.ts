@@ -472,7 +472,6 @@ function getRequiredElement(doc: FakeDocument, id: string): FakeElement {
  */
 export function createTaskpaneDocument(): FakeDocument {
   const doc = new FakeDocument([
-    "sideload-msg",
     "app-body",
     "container",
     "btn-analyze",
@@ -493,8 +492,7 @@ export function createTaskpaneDocument(): FakeDocument {
     "btn-disable-track-changes-label",
   ]);
 
-  getRequiredElement(doc, "sideload-msg").style.display = "block";
-  getRequiredElement(doc, "app-body").style.display = "none";
+  getRequiredElement(doc, "app-body").style.display = "flex";
   getRequiredElement(doc, "cleanup-section").style.display = "none";
   getRequiredElement(doc, "disable-track-changes-section").style.display = "none";
   getRequiredElement(doc, "results-panel").style.display = "block";

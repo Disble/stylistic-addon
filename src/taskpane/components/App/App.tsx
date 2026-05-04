@@ -31,7 +31,7 @@ export function App({
   }, [onMount]);
 
   return (
-    <>
+    <main id="app-body">
       <TaskpaneHeader title={title} subtitle={subtitle} />
       <AnalysisProfileSection
         isDisabled={shellState.isAnalyzeLoading}
@@ -43,6 +43,6 @@ export function App({
       <CleanupSection isVisible={shellState.cleanupVisible} />
       <DisableTrackChangesSection isVisible={shellState.disableTrackChangesCtaVisible} />
       <StatusBar status={shellState.status} />
-    </>
+    </main>
   );
 }
