@@ -1,9 +1,9 @@
 /**
- * SuggestionCardRenderer — taskpane-facing facade for suggestion-card rendering.
+ * SuggestionCardRenderer — taskpane-facing facade for results-panel publishing.
  *
- * The concrete DOM, action, state, feedback, and list responsibilities live in
- * focused `suggestion-card/*` modules. This file owns only the public API used
- * by the taskpane composition root.
+ * React now owns the concrete results rendering. This module keeps only the
+ * public presentation helpers used by the taskpane composition root and publishes
+ * pipeline-completion payloads into `ResultsPanelStore`.
  *
  * @module SuggestionCardRenderer
  */
@@ -15,9 +15,7 @@ import {
   buildSuggestionProgressSummaryText,
   createSuggestionProgressSummaryModel,
 } from "./SuggestionProgressSummary";
-import { wireSuggestionCardInteractions } from "./suggestion-card/SuggestionCardActions";
-import { createSuggestionCard } from "./suggestion-card/SuggestionCardElements";
-import { getRequiredElement, setDisableTrackChangesCtaVisible } from "./TaskpaneUi";
+import { setResultsPanelData } from "./ResultsPanelStore";
 
 export type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
 
@@ -74,34 +72,5 @@ export function renderResultsPanel(
   isSelection: boolean,
   deps: ResultsPanelDeps
 ): void {
-  const panel = getRequiredElement("results-panel");
-  const summary = getRequiredElement("results-summary");
-  const list = getRequiredElement("results-list");
-  const summaryModel = createSuggestionProgressSummaryModel(suggestions, result, chunkErrors);
-
-  summary.textContent = buildSuggestionProgressSummaryText(summaryModel, isSelection);
-  const uiContext = {
-    summaryModel,
-    summaryElement: summary,
-    isSelection,
-  };
-
-  list.innerHTML = "";
-  const cards = suggestions.map((suggestion) =>
-    createSuggestionCard(suggestion, result.failedSuggestions)
-  );
-
-  for (const card of cards.filter((entry) => !entry.isNotFoundFailure)) {
-    list.appendChild(card.li);
-    if (!card.isFailed) {
-      wireSuggestionCardInteractions(card.li, card.suggestion, deps, uiContext);
-    }
-  }
-
-  for (const card of cards.filter((entry) => entry.isNotFoundFailure)) {
-    list.appendChild(card.li);
-  }
-
-  panel.style.display = "block";
-  setDisableTrackChangesCtaVisible(result.documentState === "ready-to-disable-track-changes");
+  setResultsPanelData(suggestions, result, chunkErrors, isSelection, deps);
 }

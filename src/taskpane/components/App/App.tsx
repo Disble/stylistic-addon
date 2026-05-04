@@ -13,31 +13,36 @@ import {
   DEFAULT_APP_TITLE,
 } from "./App.constants";
 import type { AppProps } from "./App.types";
+import { useApp } from "./useApp";
 
 /**
  * React shell for the taskpane.
  * It preserves the existing DOM anchor IDs so the legacy composition root can bind safely during migration.
  */
 export function App({
+  onMount,
   title = DEFAULT_APP_TITLE,
   subtitle = DEFAULT_APP_SUBTITLE,
 }: AppProps): React.JSX.Element {
+  const shellState = useApp();
+
+  React.useEffect(() => {
+    onMount?.();
+  }, [onMount]);
+
   return (
     <>
-      <section id="sideload-msg" className="sideload-msg">
-        <h2>Please sideload your add-in to see app body.</h2>
-      </section>
-
-      <main id="app-body" style={{ display: "none" }}>
-        <TaskpaneHeader title={title} subtitle={subtitle} />
-        <AnalysisProfileSection options={ANALYSIS_PROFILE_OPTIONS} />
-        <AnalyzeSection />
-        <ProgressPanel />
-        <ResultsPanel />
-        <CleanupSection />
-        <DisableTrackChangesSection />
-        <StatusBar />
-      </main>
+      <TaskpaneHeader title={title} subtitle={subtitle} />
+      <AnalysisProfileSection
+        isDisabled={shellState.isAnalyzeLoading}
+        options={ANALYSIS_PROFILE_OPTIONS}
+      />
+      <AnalyzeSection isLoading={shellState.isAnalyzeLoading} />
+      <ProgressPanel progress={shellState.progress} />
+      <ResultsPanel />
+      <CleanupSection isVisible={shellState.cleanupVisible} />
+      <DisableTrackChangesSection isVisible={shellState.disableTrackChangesCtaVisible} />
+      <StatusBar status={shellState.status} />
     </>
   );
 }

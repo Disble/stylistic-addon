@@ -1,46 +1,16 @@
-import type { SuggestionResolutionMediatorResult } from "../domain/suggestion/SuggestionResolutionWorkflow.types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SuggestionResolutionMediatorResult } from "../domain/suggestion/SuggestionResolutionWorkflow.types";
+import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
 import {
-  createTaskpaneDocument,
-  FakeElement,
-  getTaskpaneMocks,
-  makeSuggestion,
-  renderViaEmitter,
-  resetTaskpaneHarness,
-  teardownTaskpaneHarness,
-} from "./TaskpaneTestHelper";
+  acceptResultsPanelSuggestion,
+  getResultsPanelState,
+  rejectResultsPanelSuggestion,
+  resetResultsPanelState,
+  setResultsPanelData,
+} from "./ResultsPanelStore";
+import { getTaskpaneShellState, resetTaskpaneShellState } from "./TaskpaneShellStore";
+import { makeSuggestion } from "./TaskpaneTestHelper";
 
-/** Returns a required fake DOM element by id. */
-function getRequiredElement(
-  doc: ReturnType<typeof createTaskpaneDocument>,
-  id: string
-): FakeElement {
-  const element = doc.getElementById(id);
-  if (!element) {
-    throw new Error(`Missing fake DOM element: ${id}`);
-  }
-
-  return element;
-}
-
-/** Returns a required fake child selected from the given parent. */
-function getRequiredChild(parent: FakeElement, selector: string): FakeElement {
-  const child = parent.querySelector(selector);
-  if (!child) {
-    throw new Error(`Missing child for selector: ${selector}`);
-  }
-
-  return child;
-}
-
-/** Flushes queued microtasks from taskpane action handlers. */
-async function flushTaskpaneWork(times = 8): Promise<void> {
-  for (let index = 0; index < times; index += 1) {
-    await Promise.resolve();
-  }
-}
-
-/** Builds a compact mediator result fixture for taskpane action tests. */
 function makeMediatorResult(
   overrides: Partial<SuggestionResolutionMediatorResult> = {}
 ): SuggestionResolutionMediatorResult {
@@ -64,156 +34,145 @@ function makeMediatorResult(
   };
 }
 
-describe("TaskpaneSuggestionResolution", () => {
-  const taskpaneMocks = getTaskpaneMocks();
-  let logSpy: ReturnType<typeof vi.spyOn>;
-  let warnSpy: ReturnType<typeof vi.spyOn>;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
+function createResultsPanelDeps(overrides: Partial<ResultsPanelDeps> = {}): ResultsPanelDeps {
+  return {
+    navigateToText: vi.fn().mockResolvedValue({ status: "navigated" }),
+    acceptSuggestion: vi.fn().mockResolvedValue(makeMediatorResult()),
+    rejectSuggestion: vi.fn().mockResolvedValue(
+      makeMediatorResult({
+        status: "rejected",
+      })
+    ),
+    ...overrides,
+  };
+}
 
+function seedResultsPanel(deps: ResultsPanelDeps) {
+  const suggestion = makeSuggestion({ id: "s-1" });
+  setResultsPanelData(
+    [suggestion],
+    {
+      successCount: 1,
+      failedSuggestions: [],
+      pendingAfter: {
+        pendingStylisticArtifacts: 1,
+        hasPendingStylisticArtifacts: true,
+        trackChangesActive: true,
+      },
+      documentState: "pending-review",
+      trackChangesActivatedForBatch: true,
+    },
+    [],
+    false,
+    deps
+  );
+  return suggestion;
+}
+
+describe("TaskpaneSuggestionResolution", () => {
   beforeEach(() => {
-    resetTaskpaneHarness();
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    resetResultsPanelState();
+    resetTaskpaneShellState();
   });
 
   afterEach(() => {
-    logSpy.mockRestore();
-    warnSpy.mockRestore();
-    errorSpy.mockRestore();
-    teardownTaskpaneHarness();
+    resetResultsPanelState();
+    resetTaskpaneShellState();
   });
 
   it("marks an accepted suggestion as terminal and updates taskpane CTAs", async () => {
-    taskpaneMocks.getCleanupPreview.mockResolvedValue({
-      deletable: 2,
-      kept: 0,
+    const deps = createResultsPanelDeps({
+      acceptSuggestion: vi.fn().mockResolvedValue(
+        makeMediatorResult({
+          status: "accepted",
+          pendingAfter: {
+            pendingStylisticArtifacts: 0,
+            hasPendingStylisticArtifacts: false,
+            trackChangesActive: true,
+          },
+          documentState: "ready-to-disable-track-changes",
+          taskpaneState: {
+            documentState: "ready-to-disable-track-changes",
+            showDisableTrackChangesCta: true,
+            showCleanupSection: true,
+          },
+        })
+      ),
     });
-    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce(
-      makeMediatorResult({
-        status: "accepted",
-        pendingAfter: {
-          pendingStylisticArtifacts: 0,
-          hasPendingStylisticArtifacts: false,
-          trackChangesActive: true,
-        },
-        documentState: "ready-to-disable-track-changes",
-      })
-    );
+    const suggestion = seedResultsPanel(deps);
 
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-accept" });
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    await acceptResultsPanelSuggestion(suggestion.id);
 
-    getRequiredChild(li, '[data-action="accept"]').click();
-    await flushTaskpaneWork();
-
-    expect(taskpaneMocks.acceptSuggestion).toHaveBeenCalledWith(suggestion);
-    expect(li.classList.contains("result-accepted")).toBe(true);
-    expect(li.querySelector(".result-actions")).toBeNull();
-    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
-    expect(getRequiredElement(doc, "disable-track-changes-section").style.display).toBe("block");
+    const card = getResultsPanelState().cards[0];
+    expect(deps.acceptSuggestion).toHaveBeenCalledWith(suggestion, undefined);
+    expect(card.state).toBe("accepted");
+    expect(card.cardGroup).toBe("processed");
+    expect(card.hideActions).toBe(true);
+    expect(getTaskpaneShellState().cleanupVisible).toBe(true);
+    expect(getTaskpaneShellState().disableTrackChangesCtaVisible).toBe(true);
   });
 
   it("marks a rejected suggestion as terminal and removes action buttons", async () => {
-    taskpaneMocks.rejectSuggestion.mockResolvedValueOnce(
-      makeMediatorResult({
-        status: "rejected",
-        feedbackStatus: "sent",
-      })
-    );
+    const deps = createResultsPanelDeps();
+    const suggestion = seedResultsPanel(deps);
 
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-reject" });
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    await rejectResultsPanelSuggestion(suggestion.id);
 
-    getRequiredChild(li, '[data-action="reject"]').click();
-    await flushTaskpaneWork();
-
-    expect(taskpaneMocks.rejectSuggestion).toHaveBeenCalledWith(suggestion);
-    expect(li.classList.contains("result-rejected")).toBe(true);
-    expect(li.querySelector(".result-actions")).toBeNull();
+    const card = getResultsPanelState().cards[0];
+    expect(deps.rejectSuggestion).toHaveBeenCalledWith(suggestion, undefined);
+    expect(card.state).toBe("rejected");
+    expect(card.cardGroup).toBe("processed");
+    expect(card.hideActions).toBe(true);
   });
 
-  it("re-enables buttons and keeps the card non-terminal on unobservable", async () => {
-    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce(
-      makeMediatorResult({
-        status: "unobservable",
-        trackedChangesAffected: 0,
-        commentDeleted: false,
-        feedbackStatus: "skipped",
-        error: "Word no expuso suficiente evidencia operacional para confirmar la resolución.",
-      })
-    );
+  it("re-enables the card and keeps it non-terminal on unobservable", async () => {
+    const deps = createResultsPanelDeps({
+      acceptSuggestion: vi.fn().mockResolvedValue(
+        makeMediatorResult({
+          status: "unobservable",
+          trackedChangesAffected: 0,
+          commentDeleted: false,
+          feedbackStatus: "skipped",
+          error: "Word no expuso suficiente evidencia operacional para confirmar la resolución.",
+        })
+      ),
+    });
+    const suggestion = seedResultsPanel(deps);
 
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-unobservable" });
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const acceptBtn = getRequiredChild(li, '[data-action="accept"]');
-    const rejectBtn = getRequiredChild(li, '[data-action="reject"]');
+    await acceptResultsPanelSuggestion(suggestion.id);
 
-    acceptBtn.click();
-    await flushTaskpaneWork();
-
-    expect(acceptBtn.disabled).toBe(false);
-    expect(rejectBtn.disabled).toBe(false);
-    expect(li.classList.contains("result-accepted")).toBe(false);
-    expect(li.classList.contains("result-unobservable")).toBe(false);
-    expect(getRequiredElement(doc, "status-bar").textContent).toBe(
+    const card = getResultsPanelState().cards[0];
+    expect(card.hideActions).toBe(false);
+    expect(card.isResolving).toBe(false);
+    expect(card.cardGroup).toBe("active");
+    expect(card.state).toBe("unobservable");
+    expect(getTaskpaneShellState().status.message).toBe(
       "Word no expuso suficiente evidencia operacional para confirmar la resolución."
     );
-    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });
 
-  it("renders ambiguous-location as terminal manual-review UI", async () => {
-    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce(
-      makeMediatorResult({
-        status: "ambiguous-location",
-        trackedChangesAffected: 0,
-        commentDeleted: false,
-        feedbackStatus: "skipped",
-        error: "La ubicación de la sugerencia es ambigua.",
-      })
+  it("renders ambiguous-location as terminal manual-review state", async () => {
+    const deps = createResultsPanelDeps({
+      acceptSuggestion: vi.fn().mockResolvedValue(
+        makeMediatorResult({
+          status: "ambiguous-location",
+          trackedChangesAffected: 0,
+          commentDeleted: false,
+          feedbackStatus: "skipped",
+          error: "La ubicación de la sugerencia es ambigua.",
+        })
+      ),
+    });
+    const suggestion = seedResultsPanel(deps);
+
+    await acceptResultsPanelSuggestion(suggestion.id);
+
+    const card = getResultsPanelState().cards[0];
+    expect(card.state).toBe("ambiguous-location");
+    expect(card.hideActions).toBe(true);
+    expect(card.resolutionNote).toBe("(resolución ambigua; reanalizá la sugerencia)");
+    expect(getTaskpaneShellState().status.message).toBe(
+      "La ubicación de la sugerencia es ambigua."
     );
-
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-ambiguous" });
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-
-    getRequiredChild(li, '[data-action="accept"]').click();
-    await flushTaskpaneWork();
-
-    expect(li.classList.contains("result-ambiguous-location")).toBe(true);
-    expect(li.querySelector(".result-actions")).toBeNull();
-    expect(li.querySelector(".result-ambiguous-location-note")?.textContent).toBe(
-      "(resolución ambigua; reanalizá la sugerencia)"
-    );
-    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
-  });
-
-  it("renders mixed-group as terminal manual-review UI", async () => {
-    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce(
-      makeMediatorResult({
-        status: "mixed-group",
-        trackedChangesAffected: 0,
-        commentDeleted: false,
-        feedbackStatus: "skipped",
-        error: "El grupo contiguo requiere resolución grupal coherente.",
-      })
-    );
-
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-mixed" });
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-
-    getRequiredChild(li, '[data-action="accept"]').click();
-    await flushTaskpaneWork();
-
-    expect(li.classList.contains("result-mixed-group")).toBe(true);
-    expect(li.querySelector(".result-actions")).toBeNull();
-    expect(li.querySelector(".result-mixed-group-note")?.textContent).toBe(
-      "(resolución ambigua; reanalizá la sugerencia)"
-    );
-    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });
 });

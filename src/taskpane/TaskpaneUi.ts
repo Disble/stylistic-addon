@@ -1,4 +1,13 @@
-/* global document, setTimeout, HTMLButtonElement, HTMLSelectElement */
+/* global document, HTMLSelectElement */
+
+import {
+  hideTaskpaneProgress,
+  setTaskpaneAnalyzeLoading,
+  setTaskpaneCleanupVisible,
+  setTaskpaneDisableTrackChangesCtaVisible,
+  showTaskpaneStatus,
+  updateTaskpaneProgress,
+} from "./TaskpaneShellStore";
 
 /**
  * Taskpane UI primitives — pure DOM helpers with zero business logic.
@@ -9,9 +18,6 @@
  *
  * @module TaskpaneUi
  */
-
-/** Duration (ms) before the status bar message auto-hides. */
-export const STATUS_DISPLAY_MS = 4000;
 
 /** Returns a required DOM element by id or throws with a clear error. */
 export function getRequiredElement<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -27,60 +33,42 @@ export function getRequiredElement<T extends HTMLElement = HTMLElement>(id: stri
  * Auto-hides after {@link STATUS_DISPLAY_MS} milliseconds.
  */
 export function showStatus(message: string, type: "success" | "error"): void {
-  const bar = getRequiredElement("status-bar");
-  bar.textContent = message;
-  bar.className = `stylistic-status ${type}`;
-  bar.style.display = "block";
-  setTimeout(() => {
-    bar.style.display = "none";
-  }, STATUS_DISPLAY_MS);
+  showTaskpaneStatus(message, type);
 }
 
 /**
  * Toggles the "Analizar y sugerir" button between normal and loading states.
  */
 export function setAnalyzeLoading(loading: boolean): void {
-  const btn = document.getElementById("btn-analyze") as HTMLButtonElement;
-  const label = getRequiredElement("btn-analyze-label");
-  const select = document.getElementById("profile-select") as HTMLSelectElement;
-  btn.disabled = loading;
-  select.disabled = loading;
-  label.textContent = loading ? "Analizando..." : "Analizar y sugerir";
+  setTaskpaneAnalyzeLoading(loading);
 }
 
 /**
  * Updates the progress bar and text in the progress area.
  */
 export function updateProgress(current: number, total: number, message: string): void {
-  const container = getRequiredElement("progress-container");
-  const bar = getRequiredElement("progress-bar");
-  const text = getRequiredElement("progress-text");
-
-  container.style.display = "block";
-  const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
-  bar.style.width = `${percentage}%`;
-  text.textContent = message;
+  updateTaskpaneProgress(current, total, message);
 }
 
 /**
  * Hides the progress bar (called on pipeline completion or abort).
  */
 export function hideProgress(): void {
-  setTimeout(() => {
-    const container = document.getElementById("progress-container");
-    if (container) container.style.display = "none";
-  }, 1000);
+  hideTaskpaneProgress();
+}
+
+/**
+ * Syncs the cleanup CTA visibility from document-derived workflow semantics.
+ */
+export function setCleanupCtaVisible(visible: boolean): void {
+  setTaskpaneCleanupVisible(visible);
 }
 
 /**
  * Syncs the Track Changes CTA visibility from document-derived workflow semantics.
  */
 export function setDisableTrackChangesCtaVisible(visible: boolean): void {
-  const ctaSection = document.getElementById("disable-track-changes-section");
-  if (!ctaSection) {
-    return;
-  }
-  ctaSection.style.display = visible ? "block" : "none";
+  setTaskpaneDisableTrackChangesCtaVisible(visible);
 }
 
 /**

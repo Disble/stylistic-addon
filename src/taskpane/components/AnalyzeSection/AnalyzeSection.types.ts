@@ -1,1 +1,3 @@
-export type AnalyzeSectionProps = Readonly<Record<string, never>>;
+export type AnalyzeSectionProps = Readonly<{
+  isLoading: boolean;
+}>;

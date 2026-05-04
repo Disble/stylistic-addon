@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 import {
   createOffice,
   createTaskpaneDocument,
   deferred,
   getTaskpaneMocks,
+  getTaskpaneReactMocks,
   importTaskpane,
   makeSuggestion,
   resetTaskpaneHarness,
   teardownTaskpaneHarness,
 } from "./TaskpaneTestHelper";
-import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 
 function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: string) {
   const el = doc.getElementById(id);
@@ -19,7 +20,21 @@ function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: 
   return el;
 }
 
-async function flushTaskpaneWork(times = 6) {
+async function importTaskpaneRuntime() {
+  await importTaskpane();
+
+  const resultsPanelStore = await import("./ResultsPanelStore");
+  const taskpaneShellStore = await import("./TaskpaneShellStore");
+
+  return {
+    getResultsPanelState: resultsPanelStore.getResultsPanelState,
+    resetResultsPanelState: resultsPanelStore.resetResultsPanelState,
+    getTaskpaneShellState: taskpaneShellStore.getTaskpaneShellState,
+    resetTaskpaneShellState: taskpaneShellStore.resetTaskpaneShellState,
+  };
+}
+
+async function flushTaskpaneWork(times = 8) {
   for (let index = 0; index < times; index += 1) {
     await Promise.resolve();
   }
@@ -27,6 +42,7 @@ async function flushTaskpaneWork(times = 6) {
 
 describe("taskpane entrypoint", () => {
   const taskpaneMocks = getTaskpaneMocks();
+  const reactMocks = getTaskpaneReactMocks();
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -52,15 +68,21 @@ describe("taskpane entrypoint", () => {
       trackChangesActive: true,
     });
 
-    await importTaskpane();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
+
+    expect(reactMocks.createRoot).toHaveBeenCalledWith(getRequiredElement(doc, "container"));
 
     officeHarness.triggerReady({ host: "Excel" });
+    await flushTaskpaneWork();
+
+    expect(reactMocks.render).not.toHaveBeenCalled();
     expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("block");
     expect(doc.getElementById("btn-analyze")?.onclick).toBeNull();
 
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
 
+    expect(reactMocks.render).toHaveBeenCalledOnce();
     expect(taskpaneMocks.orchestratorHandlers).toHaveLength(7);
     expect(taskpaneMocks.retryDecoratorConstructor).toHaveBeenCalledWith(
       expect.any(Object),
@@ -72,11 +94,11 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("btn-analyze")?.onclick).toEqual(expect.any(Function));
     expect(doc.getElementById("btn-cleanup")?.onclick).toEqual(expect.any(Function));
     expect(doc.getElementById("btn-disable-track-changes")?.onclick).toEqual(expect.any(Function));
-    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
-    expect(getRequiredElement(doc, "disable-track-changes-section").style.display).toBe("block");
+    expect(getTaskpaneShellState().cleanupVisible).toBe(true);
+    expect(getTaskpaneShellState().disableTrackChangesCtaVisible).toBe(true);
   });
 
-  it("runs the pipeline and updates progress/results/status from emitted events", async () => {
+  it("runs the pipeline and publishes progress/results/state through the stores", async () => {
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
@@ -105,12 +127,14 @@ describe("taskpane entrypoint", () => {
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({ deletable: 0, kept: 0 });
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({ deletable: 1, kept: 0 });
 
-    await importTaskpane();
+    const { getResultsPanelState, getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
 
     await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
-    await Promise.resolve();
+    await flushTaskpaneWork();
+    vi.advanceTimersByTime(1000);
+    await flushTaskpaneWork();
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(taskpaneMocks.run.mock.calls[0][0]).toMatchObject({
@@ -120,13 +144,13 @@ describe("taskpane entrypoint", () => {
       analysisPort: expect.any(Object),
       emitter: expect.any(Object),
     });
-    expect(getRequiredElement(doc, "progress-container").style.display).toBe("block");
-    expect(doc.getElementById("progress-bar")?.style.width).toBe("25%");
-    expect(doc.getElementById("results-list")?.children).toHaveLength(1);
-    expect(doc.getElementById("status-bar")?.textContent).toBe(
+    expect(getTaskpaneShellState().progress.visible).toBe(false);
+    expect(getResultsPanelState().visible).toBe(true);
+    expect(getResultsPanelState().cards).toHaveLength(1);
+    expect(getTaskpaneShellState().status.message).toBe(
       "1 sugerencia(s) insertada(s) como Track Changes (selección)."
     );
-    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
+    expect(getTaskpaneShellState().cleanupVisible).toBe(true);
   });
 
   it("ignores analyze clicks while a run is already in progress", async () => {
@@ -138,8 +162,9 @@ describe("taskpane entrypoint", () => {
 
     taskpaneMocks.run.mockImplementationOnce(() => runDeferred.promise);
 
-    await importTaskpane();
+    await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
 
     const firstRun = doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
     await Promise.resolve();
@@ -154,23 +179,23 @@ describe("taskpane entrypoint", () => {
     await firstRun;
   });
 
-  it("delegates cleanup and hides the section when no comments remain", async () => {
+  it("delegates cleanup and hides the cleanup CTA when no comments remain", async () => {
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
     (globalThis as any).Office = officeHarness.office;
-    getRequiredElement(doc, "cleanup-section").style.display = "block";
 
     taskpaneMocks.cleanupResolvedComments.mockResolvedValueOnce({ deleted: 2, kept: 0 });
 
-    await importTaskpane();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
 
     await doc.getElementById("btn-cleanup")?.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
-    expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("none");
-    expect(doc.getElementById("status-bar")?.textContent).toBe(
+    expect(getTaskpaneShellState().cleanupVisible).toBe(false);
+    expect(getTaskpaneShellState().status.message).toBe(
       "2 comentario(s) eliminado(s), 0 conservado(s)."
     );
   });
@@ -180,15 +205,15 @@ describe("taskpane entrypoint", () => {
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
     (globalThis as any).Office = officeHarness.office;
-    getRequiredElement(doc, "disable-track-changes-section").style.display = "block";
 
-    await importTaskpane();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
 
     await doc.getElementById("btn-disable-track-changes")?.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.disableTrackChanges).toHaveBeenCalledOnce();
-    expect(getRequiredElement(doc, "disable-track-changes-section").style.display).toBe("none");
-    expect(doc.getElementById("status-bar")?.textContent).toBe("Control de cambios desactivado.");
+    expect(getTaskpaneShellState().disableTrackChangesCtaVisible).toBe(false);
+    expect(getTaskpaneShellState().status.message).toBe("Control de cambios desactivado.");
   });
 });

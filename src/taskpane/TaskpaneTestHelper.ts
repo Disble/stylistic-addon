@@ -1,9 +1,6 @@
 import { vi } from "vitest";
+import * as React from "react";
 
-import type {
-  ApplySuggestionsResult,
-  SuggestionApplicationFailure,
-} from "../domain/DocumentApplication.types";
 import type { Suggestion, SuggestionNavigationResult } from "../domain/suggestion/Suggestion.types";
 
 const hoistedTaskpaneMocks = vi.hoisted(() => ({
@@ -28,11 +25,60 @@ const hoistedTaskpaneMocks = vi.hoisted(() => ({
   feedbackSendFeedback: vi.fn<(payload: any) => Promise<void>>(),
 }));
 
+const hoistedReactMocks = vi.hoisted(() => ({
+  createRoot: vi.fn(),
+  render: vi.fn(),
+}));
+
 /**
  * Returns the shared mock registry used by taskpane presentation tests.
  */
 export function getTaskpaneMocks() {
   return hoistedTaskpaneMocks;
+}
+
+/** Returns shared React-root mocks used by the taskpane entrypoint tests. */
+export function getTaskpaneReactMocks() {
+  return hoistedReactMocks;
+}
+
+vi.mock("react-dom/client", () => ({
+  createRoot: vi.fn((...args: unknown[]) => {
+    hoistedReactMocks.createRoot(...args);
+    return {
+      render: vi.fn((...renderArgs: unknown[]) => {
+        hoistedReactMocks.render(...renderArgs);
+        simulateMountedReactTree(renderArgs[0]);
+      }),
+    };
+  }),
+}));
+
+/**
+ * Simulates React mount effects in tests by walking the rendered element tree
+ * and invoking any `onMount` callback props exposed by shell components.
+ */
+function simulateMountedReactTree(node: unknown): void {
+  if (!isReactElementLike(node)) {
+    return;
+  }
+
+  const onMount = node.props.onMount;
+  if (typeof onMount === "function") {
+    onMount();
+  }
+
+  const children = React.Children.toArray(node.props.children);
+  for (const child of children) {
+    simulateMountedReactTree(child);
+  }
+}
+
+/** Returns true when the value looks like a React element object. */
+function isReactElementLike(
+  value: unknown
+): value is React.ReactElement<{ children?: React.ReactNode; onMount?: unknown }> {
+  return typeof value === "object" && value !== null && "props" in value;
 }
 
 vi.mock("../adapters/word/WordAdapter", () => ({
@@ -428,6 +474,7 @@ export function createTaskpaneDocument(): FakeDocument {
   const doc = new FakeDocument([
     "sideload-msg",
     "app-body",
+    "container",
     "btn-analyze",
     "btn-analyze-label",
     "btn-cleanup",
@@ -488,11 +535,13 @@ export function createOffice() {
 }
 
 /**
- * Re-imports the taskpane entrypoint after resetting Vitest module state.
+ * Re-imports the taskpane entrypoint after resetting the module graph.
+ * Tests that assert store state must import the stores again after this call
+ * so they observe the same module instances used by the entrypoint.
  */
 export async function importTaskpane() {
   vi.resetModules();
-  return import("./taskpane");
+  return import("./index");
 }
 
 /**
@@ -500,9 +549,12 @@ export async function importTaskpane() {
  */
 export function resetTaskpaneHarness() {
   const taskpaneMocks = getTaskpaneMocks();
+  const reactMocks = getTaskpaneReactMocks();
   vi.resetAllMocks();
   vi.useFakeTimers();
   taskpaneMocks.orchestratorHandlers = [];
+  reactMocks.createRoot.mockReset();
+  reactMocks.render.mockReset();
   taskpaneMocks.run.mockResolvedValue(undefined);
   taskpaneMocks.getCleanupPreview.mockResolvedValue({
     deletable: 0,
@@ -561,47 +613,4 @@ export function teardownTaskpaneHarness() {
   vi.useRealTimers();
   delete (globalThis as any).document;
   delete (globalThis as any).Office;
-}
-
-/**
- * Renders results by emitting a pipeline completion event through the entrypoint.
- */
-export async function renderViaEmitter(
-  doc: FakeDocument,
-  suggestions: Suggestion[],
-  failedIds: string[] = []
-): Promise<FakeElement[]> {
-  const taskpaneMocks = getTaskpaneMocks();
-  const officeHarness = createOffice();
-  (globalThis as any).document = doc;
-  (globalThis as any).Office = officeHarness.office;
-
-  const failedSuggestions: SuggestionApplicationFailure[] = suggestions
-    .filter((suggestion) => failedIds.includes(suggestion.id))
-    .map((suggestion) => ({
-      suggestion,
-      reason: "not-found",
-      message: "Anchor no encontrado en el contexto",
-    }));
-  const result: ApplySuggestionsResult = {
-    successCount: suggestions.length - failedSuggestions.length,
-    failedSuggestions,
-    pendingAfter: {
-      pendingStylisticArtifacts: suggestions.length - failedSuggestions.length,
-      hasPendingStylisticArtifacts: suggestions.length - failedSuggestions.length > 0,
-      trackChangesActive: suggestions.length - failedSuggestions.length > 0,
-    },
-    documentState: suggestions.length - failedSuggestions.length > 0 ? "pending-review" : "idle",
-    trackChangesActivatedForBatch: suggestions.length - failedSuggestions.length > 0,
-  };
-
-  taskpaneMocks.run.mockImplementationOnce(async (ctx: any) => {
-    ctx.emitter.emitComplete(suggestions, result, [], false);
-  });
-
-  await importTaskpane();
-  officeHarness.triggerReady({ host: "Word" });
-  await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
-
-  return doc.getElementById("results-list")?.children ?? [];
 }

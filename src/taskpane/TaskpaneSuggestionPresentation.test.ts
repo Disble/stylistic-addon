@@ -1,40 +1,52 @@
+import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createTaskpaneDocument,
-  FakeElement,
-  getTaskpaneMocks,
-  makeSuggestion,
-  renderViaEmitter,
-  resetTaskpaneHarness,
-  teardownTaskpaneHarness,
-} from "./TaskpaneTestHelper";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
 import { buildResultsSummary } from "./SuggestionCardRenderer";
+import {
+  getResultsPanelState,
+  resetResultsPanelState,
+  setResultsPanelData,
+} from "./ResultsPanelStore";
+import { resetTaskpaneShellState } from "./TaskpaneShellStore";
+import { ResultSuggestionCard } from "./components/ResultSuggestionCard";
+import { makeSuggestion } from "./TaskpaneTestHelper";
 
-/** Returns a fake DOM element that the test requires to exist. */
-function requireElement(container: FakeElement, selector: string): FakeElement {
-  const element = container.querySelector(selector);
-  expect(element).not.toBeNull();
-  return element;
+function createResultsPanelDeps(): ResultsPanelDeps {
+  return {
+    navigateToText: vi.fn().mockResolvedValue({ status: "navigated" }),
+    acceptSuggestion: vi.fn().mockResolvedValue({ status: "accepted" }),
+    rejectSuggestion: vi.fn().mockResolvedValue({ status: "rejected" }),
+  } as unknown as ResultsPanelDeps;
+}
+
+function renderCardMarkup(cardId: string): string {
+  const card = getResultsPanelState().cards.find((entry) => entry.suggestion.id === cardId);
+  if (!card) {
+    throw new Error(`Missing card: ${cardId}`);
+  }
+
+  return renderToStaticMarkup(
+    React.createElement(ResultSuggestionCard, {
+      card,
+      onAccept: async () => {},
+      onFeedbackCommentChange: () => {},
+      onNavigate: async () => {},
+      onReject: async () => {},
+      onToggleFeedback: () => {},
+    })
+  );
 }
 
 describe("taskpane suggestion presentation", () => {
-  const taskpaneMocks = getTaskpaneMocks();
-  let logSpy: ReturnType<typeof vi.spyOn>;
-  let warnSpy: ReturnType<typeof vi.spyOn>;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
-    resetTaskpaneHarness();
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    resetResultsPanelState();
+    resetTaskpaneShellState();
   });
 
   afterEach(() => {
-    logSpy.mockRestore();
-    warnSpy.mockRestore();
-    errorSpy.mockRestore();
-    teardownTaskpaneHarness();
+    resetResultsPanelState();
+    resetTaskpaneShellState();
   });
 
   it("builds a live-friendly summary with resolved and remaining counts", () => {
@@ -69,70 +81,105 @@ describe("taskpane suggestion presentation", () => {
     );
   });
 
-  it("renders comment-only suggestions without diff blocks and with text action labels", async () => {
-    const doc = createTaskpaneDocument();
+  it("renders comment-only suggestions without diff blocks and with text action labels", () => {
     const suggestion = makeSuggestion({
       id: "s-co",
       type: "comment-only",
       suggestedText: undefined,
     });
 
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    setResultsPanelData(
+      [suggestion],
+      {
+        successCount: 1,
+        failedSuggestions: [],
+        pendingAfter: {
+          pendingStylisticArtifacts: 1,
+          hasPendingStylisticArtifacts: true,
+          trackChangesActive: true,
+        },
+        documentState: "pending-review",
+        trackChangesActivatedForBatch: false,
+      },
+      [],
+      false,
+      createResultsPanelDeps()
+    );
 
-    expect(li.querySelector(".card-diff")).toBeNull();
-    expect(li.querySelector('[data-action="accept"]')?.textContent).toBe("Entendido");
-    expect(li.querySelector('[data-action="reject"]')?.textContent).toBe("Ignorar");
-    expect(li.querySelector(".result-type-badge--comment")?.textContent).toBe("comentario");
+    const markup = renderCardMarkup("s-co");
+
+    expect(markup).not.toContain("card-diff");
+    expect(markup).toContain("Entendido");
+    expect(markup).toContain("Ignorar");
+    expect(markup).toContain("result-type-badge--comment");
   });
 
-  it("renders track-change suggestions with diff blocks and symbolic action labels", async () => {
-    const doc = createTaskpaneDocument();
+  it("renders track-change suggestions with diff blocks and symbolic action labels", () => {
     const suggestion = makeSuggestion({
       id: "s-tc",
       type: "track-change",
       suggestedText: "texto sugerido",
     });
 
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
+    setResultsPanelData(
+      [suggestion],
+      {
+        successCount: 1,
+        failedSuggestions: [],
+        pendingAfter: {
+          pendingStylisticArtifacts: 1,
+          hasPendingStylisticArtifacts: true,
+          trackChangesActive: true,
+        },
+        documentState: "pending-review",
+        trackChangesActivatedForBatch: false,
+      },
+      [],
+      false,
+      createResultsPanelDeps()
+    );
 
-    expect(li.querySelector(".card-diff")).not.toBeNull();
-    expect(li.querySelector('[data-action="accept"]')?.textContent).toBe("✓");
-    expect(li.querySelector('[data-action="reject"]')?.textContent).toBe("✗");
+    const markup = renderCardMarkup("s-tc");
+
+    expect(markup).toContain("card-diff");
+    expect(markup).toContain(">✓<");
+    expect(markup).toContain(">✗<");
   });
 
-  it("uses the suggestion identity for clickable navigation", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({
-      id: "s-nav",
-      anchor: "fragmento exacto",
-      context: "Un contexto con fragmento exacto adentro.",
-    });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const clickable = requireElement(li, ".card-clickable-area");
-
-    expect(requireElement(li, ".result-original").textContent).toBe("fragmento exacto");
-    clickable.click();
-
-    expect(taskpaneMocks.navigateToText).toHaveBeenCalledWith(suggestion);
-  });
-
-  it('renders "No encontrado" cards after actionable suggestions on initial paint', async () => {
-    const doc = createTaskpaneDocument();
+  it('keeps "No encontrado" cards after actionable suggestions in store ordering', () => {
     const firstSuggestion = makeSuggestion({ id: "s-1", anchor: "primero" });
     const missingSuggestion = makeSuggestion({ id: "s-missing", anchor: "faltante" });
     const secondSuggestion = makeSuggestion({ id: "s-2", anchor: "segundo" });
 
-    const liItems = await renderViaEmitter(
-      doc,
+    setResultsPanelData(
       [firstSuggestion, missingSuggestion, secondSuggestion],
-      ["s-missing"]
+      {
+        successCount: 2,
+        failedSuggestions: [
+          {
+            suggestion: missingSuggestion,
+            reason: "not-found",
+            message: "Anchor no encontrado en el contexto",
+          },
+        ],
+        pendingAfter: {
+          pendingStylisticArtifacts: 2,
+          hasPendingStylisticArtifacts: true,
+          trackChangesActive: true,
+        },
+        documentState: "pending-review",
+        trackChangesActivatedForBatch: true,
+      },
+      [],
+      false,
+      createResultsPanelDeps()
     );
 
-    expect(requireElement(liItems[0], ".result-original").textContent).toBe("primero");
-    expect(requireElement(liItems[1], ".result-original").textContent).toBe("segundo");
-    expect(requireElement(liItems[2], ".result-failed").textContent).toBe(
-      'No encontrado: "faltante"'
-    );
+    expect(getResultsPanelState().cards.map((card) => card.suggestion.anchor)).toEqual([
+      "primero",
+      "segundo",
+      "faltante",
+    ]);
+    expect(renderCardMarkup("s-missing")).toContain("No encontrado: &quot;faltante&quot;");
   });
 });

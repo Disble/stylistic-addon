@@ -5,10 +5,10 @@
  * - Instantiate all adapters, decorators, mediators, and the pipeline.
  * - Initialize after the React shell is mounted and Office confirms the host is Word.
  * - Bind top-level DOM event handlers (analyze, cleanup, disable TC).
- * - Register a `PipelineObserver` to relay pipeline events to the DOM.
+ * - Register a `PipelineObserver` to relay pipeline events into presentation stores.
  *
- * Card rendering, card interaction, and UI primitives are delegated to
- * `SuggestionCardRenderer` and `TaskpaneUi` respectively.
+ * React now owns shell/results rendering. This module still owns orchestration,
+ * top-level host event binding, and publication into presentation facades.
  *
  * @module taskpane
  */
@@ -41,6 +41,7 @@ import {
   getRequiredElement,
   getSelectedGenero,
   hideProgress,
+  setCleanupCtaVisible,
   setAnalyzeLoading,
   setDisableTrackChangesCtaVisible,
   showStatus,
@@ -140,14 +141,9 @@ export function bootstrapTaskpane(
  * Shows the section only when there are deletable Stylistic comments.
  */
 async function refreshCleanupVisibility(): Promise<void> {
-  const cleanupSection = document.getElementById("cleanup-section");
-  if (!cleanupSection) {
-    return;
-  }
-
   try {
     const { deletable } = await documentPort.getCleanupPreview();
-    cleanupSection.style.display = deletable > 0 ? "block" : "none";
+    setCleanupCtaVisible(deletable > 0);
   } catch (error) {
     console.warn("⚠️ [Taskpane] No se pudo calcular la visibilidad de limpieza:", error);
   }
@@ -253,7 +249,7 @@ async function handleCleanup(): Promise<void> {
     const { deleted, kept } = await documentPort.cleanupResolvedComments();
     console.log(`🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`);
     showStatus(`${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`, "success");
-    getRequiredElement("cleanup-section").style.display = kept > 0 ? "block" : "none";
+    setCleanupCtaVisible(kept > 0);
   } catch (error) {
     showStatus(toUserMessage(error), "error");
   } finally {

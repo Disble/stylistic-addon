@@ -1,1 +1,5 @@
-export type StatusBarProps = Readonly<Record<string, never>>;
+import type { TaskpaneShellStatus } from "../../TaskpaneShellStore";
+
+export type StatusBarProps = Readonly<{
+  status: TaskpaneShellStatus;
+}>;

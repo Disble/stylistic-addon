@@ -1,1 +1,3 @@
-export type DisableTrackChangesSectionProps = Readonly<Record<string, never>>;
+export type DisableTrackChangesSectionProps = Readonly<{
+  isVisible: boolean;
+}>;

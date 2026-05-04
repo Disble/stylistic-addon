@@ -1,12 +1,15 @@
 import * as React from "react";
+import type { DisableTrackChangesSectionProps } from "./DisableTrackChangesSection.types";
 
 /** Renders the Track Changes disable CTA anchor. */
-export function DisableTrackChangesSection(): React.JSX.Element {
+export function DisableTrackChangesSection({
+  isVisible,
+}: DisableTrackChangesSectionProps): React.JSX.Element {
   return (
     <div
       className="stylistic-section"
       id="disable-track-changes-section"
-      style={{ display: "none" }}
+      style={{ display: isVisible ? "block" : "none" }}
     >
       <button
         id="btn-disable-track-changes"

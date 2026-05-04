@@ -1,1 +1,3 @@
-export type CleanupSectionProps = Readonly<Record<string, never>>;
+export type CleanupSectionProps = Readonly<{
+  isVisible: boolean;
+}>;

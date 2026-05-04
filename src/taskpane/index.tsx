@@ -6,17 +6,18 @@ import { App } from "./components/App";
 
 /**
  * React bootstrap entrypoint for the Stylistic taskpane.
- * Renders the React shell first, then binds the legacy composition root to the rendered DOM.
+ * Follows the Office React template bootstrap pattern and lets the mounted React shell
+ * trigger taskpane DOM binding once its anchor elements exist.
  */
 function renderTaskpaneShell(): void {
   const office = globalThis.Office;
   const rootElement = document.getElementById("container");
 
-  if (!office?.onReady || !rootElement) {
+  if (!office?.onReady) {
     return;
   }
 
-  const root = createRoot(rootElement);
+  const root = rootElement ? createRoot(rootElement) : undefined;
 
   office.onReady((info) => {
     const wordHost = office.HostType?.Word ?? "Word";
@@ -24,17 +25,15 @@ function renderTaskpaneShell(): void {
       return;
     }
 
-    root.render(
-      <React.StrictMode>
-        <FluentProvider theme={webLightTheme}>
-          <App />
-        </FluentProvider>
-      </React.StrictMode>
+    root?.render(
+      React.createElement(
+        FluentProvider,
+        { theme: webLightTheme },
+        React.createElement(App, {
+          onMount: () => bootstrapTaskpane(document, office),
+        })
+      )
     );
-
-    queueMicrotask(() => {
-      bootstrapTaskpane(document, office);
-    });
   });
 }
 

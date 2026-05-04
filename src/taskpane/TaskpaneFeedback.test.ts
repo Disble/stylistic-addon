@@ -1,152 +1,24 @@
+import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
 import {
-  createTaskpaneDocument,
-  FakeElement,
-  getTaskpaneMocks,
-  makeSuggestion,
-  renderViaEmitter,
-  resetTaskpaneHarness,
-  teardownTaskpaneHarness,
-} from "./TaskpaneTestHelper";
+  acceptResultsPanelSuggestion,
+  getResultsPanelState,
+  rejectResultsPanelSuggestion,
+  resetResultsPanelState,
+  setResultsPanelData,
+  setResultsPanelFeedbackComment,
+  toggleResultsPanelFeedback,
+} from "./ResultsPanelStore";
+import { resetTaskpaneShellState } from "./TaskpaneShellStore";
+import { ResultSuggestionCard } from "./components/ResultSuggestionCard";
+import { makeSuggestion } from "./TaskpaneTestHelper";
 
-/** Flushes taskpane microtasks for async review resolution tests. */
-async function flushTaskpaneWork(times = 8) {
-  for (let index = 0; index < times; index += 1) {
-    await Promise.resolve();
-  }
-}
-
-/** Returns a taskpane element that a test requires to exist. */
-function requireElement(container: FakeElement, selector: string): FakeElement {
-  const element = container.querySelector(selector);
-  expect(element).not.toBeNull();
-  return element;
-}
-
-describe("taskpane feedback controls", () => {
-  const taskpaneMocks = getTaskpaneMocks();
-  let logSpy: ReturnType<typeof vi.spyOn>;
-  let warnSpy: ReturnType<typeof vi.spyOn>;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    resetTaskpaneHarness();
-    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    logSpy.mockRestore();
-    warnSpy.mockRestore();
-    errorSpy.mockRestore();
-    teardownTaskpaneHarness();
-  });
-
-  it("renders a feedback button and accordion for each non-failed suggestion", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-1" });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-
-    expect(li.querySelector('[data-action="feedback"]')?.getAttribute("aria-label")).toBe(
-      "Dejar feedback"
-    );
-    expect(li.querySelector(".feedback-accordion")).not.toBeNull();
-    expect(li.querySelector(".feedback-textarea")).not.toBeNull();
-  });
-
-  it("omits feedback controls for failed suggestions", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-fail" });
-
-    const li = (await renderViaEmitter(doc, [suggestion], ["s-fail"]))[0];
-
-    expect(li.querySelector('[data-action="feedback"]')).toBeNull();
-    expect(li.querySelector(".feedback-accordion")).toBeNull();
-  });
-
-  it("toggles the feedback accordion when the feedback button is clicked", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-1" });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    const feedbackBtn = requireElement(li, '[data-action="feedback"]');
-    const accordion = requireElement(li, ".feedback-accordion");
-
-    expect(accordion.classList.contains("feedback-accordion--open")).toBe(false);
-    feedbackBtn.click();
-    expect(accordion.classList.contains("feedback-accordion--open")).toBe(true);
-    feedbackBtn.click();
-    expect(accordion.classList.contains("feedback-accordion--open")).toBe(false);
-  });
-
-  it("sends positive feedback payloads after accept", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({
-      id: "s-1",
-      category: "Redundancia",
-      anchor: "completamente necesario",
-      context: "Frase con completamente necesario.",
-      suggestedText: "necesario",
-      justification: "Ya implica completitud.",
-      severity: "high",
-    });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    requireElement(li, '[data-action="accept"]').click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "accept",
-        context: "Frase con completamente necesario.",
-        category: "Redundancia",
-        anchor: "completamente necesario",
-        suggestedText: "necesario",
-        justification: "Ya implica completitud.",
-        severity: "high",
-        suggestionType: "track-change",
-      })
-    );
-  });
-
-  it("sends negative feedback payloads after reject", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({
-      id: "s-1",
-      category: "Muletilla",
-      anchor: "básicamente",
-      context: "Frase con básicamente.",
-      suggestedText: "",
-      justification: "Frase de relleno.",
-      severity: "medium",
-    });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    requireElement(li, '[data-action="reject"]').click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "reject",
-        context: "Frase con básicamente.",
-        category: "Muletilla",
-        anchor: "básicamente",
-        suggestedText: "",
-        justification: "Frase de relleno.",
-        severity: "medium",
-        suggestionType: "track-change",
-      })
-    );
-  });
-
-  it("keeps feedback non-blocking even when the adapter rejects it later", async () => {
-    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce({
+function createResultsPanelDeps(overrides: Partial<ResultsPanelDeps> = {}): ResultsPanelDeps {
+  return {
+    navigateToText: vi.fn().mockResolvedValue({ status: "navigated" }),
+    acceptSuggestion: vi.fn().mockResolvedValue({
       status: "accepted",
       trackedChangesAffected: 2,
       commentDeleted: true,
@@ -162,81 +34,143 @@ describe("taskpane feedback controls", () => {
         showDisableTrackChangesCta: false,
         showCleanupSection: false,
       },
-    });
-    taskpaneMocks.feedbackSendFeedback.mockRejectedValueOnce(new Error("feedback failed"));
-
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-feedback" });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    requireElement(li, '[data-action="accept"]').click();
-    await flushTaskpaneWork();
-
-    expect(li.classList.contains("result-accepted")).toBe(true);
-  });
-
-  it("does not send feedback when the resolution ends in identity-lost", async () => {
-    taskpaneMocks.acceptSuggestion.mockResolvedValueOnce({
-      status: "identity-lost",
-      trackedChangesAffected: 0,
-      commentDeleted: false,
+    }),
+    rejectSuggestion: vi.fn().mockResolvedValue({
+      status: "rejected",
+      trackedChangesAffected: 2,
+      commentDeleted: true,
       pendingAfter: {
         pendingStylisticArtifacts: 1,
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       },
       documentState: "pending-review",
-      error: "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.",
-      feedbackStatus: "skipped",
+      feedbackStatus: "sent",
       taskpaneState: {
         documentState: "pending-review",
         showDisableTrackChangesCta: false,
         showCleanupSection: false,
       },
-    });
+    }),
+    ...overrides,
+  };
+}
 
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-identity-lost" });
+function seedResultsPanel(deps: ResultsPanelDeps, failed = false) {
+  const suggestion = makeSuggestion({ id: failed ? "s-fail" : "s-1" });
+  setResultsPanelData(
+    [suggestion],
+    {
+      successCount: failed ? 0 : 1,
+      failedSuggestions: failed
+        ? [
+            {
+              suggestion,
+              reason: "not-found",
+              message: "Anchor no encontrado en el contexto",
+            },
+          ]
+        : [],
+      pendingAfter: {
+        pendingStylisticArtifacts: failed ? 0 : 1,
+        hasPendingStylisticArtifacts: !failed,
+        trackChangesActive: !failed,
+      },
+      documentState: failed ? "idle" : "pending-review",
+      trackChangesActivatedForBatch: !failed,
+    },
+    [],
+    false,
+    deps
+  );
+  return suggestion;
+}
 
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    requireElement(li, '[data-action="accept"]').click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+function renderCardMarkup(cardId: string): string {
+  const card = getResultsPanelState().cards.find((entry) => entry.suggestion.id === cardId);
+  if (!card) {
+    throw new Error(`Missing card: ${cardId}`);
+  }
 
-    expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
+  return renderToStaticMarkup(
+    React.createElement(ResultSuggestionCard, {
+      card,
+      onAccept: async () => {},
+      onFeedbackCommentChange: () => {},
+      onNavigate: async () => {},
+      onReject: async () => {},
+      onToggleFeedback: () => {},
+    })
+  );
+}
+
+describe("taskpane feedback controls", () => {
+  beforeEach(() => {
+    resetResultsPanelState();
+    resetTaskpaneShellState();
   });
 
-  it("omits empty textarea comments from the feedback payload", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-1" });
-
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    requireElement(li, ".feedback-textarea").value = "";
-    requireElement(li, '[data-action="accept"]').click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(taskpaneMocks.feedbackSendFeedback.mock.calls[0][0]).not.toHaveProperty("comment");
+  afterEach(() => {
+    resetResultsPanelState();
+    resetTaskpaneShellState();
   });
 
-  it("includes non-empty textarea comments and justification in the feedback payload", async () => {
-    const doc = createTaskpaneDocument();
-    const suggestion = makeSuggestion({ id: "s-1", justification: "Es más claro" });
+  it("renders a feedback button and accordion for each non-failed suggestion", () => {
+    seedResultsPanel(createResultsPanelDeps());
 
-    const li = (await renderViaEmitter(doc, [suggestion]))[0];
-    requireElement(li, ".feedback-textarea").value = "Muy buen cambio";
-    requireElement(li, '[data-action="accept"]').click();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    const markup = renderCardMarkup("s-1");
 
-    expect(taskpaneMocks.feedbackSendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        comment: "Muy buen cambio",
-        justification: "Es más claro",
-      })
-    );
+    expect(markup).toContain('data-action="feedback"');
+    expect(markup).toContain("feedback-accordion");
+    expect(markup).toContain("feedback-textarea");
+  });
+
+  it("omits feedback controls for failed suggestions", () => {
+    seedResultsPanel(createResultsPanelDeps(), true);
+
+    const markup = renderCardMarkup("s-fail");
+
+    expect(markup).not.toContain('data-action="feedback"');
+    expect(markup).not.toContain("feedback-accordion");
+  });
+
+  it("toggles the feedback accordion state when requested", () => {
+    seedResultsPanel(createResultsPanelDeps());
+
+    expect(getResultsPanelState().cards[0].feedbackOpen).toBe(false);
+    toggleResultsPanelFeedback("s-1");
+    expect(getResultsPanelState().cards[0].feedbackOpen).toBe(true);
+    toggleResultsPanelFeedback("s-1");
+    expect(getResultsPanelState().cards[0].feedbackOpen).toBe(false);
+  });
+
+  it("omits empty textarea comments from accept resolution payloads", async () => {
+    const deps = createResultsPanelDeps();
+    const suggestion = seedResultsPanel(deps);
+
+    setResultsPanelFeedbackComment(suggestion.id, "   ");
+    await acceptResultsPanelSuggestion(suggestion.id);
+
+    expect(deps.acceptSuggestion).toHaveBeenCalledWith(suggestion, undefined);
+  });
+
+  it("includes non-empty textarea comments in accept resolution payloads", async () => {
+    const deps = createResultsPanelDeps();
+    const suggestion = seedResultsPanel(deps);
+
+    setResultsPanelFeedbackComment(suggestion.id, "Muy buen cambio");
+    await acceptResultsPanelSuggestion(suggestion.id);
+
+    expect(deps.acceptSuggestion).toHaveBeenCalledWith(suggestion, "Muy buen cambio");
+  });
+
+  it("includes non-empty textarea comments in reject resolution payloads", async () => {
+    const deps = createResultsPanelDeps();
+    const suggestion = seedResultsPanel(deps);
+
+    setResultsPanelFeedbackComment(suggestion.id, "No me convence");
+    await rejectResultsPanelSuggestion(suggestion.id);
+
+    expect(deps.rejectSuggestion).toHaveBeenCalledWith(suggestion, "No me convence");
   });
 });

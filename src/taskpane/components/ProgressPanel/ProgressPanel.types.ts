@@ -1,1 +1,5 @@
-export type ProgressPanelProps = Readonly<Record<string, never>>;
+import type { TaskpaneShellProgress } from "../../TaskpaneShellStore";
+
+export type ProgressPanelProps = Readonly<{
+  progress: TaskpaneShellProgress;
+}>;

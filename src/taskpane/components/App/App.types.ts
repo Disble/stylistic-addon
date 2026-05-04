@@ -4,6 +4,7 @@ export type AnalysisProfileOption = Readonly<{
 }>;
 
 export type AppProps = Readonly<{
+  onMount?: () => void;
   title?: string;
   subtitle?: string;
 }>;
