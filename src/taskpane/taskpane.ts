@@ -33,6 +33,7 @@ import type { IFeedbackPort } from "../domain/ports";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 import { hideResultsPanel } from "./ResultsPanelStore";
+import { setSelectionPreviewSnapshot } from "./SelectionPreviewStore";
 import {
   buildApplyStatusMessage,
   type ResultsPanelDeps,
@@ -120,6 +121,7 @@ const cardRendererDeps: ResultsPanelDeps = {
 export function bootstrapTaskpane(): void {
   void refreshCleanupVisibility();
   void refreshTrackChangesCtaVisibility();
+  documentPort.subscribeSelectionChanges(setSelectionPreviewSnapshot);
 }
 
 // ---------------------------------------------------------------------------

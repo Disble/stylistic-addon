@@ -5,6 +5,7 @@ import { CleanupSection } from "../CleanupSection";
 import { DisableTrackChangesSection } from "../DisableTrackChangesSection";
 import { ProgressPanel } from "../ProgressPanel";
 import { ResultsPanel } from "../ResultsPanel";
+import { SelectionPreview, useSelectionPreview } from "../SelectionPreview";
 import { StatusBar } from "../StatusBar";
 import { TaskpaneHeader } from "../TaskpaneHeader";
 import { ANALYSIS_PROFILE_OPTIONS, DEFAULT_APP_SUBTITLE, DEFAULT_APP_TITLE } from "./App.constants";
@@ -24,6 +25,7 @@ export function App({
   subtitle = DEFAULT_APP_SUBTITLE,
 }: AppProps): React.JSX.Element {
   const { handleGeneroChange, shellState } = useApp();
+  const selectionPreview = useSelectionPreview();
 
   React.useEffect(() => {
     onMount?.();
@@ -39,6 +41,11 @@ export function App({
         selectedGenero={shellState.selectedGenero}
       />
       <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
+      <SelectionPreview
+        isVisible={selectionPreview.isVisible}
+        charCount={selectionPreview.charCount}
+        preview={selectionPreview.preview}
+      />
       <ProgressPanel progress={shellState.progress} />
       <ResultsPanel />
       <CleanupSection

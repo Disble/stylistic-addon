@@ -68,6 +68,7 @@ function makeMockDocumentPort(): IDocumentPort {
     getDocumentReviewState: vi.fn(),
     disableTrackChanges: vi.fn(),
     navigateToText: vi.fn(),
+    subscribeSelectionChanges: vi.fn(() => () => {}),
   };
 }
 

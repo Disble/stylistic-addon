@@ -19,6 +19,7 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     getDocumentReviewState: vi.fn(),
     disableTrackChanges: vi.fn(),
     navigateToText: vi.fn(),
+    subscribeSelectionChanges: vi.fn(() => () => {}),
   };
 
   const analysisPort: IAnalysisPort = {

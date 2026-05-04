@@ -114,6 +114,10 @@ vi.mock("../adapters/word/WordAdapter", () => ({
     navigateToText(target: Suggestion | string) {
       return hoistedTaskpaneMocks.navigateToText(target);
     }
+
+    subscribeSelectionChanges() {
+      return () => {};
+    }
   },
 }));
 

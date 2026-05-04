@@ -53,6 +53,7 @@ function makeMockPorts(): {
       getDocumentReviewState: vi.fn(),
       disableTrackChanges: vi.fn(),
       navigateToText: vi.fn(),
+      subscribeSelectionChanges: vi.fn(() => () => {}),
     },
     analysisPort: {
       checkConnection: vi.fn(),

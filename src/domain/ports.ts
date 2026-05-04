@@ -21,6 +21,7 @@ import type { ApplySuggestionsResult } from "./DocumentApplication.types";
 import type { ChunkPollResult, ChunkSubmitResult } from "./mastra/MastraWorkflow.types";
 import type { ProgressCallback } from "./pipeline/PipelineEvents.types";
 import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
+import type { SelectionSnapshot } from "./selection/SelectionSnapshot.types";
 import type { Suggestion, SuggestionNavigationResult } from "./suggestion/Suggestion.types";
 import type {
   FeedbackPayload,
@@ -114,6 +115,16 @@ export interface IDocumentPort {
    * artifacts reach zero. Never called automatically.
    */
   disableTrackChanges(): Promise<void>;
+
+  /**
+   * Subscribes to host selection changes and emits a `SelectionSnapshot` whenever
+   * the user updates the active selection. Implementations must emit one initial
+   * snapshot synchronously or asynchronously after subscription so the UI can
+   * reflect the current state.
+   *
+   * Returns a function that cancels the subscription.
+   */
+  subscribeSelectionChanges(listener: (snapshot: SelectionSnapshot) => void): () => void;
 
   /**
    * Navigates the document view to the real Word artifact for one suggestion.

@@ -13,6 +13,7 @@ import type { ApplySuggestionsResult, CommandResult } from "../../domain/Documen
 import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.types";
 import type { IDocumentPort, IResolutionObservabilityPort } from "../../domain/ports";
 import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
+import type { SelectionSnapshot } from "../../domain/selection/SelectionSnapshot.types";
 import type {
   Suggestion,
   SuggestionNavigationResult,
@@ -24,6 +25,7 @@ import { BatchApplyOrchestrator } from "./BatchApplyOrchestrator";
 import { cleanupResolvedComments, getCleanupPreview } from "./cleanup/CommentCleanup";
 import { ResolveSuggestionCommand } from "./resolve-suggestion/ResolveSuggestionCommand";
 import { WordAppliedSuggestionInspector } from "./WordAppliedSuggestionInspector";
+import { WordSelectionMonitorAdapter } from "./WordSelectionMonitorAdapter";
 import { WordSuggestionNavigationAdapter } from "./WordSuggestionNavigationAdapter";
 import {
   getDefaultTextLocator,
@@ -39,6 +41,8 @@ export class WordAdapter implements IDocumentPort {
   private readonly appliedSuggestionInspector = new WordAppliedSuggestionInspector();
 
   private readonly trackChangesAdapter = new WordTrackChangesAdapter();
+
+  private readonly selectionMonitor = new WordSelectionMonitorAdapter();
 
   private readonly suggestionNavigationAdapter: WordSuggestionNavigationAdapter;
 
@@ -172,5 +176,10 @@ export class WordAdapter implements IDocumentPort {
   /** Navigates to the real suggestion artifact when available. */
   async navigateToText(target: Suggestion | string): Promise<SuggestionNavigationResult> {
     return this.suggestionNavigationAdapter.navigateToText(target);
+  }
+
+  /** Subscribes to host selection changes for live previews in the UI. */
+  subscribeSelectionChanges(listener: (snapshot: SelectionSnapshot) => void): () => void {
+    return this.selectionMonitor.subscribe(listener);
   }
 }
