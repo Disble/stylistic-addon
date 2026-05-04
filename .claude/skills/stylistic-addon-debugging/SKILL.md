@@ -17,6 +17,22 @@ metadata:
 - Word real-host behavior contradicts what the test suite suggests
 - Starting a bug investigation in this repo
 
+## Canonical docs before repo-specific debugging changes
+
+When the debugging lesson overlaps with project documentation, `docs/` is the
+source of truth and this skill should point there instead of restating the same
+forensics.
+
+Read these first when relevant:
+
+- `docs/troubleshooting.md` — current symptom → cause → inspection guidance
+- `docs/replace-resolution-postmortem.md` — accept/reject and replace-resolution investigation history
+- `docs/architecture.md` — current adapter and locator workflow contracts
+
+If a regression teaches a new repo-specific lesson, capture the detailed story
+in the relevant `docs/` page and keep this skill focused on the debugging
+workflow itself.
+
 ## Bug Intake Pattern
 
 This repo's bug reports often arrive as:

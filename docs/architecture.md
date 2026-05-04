@@ -639,6 +639,8 @@ Owns persisted Stylistic artifact lookup:
   `stylistic-operational-wrapper:{id}` plus valid operational-wrapper metadata
   for the expected subtype,
 - comment-only suggestions: exact canonical tag `stylistic:comment-only:{id}`,
+- load every proxy-backed identity field that downstream resolution steps will
+  read later (`tag`, `title`, and similar properties),
 - duplicate valid wrappers become `ambiguous-location`,
 - malformed Stylistic metadata becomes `identity-lost`,
 - no selected artifact is returned unless the lookup is unique and safe.
@@ -646,6 +648,12 @@ Owns persisted Stylistic artifact lookup:
 This locator is shared by navigation and accept/reject resolution. Navigation
 selects the safe artifact range. Resolution continues with tracked-change
 observation and mutation after the artifact is located.
+
+Office.js reminder: locating a Content Control does not materialize all of its
+properties automatically. If later workflow phases read `selectedCc.tag` or
+`selectedCc.title`, the locator contract must ensure those fields were loaded
+before returning. Real Word will throw on unloaded proxy reads even if tests use
+permissive plain-object mocks.
 
 #### `SuggestionLocator`
 

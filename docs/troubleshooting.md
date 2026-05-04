@@ -210,6 +210,38 @@ context text exists in the document after user edits.
 
 ---
 
+### Accept/Reject appears to do nothing
+
+**Symptom:** Clicking **Accept** or **Reject** appears inert, or the card enters
+resolving state briefly and then returns without a visible document change.
+
+**Common real-host cause:** The resolution workflow successfully locates the
+Stylistic artifact, but a later step reads a proxy-backed Word property such as
+`ContentControl.tag` that was never loaded. Real Word then throws an error like:
+
+> `The property 'tag' is not available. Before reading the property's value, call the load method on the containing object and call "context.sync()" on the associated request context.`
+
+This can look like an inert button when the taskpane only surfaces a generic
+resolution failure.
+
+**Why tests can miss it:** permissive Office.js mocks often expose `tag` and
+`title` as plain fields, so a GREEN suite does not prove the real host loaded
+those properties correctly.
+
+**What to inspect in logs:**
+
+1. Confirm the workflow emitted `locate succeeded` for the attempt.
+2. Check the next failure event or caught error metadata for an unloaded proxy
+   property (`tag`, `title`, etc.).
+3. Inspect the artifact locator and verify it loads every identity field that
+   downstream resolution steps read.
+
+**Fix direction:** treat the locator as the contract boundary. If downstream code
+reads `selectedCc.tag` or `selectedCc.title`, the locator must load those
+properties before returning the selected artifact bundle.
+
+---
+
 ## Comment Cleanup Issues
 
 ### Accepted/rejected suggestions leave invisible Stylistic metadata

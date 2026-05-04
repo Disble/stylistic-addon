@@ -17,6 +17,22 @@ metadata:
 - Touching Office.js mocks, `Word.run`, tracked changes, comments, or content controls
 - Reviewing whether a test provides real confidence or only plumbing coverage
 
+## Canonical docs before repo-specific testing changes
+
+When the lesson already belongs in project documentation, `docs/` is the source
+of truth and this skill should point to it instead of duplicating the same
+narrative.
+
+Read these first when relevant:
+
+- `docs/troubleshooting.md` — current real-host symptom → cause → inspection guidance
+- `docs/replace-resolution-postmortem.md` — long-form replace-resolution forensic history
+- `docs/architecture.md` — current locator and workflow contracts
+
+Use this skill as the durable testing checklist. Put the detailed repo-specific
+forensics in `docs/`, then keep only the stable testing rule or a short pointer
+here.
+
 ## Critical Patterns
 
 ### 0. Real host beats automated GREEN

@@ -12,6 +12,9 @@ When working in this project, IMMEDIATELY read the corresponding skill file befo
 
 Update the local testing skill when a regression teaches a new repo-specific lesson.
 
+- `docs/` is the canonical home for detailed repo-specific bug forensics and operational lessons.
+- When a lesson would duplicate project docs, update the relevant `docs/` page first and keep the skill as a concise pointer/checklist.
+
 ## Philosophy
 
 - This project ALWAYS prioritizes breaking changes over legacy code.

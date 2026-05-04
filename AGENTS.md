@@ -26,6 +26,8 @@ This project uses Bun as its package manager.
 - When a bug escapes existing tests, update the relevant local testing skill with the new lesson.
 - Document not only the fix, but also **why the previous test strategy failed**.
 - Corrections of prior corrections MUST also be documented when they reveal a false assumption, permissive mock, or missing semantic assertion.
+- `docs/` is the canonical home for detailed repo-specific bug forensics and operational lessons.
+- When a lesson would duplicate project docs, update the relevant `docs/` page first and keep the skill as a concise pointer/checklist.
 
 ## Philosophy
 

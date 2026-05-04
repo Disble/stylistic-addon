@@ -6,6 +6,16 @@
 - El objetivo sigue siendo el mismo desde el primer reporte: si un replace no puede resolverse atómicamente, **no** debe dejar Word en estado intermedio ni marcar la tarjeta como `accepted` / `rejected`.
 - Este documento registra **todos los intentos de fix** hasta ahora, incluso los fallidos o parciales, para poder borrarlos después uno por uno hasta dejar solo el fix real.
 
+> **Actualización 2026-05 — no confundir bugs:** después de la migración React
+> apareció otra regresión donde accept/reject parecía no hacer nada. Ese bug NO
+> cambió la conclusión de atomicidad de este documento. El root cause fue más
+> acotado: `SuggestionArtifactLocator` dejó de cargar `items/tag`, y un paso
+> posterior del workflow leyó `selectedCc.tag` sobre un proxy no cargado. La
+> lección operativa queda documentada también en `docs/troubleshooting.md` y
+> `docs/architecture.md`: si un locator devuelve un Content Control que luego se
+> seguirá usando como identidad operativa, debe cargar explícitamente todos los
+> campos proxy-backed que el workflow vaya a leer.
+
 ---
 
 ## Resumen ejecutivo
