@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installRejectingWord, installWordWithContext, makeParagraph } from "./WordAdapterTestHelper";
+import {
+  installRejectingWord,
+  installWordWithContext,
+  makeParagraph,
+} from "./WordAdapterTestHelper";
 import { WordTextSourceAdapter } from "./WordTextSourceAdapter";
 
 describe("WordTextSourceAdapter", () => {
@@ -43,8 +47,6 @@ describe("WordTextSourceAdapter", () => {
   it("propagates Word.run errors", async () => {
     installRejectingWord(new Error("Office host unavailable"));
 
-    await expect(adapter.getTextToAnalyze()).rejects.toThrow(
-      "Office host unavailable",
-    );
+    await expect(adapter.getTextToAnalyze()).rejects.toThrow("Office host unavailable");
   });
 });

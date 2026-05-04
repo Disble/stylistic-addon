@@ -23,9 +23,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function makeCommentOnlySuggestion(
-  overrides: Partial<Suggestion> = {},
-): Suggestion {
+function makeCommentOnlySuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
     id: "c1",
@@ -66,7 +64,7 @@ function makeMockPorts(): {
 
 function makePipelineContext(
   rawSuggestions: Suggestion[],
-  overrides: Partial<PipelineContext> = {},
+  overrides: Partial<PipelineContext> = {}
 ): PipelineContext {
   const { documentPort, analysisPort } = makeMockPorts();
   return {
@@ -182,11 +180,7 @@ describe("DeduplicateHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.uniqueSuggestions).toHaveLength(3);
-      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual([
-        "s1",
-        "s2",
-        "s4",
-      ]);
+      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual(["s1", "s2", "s4"]);
     });
   });
 
@@ -371,8 +365,16 @@ describe("DeduplicateHandler", () => {
       // Two comment-only suggestions targeting the same phrase are both valid:
       // they produce independent Word comments and never conflict with each other.
       const suggestions = [
-        makeCommentOnlySuggestion({ id: "c1", anchor: "misma frase", context: "Contexto misma frase" }),
-        makeCommentOnlySuggestion({ id: "c2", anchor: "misma frase", context: "Otro contexto misma frase" }),
+        makeCommentOnlySuggestion({
+          id: "c1",
+          anchor: "misma frase",
+          context: "Contexto misma frase",
+        }),
+        makeCommentOnlySuggestion({
+          id: "c2",
+          anchor: "misma frase",
+          context: "Otro contexto misma frase",
+        }),
       ];
       const ctx = makePipelineContext(suggestions);
 
@@ -417,11 +419,7 @@ describe("DeduplicateHandler", () => {
 
       // tc1 kept, tc2 removed; co1 and co2 both kept
       expect(ctx.uniqueSuggestions).toHaveLength(3);
-      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual([
-        "tc1",
-        "co1",
-        "co2",
-      ]);
+      expect(ctx.uniqueSuggestions?.map((s) => s.id)).toEqual(["tc1", "co1", "co2"]);
     });
 
     it("should deduplicate exact semantic comment-only duplicates even with different ids", async () => {

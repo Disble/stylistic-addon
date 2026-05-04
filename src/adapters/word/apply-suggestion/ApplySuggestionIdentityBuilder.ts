@@ -30,7 +30,7 @@ export class ApplySuggestionIdentityBuilder {
   createArtifactRef(
     kind: WordArtifactRef["kind"],
     role: WordArtifactRef["role"],
-    value: string,
+    value: string
   ): WordArtifactRef {
     return { kind, role, value };
   }
@@ -51,18 +51,11 @@ export class ApplySuggestionIdentityBuilder {
    */
   buildReplaceIdentity(suggestion: Suggestion): ReplaceSuggestionIdentity {
     const subtypeResolution = this.subtypeResolver.resolve(suggestion);
-    const subtype =
-      subtypeResolution.subtype === "insert"
-        ? "replace"
-        : subtypeResolution.subtype;
+    const subtype = subtypeResolution.subtype === "insert" ? "replace" : subtypeResolution.subtype;
     const baseIdentity = {
       suggestionId: suggestion.id,
       version: "operational-wrapper-v1" as const,
-      anchorRef: this.createArtifactRef(
-        "anchor",
-        "operational-anchor",
-        suggestion.context,
-      ),
+      anchorRef: this.createArtifactRef("anchor", "operational-anchor", suggestion.context),
       groupId: suggestion.id,
       groupIndex: 0,
       groupSize: 1,
@@ -72,11 +65,7 @@ export class ApplySuggestionIdentityBuilder {
       return {
         ...baseIdentity,
         trackChangeSubtype: "delete-only",
-        deletedSideRef: this.createArtifactRef(
-          "anchor",
-          "delete-side",
-          suggestion.anchor,
-        ),
+        deletedSideRef: this.createArtifactRef("anchor", "delete-side", suggestion.anchor),
       };
     }
 
@@ -87,7 +76,7 @@ export class ApplySuggestionIdentityBuilder {
         formatSideRef: this.createArtifactRef(
           "content-control",
           "format-side",
-          this.buildSuggestionTag(suggestion),
+          this.buildSuggestionTag(suggestion)
         ),
       };
     }
@@ -98,18 +87,10 @@ export class ApplySuggestionIdentityBuilder {
       insertedSideRef: this.createArtifactRef(
         "content-control",
         "inserted-side",
-        this.buildSuggestionTag(suggestion),
+        this.buildSuggestionTag(suggestion)
       ),
-      deletedSideRef: this.createArtifactRef(
-        "anchor",
-        "deleted-side",
-        suggestion.anchor,
-      ),
-      anchorRef: this.createArtifactRef(
-        "anchor",
-        "operational-anchor",
-        suggestion.context,
-      ),
+      deletedSideRef: this.createArtifactRef("anchor", "deleted-side", suggestion.anchor),
+      anchorRef: this.createArtifactRef("anchor", "operational-anchor", suggestion.context),
       groupId: suggestion.id,
       groupIndex: 0,
       groupSize: 1,

@@ -40,7 +40,7 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
 function makeHandler(
   name: string,
   calls: string[],
-  sideEffect?: (ctx: PipelineContext) => void | Promise<void>,
+  sideEffect?: (ctx: PipelineContext) => void | Promise<void>
 ): PipelineHandler {
   return {
     handle: vi.fn(async (ctx: PipelineContext, next: () => Promise<void>) => {
@@ -116,7 +116,7 @@ describe("PipelineOrchestrator", () => {
     ]);
 
     await expect(orchestrator.run(makeContext())).rejects.toThrow(
-      "next() called multiple times in the same handler",
+      "next() called multiple times in the same handler"
     );
   });
 });

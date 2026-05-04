@@ -33,27 +33,19 @@ export type {
 
 const TRANSITIONS: Record<DocumentReviewUiState, DocumentReviewUiState[]> = {
   idle: ["idle", "pending-review", "ready-to-disable-track-changes"],
-  "pending-review": [
-    "pending-review",
-    "ready-to-disable-track-changes",
-    "idle",
-  ],
-  "ready-to-disable-track-changes": [
-    "ready-to-disable-track-changes",
-    "pending-review",
-    "idle",
-  ],
+  "pending-review": ["pending-review", "ready-to-disable-track-changes", "idle"],
+  "ready-to-disable-track-changes": ["ready-to-disable-track-changes", "pending-review", "idle"],
 };
 
 export class InvalidDocumentReviewTransitionError extends Error {
   constructor(
     from: DocumentReviewUiState,
     to: DocumentReviewUiState,
-    allowed: DocumentReviewUiState[],
+    allowed: DocumentReviewUiState[]
   ) {
     super(
       `[DocumentReviewStateMachine] Invalid transition: "${from}" → "${to}". ` +
-        `Allowed: [${allowed.join(", ")}]`,
+        `Allowed: [${allowed.join(", ")}]`
     );
     this.name = "InvalidDocumentReviewTransitionError";
   }
@@ -101,7 +93,7 @@ export class DocumentReviewStateMachine {
    */
   static evaluateTransition(
     before: DocumentReviewState,
-    after: DocumentReviewState,
+    after: DocumentReviewState
   ): DocumentReviewTransition {
     const machine = new DocumentReviewStateMachine(before);
     const from = machine.state;
@@ -150,9 +142,7 @@ export class DocumentReviewStateMachine {
    * Resets the machine to `idle`.
    */
   reset(): void {
-    console.log(
-      `🔄 [DocumentReviewStateMachine] reset → idle (was: ${this.current})`,
-    );
+    console.log(`🔄 [DocumentReviewStateMachine] reset → idle (was: ${this.current})`);
     this.current = "idle";
   }
 
@@ -161,11 +151,7 @@ export class DocumentReviewStateMachine {
    */
   private transitionTo(next: DocumentReviewUiState): void {
     if (!TRANSITIONS[this.current].includes(next)) {
-      throw new InvalidDocumentReviewTransitionError(
-        this.current,
-        next,
-        TRANSITIONS[this.current],
-      );
+      throw new InvalidDocumentReviewTransitionError(this.current, next, TRANSITIONS[this.current]);
     }
 
     if (this.current === next) {

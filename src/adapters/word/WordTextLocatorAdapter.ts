@@ -43,9 +43,7 @@ function stringifyUnknownError(error: unknown): string {
 export class WordTextLocatorAdapter implements TextLocator {
   /** Detects Word search rejections caused by invalid or too-long strings. */
   private static isSearchInvalidError(error: unknown): boolean {
-    return stringifyUnknownError(error).includes(
-      "SearchStringInvalidOrTooLong",
-    );
+    return stringifyUnknownError(error).includes("SearchStringInvalidOrTooLong");
   }
 
   /** Runs one Word search attempt and normalizes invalid-search failures. */
@@ -53,7 +51,7 @@ export class WordTextLocatorAdapter implements TextLocator {
     requestContext: Word.RequestContext,
     container: WordSearchContainer,
     searchText: string,
-    options: Record<string, boolean>,
+    options: Record<string, boolean>
   ): Promise<{ invalid: boolean; results?: Word.RangeCollection }> {
     try {
       const results = container.search(searchText, options);
@@ -74,7 +72,7 @@ export class WordTextLocatorAdapter implements TextLocator {
     requestContext: Word.RequestContext,
     container: WordSearchContainer,
     searchText: string,
-    searchOptions: Record<string, boolean>,
+    searchOptions: Record<string, boolean>
   ): Promise<WordTextLocationResult> {
     container.load("text");
     await requestContext.sync();
@@ -84,10 +82,7 @@ export class WordTextLocatorAdapter implements TextLocator {
       return null;
     }
 
-    const fallbackSearchText = findUniqueLocatorSubstring(
-      rawSlice,
-      container.text,
-    );
+    const fallbackSearchText = findUniqueLocatorSubstring(rawSlice, container.text);
     if (!fallbackSearchText) {
       return null;
     }
@@ -96,7 +91,7 @@ export class WordTextLocatorAdapter implements TextLocator {
       requestContext,
       container,
       fallbackSearchText,
-      searchOptions,
+      searchOptions
     );
     if (!fallbackAttempt.invalid) {
       return fallbackAttempt.results?.items[0] ?? null;
@@ -108,10 +103,7 @@ export class WordTextLocatorAdapter implements TextLocator {
     }
 
     const alphanumericSlice = rawSlice.slice(alphanumericOffset);
-    const alphanumericCandidate = findUniqueLocatorSubstring(
-      alphanumericSlice,
-      container.text,
-    );
+    const alphanumericCandidate = findUniqueLocatorSubstring(alphanumericSlice, container.text);
     if (!alphanumericCandidate) {
       return null;
     }
@@ -120,7 +112,7 @@ export class WordTextLocatorAdapter implements TextLocator {
       requestContext,
       container,
       alphanumericCandidate,
-      searchOptions,
+      searchOptions
     );
     if (retryAttempt.invalid) {
       return null;
@@ -154,15 +146,10 @@ export class WordTextLocatorAdapter implements TextLocator {
         context,
         container,
         searchText,
-        searchOptions,
+        searchOptions
       );
       if (exactAttempt.invalid) {
-        return this.resolveByWhitespaceScan(
-          context,
-          container,
-          searchText,
-          searchOptions,
-        );
+        return this.resolveByWhitespaceScan(context, container, searchText, searchOptions);
       }
 
       exactResults = exactAttempt.results;
@@ -171,22 +158,16 @@ export class WordTextLocatorAdapter implements TextLocator {
       }
     }
 
-    const shouldRunRelaxedSearch =
-      !exactMatchAllowed || (exactResults?.items.length ?? 0) === 0;
+    const shouldRunRelaxedSearch = !exactMatchAllowed || (exactResults?.items.length ?? 0) === 0;
     if (shouldRunRelaxedSearch) {
       const relaxedAttempt = await this.runSearchAttempt(
         context,
         container,
         searchText,
-        relaxedOptions,
+        relaxedOptions
       );
       if (relaxedAttempt.invalid) {
-        return this.resolveByWhitespaceScan(
-          context,
-          container,
-          searchText,
-          searchOptions,
-        );
+        return this.resolveByWhitespaceScan(context, container, searchText, searchOptions);
       }
 
       if ((relaxedAttempt.results?.items.length ?? 0) > 0) {
@@ -194,11 +175,6 @@ export class WordTextLocatorAdapter implements TextLocator {
       }
     }
 
-    return this.resolveByWhitespaceScan(
-      context,
-      container,
-      searchText,
-      searchOptions,
-    );
+    return this.resolveByWhitespaceScan(context, container, searchText, searchOptions);
   }
 }

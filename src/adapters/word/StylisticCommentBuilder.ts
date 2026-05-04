@@ -21,10 +21,7 @@ function normalizeCommentContent(content: string | undefined): string {
 }
 
 /** Visible content format currently used by Stylistic-generated comments. */
-export function buildStylisticCommentContent(
-  category: string,
-  justification: string,
-): string {
+export function buildStylisticCommentContent(category: string, justification: string): string {
   return `[${category}]\n${justification}`;
 }
 

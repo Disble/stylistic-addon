@@ -75,8 +75,6 @@ describe("ExecuteResolutionStateMachine", () => {
   it("throws on invalid transition", () => {
     const machine = new ExecuteResolutionStateMachine();
 
-    expect(() => machine.transition("executing")).toThrow(
-      InvalidExecuteResolutionTransitionError,
-    );
+    expect(() => machine.transition("executing")).toThrow(InvalidExecuteResolutionTransitionError);
   });
 });

@@ -40,7 +40,7 @@ export interface PipelineObserver {
     suggestions: Suggestion[],
     result: ApplySuggestionsResult,
     chunkErrors: string[],
-    isSelection: boolean,
+    isSelection: boolean
   ): void;
 
   /** Called when the pipeline is aborted before reaching `done`. */
@@ -99,9 +99,7 @@ export class PipelineEventEmitter {
   }
 
   emitProgress(current: number, total: number, message: string): void {
-    this.notifyObservers((observer) =>
-      observer.onProgress?.(current, total, message),
-    );
+    this.notifyObservers((observer) => observer.onProgress?.(current, total, message));
   }
 
   emitPhaseComplete(phase: PipelineState): void {
@@ -116,10 +114,10 @@ export class PipelineEventEmitter {
     suggestions: Suggestion[],
     result: ApplySuggestionsResult,
     chunkErrors: string[],
-    isSelection: boolean,
+    isSelection: boolean
   ): void {
     this.notifyObservers((observer) =>
-      observer.onComplete?.(suggestions, result, chunkErrors, isSelection),
+      observer.onComplete?.(suggestions, result, chunkErrors, isSelection)
     );
   }
 

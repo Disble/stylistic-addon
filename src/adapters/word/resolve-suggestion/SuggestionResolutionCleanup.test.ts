@@ -101,7 +101,7 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
       wrapperContentControl.modeAtDelete = context.document.changeTrackingMode;
       wrapperContentControl.deleted = true;
       graph.contentControls = graph.contentControls.filter(
-        (candidate) => candidate.id !== wrapperContentControl.id,
+        (candidate) => candidate.id !== wrapperContentControl.id
       );
     }),
   };
@@ -115,7 +115,7 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
       insertedSideContentControl.modeAtDelete = context.document.changeTrackingMode;
       insertedSideContentControl.deleted = true;
       graph.contentControls = graph.contentControls.filter(
-        (candidate) => candidate.id !== insertedSideContentControl.id,
+        (candidate) => candidate.id !== insertedSideContentControl.id
       );
     }),
   };
@@ -129,7 +129,7 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
       foreignContentControl.modeAtDelete = context.document.changeTrackingMode;
       foreignContentControl.deleted = true;
       graph.contentControls = graph.contentControls.filter(
-        (candidate) => candidate.id !== foreignContentControl.id,
+        (candidate) => candidate.id !== foreignContentControl.id
       );
     }),
   };
@@ -168,11 +168,7 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
     delete: vi.fn(() => deleteCommentFromGraph("comment-foreign")),
   };
 
-  graph.comments = [
-    locatedCommentNode,
-    preservedCommentNode,
-    foreignCommentNode,
-  ];
+  graph.comments = [locatedCommentNode, preservedCommentNode, foreignCommentNode];
   graph.contentControls = [
     wrapperContentControl,
     insertedSideContentControl,
@@ -209,9 +205,7 @@ function buildIntegratedCleanupHarness(): IntegratedCleanupHarness {
   };
 }
 
-function makeColocatedComment(
-  deleteImpl: () => void = () => undefined,
-): ColocatedCommentContext {
+function makeColocatedComment(deleteImpl: () => void = () => undefined): ColocatedCommentContext {
   return {
     comment: { delete: vi.fn(deleteImpl) } as unknown as Word.Comment,
     range: {} as unknown as Word.Range,
@@ -237,10 +231,7 @@ describe("SuggestionResolutionCleanup soft-success contract", () => {
     });
     const colocatedComment = makeColocatedComment();
 
-    const commentDeleted = await cleanup.deleteLocatedStylisticComment(
-      context,
-      colocatedComment,
-    );
+    const commentDeleted = await cleanup.deleteLocatedStylisticComment(context, colocatedComment);
 
     expect(commentDeleted).toBe(true);
   });
@@ -253,9 +244,9 @@ describe("SuggestionResolutionCleanup soft-success contract", () => {
     });
     const colocatedComment = makeColocatedComment();
 
-    await expect(
-      cleanup.deleteLocatedStylisticComment(context, colocatedComment),
-    ).rejects.toThrow("InvalidOperationInCellEdit");
+    await expect(cleanup.deleteLocatedStylisticComment(context, colocatedComment)).rejects.toThrow(
+      "InvalidOperationInCellEdit"
+    );
   });
 
   it("exposes explicit metadata cleanup for resolved track-change wrappers", () => {
@@ -270,7 +261,7 @@ describe("SuggestionResolutionCleanup soft-success contract", () => {
 
     const commentDeleted = await cleanup.deleteLocatedStylisticCommentAfterResolution(
       harness.context,
-      harness.colocatedComment,
+      harness.colocatedComment
     );
 
     expect(commentDeleted).toBe(true);
@@ -302,9 +293,7 @@ describe("SuggestionResolutionCleanup soft-success contract", () => {
     const cleanup = new SuggestionResolutionCleanup("s-cleanup", "accept");
     const harness = buildIntegratedCleanupHarness();
 
-    const result = await cleanup.deleteResolvedTrackChangeMetadata(
-      harness.context,
-    );
+    const result = await cleanup.deleteResolvedTrackChangeMetadata(harness.context);
 
     expect(result.deletedContentControls).toEqual([
       harness.wrapperContentControl.tag,
@@ -328,16 +317,12 @@ describe("SuggestionResolutionCleanup soft-success contract", () => {
     const cleanup = new SuggestionResolutionCleanup("s-cleanup", "reject");
     const harness = buildIntegratedCleanupHarness();
     harness.graph.contentControls = harness.graph.contentControls.filter(
-      (cc) => cc.id !== harness.insertedSideContentControl.id,
+      (cc) => cc.id !== harness.insertedSideContentControl.id
     );
 
-    const result = await cleanup.deleteResolvedTrackChangeMetadata(
-      harness.context,
-    );
+    const result = await cleanup.deleteResolvedTrackChangeMetadata(harness.context);
 
-    expect(result.deletedContentControls).toEqual([
-      harness.wrapperContentControl.tag,
-    ]);
+    expect(result.deletedContentControls).toEqual([harness.wrapperContentControl.tag]);
     expect(result.failedContentControls).toEqual([]);
     expect(harness.wrapperContentControl.delete).toHaveBeenCalledWith(true);
     expect(harness.insertedSideContentControl.delete).not.toHaveBeenCalled();

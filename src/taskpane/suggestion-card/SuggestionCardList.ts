@@ -4,25 +4,18 @@ import { SUGGESTION_CARD_REORDER_ANIMATION_MS } from "../../infrastructure/confi
  * Runs a FLIP-style animation for suggestion-list reordering when the host DOM
  * provides layout APIs. Falls back to an immediate reorder in test/fake DOM.
  */
-export function animateSuggestionListReorder(
-  parent: HTMLElement,
-  reorder: () => void,
-): void {
+export function animateSuggestionListReorder(parent: HTMLElement, reorder: () => void): void {
   const cardsBefore = Array.from(parent.children) as HTMLElement[];
   const canAnimate =
     typeof globalThis.requestAnimationFrame === "function" &&
-    cardsBefore.every(
-      (card) => typeof card.getBoundingClientRect === "function",
-    );
+    cardsBefore.every((card) => typeof card.getBoundingClientRect === "function");
 
   if (!canAnimate) {
     reorder();
     return;
   }
 
-  const firstRects = new Map(
-    cardsBefore.map((card) => [card, card.getBoundingClientRect()]),
-  );
+  const firstRects = new Map(cardsBefore.map((card) => [card, card.getBoundingClientRect()]));
 
   reorder();
 
@@ -73,7 +66,7 @@ export function animateSuggestionListReorder(
 export function getFirstNotFoundCard(parent: HTMLElement): HTMLElement | null {
   return (
     (Array.from(parent.children) as HTMLElement[]).find(
-      (card) => card.dataset.cardGroup === "not-found",
+      (card) => card.dataset.cardGroup === "not-found"
     ) ?? null
   );
 }

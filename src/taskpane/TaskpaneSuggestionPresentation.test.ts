@@ -62,10 +62,10 @@ describe("taskpane suggestion presentation", () => {
           trackChangesActivatedForBatch: true,
         },
         [],
-        true,
-      ),
+        true
+      )
     ).toBe(
-      "Sobre selección — Te faltan 1 de 1 sugerencia aplicada por revisar. Todavía no resolviste ninguna. 1 no encontrada(s) en el texto.",
+      "Sobre selección — Te faltan 1 de 1 sugerencia aplicada por revisar. Todavía no resolviste ninguna. 1 no encontrada(s) en el texto."
     );
   });
 
@@ -80,15 +80,9 @@ describe("taskpane suggestion presentation", () => {
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
 
     expect(li.querySelector(".card-diff")).toBeNull();
-    expect(li.querySelector('[data-action="accept"]')?.textContent).toBe(
-      "Entendido",
-    );
-    expect(li.querySelector('[data-action="reject"]')?.textContent).toBe(
-      "Ignorar",
-    );
-    expect(li.querySelector(".result-type-badge--comment")?.textContent).toBe(
-      "comentario",
-    );
+    expect(li.querySelector('[data-action="accept"]')?.textContent).toBe("Entendido");
+    expect(li.querySelector('[data-action="reject"]')?.textContent).toBe("Ignorar");
+    expect(li.querySelector(".result-type-badge--comment")?.textContent).toBe("comentario");
   });
 
   it("renders track-change suggestions with diff blocks and symbolic action labels", async () => {
@@ -117,9 +111,7 @@ describe("taskpane suggestion presentation", () => {
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
     const clickable = requireElement(li, ".card-clickable-area");
 
-    expect(requireElement(li, ".result-original").textContent).toBe(
-      "fragmento exacto",
-    );
+    expect(requireElement(li, ".result-original").textContent).toBe("fragmento exacto");
     clickable.click();
 
     expect(taskpaneMocks.navigateToText).toHaveBeenCalledWith(suggestion);
@@ -134,17 +126,13 @@ describe("taskpane suggestion presentation", () => {
     const liItems = await renderViaEmitter(
       doc,
       [firstSuggestion, missingSuggestion, secondSuggestion],
-      ["s-missing"],
+      ["s-missing"]
     );
 
-    expect(requireElement(liItems[0], ".result-original").textContent).toBe(
-      "primero",
-    );
-    expect(requireElement(liItems[1], ".result-original").textContent).toBe(
-      "segundo",
-    );
+    expect(requireElement(liItems[0], ".result-original").textContent).toBe("primero");
+    expect(requireElement(liItems[1], ".result-original").textContent).toBe("segundo");
     expect(requireElement(liItems[2], ".result-failed").textContent).toBe(
-      'No encontrado: "faltante"',
+      'No encontrado: "faltante"'
     );
   });
 });

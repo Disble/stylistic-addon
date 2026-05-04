@@ -43,7 +43,7 @@ describe("PipelineStateMachine", () => {
     const machine = new PipelineStateMachine();
 
     expect(() => machine.transition("done")).toThrow(
-      '[PipelineStateMachine] Invalid transition: "idle" → "done". Allowed: [reading]',
+      '[PipelineStateMachine] Invalid transition: "idle" → "done". Allowed: [reading]'
     );
     expect(machine.state).toBe("idle");
     expect(machine.canTransition("done")).toBe(false);
@@ -77,13 +77,10 @@ describe("PipelineStateMachine", () => {
     machine.transition("reading");
     machine.reset();
 
-    expect(logSpy).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining("idle → reading"),
-    );
+    expect(logSpy).toHaveBeenNthCalledWith(1, expect.stringContaining("idle → reading"));
     expect(logSpy).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining("reset → idle (was: reading)"),
+      expect.stringContaining("reset → idle (was: reading)")
     );
 
     logSpy.mockRestore();

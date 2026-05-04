@@ -26,8 +26,6 @@ describe("DocumentReviewStateInspector", () => {
       sync: vi.fn(),
     } as unknown as Word.RequestContext;
 
-    await expect(inspector.inspectAfterResolution(context)).rejects.toThrow(
-      "GeneralException",
-    );
+    await expect(inspector.inspectAfterResolution(context)).rejects.toThrow("GeneralException");
   });
 });

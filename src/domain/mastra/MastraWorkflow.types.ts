@@ -10,11 +10,7 @@ export interface WorkflowInput {
   text: string;
 
   /** Genre identifier matching the backend enum. */
-  genero:
-    | "narrativa-literaria"
-    | "ensayo-academico"
-    | "periodismo-cultural"
-    | "general";
+  genero: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
 
   /** Author slug in kebab-case used to load the author profile. */
   autorSlug: string;

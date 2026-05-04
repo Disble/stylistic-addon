@@ -15,10 +15,7 @@
 import { MastraClient } from "@mastra/client-js";
 import type { IFeedbackPort } from "../../domain/ports";
 import type { FeedbackPayload } from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
-import {
-  FEEDBACK_WORKFLOW_ID,
-  MASTRA_BASE_URL,
-} from "../../infrastructure/config";
+import { FEEDBACK_WORKFLOW_ID, MASTRA_BASE_URL } from "../../infrastructure/config";
 
 /** Singleton Mastra client instance, reused across all feedback calls. */
 const mastraClient = new MastraClient({ baseUrl: MASTRA_BASE_URL });

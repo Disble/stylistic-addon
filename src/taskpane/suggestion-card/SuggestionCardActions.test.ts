@@ -10,10 +10,7 @@ import {
 } from "../TaskpaneTestHelper";
 import type { ResultsPanelDeps } from "../SuggestionCardRenderer.types";
 import { createSuggestionCard } from "./SuggestionCardElements";
-import {
-  handleAcceptSuggestion,
-  wireSuggestionCardInteractions,
-} from "./SuggestionCardActions";
+import { handleAcceptSuggestion, wireSuggestionCardInteractions } from "./SuggestionCardActions";
 
 /** Builds a compact accepted mediator result for card-action tests. */
 function makeAcceptedResult(): SuggestionResolutionMediatorResult {
@@ -49,15 +46,9 @@ describe("SuggestionCardActions", () => {
   it("accepts with the card feedback comment and applies terminal UI consequences", async () => {
     const suggestion = makeSuggestion({ id: "s-action" });
     const card = createSuggestionCard(suggestion, []);
-    const textarea = card.li.querySelector(".feedback-textarea") as
-      | HTMLTextAreaElement
-      | null;
-    const acceptBtn = card.li.querySelector(
-      '[data-action="accept"]',
-    ) as HTMLButtonElement | null;
-    const rejectBtn = card.li.querySelector(
-      '[data-action="reject"]',
-    ) as HTMLButtonElement | null;
+    const textarea = card.li.querySelector(".feedback-textarea") as HTMLTextAreaElement | null;
+    const acceptBtn = card.li.querySelector('[data-action="accept"]') as HTMLButtonElement | null;
+    const rejectBtn = card.li.querySelector('[data-action="reject"]') as HTMLButtonElement | null;
     const summaryElement = document.createElement("div");
     const deps: ResultsPanelDeps = {
       navigateToText: vi.fn().mockResolvedValue({ status: "navigated" }),
@@ -88,27 +79,20 @@ describe("SuggestionCardActions", () => {
             documentState: "pending-review",
             trackChangesActivatedForBatch: true,
           },
-          [],
+          []
         ),
         summaryElement,
         isSelection: false,
-      },
+      }
     );
 
-    expect(deps.acceptSuggestion).toHaveBeenCalledWith(
-      suggestion,
-      "comentario útil",
-    );
+    expect(deps.acceptSuggestion).toHaveBeenCalledWith(suggestion, "comentario útil");
     expect(card.li.classList.contains("result-accepted")).toBe(true);
     expect(card.li.querySelector(".result-actions")).toBeNull();
-    expect(document.getElementById("cleanup-section")?.style.display).toBe(
-      "block",
-    );
-    expect(
-      document.getElementById("disable-track-changes-section")?.style.display,
-    ).toBe("block");
+    expect(document.getElementById("cleanup-section")?.style.display).toBe("block");
+    expect(document.getElementById("disable-track-changes-section")?.style.display).toBe("block");
     expect(summaryElement.textContent).toContain(
-      "Ya no te quedan sugerencias aplicadas por revisar.",
+      "Ya no te quedan sugerencias aplicadas por revisar."
     );
     expect(summaryElement.textContent).toContain("1 ya resuelta.");
   });
@@ -139,7 +123,7 @@ describe("SuggestionCardActions", () => {
           documentState: "pending-review",
           trackChangesActivatedForBatch: false,
         },
-        [],
+        []
       ),
       summaryElement: document.createElement("div"),
       isSelection: false,
@@ -149,8 +133,6 @@ describe("SuggestionCardActions", () => {
     await Promise.resolve();
 
     const note = card.li.querySelector(".result-navigation-note");
-    expect(note?.textContent).toContain(
-      "no se pudo ubicar la sugerencia de forma segura",
-    );
+    expect(note?.textContent).toContain("no se pudo ubicar la sugerencia de forma segura");
   });
 });

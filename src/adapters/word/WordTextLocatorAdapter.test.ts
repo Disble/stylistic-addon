@@ -3,9 +3,7 @@ import { WordTextLocatorAdapter } from "./WordTextLocatorAdapter";
 
 type MockRange = { id: string };
 
-type SearchOutcome =
-  | { kind: "results"; items: MockRange[] }
-  | { kind: "invalid" };
+type SearchOutcome = { kind: "results"; items: MockRange[] } | { kind: "invalid" };
 
 /** Creates a minimal fake RangeCollection for locator tests. */
 function createRangeCollection(items: MockRange[]) {
@@ -114,9 +112,7 @@ describe("WordTextLocatorAdapter", () => {
   it("retries from the first alphanumeric offset when the fallback candidate is invalid", async () => {
     const retriedRange: MockRange = { id: "retried" };
     const adapter = new WordTextLocatorAdapter();
-    const searchText =
-      "—¿Sabes quién es la tercera? " +
-      "A".repeat(260);
+    const searchText = "—¿Sabes quién es la tercera? " + "A".repeat(260);
     const containerText = `${searchText} final`;
     const container = createSearchContainer(containerText, [
       { kind: "invalid" },

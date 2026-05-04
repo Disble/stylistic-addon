@@ -8,7 +8,7 @@ function makeGroupCc(
   id: string,
   index: number,
   groupSize: number,
-  relationWithNext = "AdjacentBefore",
+  relationWithNext = "AdjacentBefore"
 ) {
   return {
     tag: `stylistic:track-change:${id}`,
@@ -47,17 +47,10 @@ describe("OperationalWrapperGroupResolver", () => {
     const resolver = new OperationalWrapperGroupResolver();
     const seedIdentity = parseReplaceIdentityTitle(first.title);
 
-    const group = await resolver.resolve(
-      makeContext([second, first]),
-      first,
-      seedIdentity!,
-    );
+    const group = await resolver.resolve(makeContext([second, first]), first, seedIdentity!);
 
     expect(group.status).toBe("contiguous");
-    expect(group.members.map((member) => member.identity.suggestionId)).toEqual([
-      "s-1",
-      "s-2",
-    ]);
+    expect(group.members.map((member) => member.identity.suggestionId)).toEqual(["s-1", "s-2"]);
   });
 
   it("degrades incomplete explicit groups before any mutation can run", async () => {
@@ -76,11 +69,7 @@ describe("OperationalWrapperGroupResolver", () => {
     const resolver = new OperationalWrapperGroupResolver();
     const seedIdentity = parseReplaceIdentityTitle(first.title);
 
-    const group = await resolver.resolve(
-      makeContext([first, second]),
-      first,
-      seedIdentity!,
-    );
+    const group = await resolver.resolve(makeContext([first, second]), first, seedIdentity!);
 
     expect(group.status).toBe("ambiguous");
   });

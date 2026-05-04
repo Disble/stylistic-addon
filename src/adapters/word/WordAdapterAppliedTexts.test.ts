@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "./WordAdapter";
-import {
-  installRejectingWord,
-  installWordWithContext,
-} from "./WordAdapterTestHelper";
+import { installRejectingWord, installWordWithContext } from "./WordAdapterTestHelper";
 
 describe("WordAdapter.getAppliedOriginalTexts", () => {
   let adapter: WordAdapter;
@@ -209,8 +206,6 @@ describe("WordAdapter.getAppliedOriginalTexts", () => {
   it("propagates Word.run errors", async () => {
     installRejectingWord(new Error("Tracked changes unavailable"));
 
-    await expect(adapter.getAppliedOriginalTexts()).rejects.toThrow(
-      "Tracked changes unavailable",
-    );
+    await expect(adapter.getAppliedOriginalTexts()).rejects.toThrow("Tracked changes unavailable");
   });
 });

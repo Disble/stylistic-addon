@@ -158,7 +158,7 @@ describe("WordAdapter.rejectSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(0);
     expect(result.commentDeleted).toBe(true);
     expect(context.document.contentControls.getByTag).toHaveBeenCalledWith(
-      makeCommentOnlyTag("s-comment-only-reject"),
+      makeCommentOnlyTag("s-comment-only-reject")
     );
     expect(context._cc.delete).toHaveBeenCalledWith(true);
     expect(deleteComment).toHaveBeenCalledOnce();

@@ -66,7 +66,7 @@ describe("MastraAdapter", () => {
   beforeEach(() => {
     vi.doMock("../../infrastructure/config", async () => {
       const actual = await vi.importActual<typeof import("../../infrastructure/config")>(
-        "../../infrastructure/config",
+        "../../infrastructure/config"
       );
 
       return {
@@ -115,7 +115,7 @@ describe("MastraAdapter", () => {
     vi.doUnmock("../../infrastructure/config");
     vi.doMock("../../infrastructure/config", async () => {
       const actual = await vi.importActual<typeof import("../../infrastructure/config")>(
-        "../../infrastructure/config",
+        "../../infrastructure/config"
       );
 
       return {
@@ -135,7 +135,7 @@ describe("MastraAdapter", () => {
     vi.doUnmock("../../infrastructure/config");
     vi.doMock("../../infrastructure/config", async () => {
       const actual = await vi.importActual<typeof import("../../infrastructure/config")>(
-        "../../infrastructure/config",
+        "../../infrastructure/config"
       );
 
       return {
@@ -169,7 +169,7 @@ describe("MastraAdapter", () => {
     const result = await adapter.submitChunkAnalysis(
       makeChunk({ text: "Hola mundo", index: 4 }),
       "narrativa-literaria",
-      "maria-garcia",
+      "maria-garcia"
     );
 
     expect(mastraMocks.getWorkflow).toHaveBeenCalledWith(WORKFLOW_ID);
@@ -189,11 +189,7 @@ describe("MastraAdapter", () => {
     const { MastraAdapter } = await importAdapterModule();
     const adapter = new MastraAdapter();
 
-    const result = await adapter.submitChunkAnalysis(
-      makeChunk(),
-      "general",
-      "disble",
-    );
+    const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "disble");
 
     expect(result).toEqual({
       chunkIndex: 2,

@@ -25,11 +25,7 @@ type CleanupContentControl = {
 };
 
 /** Creates a fake cleanup comment with optional range/content overrides. */
-function makeComment(
-  authorName: string,
-  range?: CleanupRange,
-  content?: string,
-): CleanupComment {
+function makeComment(authorName: string, range?: CleanupRange, content?: string): CleanupComment {
   const actualRange =
     range ??
     ({
@@ -63,7 +59,7 @@ function installWordCleanupContext(
   options: {
     comments?: CleanupComment[];
     contentControls?: CleanupContentControl[];
-  } = {},
+  } = {}
 ) {
   const commentsCollection = {
     items: options.comments ?? [],
@@ -86,9 +82,7 @@ function installWordCleanupContext(
   };
 
   (globalThis as any).Word = {
-    run: vi.fn(async (callback: (ctx: typeof context) => unknown) =>
-      callback(context),
-    ),
+    run: vi.fn(async (callback: (ctx: typeof context) => unknown) => callback(context)),
   };
 
   return { context, commentsCollection, contentControlsCollection };
@@ -128,16 +122,8 @@ describe("CommentCleanup", () => {
   });
 
   it("deletes every Stylistic comment when no active Stylistic content controls exist", async () => {
-    const stylisticA = makeComment(
-      "Usuario de prueba",
-      undefined,
-      "[Claridad]\nMas claro",
-    );
-    const stylisticB = makeComment(
-      "Usuario de prueba",
-      undefined,
-      "[Registro]\nMas natural",
-    );
+    const stylisticA = makeComment("Usuario de prueba", undefined, "[Claridad]\nMas claro");
+    const stylisticB = makeComment("Usuario de prueba", undefined, "[Registro]\nMas natural");
 
     await installWordCleanupContext({
       comments: [stylisticA, stylisticB],
@@ -177,12 +163,12 @@ describe("CommentCleanup", () => {
       const keptComment = makeComment(
         "Usuario de prueba",
         keptRange,
-        "[Claridad]\nComentario activo",
+        "[Claridad]\nComentario activo"
       );
       const orphanComment = makeComment(
         "Usuario de prueba",
         orphanRange,
-        "[Estilo]\nComentario huérfano",
+        "[Estilo]\nComentario huérfano"
       );
 
       installWordCleanupContext({
@@ -216,7 +202,7 @@ describe("CommentCleanup", () => {
     const stylisticComment = makeComment(
       "Usuario de prueba",
       undefined,
-      "[gramática]\nRedundancia pronominal.",
+      "[gramática]\nRedundancia pronominal."
     );
 
     await installWordCleanupContext({
@@ -244,13 +230,7 @@ describe("CommentCleanup", () => {
 
   it("exports the overlap allowlist used by cleanup colocation checks", () => {
     expect(OVERLAPPING_RELATIONS).toEqual(
-      expect.arrayContaining([
-        "Equal",
-        "Contains",
-        "Inside",
-        "OverlapsBefore",
-        "OverlapsAfter",
-      ]),
+      expect.arrayContaining(["Equal", "Contains", "Inside", "OverlapsBefore", "OverlapsAfter"])
     );
   });
 });

@@ -7,9 +7,7 @@ import { ReadTextHandler } from "./ReadTextHandler";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContext(
-  overrides: Partial<PipelineContext> = {},
-): PipelineContext {
+function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
@@ -206,9 +204,7 @@ describe("ReadTextHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(onAbort).toHaveBeenCalledWith(
-        "El documento está vacío. Escribe algo primero.",
-      );
+      expect(onAbort).toHaveBeenCalledWith("El documento está vacío. Escribe algo primero.");
     });
   });
 
@@ -227,9 +223,7 @@ describe("ReadTextHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.aborted).toBe(true);
-      expect(ctx.abortReason).toBe(
-        "El documento está vacío. Escribe algo primero.",
-      );
+      expect(ctx.abortReason).toBe("El documento está vacío. Escribe algo primero.");
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -281,13 +275,9 @@ describe("ReadTextHandler", () => {
 
     it("propagates errors thrown by documentPort.getTextToAnalyze", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.documentPort.getTextToAnalyze).mockRejectedValue(
-        new Error("Office.js error"),
-      );
+      vi.mocked(ctx.documentPort.getTextToAnalyze).mockRejectedValue(new Error("Office.js error"));
 
-      await expect(handler.handle(ctx, next)).rejects.toThrow(
-        "Office.js error",
-      );
+      await expect(handler.handle(ctx, next)).rejects.toThrow("Office.js error");
       expect(next).not.toHaveBeenCalled();
     });
 

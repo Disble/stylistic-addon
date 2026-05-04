@@ -11,9 +11,7 @@ vi.mock("../../../infrastructure/config", () => ({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContext(
-  overrides: Partial<PipelineContext> = {},
-): PipelineContext {
+function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
@@ -94,9 +92,8 @@ describe("CheckConnectionHandler", () => {
         MASTRA_POLL_BYPASS_ENABLED: true,
       }));
       vi.resetModules();
-      const { CheckConnectionHandler: BypassCheckConnectionHandler } = await import(
-        "./CheckConnectionHandler"
-      );
+      const { CheckConnectionHandler: BypassCheckConnectionHandler } =
+        await import("./CheckConnectionHandler");
       const bypassHandler = new BypassCheckConnectionHandler();
       const ctx = makeContext();
 
@@ -128,7 +125,7 @@ describe("CheckConnectionHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.abortReason).toBe(
-        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.",
+        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose."
       );
     });
 
@@ -157,10 +154,7 @@ describe("CheckConnectionHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(onPhaseStart).toHaveBeenCalledWith(
-        "connecting",
-        "Conectando con el servidor...",
-      );
+      expect(onPhaseStart).toHaveBeenCalledWith("connecting", "Conectando con el servidor...");
     });
 
     it("emits phaseComplete('connecting') on success", async () => {
@@ -181,9 +175,8 @@ describe("CheckConnectionHandler", () => {
         MASTRA_POLL_BYPASS_ENABLED: true,
       }));
       vi.resetModules();
-      const { CheckConnectionHandler: BypassCheckConnectionHandler } = await import(
-        "./CheckConnectionHandler"
-      );
+      const { CheckConnectionHandler: BypassCheckConnectionHandler } =
+        await import("./CheckConnectionHandler");
       const bypassHandler = new BypassCheckConnectionHandler();
       const emitter = new PipelineEventEmitter();
       const onPhaseStart = vi.fn();
@@ -224,7 +217,7 @@ describe("CheckConnectionHandler", () => {
       await handler.handle(ctx, next);
 
       expect(onAbort).toHaveBeenCalledWith(
-        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose.",
+        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose."
       );
     });
 
@@ -268,9 +261,7 @@ describe("CheckConnectionHandler", () => {
   describe("error handling", () => {
     it("propagates errors thrown by analysisPort.checkConnection", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockRejectedValue(
-        new Error("Network error"),
-      );
+      vi.mocked(ctx.analysisPort.checkConnection).mockRejectedValue(new Error("Network error"));
 
       await expect(handler.handle(ctx, next)).rejects.toThrow("Network error");
       expect(next).not.toHaveBeenCalled();

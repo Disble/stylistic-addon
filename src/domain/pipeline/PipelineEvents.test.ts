@@ -1,7 +1,4 @@
-import type {
-  ApplySuggestionsResult,
-  SuggestionApplicationFailure,
-} from "../DocumentApplication.types";
+import type { ApplySuggestionsResult } from "../DocumentApplication.types";
 import type { Suggestion } from "../suggestion/Suggestion.types";
 import type { PipelineState } from "./PipelineStateMachine.types";
 import { PipelineEventEmitter, type PipelineObserver } from "./PipelineEvents";
@@ -26,7 +23,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 }
 
 function makeInsertionResult(
-  overrides: Partial<ApplySuggestionsResult> = {},
+  overrides: Partial<ApplySuggestionsResult> = {}
 ): ApplySuggestionsResult {
   return {
     successCount: 1,
@@ -38,18 +35,6 @@ function makeInsertionResult(
     },
     documentState: "pending-review",
     trackChangesActivatedForBatch: false,
-    ...overrides,
-  };
-}
-
-function makeFailure(
-  suggestion: Suggestion,
-  overrides: Partial<SuggestionApplicationFailure> = {},
-): SuggestionApplicationFailure {
-  return {
-    suggestion,
-    reason: "not-found",
-    message: "Anchor no encontrado en el contexto",
     ...overrides,
   };
 }
@@ -76,10 +61,7 @@ describe("PipelineEventEmitter", () => {
 
       emitter.emitPhaseStart("reading", "Starting…");
 
-      expect(observer.onPhaseStart).toHaveBeenCalledWith(
-        "reading",
-        "Starting…",
-      );
+      expect(observer.onPhaseStart).toHaveBeenCalledWith("reading", "Starting…");
     });
 
     it("should stop calling observer methods after unsubscribing", () => {
@@ -222,9 +204,7 @@ describe("PipelineEventEmitter", () => {
     });
 
     it("should not throw when emitting complete with no observers", () => {
-      expect(() =>
-        emitter.emitComplete([], makeInsertionResult(), [], false),
-      ).not.toThrow();
+      expect(() => emitter.emitComplete([], makeInsertionResult(), [], false)).not.toThrow();
     });
 
     it("should not throw when emitting abort with no observers", () => {
@@ -245,9 +225,7 @@ describe("PipelineEventEmitter", () => {
       expect(() => emitter.emitProgress(1, 5, "msg")).not.toThrow();
       expect(() => emitter.emitPhaseComplete("done")).not.toThrow();
       expect(() => emitter.emitError("error", "oops")).not.toThrow();
-      expect(() =>
-        emitter.emitComplete([], makeInsertionResult(), [], false),
-      ).not.toThrow();
+      expect(() => emitter.emitComplete([], makeInsertionResult(), [], false)).not.toThrow();
       expect(() => emitter.emitAbort("cancelled")).not.toThrow();
     });
 
@@ -344,10 +322,7 @@ describe("PipelineEventEmitter", () => {
       const fn = vi.fn();
       emitter.subscribe({ onComplete: fn });
 
-      const suggestions = [
-        makeSuggestion({ id: "s1" }),
-        makeSuggestion({ id: "s2" }),
-      ];
+      const suggestions = [makeSuggestion({ id: "s1" }), makeSuggestion({ id: "s2" })];
       const result = makeInsertionResult({ successCount: 2 });
       const chunkErrors = ["chunk 3 failed"];
 

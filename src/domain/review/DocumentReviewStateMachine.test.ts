@@ -5,9 +5,7 @@ import {
 } from "./DocumentReviewStateMachine";
 import type { DocumentReviewState } from "./DocumentReviewStateMachine.types";
 
-function makeReviewState(
-  overrides: Partial<DocumentReviewState> = {},
-): DocumentReviewState {
+function makeReviewState(overrides: Partial<DocumentReviewState> = {}): DocumentReviewState {
   return {
     pendingStylisticArtifacts: 0,
     hasPendingStylisticArtifacts: false,
@@ -23,7 +21,7 @@ describe("DocumentReviewStateMachine", () => {
         pendingStylisticArtifacts: 2,
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
-      }),
+      })
     );
 
     expect(machine.state).toBe("pending-review");
@@ -31,9 +29,7 @@ describe("DocumentReviewStateMachine", () => {
   });
 
   it("derives ready-to-disable-track-changes when zero pending remain but Track Changes stays active", () => {
-    const machine = new DocumentReviewStateMachine(
-      makeReviewState({ trackChangesActive: true }),
-    );
+    const machine = new DocumentReviewStateMachine(makeReviewState({ trackChangesActive: true }));
 
     expect(machine.state).toBe("ready-to-disable-track-changes");
     expect(machine.shouldShowDisableTrackChangesCta).toBe(true);
@@ -46,7 +42,7 @@ describe("DocumentReviewStateMachine", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       }),
-      makeReviewState({ trackChangesActive: true }),
+      makeReviewState({ trackChangesActive: true })
     );
 
     expect(transition).toEqual({
@@ -62,7 +58,7 @@ describe("DocumentReviewStateMachine", () => {
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
       }),
-      makeReviewState({ trackChangesActive: false }),
+      makeReviewState({ trackChangesActive: false })
     );
 
     expect(transition).toEqual({
@@ -77,11 +73,9 @@ describe("DocumentReviewStateMachine", () => {
         pendingStylisticArtifacts: 1,
         hasPendingStylisticArtifacts: true,
         trackChangesActive: true,
-      }),
+      })
     );
 
-    expect(() => machine.disableTrackChanges()).toThrow(
-      InvalidDocumentReviewTransitionError,
-    );
+    expect(() => machine.disableTrackChanges()).toThrow(InvalidDocumentReviewTransitionError);
   });
 });

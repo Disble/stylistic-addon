@@ -47,9 +47,7 @@ export class TrackChangeSubtypeResolver {
   }
 
   /** Extracts a supported markdown formatting instruction for the exact anchor. */
-  parseFormattingInstruction(
-    suggestion: Suggestion,
-  ): TrackChangeFormattingInstruction | null {
+  parseFormattingInstruction(suggestion: Suggestion): TrackChangeFormattingInstruction | null {
     const suggestedText = suggestion.suggestedText ?? "";
 
     if (

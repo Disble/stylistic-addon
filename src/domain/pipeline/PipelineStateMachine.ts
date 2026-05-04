@@ -59,11 +59,7 @@ export class PipelineStateMachine {
 
   /** Returns `true` if the pipeline is currently executing (not idle/done/error). */
   get isRunning(): boolean {
-    return (
-      this.current !== "idle" &&
-      this.current !== "done" &&
-      this.current !== "error"
-    );
+    return this.current !== "idle" && this.current !== "done" && this.current !== "error";
   }
 
   /**
@@ -85,7 +81,7 @@ export class PipelineStateMachine {
     if (!this.canTransition(to)) {
       throw new Error(
         `[PipelineStateMachine] Invalid transition: "${this.current}" → "${to}". ` +
-          `Allowed: [${TRANSITIONS[this.current].join(", ")}]`,
+          `Allowed: [${TRANSITIONS[this.current].join(", ")}]`
       );
     }
     console.log(`🔄 [StateMachine] ${this.current} → ${to}`);

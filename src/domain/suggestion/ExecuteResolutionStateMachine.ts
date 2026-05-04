@@ -29,11 +29,11 @@ export class InvalidExecuteResolutionTransitionError extends Error {
   constructor(
     from: ExecuteResolutionState,
     to: ExecuteResolutionState,
-    allowed: ExecuteResolutionState[],
+    allowed: ExecuteResolutionState[]
   ) {
     super(
       `[ExecuteResolutionStateMachine] Invalid transition: "${from}" → "${to}". ` +
-        `Allowed: [${allowed.join(", ")}]`,
+        `Allowed: [${allowed.join(", ")}]`
     );
     this.name = "InvalidExecuteResolutionTransitionError";
   }
@@ -89,7 +89,7 @@ export class ExecuteResolutionStateMachine {
       throw new InvalidExecuteResolutionTransitionError(
         this.current,
         to,
-        TRANSITIONS[this.current],
+        TRANSITIONS[this.current]
       );
     }
 
@@ -107,7 +107,7 @@ export class ExecuteResolutionStateMachine {
 
   /** Resolves the semantic phase for one non-terminal active state. */
   private currentPhaseForState(
-    state: Exclude<ExecuteResolutionState, "idle" | "completed" | "failed">,
+    state: Exclude<ExecuteResolutionState, "idle" | "completed" | "failed">
   ): ResolutionPhase {
     switch (state) {
       case "locating":

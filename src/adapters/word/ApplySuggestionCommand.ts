@@ -1,5 +1,3 @@
-/* global Word, console */
-
 /**
  * ApplySuggestionCommand — Command pattern for applying one Word suggestion.
  *
@@ -34,7 +32,6 @@
 
 import type { CommandResult } from "../../domain/DocumentApplication.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
-import { STYLISTIC_TAG_PREFIX } from "../../infrastructure/config";
 import { applySuggestionObservability } from "../observability/ConsoleApplySuggestionObservabilityAdapter";
 import { ApplySuggestionAnchorResolver } from "./apply-suggestion/ApplySuggestionAnchorResolver";
 import { ApplySuggestionIdentityBuilder } from "./apply-suggestion/ApplySuggestionIdentityBuilder";
@@ -65,29 +62,24 @@ export class ApplySuggestionCommand {
 
   constructor(
     private readonly suggestion: Suggestion,
-    private readonly textLocator: TextLocator,
+    private readonly textLocator: TextLocator
   ) {
     this.id = suggestion.id;
     this.description = `Apply suggestion [${suggestion.type}]: "${suggestion.anchor.substring(0, 40)}" → "${(suggestion.suggestedText ?? "").substring(0, 40)}"`;
     this.identityBuilder = new ApplySuggestionIdentityBuilder();
     this.mutationPatchBuilder = new ApplySuggestionMutationPatchBuilder();
     this.subtypeResolver = new TrackChangeSubtypeResolver();
-    this.anchorResolver = new ApplySuggestionAnchorResolver(
-      suggestion,
-      this.textLocator,
-      this.id,
-    );
+    this.anchorResolver = new ApplySuggestionAnchorResolver(suggestion, this.textLocator, this.id);
     this.replaceRangeResolver = new ApplySuggestionReplaceRangeResolver(
       suggestion,
       this.textLocator,
-      this.id,
+      this.id
     );
-    this.operationalWrapperResolver =
-      new ApplySuggestionOperationalWrapperResolver(
-        suggestion,
-        this.textLocator,
-        this.identityBuilder,
-      );
+    this.operationalWrapperResolver = new ApplySuggestionOperationalWrapperResolver(
+      suggestion,
+      this.textLocator,
+      this.identityBuilder
+    );
   }
 
   /**
@@ -99,22 +91,18 @@ export class ApplySuggestionCommand {
    */
   async execute(): Promise<CommandResult> {
     console.log(
-      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.anchor.substring(0, 40)}" → "${(this.suggestion.suggestedText ?? "").substring(0, 40)}"`,
+      `🔍 [ApplySuggestionCommand] "${this.id}": "${this.suggestion.anchor.substring(0, 40)}" → "${(this.suggestion.suggestedText ?? "").substring(0, 40)}"`
     );
 
     if (this.suggestion.type === "comment-only") {
       return this.executeCommentOnly();
     }
 
-    const changeType = this.mutationPatchBuilder.classifyChange(
-      this.suggestion,
-    );
+    const changeType = this.mutationPatchBuilder.classifyChange(this.suggestion);
     const subtypeResolution = this.subtypeResolver.resolve(this.suggestion);
 
     if (subtypeResolution.subtype === "insert" || changeType === "insert") {
-      console.warn(
-        `⚠️ [ApplySuggestionCommand] "${this.id}": inserción sin texto ancla`,
-      );
+      console.warn(`⚠️ [ApplySuggestionCommand] "${this.id}": inserción sin texto ancla`);
       return {
         success: false,
         commandId: this.id,
@@ -125,14 +113,9 @@ export class ApplySuggestionCommand {
     try {
       return await Word.run(async (context) => {
         const body = context.document.body;
-        const range = await this.anchorResolver.resolveAnchorRange(
-          context,
-          body,
-        );
+        const range = await this.anchorResolver.resolveAnchorRange(context, body);
         if (!range) {
-          console.warn(
-            `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado`,
-          );
+          console.warn(`🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado`);
           return {
             success: false,
             commandId: this.id,
@@ -141,14 +124,11 @@ export class ApplySuggestionCommand {
         }
 
         const operationalWrapperResult =
-          await this.operationalWrapperResolver.resolveOperationalWrapper(
-            context,
-            range,
-          );
+          await this.operationalWrapperResolver.resolveOperationalWrapper(context, range);
 
         if (operationalWrapperResult?.error) {
           console.log(
-            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — covered-by-existing-cc abort before mutation`,
+            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — covered-by-existing-cc abort before mutation`
           );
           return {
             success: false,
@@ -157,9 +137,7 @@ export class ApplySuggestionCommand {
           };
         }
 
-        const containingParagraph = range.paragraphs
-          .getFirst()
-          .getRange("Whole");
+        const containingParagraph = range.paragraphs.getFirst().getRange("Whole");
         containingParagraph.load("text");
         const shouldReadTrackingMode = subtypeResolution.subtype === "replace";
         if (shouldReadTrackingMode) {
@@ -171,22 +149,24 @@ export class ApplySuggestionCommand {
           : "not-read";
 
         console.log(
-          `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`,
+          `📄 [ApplySuggestionCommand] "${this.id}": insertando TC nativo (tipo: ${changeType})`
         );
+        const containingParagraphText = containingParagraph.text;
+
         applySuggestionObservability.logPreMutationScope(this.id, {
           changeType: subtypeResolution.subtype,
           changeTrackingMode: preMutationTrackingMode,
           anchor: this.suggestion.anchor,
           suggestedText: this.suggestion.suggestedText ?? "",
-          paragraphLength: containingParagraph.text.length,
-          paragraphPreview: containingParagraph.text.substring(0, 180),
+          paragraphLength: containingParagraphText.length,
+          paragraphPreview: containingParagraphText.substring(0, 180),
         });
 
         const operationalWrapper = operationalWrapperResult.wrapper ?? null;
         const mutationRange = operationalWrapper
           ? await this.operationalWrapperResolver.resolveAnchorInsideWrapper(
               context,
-              operationalWrapper,
+              operationalWrapper
             )
           : range;
 
@@ -194,8 +174,7 @@ export class ApplySuggestionCommand {
           return {
             success: false,
             commandId: this.id,
-            error:
-              "No se pudo re-localizar el anchor dentro del wrapper operacional",
+            error: "No se pudo re-localizar el anchor dentro del wrapper operacional",
           };
         }
 
@@ -208,13 +187,11 @@ export class ApplySuggestionCommand {
           context,
           mutationRange,
           operationalWrapper!.getRange(),
-          subtypeResolution,
+          subtypeResolution
         );
 
         if (!annotationRange) {
-          applySuggestionObservability.warnPostMutationIsolationFailure(
-            this.id,
-          );
+          applySuggestionObservability.warnPostMutationIsolationFailure(this.id);
           return {
             success: false,
             commandId: this.id,
@@ -223,31 +200,24 @@ export class ApplySuggestionCommand {
         }
 
         annotationRange.insertComment(
-          buildStylisticCommentContent(
-            this.suggestion.category,
-            this.suggestion.justification,
-          ),
+          buildStylisticCommentContent(this.suggestion.category, this.suggestion.justification)
         );
 
         const cc = annotationRange.insertContentControl();
         cc.tag = this.identityBuilder.buildSuggestionTag(this.suggestion);
-        cc.title = this.identityBuilder.buildContentControlTitle(
-          this.suggestion,
-        );
+        cc.title = this.identityBuilder.buildContentControlTitle(this.suggestion);
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
 
-        console.log(
-          `✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`,
-        );
+        console.log(`✅ [ApplySuggestionCommand] "${this.id}": insertado exitosamente`);
 
         const mutationPatch =
           subtypeResolution.subtype === "formatting"
             ? undefined
             : this.mutationPatchBuilder.buildApplyMutationPatch(
                 this.suggestion,
-                containingParagraph.text,
+                containingParagraphText
               );
 
         return {
@@ -279,7 +249,7 @@ export class ApplySuggestionCommand {
         let range = await this.anchorResolver.resolveAnchorRange(context, body);
         if (!range) {
           console.warn(
-            `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado (comment-only)`,
+            `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado (comment-only)`
           );
           return {
             success: false,
@@ -294,12 +264,11 @@ export class ApplySuggestionCommand {
 
         const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
         const isAlreadyCovered =
-          existingTag.startsWith("stylistic:") ||
-          /^chunk\d+-\d+$/.test(existingTag);
+          existingTag.startsWith("stylistic:") || /^chunk\d+-\d+$/.test(existingTag);
 
         if (isAlreadyCovered) {
           console.log(
-            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado (comment-only) — eliminando wrapper y reinsertando`,
+            `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado (comment-only) — eliminando wrapper y reinsertando`
           );
           parentCC.delete(true);
           await context.sync();
@@ -307,7 +276,7 @@ export class ApplySuggestionCommand {
           range = await this.anchorResolver.resolveAnchorRange(context, body);
           if (!range) {
             console.warn(
-              `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado tras eliminar CC existente (comment-only)`,
+              `🔍 [ApplySuggestionCommand] "${this.id}": anchor no encontrado tras eliminar CC existente (comment-only)`
             );
             return {
               success: false,
@@ -317,28 +286,21 @@ export class ApplySuggestionCommand {
           }
         }
 
-        console.log(
-          `📄 [ApplySuggestionCommand] "${this.id}": insertando comment-only nativo`,
-        );
+        console.log(`📄 [ApplySuggestionCommand] "${this.id}": insertando comment-only nativo`);
 
         range.insertComment(
-          buildStylisticCommentContent(
-            this.suggestion.category,
-            this.suggestion.justification,
-          ),
+          buildStylisticCommentContent(this.suggestion.category, this.suggestion.justification)
         );
 
         const cc = range.insertContentControl();
         cc.tag = this.identityBuilder.buildSuggestionTag(this.suggestion);
-        cc.title = this.identityBuilder.buildContentControlTitle(
-          this.suggestion,
-        );
+        cc.title = this.identityBuilder.buildContentControlTitle(this.suggestion);
         cc.appearance = "Hidden";
         cc.cannotDelete = false;
         await context.sync();
 
         console.log(
-          `✅ [ApplySuggestionCommand] "${this.id}": comment-only insertado exitosamente`,
+          `✅ [ApplySuggestionCommand] "${this.id}": comment-only insertado exitosamente`
         );
 
         return { success: true, commandId: this.id };
@@ -363,7 +325,7 @@ export class ApplySuggestionCommand {
     context: Word.RequestContext,
     mutationRange: Word.Range,
     wrapperRange: Word.Range,
-    subtypeResolution: TrackChangeSubtypeResolution,
+    subtypeResolution: TrackChangeSubtypeResolution
   ): Promise<Word.Range | null> {
     if (subtypeResolution.subtype === "formatting") {
       if (!subtypeResolution.formatting) {
@@ -381,7 +343,7 @@ export class ApplySuggestionCommand {
 
     const insertedRange = mutationRange.insertText(
       this.suggestion.suggestedText ?? "",
-      Word.InsertLocation.replace,
+      Word.InsertLocation.replace
     );
     applySuggestionObservability.logInsertTextIssued(this.id);
 
@@ -392,7 +354,7 @@ export class ApplySuggestionCommand {
     return this.replaceRangeResolver.resolveReplaceAnnotationRange(
       context,
       insertedRange,
-      wrapperRange,
+      wrapperRange
     );
   }
 }

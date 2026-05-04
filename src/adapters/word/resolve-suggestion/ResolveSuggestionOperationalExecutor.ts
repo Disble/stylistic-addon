@@ -1,8 +1,5 @@
 import type { ResolutionExecutionReport } from "../../../domain/suggestion/SuggestionResolutionWorkflow.types";
-import type {
-  ResolutionObservation,
-  ResolveSuggestionAction,
-} from "./ResolutionContext";
+import type { ResolutionObservation, ResolveSuggestionAction } from "./ResolutionContext";
 import type { ResolutionErrorSerializer } from "./ResolutionErrorParser";
 import type { ResolutionObservabilityReporter } from "./ResolutionObservabilityAdapter";
 
@@ -16,13 +13,13 @@ export class ResolveSuggestionOperationalExecutor {
   constructor(
     private readonly action: ResolveSuggestionAction,
     private readonly observabilityReporter: ResolutionObservabilityReporter,
-    private readonly errorSerializer: ResolutionErrorSerializer,
+    private readonly errorSerializer: ResolutionErrorSerializer
   ) {}
 
   /** Applies the requested action to the wrapper-owned tracked-change collection. */
   async execute(
     context: Word.RequestContext,
-    observation: ResolutionObservation,
+    observation: ResolutionObservation
   ): Promise<ResolutionExecutionReport> {
     const collection = observation.trackedChangesCollection;
     if (!collection) {
@@ -30,8 +27,7 @@ export class ResolveSuggestionOperationalExecutor {
         attempted: 0,
         completed: 0,
         remaining: 0,
-        error:
-          "La sugerencia no expuso una colección operacional ejecutable dentro del wrapper.",
+        error: "La sugerencia no expuso una colección operacional ejecutable dentro del wrapper.",
       };
     }
 

@@ -13,7 +13,7 @@ import {
 /** Returns a required fake DOM element by id. */
 function getRequiredElement(
   doc: ReturnType<typeof createTaskpaneDocument>,
-  id: string,
+  id: string
 ): FakeElement {
   const element = doc.getElementById(id);
   if (!element) {
@@ -42,7 +42,7 @@ async function flushTaskpaneWork(times = 8): Promise<void> {
 
 /** Builds a compact mediator result fixture for taskpane action tests. */
 function makeMediatorResult(
-  overrides: Partial<SuggestionResolutionMediatorResult> = {},
+  overrides: Partial<SuggestionResolutionMediatorResult> = {}
 ): SuggestionResolutionMediatorResult {
   return {
     status: "accepted",
@@ -98,7 +98,7 @@ describe("TaskpaneSuggestionResolution", () => {
           trackChangesActive: true,
         },
         documentState: "ready-to-disable-track-changes",
-      }),
+      })
     );
 
     const doc = createTaskpaneDocument();
@@ -120,7 +120,7 @@ describe("TaskpaneSuggestionResolution", () => {
       makeMediatorResult({
         status: "rejected",
         feedbackStatus: "sent",
-      }),
+      })
     );
 
     const doc = createTaskpaneDocument();
@@ -142,9 +142,8 @@ describe("TaskpaneSuggestionResolution", () => {
         trackedChangesAffected: 0,
         commentDeleted: false,
         feedbackStatus: "skipped",
-        error:
-          "Word no expuso suficiente evidencia operacional para confirmar la resolución.",
-      }),
+        error: "Word no expuso suficiente evidencia operacional para confirmar la resolución.",
+      })
     );
 
     const doc = createTaskpaneDocument();
@@ -161,7 +160,7 @@ describe("TaskpaneSuggestionResolution", () => {
     expect(li.classList.contains("result-accepted")).toBe(false);
     expect(li.classList.contains("result-unobservable")).toBe(false);
     expect(getRequiredElement(doc, "status-bar").textContent).toBe(
-      "Word no expuso suficiente evidencia operacional para confirmar la resolución.",
+      "Word no expuso suficiente evidencia operacional para confirmar la resolución."
     );
     expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });
@@ -174,7 +173,7 @@ describe("TaskpaneSuggestionResolution", () => {
         commentDeleted: false,
         feedbackStatus: "skipped",
         error: "La ubicación de la sugerencia es ambigua.",
-      }),
+      })
     );
 
     const doc = createTaskpaneDocument();
@@ -187,7 +186,7 @@ describe("TaskpaneSuggestionResolution", () => {
     expect(li.classList.contains("result-ambiguous-location")).toBe(true);
     expect(li.querySelector(".result-actions")).toBeNull();
     expect(li.querySelector(".result-ambiguous-location-note")?.textContent).toBe(
-      "(resolución ambigua; reanalizá la sugerencia)",
+      "(resolución ambigua; reanalizá la sugerencia)"
     );
     expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });
@@ -200,7 +199,7 @@ describe("TaskpaneSuggestionResolution", () => {
         commentDeleted: false,
         feedbackStatus: "skipped",
         error: "El grupo contiguo requiere resolución grupal coherente.",
-      }),
+      })
     );
 
     const doc = createTaskpaneDocument();
@@ -213,7 +212,7 @@ describe("TaskpaneSuggestionResolution", () => {
     expect(li.classList.contains("result-mixed-group")).toBe(true);
     expect(li.querySelector(".result-actions")).toBeNull();
     expect(li.querySelector(".result-mixed-group-note")?.textContent).toBe(
-      "(resolución ambigua; reanalizá la sugerencia)",
+      "(resolución ambigua; reanalizá la sugerencia)"
     );
     expect(taskpaneMocks.feedbackSendFeedback).not.toHaveBeenCalled();
   });

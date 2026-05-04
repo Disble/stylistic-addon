@@ -8,7 +8,7 @@ import type { RenderedSuggestionCard } from "../SuggestionCardRenderer.types";
 export function createSuggestionMetaRow(
   suggestion: Suggestion,
   isFailed: boolean,
-  isCommentOnly: boolean,
+  isCommentOnly: boolean
 ): HTMLDivElement {
   const meta = document.createElement("div");
   meta.className = "card-meta";
@@ -40,7 +40,7 @@ export function createSuggestionMetaRow(
 /** Renders the failed-state content for one suggestion card. */
 export function appendFailedCardContent(
   li: HTMLLIElement,
-  failure: SuggestionApplicationFailure,
+  failure: SuggestionApplicationFailure
 ): void {
   const failedSpan = document.createElement("span");
   failedSpan.className = "result-failed";
@@ -67,7 +67,7 @@ export function appendFailedCardContent(
 export function createActionButton(
   action: "accept" | "reject" | "feedback",
   suggestionId: string,
-  isCommentOnly: boolean,
+  isCommentOnly: boolean
 ): HTMLButtonElement {
   const button = document.createElement("button");
   button.dataset.action = action;
@@ -99,7 +99,7 @@ export function createActionButton(
 export function appendActionableCardContent(
   li: HTMLLIElement,
   suggestion: Suggestion,
-  isCommentOnly: boolean,
+  isCommentOnly: boolean
 ): void {
   const clickable = document.createElement("div");
   clickable.className = "card-clickable-area";
@@ -132,15 +132,9 @@ export function appendActionableCardContent(
 
   const actionsSpan = document.createElement("span");
   actionsSpan.className = "result-actions";
-  actionsSpan.appendChild(
-    createActionButton("accept", suggestion.id, isCommentOnly),
-  );
-  actionsSpan.appendChild(
-    createActionButton("reject", suggestion.id, isCommentOnly),
-  );
-  actionsSpan.appendChild(
-    createActionButton("feedback", suggestion.id, isCommentOnly),
-  );
+  actionsSpan.appendChild(createActionButton("accept", suggestion.id, isCommentOnly));
+  actionsSpan.appendChild(createActionButton("reject", suggestion.id, isCommentOnly));
+  actionsSpan.appendChild(createActionButton("feedback", suggestion.id, isCommentOnly));
 
   footer.appendChild(actionsSpan);
   li.appendChild(footer);
@@ -157,11 +151,9 @@ export function appendActionableCardContent(
 /** Builds one suggestion card and returns whether it is in failed state. */
 export function createSuggestionCard(
   suggestion: Suggestion,
-  failedSuggestions: SuggestionApplicationFailure[],
+  failedSuggestions: SuggestionApplicationFailure[]
 ): RenderedSuggestionCard {
-  const failure = failedSuggestions.find(
-    (f) => f.suggestion.id === suggestion.id,
-  );
+  const failure = failedSuggestions.find((f) => f.suggestion.id === suggestion.id);
   const isFailed = Boolean(failure);
   const isNotFoundFailure = failure?.reason === "not-found";
   const isCommentOnly = suggestion.type === "comment-only";

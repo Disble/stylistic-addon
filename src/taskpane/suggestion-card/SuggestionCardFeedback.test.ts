@@ -23,9 +23,7 @@ describe("SuggestionCardFeedback", () => {
 
   it("toggles the feedback accordion from the feedback button", () => {
     const card = createSuggestionCard(makeSuggestion(), []);
-    const button = card.li.querySelector(
-      '[data-action="feedback"]',
-    ) as HTMLButtonElement | null;
+    const button = card.li.querySelector('[data-action="feedback"]') as HTMLButtonElement | null;
     const accordion = card.li.querySelector(".feedback-accordion");
 
     wireSuggestionFeedbackToggle(card.li);
@@ -39,9 +37,7 @@ describe("SuggestionCardFeedback", () => {
 
   it("returns trimmed comments and omits empty feedback", () => {
     const card = createSuggestionCard(makeSuggestion(), []);
-    const textarea = card.li.querySelector(".feedback-textarea") as
-      | HTMLTextAreaElement
-      | null;
+    const textarea = card.li.querySelector(".feedback-textarea") as HTMLTextAreaElement | null;
 
     if (!textarea) throw new Error("Missing feedback textarea");
 

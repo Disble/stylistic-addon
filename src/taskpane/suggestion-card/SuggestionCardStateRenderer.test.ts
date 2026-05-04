@@ -36,12 +36,12 @@ describe("SuggestionCardStateRenderer", () => {
       "ambiguous-location",
       null,
       null,
-      "La ubicación de la sugerencia es ambigua.",
+      "La ubicación de la sugerencia es ambigua."
     );
 
     expect(card.li.classList.contains("result-ambiguous-location")).toBe(true);
     expect(card.li.querySelector(".result-ambiguous-location-note")?.textContent).toBe(
-      "(resolución ambigua; reanalizá la sugerencia)",
+      "(resolución ambigua; reanalizá la sugerencia)"
     );
     expect(statusBar?.textContent).toBe("La ubicación de la sugerencia es ambigua.");
   });

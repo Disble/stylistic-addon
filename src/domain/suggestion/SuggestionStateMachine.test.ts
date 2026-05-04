@@ -12,11 +12,7 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TERMINAL_STATES: SuggestionState[] = [
-  "accepted",
-  "rejected",
-  "identity-lost",
-];
+const TERMINAL_STATES: SuggestionState[] = ["accepted", "rejected", "identity-lost"];
 
 /** Returns an SM already transitioned to the given state. */
 function machineAt(target: SuggestionState): SuggestionStateMachine {
@@ -64,9 +60,7 @@ describe("SuggestionStateMachine", () => {
     });
 
     it("canTransition('resolving') is true from 'pending'", () => {
-      expect(new SuggestionStateMachine().canTransition("resolving")).toBe(
-        true,
-      );
+      expect(new SuggestionStateMachine().canTransition("resolving")).toBe(true);
     });
   });
 
@@ -182,12 +176,8 @@ describe("SuggestionStateMachine", () => {
     });
 
     it("returns false for invalid transitions", () => {
-      expect(new SuggestionStateMachine().canTransition("accepted")).toBe(
-        false,
-      );
-      expect(new SuggestionStateMachine().canTransition("rejected")).toBe(
-        false,
-      );
+      expect(new SuggestionStateMachine().canTransition("accepted")).toBe(false);
+      expect(new SuggestionStateMachine().canTransition("rejected")).toBe(false);
       expect(new SuggestionStateMachine().canTransition("error")).toBe(false);
     });
   });
@@ -199,43 +189,31 @@ describe("SuggestionStateMachine", () => {
   describe("invalid transitions", () => {
     it("throws when skipping resolving (pending → accepted)", () => {
       const sm = new SuggestionStateMachine();
-      expect(() => sm.transition("accepted")).toThrow(
-        InvalidSuggestionTransitionError,
-      );
+      expect(() => sm.transition("accepted")).toThrow(InvalidSuggestionTransitionError);
       expect(sm.state).toBe("pending");
     });
 
     it("throws when skipping resolving (pending → error)", () => {
       const sm = new SuggestionStateMachine();
-      expect(() => sm.transition("error")).toThrow(
-        InvalidSuggestionTransitionError,
-      );
+      expect(() => sm.transition("error")).toThrow(InvalidSuggestionTransitionError);
       expect(sm.state).toBe("pending");
     });
 
-    it.each(
-      TERMINAL_STATES,
-    )("throws from terminal state '%s' → resolving", (state) => {
+    it.each(TERMINAL_STATES)("throws from terminal state '%s' → resolving", (state) => {
       const sm = machineAt(state);
-      expect(() => sm.transition("resolving")).toThrow(
-        InvalidSuggestionTransitionError,
-      );
+      expect(() => sm.transition("resolving")).toThrow(InvalidSuggestionTransitionError);
       expect(sm.state).toBe(state);
     });
 
     it("double-click guard: resolving → resolving throws", () => {
       const sm = machineAt("resolving");
-      expect(() => sm.transition("resolving")).toThrow(
-        InvalidSuggestionTransitionError,
-      );
+      expect(() => sm.transition("resolving")).toThrow(InvalidSuggestionTransitionError);
       expect(sm.state).toBe("resolving");
     });
 
     it("throws from 'resolving' → 'pending' (no going back)", () => {
       const sm = machineAt("resolving");
-      expect(() => sm.transition("pending")).toThrow(
-        InvalidSuggestionTransitionError,
-      );
+      expect(() => sm.transition("pending")).toThrow(InvalidSuggestionTransitionError);
     });
   });
 
@@ -278,12 +256,8 @@ describe("SuggestionStateMachine", () => {
     it("logs on valid transition with [SuggestionStateMachine] prefix", () => {
       const sm = new SuggestionStateMachine();
       sm.transition("resolving");
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[SuggestionStateMachine]"),
-      );
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining("pending → resolving"),
-      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("[SuggestionStateMachine]"));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("pending → resolving"));
     });
 
     it("does NOT log on invalid transition", () => {
@@ -300,12 +274,8 @@ describe("SuggestionStateMachine", () => {
       const sm = machineAt("resolving");
       logSpy.mockClear();
       sm.reset();
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining("reset → pending"),
-      );
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining("was: resolving"),
-      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("reset → pending"));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("was: resolving"));
     });
   });
 

@@ -14,9 +14,7 @@
 export const STATUS_DISPLAY_MS = 4000;
 
 /** Returns a required DOM element by id or throws with a clear error. */
-export function getRequiredElement<T extends HTMLElement = HTMLElement>(
-  id: string,
-): T {
+export function getRequiredElement<T extends HTMLElement = HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) {
     throw new Error(`Missing required DOM element: ${id}`);
@@ -53,11 +51,7 @@ export function setAnalyzeLoading(loading: boolean): void {
 /**
  * Updates the progress bar and text in the progress area.
  */
-export function updateProgress(
-  current: number,
-  total: number,
-  message: string,
-): void {
+export function updateProgress(current: number, total: number, message: string): void {
   const container = getRequiredElement("progress-container");
   const bar = getRequiredElement("progress-bar");
   const text = getRequiredElement("progress-text");
@@ -128,11 +122,7 @@ export function getSelectedGenero(): string {
  * Appends a small annotation span to a suggestion card element.
  * Uses `textContent` (never innerHTML) — XSS-safe.
  */
-export function appendNote(
-  li: HTMLElement,
-  text: string,
-  className: string,
-): void {
+export function appendNote(li: HTMLElement, text: string, className: string): void {
   const note = document.createElement("span");
   note.className = className;
   note.textContent = text;

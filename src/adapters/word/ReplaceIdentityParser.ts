@@ -2,10 +2,7 @@ import type {
   ReplaceSuggestionIdentity,
   Suggestion,
 } from "../../domain/suggestion/Suggestion.types";
-import {
-  STYLISTIC_IDENTITY_TITLE_PREFIX,
-  STYLISTIC_TAG_PREFIX,
-} from "../../infrastructure/config";
+import { STYLISTIC_IDENTITY_TITLE_PREFIX, STYLISTIC_TAG_PREFIX } from "../../infrastructure/config";
 import { TrackChangeSubtypeResolver } from "./apply-suggestion/TrackChangeSubtypeResolver";
 
 const subtypeResolver = new TrackChangeSubtypeResolver();
@@ -18,7 +15,7 @@ const subtypeResolver = new TrackChangeSubtypeResolver();
  * prefix or when the JSON payload is malformed.
  */
 export function parseReplaceIdentityTitle(
-  title: string | undefined,
+  title: string | undefined
 ): ReplaceSuggestionIdentity | null {
   const trimmed = title?.trim() ?? "";
   if (!trimmed.startsWith(STYLISTIC_IDENTITY_TITLE_PREFIX)) {
@@ -50,7 +47,7 @@ export function parseReplaceIdentityTitle(
  */
 export function isValidOperationalReplaceIdentity(
   identity: ReplaceSuggestionIdentity | null,
-  suggestion: Suggestion,
+  suggestion: Suggestion
 ): identity is ReplaceSuggestionIdentity {
   if (identity?.version !== "operational-wrapper-v1") {
     return false;
@@ -59,9 +56,7 @@ export function isValidOperationalReplaceIdentity(
   const expectedTag = `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
   const subtypeResolution = subtypeResolver.resolve(suggestion);
   const expectedSubtype =
-    subtypeResolution.subtype === "insert"
-      ? "replace"
-      : subtypeResolution.subtype;
+    subtypeResolution.subtype === "insert" ? "replace" : subtypeResolution.subtype;
   const persistedSubtype = identity.trackChangeSubtype ?? "replace";
 
   if (persistedSubtype !== expectedSubtype) {
@@ -115,7 +110,7 @@ export function isValidOperationalReplaceIdentity(
 
 /** Validates versioned operational-wrapper metadata without binding it to one suggestion id. */
 export function isStructurallyValidOperationalWrapperIdentity(
-  identity: ReplaceSuggestionIdentity | null,
+  identity: ReplaceSuggestionIdentity | null
 ): identity is ReplaceSuggestionIdentity {
   const subtype = identity?.trackChangeSubtype ?? "replace";
   const hasValidCommonStructure =
@@ -162,7 +157,7 @@ export function isStructurallyValidOperationalWrapperIdentity(
 /** Returns the persisted deleted-side locator when the operational-wrapper identity is valid. */
 export function getDeletedSideLocator(
   identity: ReplaceSuggestionIdentity | null,
-  suggestion: Suggestion,
+  suggestion: Suggestion
 ): string | null {
   if (!isValidOperationalReplaceIdentity(identity, suggestion)) {
     return null;
@@ -174,7 +169,7 @@ export function getDeletedSideLocator(
 /** Returns the persisted operational-anchor locator when the operational-wrapper identity is valid. */
 export function getOperationalAnchorLocator(
   identity: ReplaceSuggestionIdentity | null,
-  suggestion: Suggestion,
+  suggestion: Suggestion
 ): string | null {
   if (!isValidOperationalReplaceIdentity(identity, suggestion)) {
     return null;

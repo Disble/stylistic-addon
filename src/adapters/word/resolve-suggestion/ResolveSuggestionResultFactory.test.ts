@@ -17,8 +17,7 @@ describe("ResolveSuggestionResultFactory", () => {
     };
     const factory = new ResolveSuggestionResultFactory("accept", {
       deriveDocumentState: vi.fn(
-        (_reviewState: DocumentReviewState): DocumentReviewUiState =>
-          "pending-review",
+        (_reviewState: DocumentReviewState): DocumentReviewUiState => "pending-review"
       ),
       inspect: vi.fn().mockResolvedValue(pendingAfter),
     });
@@ -26,7 +25,7 @@ describe("ResolveSuggestionResultFactory", () => {
     const result = await factory.buildObservationFailureResult(
       {} as Word.RequestContext,
       "identity-lost",
-      pendingBefore,
+      pendingBefore
     );
 
     expect(result.status).toBe("identity-lost");
@@ -41,18 +40,14 @@ describe("ResolveSuggestionResultFactory", () => {
       trackChangesActive: false,
     };
     const deriveDocumentState = vi.fn(
-      (_reviewState: DocumentReviewState): DocumentReviewUiState => "idle",
+      (_reviewState: DocumentReviewState): DocumentReviewUiState => "idle"
     );
     const factory = new ResolveSuggestionResultFactory("reject", {
       deriveDocumentState,
       inspect: vi.fn(),
     });
 
-    const result = factory.buildErrorResult(
-      "boom",
-      pendingAfter,
-      "execute",
-    );
+    const result = factory.buildErrorResult("boom", pendingAfter, "execute");
 
     expect(result).toEqual({
       status: "error",

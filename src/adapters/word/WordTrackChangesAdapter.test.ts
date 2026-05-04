@@ -41,9 +41,7 @@ describe("WordTrackChangesAdapter", () => {
       sync: vi.fn().mockResolvedValue(undefined),
     };
 
-    await expect(adapter.ensureTrackChangesActive(context as never)).resolves.toBe(
-      true,
-    );
+    await expect(adapter.ensureTrackChangesActive(context as never)).resolves.toBe(true);
     expect(context.document.changeTrackingMode).toBe("trackAll");
   });
 });

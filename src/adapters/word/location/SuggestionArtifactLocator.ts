@@ -41,26 +41,20 @@ export class SuggestionArtifactLocator {
    */
   async locateOperationalWrapper(
     context: Word.RequestContext,
-    suggestion: Suggestion,
+    suggestion: Suggestion
   ): Promise<LocatedSuggestionArtifactResult> {
     const { candidates } = await this.locateByTag(
       context,
-      `${STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX}${suggestion.id}`,
+      `${STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX}${suggestion.id}`
     );
     const validCandidates = candidates.filter((cc) =>
-      isValidOperationalReplaceIdentity(
-        parseReplaceIdentityTitle(cc.title),
-        suggestion,
-      ),
+      isValidOperationalReplaceIdentity(parseReplaceIdentityTitle(cc.title), suggestion)
     );
 
     return {
       candidates,
       selectedCc: validCandidates.length === 1 ? validCandidates[0] : null,
-      locateStatus: this.resolveOperationalWrapperStatus(
-        candidates,
-        validCandidates,
-      ),
+      locateStatus: this.resolveOperationalWrapperStatus(candidates, validCandidates),
     };
   }
 
@@ -72,21 +66,20 @@ export class SuggestionArtifactLocator {
    */
   async locateCommentOnlyArtifact(
     context: Word.RequestContext,
-    suggestion: Suggestion,
+    suggestion: Suggestion
   ): Promise<LocatedSuggestionArtifactResult> {
-    return this.locateByTag(
-      context,
-      `${STYLISTIC_TAG_PREFIX}comment-only:${suggestion.id}`,
-    );
+    return this.locateByTag(context, `${STYLISTIC_TAG_PREFIX}comment-only:${suggestion.id}`);
   }
 
   /** Loads all Content Controls matching one exact tag. */
   private async locateByTag(
     context: Word.RequestContext,
-    tag: string,
+    tag: string
   ): Promise<LocatedSuggestionArtifactResult> {
     const result = context.document.contentControls.getByTag(tag);
-    result.load("items/tag,items/title");
+    // eslint-disable-next-line office-addins/no-navigational-load -- Enumerating a Word collection requires loading `items` before reading `result.items`.
+    result.load("items");
+    result.load("items/title");
     await context.sync();
 
     const candidates = result.items;
@@ -100,7 +93,7 @@ export class SuggestionArtifactLocator {
   /** Classifies operational-wrapper lookup after identity validation. */
   private resolveOperationalWrapperStatus(
     candidates: Word.ContentControl[],
-    validCandidates: Word.ContentControl[],
+    validCandidates: Word.ContentControl[]
   ): SuggestionObservationStatus | "cc-not-found" {
     if (candidates.length === 0) {
       return "cc-not-found";
@@ -115,16 +108,14 @@ export class SuggestionArtifactLocator {
     }
 
     const hasMalformedOperationalMetadata = candidates.some((cc) =>
-      (cc.title ?? "").startsWith("stylistic-meta-v2:"),
+      (cc.title ?? "").startsWith("stylistic-meta-v2:")
     );
-    return hasMalformedOperationalMetadata
-      ? "identity-lost"
-      : "ambiguous-location";
+    return hasMalformedOperationalMetadata ? "identity-lost" : "ambiguous-location";
   }
 
   /** Classifies exact-tag lookup without ranking fallback. */
   private resolveStrictTagStatus(
-    candidates: Word.ContentControl[],
+    candidates: Word.ContentControl[]
   ): SuggestionObservationStatus | "cc-not-found" {
     if (candidates.length === 0) {
       return "cc-not-found";

@@ -12,7 +12,7 @@ export class WordTrackChangesAdapter {
   /** Creates a normalized document-review snapshot. */
   buildDocumentReviewState(
     pendingStylisticArtifacts: number,
-    trackChangesActive: boolean,
+    trackChangesActive: boolean
   ): DocumentReviewState {
     return {
       pendingStylisticArtifacts,
@@ -34,30 +34,22 @@ export class WordTrackChangesAdapter {
   }
 
   /** Reads the authoritative document-derived review state in the current batch. */
-  async inspectDocumentReviewState(
-    context: Word.RequestContext,
-  ): Promise<DocumentReviewState> {
+  async inspectDocumentReviewState(context: Word.RequestContext): Promise<DocumentReviewState> {
     const allCCs = context.document.contentControls;
     allCCs.load("items/tag");
     context.document.load("changeTrackingMode");
     await context.sync();
 
     const pendingStylisticArtifacts = allCCs.items.filter((cc) =>
-      cc.tag.startsWith(STYLISTIC_TAG_PREFIX),
+      cc.tag.startsWith(STYLISTIC_TAG_PREFIX)
     ).length;
-    const trackChangesActive =
-      context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
+    const trackChangesActive = context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
 
-    return this.buildDocumentReviewState(
-      pendingStylisticArtifacts,
-      trackChangesActive,
-    );
+    return this.buildDocumentReviewState(pendingStylisticArtifacts, trackChangesActive);
   }
 
   /** Enables Track Changes once, lazily, before the first real insertion. */
-  async ensureTrackChangesActive(
-    context: Word.RequestContext,
-  ): Promise<boolean> {
+  async ensureTrackChangesActive(context: Word.RequestContext): Promise<boolean> {
     const alreadyActive = await this.loadTrackChangesActive(context);
     if (alreadyActive) {
       return false;

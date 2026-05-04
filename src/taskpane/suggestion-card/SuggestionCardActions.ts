@@ -26,21 +26,14 @@ import {
 const NAVIGATION_NOTE_CLASS = "result-navigation-note";
 
 /** Renders a single informational note when safe navigation is not possible. */
-function renderNavigationResult(
-  li: HTMLElement,
-  result: SuggestionNavigationResult,
-): void {
+function renderNavigationResult(li: HTMLElement, result: SuggestionNavigationResult): void {
   li.querySelector(`.${NAVIGATION_NOTE_CLASS}`)?.remove();
 
   if (result.status === "navigated") {
     return;
   }
 
-  appendNote(
-    li,
-    "(no se pudo ubicar la sugerencia de forma segura)",
-    NAVIGATION_NOTE_CLASS,
-  );
+  appendNote(li, "(no se pudo ubicar la sugerencia de forma segura)", NAVIGATION_NOTE_CLASS);
 }
 
 /** Handles an accept action for one suggestion card. */
@@ -50,7 +43,7 @@ export async function handleAcceptSuggestion(
   buttons: SuggestionActionButtons,
   sm: SuggestionStateMachine,
   deps: ResultsPanelDeps,
-  uiContext: SuggestionResolutionUiContext,
+  uiContext: SuggestionResolutionUiContext
 ): Promise<void> {
   if (!sm.canTransition("resolving")) return;
 
@@ -58,10 +51,7 @@ export async function handleAcceptSuggestion(
   if (buttons.acceptBtn) buttons.acceptBtn.disabled = true;
   if (buttons.rejectBtn) buttons.rejectBtn.disabled = true;
 
-  const result = await deps.acceptSuggestion(
-    suggestion,
-    getSuggestionFeedbackComment(li),
-  );
+  const result = await deps.acceptSuggestion(suggestion, getSuggestionFeedbackComment(li));
 
   if (result.status === "cc-not-found") {
     sm.transition("error");
@@ -74,13 +64,7 @@ export async function handleAcceptSuggestion(
 
   const targetState = mapResultStatusToState(result.status);
   sm.transition(targetState);
-  applySuggestionCardState(
-    li,
-    sm.state,
-    buttons.acceptBtn,
-    buttons.rejectBtn,
-    result.error,
-  );
+  applySuggestionCardState(li, sm.state, buttons.acceptBtn, buttons.rejectBtn, result.error);
   applyResolutionWorkflowUi(result);
   updateResultsSummaryAfterResolution(uiContext, suggestion.id, result);
 }
@@ -92,7 +76,7 @@ export async function handleRejectSuggestion(
   buttons: SuggestionActionButtons,
   sm: SuggestionStateMachine,
   deps: ResultsPanelDeps,
-  uiContext: SuggestionResolutionUiContext,
+  uiContext: SuggestionResolutionUiContext
 ): Promise<void> {
   if (!sm.canTransition("resolving")) return;
 
@@ -100,10 +84,7 @@ export async function handleRejectSuggestion(
   if (buttons.acceptBtn) buttons.acceptBtn.disabled = true;
   if (buttons.rejectBtn) buttons.rejectBtn.disabled = true;
 
-  const result = await deps.rejectSuggestion(
-    suggestion,
-    getSuggestionFeedbackComment(li),
-  );
+  const result = await deps.rejectSuggestion(suggestion, getSuggestionFeedbackComment(li));
 
   if (result.status === "cc-not-found") {
     sm.transition("error");
@@ -116,13 +97,7 @@ export async function handleRejectSuggestion(
 
   const targetState = mapResultStatusToState(result.status);
   sm.transition(targetState);
-  applySuggestionCardState(
-    li,
-    sm.state,
-    buttons.acceptBtn,
-    buttons.rejectBtn,
-    result.error,
-  );
+  applySuggestionCardState(li, sm.state, buttons.acceptBtn, buttons.rejectBtn, result.error);
   applyResolutionWorkflowUi(result);
   updateResultsSummaryAfterResolution(uiContext, suggestion.id, result);
 }
@@ -132,25 +107,17 @@ export function wireSuggestionCardInteractions(
   li: HTMLLIElement,
   suggestion: Suggestion,
   deps: ResultsPanelDeps,
-  uiContext: SuggestionResolutionUiContext,
+  uiContext: SuggestionResolutionUiContext
 ): void {
-  const clickableEl = li.querySelector(
-    ".card-clickable-area",
-  ) as HTMLElement | null;
+  const clickableEl = li.querySelector(".card-clickable-area") as HTMLElement | null;
   if (clickableEl) {
     clickableEl.addEventListener("click", () => {
-      void deps
-        .navigateToText(suggestion)
-        .then((result) => renderNavigationResult(li, result));
+      void deps.navigateToText(suggestion).then((result) => renderNavigationResult(li, result));
     });
   }
 
-  const acceptBtnEl = li.querySelector(
-    '[data-action="accept"]',
-  ) as HTMLButtonElement | null;
-  const rejectBtnEl = li.querySelector(
-    '[data-action="reject"]',
-  ) as HTMLButtonElement | null;
+  const acceptBtnEl = li.querySelector('[data-action="accept"]') as HTMLButtonElement | null;
+  const rejectBtnEl = li.querySelector('[data-action="reject"]') as HTMLButtonElement | null;
 
   wireSuggestionFeedbackToggle(li);
 
@@ -162,12 +129,12 @@ export function wireSuggestionCardInteractions(
 
   if (acceptBtnEl) {
     acceptBtnEl.addEventListener("click", () =>
-      handleAcceptSuggestion(suggestion, li, buttons, sm, deps, uiContext),
+      handleAcceptSuggestion(suggestion, li, buttons, sm, deps, uiContext)
     );
   }
   if (rejectBtnEl) {
     rejectBtnEl.addEventListener("click", () =>
-      handleRejectSuggestion(suggestion, li, buttons, sm, deps, uiContext),
+      handleRejectSuggestion(suggestion, li, buttons, sm, deps, uiContext)
     );
   }
 }

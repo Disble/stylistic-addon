@@ -39,8 +39,7 @@ describe("WordAdapter.acceptSuggestion", () => {
         suggestionId: "s-accept-single",
         insertedTag: "stylistic:track-change:s-accept-single",
         deletedValue: "ni Shu",
-        anchorValue:
-          "Xia no tenía idea de lo que estaba pasando por la mente de Mei ni Shu.",
+        anchorValue: "Xia no tenía idea de lo que estaba pasando por la mente de Mei ni Shu.",
       }),
       rangeTCItems: [
         {
@@ -205,7 +204,7 @@ describe("WordAdapter.acceptSuggestion", () => {
     expect(result.trackedChangesAffected).toBe(0);
     expect(result.commentDeleted).toBe(true);
     expect(context.document.contentControls.getByTag).toHaveBeenCalledWith(
-      makeCommentOnlyTag("s-comment-only-accept"),
+      makeCommentOnlyTag("s-comment-only-accept")
     );
     expect(context._cc.delete).toHaveBeenCalledWith(true);
     expect(deleteComment).toHaveBeenCalledOnce();

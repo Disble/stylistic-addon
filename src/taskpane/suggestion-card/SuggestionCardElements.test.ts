@@ -28,15 +28,9 @@ describe("SuggestionCardElements", () => {
     const card = createSuggestionCard(suggestion, []);
 
     expect(card.li.querySelector(".card-diff")).toBeNull();
-    expect(card.li.querySelector('[data-action="accept"]')?.textContent).toBe(
-      "Entendido",
-    );
-    expect(card.li.querySelector('[data-action="reject"]')?.textContent).toBe(
-      "Ignorar",
-    );
-    expect(
-      card.li.querySelector(".result-type-badge--comment")?.textContent,
-    ).toBe("comentario");
+    expect(card.li.querySelector('[data-action="accept"]')?.textContent).toBe("Entendido");
+    expect(card.li.querySelector('[data-action="reject"]')?.textContent).toBe("Ignorar");
+    expect(card.li.querySelector(".result-type-badge--comment")?.textContent).toBe("comentario");
   });
 
   it("renders failed suggestions without feedback or action controls", () => {
@@ -52,9 +46,7 @@ describe("SuggestionCardElements", () => {
     expect(card.isFailed).toBe(true);
     expect(card.isNotFoundFailure).toBe(true);
     expect(card.li.dataset.cardGroup).toBe("not-found");
-    expect(card.li.querySelector(".result-failed")?.textContent).toBe(
-      'No encontrado: "faltante"',
-    );
+    expect(card.li.querySelector(".result-failed")?.textContent).toBe('No encontrado: "faltante"');
     expect(card.li.querySelector('[data-action="feedback"]')).toBeNull();
     expect(card.li.querySelector(".feedback-accordion")).toBeNull();
   });

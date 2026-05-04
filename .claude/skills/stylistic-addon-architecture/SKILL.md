@@ -21,7 +21,7 @@ Load this skill BEFORE writing ANY code in this project. It is the authoritative
 - **Type:** Microsoft Word Office Add-in (Task Pane)
 - **Language:** TypeScript 5.4+
 - **Bundler:** Webpack 5
-- **UI:** Pure DOM — NO UI framework. No React, Vue, or Angular. Ever.
+- **UI:** React 18 + Fluent UI v9 under `src/taskpane/` only. No React/framework imports in `src/domain/`, `src/adapters/`, or `src/infrastructure/`.
 - **Backend:** Mastra AI framework (`@mastra/client-js` v1.7.1)
 - **Test runner:** Vitest (globals: true, environment: node)
 - **Dev server port:** 3000 | **Mastra default port:** 4111
@@ -54,8 +54,8 @@ If a change blurs those boundaries, stop and correct the model before writing co
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  PRESENTATION — src/taskpane/                                    │
-│  taskpane.ts — event binding, observer registration, rendering   │
-│  Composition Root: instantiates all adapters and wires the graph │
+│  taskpane.ts — Composition Root: instantiates adapters/workflows │
+│  React components/hooks render taskpane UI under src/taskpane/   │
 ├──────────────────────────────────────────────────────────────────┤
 │  DOMAIN — src/domain/                                            │
 │  types.ts     — pure TypeScript interfaces (zero runtime code)  │
@@ -117,9 +117,11 @@ src/
 │   └── chunker.ts                  ← Pure function: splitText()
 │
 └── taskpane/
-    ├── taskpane.ts                 ← Composition Root + UI only
+    ├── taskpane.ts                 ← Composition Root + adapter/workflow wiring
+    ├── index.tsx                   ← React bootstrap + providers only
+    ├── components/                 ← Strict component folders only
     ├── taskpane.html
-    └── taskpane.css
+    └── taskpane.css                ← Legacy only until migrated into Fluent/styles
 ```
 
 ---
@@ -198,24 +200,37 @@ await run.start({ inputData: payload });
 
 ---
 
-## 6. DOM Rendering — Programmatic Only
+## 6. React Taskpane Rendering — Strict Component Rails
 
-All UI rendering is done via programmatic DOM in `taskpane.ts`. The render functions (e.g., `renderResults()`) follow these rules:
+React is allowed **only** in the presentation layer (`src/taskpane/`). It is not a new application layer and it must not own Word, Mastra, or review workflow semantics.
 
-- **ALWAYS** use `document.createElement()` + `.appendChild()` / `.textContent`
-- **NEVER** use `innerHTML` with dynamic/user-derived data (XSS risk)
-- **No UI framework** — no JSX, no templates, no virtual DOM
-- CSS max-height transitions are used for accordion animations (no JS animation)
+Rules:
 
-```ts
-// Correct
-const li = document.createElement("li");
-li.textContent = suggestion.category;   // safe, no XSS
-container.appendChild(li);
+- `taskpane.ts` remains the Composition Root: instantiate adapters, mediator/workflows, state machine, and observer wiring there.
+- `index.tsx` bootstraps React and providers only (`FluentProvider`, theme, root rendering). Do not import Word adapters or domain workflow internals into `index.tsx`.
+- Components live under `src/taskpane/components/` and must be dumb/presentational by default.
+- React components receive data/callbacks through props or taskpane-owned presenters/hooks. They must not call `Word.run`, instantiate adapters, or import from `src/adapters/**`.
+- Dynamic user/backend content must be rendered through React text interpolation, never `dangerouslySetInnerHTML`.
 
-// FORBIDDEN
-container.innerHTML = `<li>${suggestion.category}</li>`;  // NEVER with dynamic data
+### Mandatory component anatomy
+
+Every React component uses its own PascalCase folder. No flat component files.
+
+```txt
+components/ComponentName/
+├── index.ts
+├── ComponentName.tsx
+├── ComponentName.types.ts
+├── ComponentName.constants.ts      optional
+├── ComponentName.helpers.ts        optional
+├── useComponentName.ts             optional hook/orchestration
+├── ComponentName.schema.ts         optional
+└── __tests__/                      optional
 ```
+
+Minimum required files: `index.ts`, `ComponentName.tsx`, and `ComponentName.types.ts`.
+
+`ComponentName.tsx` should contain only the presentational component. Types, constants, helpers, schemas, and hooks are extracted into their sibling files. This is intentionally strict because the project is optimized for deterministic LLM-authored code, not shortcut convenience.
 
 ---
 
@@ -250,7 +265,7 @@ async sendFeedback(payload: FeedbackPayload): Promise<void> {
 
 ## 8. TDD Policy
 
-- **Test runner:** Vitest (`npm test` / `vitest run`)
+- **Test runner:** Vitest (`bun run test` / `vitest run`)
 - **Config:** `vitest.config.ts` — globals: true, environment: node
 - **Pattern:** Vertical slices — RED → GREEN → REFACTOR per behavior
 - **NEVER** write horizontal tests (covering multiple behaviors in one test)
@@ -382,16 +397,16 @@ interface WorkflowInput {
 |---|---|
 | **NEVER** use raw `fetch` for backend calls | Only `@mastra/client-js` SDK allowed |
 | **NEVER** import from frameworks/libraries into `src/domain/` | Domain must be pure TS, framework-free |
-| **NEVER** put business logic in `taskpane.ts` | Composition Root is UI + wiring only |
-| **NEVER** add a UI framework (React, Vue, Angular) | Pure DOM is the rule; add-ins don't need it |
-| **NEVER** use `innerHTML` with dynamic/user data | XSS risk; use `textContent` + `createElement` |
+| **NEVER** put business logic in `taskpane.ts` | Composition Root is adapter/workflow wiring only |
+| **NEVER** add React outside `src/taskpane/` | UI framework belongs only to presentation; domain/adapters/infrastructure stay framework-free |
+| **NEVER** use `dangerouslySetInnerHTML` or DOM `innerHTML` with dynamic/user data | XSS risk; render text safely through React interpolation or text APIs |
 | **NEVER** add `"status"` to `fields` in `workflow.runById()` | Causes deterministic HTTP 400 in SDK v1.7.1 |
 | **NEVER** call `.execute()` on a workflow | Method does not exist in SDK v1.7.1 |
 | **NEVER** hardcode URLs, IDs, or limits outside `config.ts` | Single source of truth for all constants |
 | **NEVER** await `feedbackPort.sendFeedback()` in the UI | Fire-and-forget by design |
 | **NEVER** let feedback errors surface to the user | Adapters must swallow all errors silently |
-| **NEVER** use `Word` global outside `src/adapters/word/` | GritQL plugin enforces this — use `IDocumentPort` |
-| **NEVER** import from `adapters/` inside `src/domain/` | GritQL plugin enforces this — depend on ports |
+| **NEVER** use `Word` global outside `src/adapters/word/` | `check:architecture-rails` enforces this — use `IDocumentPort` |
+| **NEVER** import from `adapters/` inside `src/domain/` | `check:architecture-rails` enforces this — depend on ports |
 | **NEVER** create a file > 800 lines without an entry in `KNOWN_EXCEPTIONS` | Complexity guard blocks the commit |
 
 ---
@@ -428,20 +443,16 @@ The current code may not fully implement these rules yet. Treat this skill as th
 
 ## 16. Linting, Naming, and Architectural Guards
 
-- Use **Biome** as the single formatter and linter for this add-in. It replaces `office-addin-lint`, `eslint-plugin-office-addins`, and Prettier in one tool.
-- Enable Biome filename enforcement via `useFilenamingConvention`. Allowed cases: `PascalCase` (class files) and `camelCase` (module/utility files).
-- Biome handles general filename case, but the project architecture enforces additional structural rules via `scripts/checkFileNaming.mjs`.
+Use **ESLint/Office Add-in lint + Office Add-in Prettier config** as the single formatting/linting authority. Biome is intentionally retired to avoid overlapping tool authorities.
 
-### GritQL Boundary Plugins (`lints/`)
+Deterministic architecture rails are enforced by scripts, not by prose:
 
-Two Biome GritQL plugins enforce architectural boundary violations in the IDE in real time and in pre-commit. Scoped via `biome.json` overrides.
-
-| Plugin | Scope | What it blocks |
-|--------|-------|---------------|
-| `lints/no-word-global.grit` | `src/domain/`, `src/infrastructure/`, `src/taskpane/` | Direct `Word.*` global usage — must go through `IDocumentPort` |
-| `lints/no-adapter-import-in-domain.grit` | `src/domain/` | Imports from `../adapters/` — domain must depend only on ports |
-
-To modify scope: edit `biome.json` → `overrides[].includes`. To add a plugin: create a `.grit` file in `lints/` and reference it in a new override.
+| Script | What it blocks |
+|--------|----------------|
+| `scripts/checkArchitectureRails.mjs` | `Word.*` outside `src/adapters/word/`, domain imports from adapters, forbidden text-search internal imports/redefinitions |
+| `scripts/checkFileNaming.mjs` | generic `utils`, invalid handler/adapter suffixes, triple-compound filenames |
+| `scripts/checkReactComponentRails.mjs` | flat component files, missing component anatomy files, TSX files containing inline types/constants/hooks/multiple components |
+| `scripts/checkComplexity.mjs` | source files exceeding line-count thresholds |
 
 ### Complexity Guard (`scripts/checkComplexity.mjs`)
 
@@ -451,7 +462,7 @@ Enforces file size across `src/domain/`, `src/adapters/`, `src/infrastructure/`,
 - Files with justified exceptions are listed in `KNOWN_EXCEPTIONS` inside the script with a `maxLines` cap and a reason. Caps only go DOWN over time.
 - Exempt: `types.ts`, `*.d.ts`
 
-Run: `npm run check:complexity`
+Run: `bun run check:complexity`
 
 If you are about to create a file that will exceed 500 lines, stop and extract responsibilities first.
 
@@ -496,26 +507,30 @@ A `Mock` prefix is allowed in front of any suffix (e.g. `MockFeedbackAdapter.ts`
 ## 17. Git Hook Workflow
 
 - Use **Lefthook** for repository hooks; wiring is in `lefthook.yml`.
-- Hooks are installed automatically on `npm install` via the `prepare` lifecycle script.
-- `pre-commit` runs four checks in parallel:
-  1. **`lint:staged`** — Biome checks (including GritQL plugins) and auto-fixes staged files.
-  2. **`check:filenames`** — validates structural naming conventions across managed folders.
-  3. **`check:complexity`** — file size guard (warn >500, error >800 lines).
-  4. **`typecheck`** — full `tsc --noEmit` across the project.
+- Hooks are installed automatically via the `prepare` lifecycle script.
+- `pre-commit` runs deterministic rails in parallel:
+  1. **`lint:fix`** — Office Add-in lint/ESLint fixes where possible.
+  2. **`check:architecture-rails`** — validates architecture boundaries formerly covered by Biome/GritQL.
+  3. **`check:filenames`** — validates structural naming conventions across managed folders.
+  4. **`check:complexity`** — file size guard (warn >400, error >500 for source files).
+  5. **`check:react-rails`** — validates strict React component folder anatomy.
+  6. **`typecheck`** — full `tsc --noEmit` across the project.
 - Do NOT add builds to pre-commit.
-- If Biome auto-fixes a staged file (`stage_fixed: true`), Lefthook re-stages the fix automatically.
+- If lint auto-fixes a staged file (`stage_fixed: true`), Lefthook re-stages the fix automatically.
 
 ### Available scripts
 
 ```bash
-npm run lint              # biome check . (full project, includes GritQL plugins)
-npm run lint:write        # biome check --write . (full project, auto-fix)
-npm run lint:staged       # biome check --staged --write (pre-commit safe)
-npm run check:filenames   # structural naming validation only
-npm run check:complexity  # file size guard only
-npm run validate          # lint + check:filenames + check:complexity
-npm run hooks:install     # re-install lefthook hooks manually
-npm run hooks:pre-commit  # run pre-commit hook locally without committing
+bun run lint                      # office-addin-lint check
+bun run lint:fix                  # office-addin-lint fix
+bun run prettier                  # office-addin-lint prettier
+bun run check:architecture-rails  # architecture boundary validation
+bun run check:filenames           # structural naming validation only
+bun run check:complexity          # file size guard only
+bun run check:react-rails         # strict React component anatomy validation
+bun run validate                  # lint + all rails + typecheck; never build
+bun run hooks:install             # re-install lefthook hooks manually
+bun run hooks:pre-commit          # run pre-commit hook locally without committing
 ```
 
 ---

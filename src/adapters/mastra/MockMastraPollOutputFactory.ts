@@ -12,8 +12,7 @@ export const MOCK_MASTRA_POLL_OUTPUT: WorkflowOutput = {
     {
       type: "track-change",
       anchor: "ni Shu",
-      context:
-        "Xia no tenía idea de lo que estaba pasando por la mente de Mei ni Shu.",
+      context: "Xia no tenía idea de lo que estaba pasando por la mente de Mei ni Shu.",
       category: "gramática",
       severity: "high",
       justification: "Omisión de preposición en estructuras paralelas.",
@@ -34,8 +33,7 @@ export const MOCK_MASTRA_POLL_OUTPUT: WorkflowOutput = {
       context: "Todas se quedaron en silencio.",
       category: "estilo",
       severity: "medium",
-      justification:
-        "Eco léxico por repetición de 'silencio' en párrafos cercanos.",
+      justification: "Eco léxico por repetición de 'silencio' en párrafos cercanos.",
       suggestedText: "guardaron silencio",
     },
     {

@@ -79,8 +79,7 @@ describe("domain types (compile-time checks)", () => {
       hasPendingStylisticArtifacts: true,
       trackChangesActive: true,
     };
-    const documentUiState: DocumentReviewUiState =
-      "ready-to-disable-track-changes";
+    const documentUiState: DocumentReviewUiState = "ready-to-disable-track-changes";
     const actionResult: SuggestionActionResult = {
       status: "accepted",
       trackedChangesAffected: 2,
@@ -126,11 +125,10 @@ describe("domain types (compile-time checks)", () => {
   });
 
   it("keeps suggestion contracts free of originalText", () => {
-    type SuggestionHasOriginalText = "originalText" extends keyof Suggestion
+    type SuggestionHasOriginalText = "originalText" extends keyof Suggestion ? true : false;
+    type WorkflowSuggestionHasOriginalText = "originalText" extends keyof WorkflowSuggestion
       ? true
       : false;
-    type WorkflowSuggestionHasOriginalText =
-      "originalText" extends keyof WorkflowSuggestion ? true : false;
 
     expectTypeOf<SuggestionHasOriginalText>().toEqualTypeOf<false>();
     expectTypeOf<WorkflowSuggestionHasOriginalText>().toEqualTypeOf<false>();
@@ -170,9 +168,7 @@ describe("domain types (compile-time checks)", () => {
     expectTypeOf<IDocumentPort["getDocumentReviewState"]>().toEqualTypeOf<
       () => Promise<DocumentReviewState>
     >();
-    expectTypeOf<IDocumentPort["disableTrackChanges"]>().toEqualTypeOf<
-      () => Promise<void>
-    >();
+    expectTypeOf<IDocumentPort["disableTrackChanges"]>().toEqualTypeOf<() => Promise<void>>();
   });
 });
 
@@ -207,9 +203,7 @@ describe("IFeedbackPort (compile-time checks)", () => {
     expectTypeOf<FeedbackPayload["justification"]>().toEqualTypeOf<string>();
     expectTypeOf<FeedbackPayload["action"]>().toEqualTypeOf<"accept" | "reject">();
 
-    type HasOptionalComment = {} extends Pick<FeedbackPayload, "comment">
-      ? true
-      : false;
+    type HasOptionalComment = {} extends Pick<FeedbackPayload, "comment"> ? true : false;
 
     expectTypeOf<HasOptionalComment>().toEqualTypeOf<true>();
   });

@@ -45,12 +45,8 @@ describe("WordAdapter.cleanupResolvedComments", () => {
   });
 
   it("propagates cleanup errors", async () => {
-    cleanupMocks.cleanupResolvedComments.mockRejectedValueOnce(
-      new Error("cleanup failed"),
-    );
+    cleanupMocks.cleanupResolvedComments.mockRejectedValueOnce(new Error("cleanup failed"));
 
-    await expect(adapter.cleanupResolvedComments()).rejects.toThrow(
-      "cleanup failed",
-    );
+    await expect(adapter.cleanupResolvedComments()).rejects.toThrow("cleanup failed");
   });
 });

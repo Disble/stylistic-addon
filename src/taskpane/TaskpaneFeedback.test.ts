@@ -50,7 +50,7 @@ describe("taskpane feedback controls", () => {
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
 
     expect(li.querySelector('[data-action="feedback"]')?.getAttribute("aria-label")).toBe(
-      "Dejar feedback",
+      "Dejar feedback"
     );
     expect(li.querySelector(".feedback-accordion")).not.toBeNull();
     expect(li.querySelector(".feedback-textarea")).not.toBeNull();
@@ -94,7 +94,7 @@ describe("taskpane feedback controls", () => {
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-  requireElement(li, '[data-action="accept"]').click();
+    requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -109,7 +109,7 @@ describe("taskpane feedback controls", () => {
         justification: "Ya implica completitud.",
         severity: "high",
         suggestionType: "track-change",
-      }),
+      })
     );
   });
 
@@ -126,7 +126,7 @@ describe("taskpane feedback controls", () => {
     });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-  requireElement(li, '[data-action="reject"]').click();
+    requireElement(li, '[data-action="reject"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -141,7 +141,7 @@ describe("taskpane feedback controls", () => {
         justification: "Frase de relleno.",
         severity: "medium",
         suggestionType: "track-change",
-      }),
+      })
     );
   });
 
@@ -163,15 +163,13 @@ describe("taskpane feedback controls", () => {
         showCleanupSection: false,
       },
     });
-    taskpaneMocks.feedbackSendFeedback.mockRejectedValueOnce(
-      new Error("feedback failed"),
-    );
+    taskpaneMocks.feedbackSendFeedback.mockRejectedValueOnce(new Error("feedback failed"));
 
     const doc = createTaskpaneDocument();
     const suggestion = makeSuggestion({ id: "s-feedback" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-  requireElement(li, '[data-action="accept"]').click();
+    requireElement(li, '[data-action="accept"]').click();
     await flushTaskpaneWork();
 
     expect(li.classList.contains("result-accepted")).toBe(true);
@@ -201,7 +199,7 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-identity-lost" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-  requireElement(li, '[data-action="accept"]').click();
+    requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -214,15 +212,13 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-1" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-  requireElement(li, ".feedback-textarea").value = "";
-  requireElement(li, '[data-action="accept"]').click();
+    requireElement(li, ".feedback-textarea").value = "";
+    requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(taskpaneMocks.feedbackSendFeedback.mock.calls[0][0]).not.toHaveProperty(
-      "comment",
-    );
+    expect(taskpaneMocks.feedbackSendFeedback.mock.calls[0][0]).not.toHaveProperty("comment");
   });
 
   it("includes non-empty textarea comments and justification in the feedback payload", async () => {
@@ -230,8 +226,8 @@ describe("taskpane feedback controls", () => {
     const suggestion = makeSuggestion({ id: "s-1", justification: "Es más claro" });
 
     const li = (await renderViaEmitter(doc, [suggestion]))[0];
-  requireElement(li, ".feedback-textarea").value = "Muy buen cambio";
-  requireElement(li, '[data-action="accept"]').click();
+    requireElement(li, ".feedback-textarea").value = "Muy buen cambio";
+    requireElement(li, '[data-action="accept"]').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -240,7 +236,7 @@ describe("taskpane feedback controls", () => {
       expect.objectContaining({
         comment: "Muy buen cambio",
         justification: "Es más claro",
-      }),
+      })
     );
   });
 });

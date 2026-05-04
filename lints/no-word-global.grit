@@ -1,3 +1,0 @@
-`Word.$method($args)` where {
-  register_diagnostic(span=$method, message="Word global must only be used inside src/adapters/word/. Use IDocumentPort instead.", severity="error")
-}

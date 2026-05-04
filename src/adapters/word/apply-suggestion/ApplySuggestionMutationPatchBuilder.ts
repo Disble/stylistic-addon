@@ -1,7 +1,4 @@
-import type {
-  ApplyMutationPatch,
-  ChangeType,
-} from "../../../domain/DocumentApplication.types";
+import type { ApplyMutationPatch, ChangeType } from "../../../domain/DocumentApplication.types";
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 
 /**
@@ -26,7 +23,7 @@ export class ApplySuggestionMutationPatchBuilder {
   /** Builds a localized mutation patch from one successful anchor replacement. */
   buildApplyMutationPatch(
     suggestion: Suggestion,
-    containerText: string,
+    containerText: string
   ): ApplyMutationPatch | undefined {
     const replacement = suggestion.suggestedText ?? "";
     const affectedStart = containerText.indexOf(suggestion.anchor);
@@ -43,9 +40,7 @@ export class ApplySuggestionMutationPatchBuilder {
       paragraphId: suggestion.positionHint?.paragraphId,
       originalText: containerText,
       updatedText:
-        containerText.slice(0, affectedStart) +
-        replacement +
-        containerText.slice(affectedEnd),
+        containerText.slice(0, affectedStart) + replacement + containerText.slice(affectedEnd),
       deltaLength: replacement.length - suggestion.anchor.length,
       affectedStart,
       affectedEnd,

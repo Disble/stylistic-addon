@@ -9,11 +9,7 @@ import {
   resetTaskpaneHarness,
   teardownTaskpaneHarness,
 } from "./TaskpaneTestHelper";
-import {
-  DEFAULT_MAX_CHUNK_SIZE,
-  MAX_RETRIES,
-  RETRY_BASE_DELAY_MS,
-} from "../infrastructure/config";
+import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 
 function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: string) {
   const el = doc.getElementById(id);
@@ -69,19 +65,15 @@ describe("taskpane entrypoint", () => {
     expect(taskpaneMocks.retryDecoratorConstructor).toHaveBeenCalledWith(
       expect.any(Object),
       MAX_RETRIES,
-      RETRY_BASE_DELAY_MS,
+      RETRY_BASE_DELAY_MS
     );
     expect(getRequiredElement(doc, "sideload-msg").style.display).toBe("none");
     expect(getRequiredElement(doc, "app-body").style.display).toBe("flex");
     expect(doc.getElementById("btn-analyze")?.onclick).toEqual(expect.any(Function));
     expect(doc.getElementById("btn-cleanup")?.onclick).toEqual(expect.any(Function));
-    expect(doc.getElementById("btn-disable-track-changes")?.onclick).toEqual(
-      expect.any(Function),
-    );
+    expect(doc.getElementById("btn-disable-track-changes")?.onclick).toEqual(expect.any(Function));
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
-    expect(getRequiredElement(doc, "disable-track-changes-section").style.display).toBe(
-      "block",
-    );
+    expect(getRequiredElement(doc, "disable-track-changes-section").style.display).toBe("block");
   });
 
   it("runs the pipeline and updates progress/results/status from emitted events", async () => {
@@ -107,7 +99,7 @@ describe("taskpane entrypoint", () => {
           trackChangesActivatedForBatch: false,
         },
         [],
-        true,
+        true
       );
     });
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({ deletable: 0, kept: 0 });
@@ -132,7 +124,7 @@ describe("taskpane entrypoint", () => {
     expect(doc.getElementById("progress-bar")?.style.width).toBe("25%");
     expect(doc.getElementById("results-list")?.children).toHaveLength(1);
     expect(doc.getElementById("status-bar")?.textContent).toBe(
-      "1 sugerencia(s) insertada(s) como Track Changes (selección).",
+      "1 sugerencia(s) insertada(s) como Track Changes (selección)."
     );
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("block");
   });
@@ -155,7 +147,7 @@ describe("taskpane entrypoint", () => {
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(warnSpy).toHaveBeenCalledWith(
-      "⚠️ [Taskpane] Pipeline ya en ejecución — ignorando click",
+      "⚠️ [Taskpane] Pipeline ya en ejecución — ignorando click"
     );
 
     runDeferred.resolve();
@@ -179,7 +171,7 @@ describe("taskpane entrypoint", () => {
     expect(taskpaneMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
     expect(getRequiredElement(doc, "cleanup-section").style.display).toBe("none");
     expect(doc.getElementById("status-bar")?.textContent).toBe(
-      "2 comentario(s) eliminado(s), 0 conservado(s).",
+      "2 comentario(s) eliminado(s), 0 conservado(s)."
     );
   });
 
@@ -196,11 +188,7 @@ describe("taskpane entrypoint", () => {
     await doc.getElementById("btn-disable-track-changes")?.onclick?.({} as MouseEvent);
 
     expect(taskpaneMocks.disableTrackChanges).toHaveBeenCalledOnce();
-    expect(getRequiredElement(doc, "disable-track-changes-section").style.display).toBe(
-      "none",
-    );
-    expect(doc.getElementById("status-bar")?.textContent).toBe(
-      "Control de cambios desactivado.",
-    );
+    expect(getRequiredElement(doc, "disable-track-changes-section").style.display).toBe("none");
+    expect(doc.getElementById("status-bar")?.textContent).toBe("Control de cambios desactivado.");
   });
 });

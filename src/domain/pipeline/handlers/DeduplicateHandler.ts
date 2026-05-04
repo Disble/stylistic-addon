@@ -23,15 +23,13 @@ import type { PipelineHandler } from "./ReadTextHandler";
 export class DeduplicateHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const raw = ctx.rawSuggestions!;
-    console.log(
-      `🧹 [DeduplicateHandler] Fase 5: Deduplicando ${raw.length} sugerencias...`,
-    );
+    console.log(`🧹 [DeduplicateHandler] Fase 5: Deduplicando ${raw.length} sugerencias...`);
 
     const unique = this.deduplicateByContextAnchor(raw);
     const removed = raw.length - unique.length;
     if (removed > 0) {
       console.log(
-        `🧹 [DeduplicateHandler] ${removed} duplicado(s) removidos → ${unique.length} únicas`,
+        `🧹 [DeduplicateHandler] ${removed} duplicado(s) removidos → ${unique.length} únicas`
       );
     }
 

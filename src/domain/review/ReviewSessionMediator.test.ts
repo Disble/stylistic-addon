@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
-import { SuggestionResolutionWorkflow } from "../suggestion/SuggestionResolutionWorkflow";
 import type { Suggestion } from "../suggestion/Suggestion.types";
 import type { SuggestionActionResult } from "../suggestion/SuggestionResolutionWorkflow.types";
 import { ReviewSessionMediator } from "./ReviewSessionMediator";
@@ -19,9 +18,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function makeActionResult(
-  overrides: Partial<SuggestionActionResult> = {},
-): SuggestionActionResult {
+function makeActionResult(overrides: Partial<SuggestionActionResult> = {}): SuggestionActionResult {
   return {
     status: "accepted",
     trackedChangesAffected: 1,
@@ -38,7 +35,6 @@ function makeActionResult(
 
 describe("ReviewSessionMediator", () => {
   let documentPort: IDocumentPort;
-  let workflow: SuggestionResolutionWorkflow;
   let mediator: ReviewSessionMediator;
 
   beforeEach(() => {
@@ -63,7 +59,6 @@ describe("ReviewSessionMediator", () => {
       sendFeedback: vi.fn().mockResolvedValue(undefined),
     };
 
-    workflow = new SuggestionResolutionWorkflow(documentPort, feedbackPort);
     mediator = new ReviewSessionMediator(documentPort, feedbackPort);
   });
 
@@ -91,7 +86,7 @@ describe("ReviewSessionMediator", () => {
           trackChangesActive: true,
         },
         documentState: "ready-to-disable-track-changes",
-      }),
+      })
     );
     vi.mocked(documentPort.getCleanupPreview).mockResolvedValueOnce({
       deletable: 1,
@@ -111,7 +106,7 @@ describe("ReviewSessionMediator", () => {
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
       makeActionResult({
         status: "accepted",
-      }),
+      })
     );
 
     const result = await mediator.acceptSuggestion(makeSuggestion());

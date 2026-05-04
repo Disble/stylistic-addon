@@ -29,17 +29,14 @@
  */
 
 import type { TextChunk } from "../domain/chunking/TextChunk.types";
-import type {
-  ChunkPollResult,
-  ChunkSubmitResult,
-} from "../domain/mastra/MastraWorkflow.types";
+import type { ChunkPollResult, ChunkSubmitResult } from "../domain/mastra/MastraWorkflow.types";
 import type { IAnalysisPort } from "../domain/ports";
 
 export class RetryAnalysisDecorator implements IAnalysisPort {
   constructor(
     private readonly wrapped: IAnalysisPort,
     private readonly maxRetries: number,
-    private readonly baseDelayMs: number,
+    private readonly baseDelayMs: number
   ) {}
 
   /** Delegates connection check directly — no retry needed. */
@@ -54,7 +51,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
   async submitChunkAnalysis(
     chunk: TextChunk,
     genero: string,
-    autorSlug: string,
+    autorSlug: string
   ): Promise<ChunkSubmitResult> {
     let lastError = "Unknown analysis error";
 
@@ -62,32 +59,27 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
       if (attempt > 0) {
         const delayMs = this.baseDelayMs * 2 ** (attempt - 1);
         console.warn(
-          `🔄 [RetryDecorator] Retry ${attempt}/${this.maxRetries} chunk #${chunk.index} — esperando ${delayMs}ms`,
+          `🔄 [RetryDecorator] Retry ${attempt}/${this.maxRetries} chunk #${chunk.index} — esperando ${delayMs}ms`
         );
         await this.delay(delayMs);
       }
 
       try {
-        const result = await this.wrapped.submitChunkAnalysis(
-          chunk,
-          genero,
-          autorSlug,
-        );
+        const result = await this.wrapped.submitChunkAnalysis(chunk, genero, autorSlug);
 
         if (this.hasRunId(result.runId)) {
           return result;
         }
 
         lastError =
-          this.normalizeError(result.error) ??
-          "Workflow submission did not return a runId";
+          this.normalizeError(result.error) ?? "Workflow submission did not return a runId";
         console.warn(
-          `⚠️ [RetryDecorator] Submit chunk #${chunk.index} intento ${attempt} falló: ${lastError}`,
+          `⚠️ [RetryDecorator] Submit chunk #${chunk.index} intento ${attempt} falló: ${lastError}`
         );
       } catch (error) {
         lastError = this.normalizeThrownError(error);
         console.warn(
-          `⚠️ [RetryDecorator] Submit chunk #${chunk.index} intento ${attempt} falló: ${lastError}`,
+          `⚠️ [RetryDecorator] Submit chunk #${chunk.index} intento ${attempt} falló: ${lastError}`
         );
 
         if (this.isDeterministicClientError(error)) {
@@ -97,7 +89,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
     }
 
     console.error(
-      `❌ [RetryDecorator] Submit chunk #${chunk.index} agotó ${this.maxRetries} reintentos. Último error: ${lastError}`,
+      `❌ [RetryDecorator] Submit chunk #${chunk.index} agotó ${this.maxRetries} reintentos. Último error: ${lastError}`
     );
     return {
       chunkIndex: chunk.index,
@@ -109,17 +101,14 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
    * Polls a submitted chunk run. Retries only on thrown transport errors;
    * intermediate statuses like `running` are returned as-is.
    */
-  async pollChunkAnalysis(
-    chunkIndex: number,
-    runId: string,
-  ): Promise<ChunkPollResult> {
+  async pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult> {
     let lastError = "Unknown analysis error";
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       if (attempt > 0) {
         const delayMs = this.baseDelayMs * 2 ** (attempt - 1);
         console.warn(
-          `🔄 [RetryDecorator] Retry ${attempt}/${this.maxRetries} poll chunk #${chunkIndex} — esperando ${delayMs}ms`,
+          `🔄 [RetryDecorator] Retry ${attempt}/${this.maxRetries} poll chunk #${chunkIndex} — esperando ${delayMs}ms`
         );
         await this.delay(delayMs);
       }
@@ -129,7 +118,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
       } catch (error) {
         lastError = this.normalizeThrownError(error);
         console.warn(
-          `⚠️ [RetryDecorator] Poll chunk #${chunkIndex} intento ${attempt} falló: ${lastError}`,
+          `⚠️ [RetryDecorator] Poll chunk #${chunkIndex} intento ${attempt} falló: ${lastError}`
         );
 
         if (this.isDeterministicClientError(error)) {
@@ -139,7 +128,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
     }
 
     console.error(
-      `❌ [RetryDecorator] Poll chunk #${chunkIndex} agotó ${this.maxRetries} reintentos. Último error: ${lastError}`,
+      `❌ [RetryDecorator] Poll chunk #${chunkIndex} agotó ${this.maxRetries} reintentos. Último error: ${lastError}`
     );
     return {
       chunkIndex,
@@ -197,8 +186,6 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
     }
 
     const { status } = error as { status?: unknown };
-    return typeof status === "number" && Number.isInteger(status)
-      ? status
-      : undefined;
+    return typeof status === "number" && Number.isInteger(status) ? status : undefined;
   }
 }

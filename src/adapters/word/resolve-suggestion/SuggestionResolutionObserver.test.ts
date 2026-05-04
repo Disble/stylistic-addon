@@ -40,16 +40,12 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(
-      suggestion,
-      locator,
-      {} as never,
-    );
+    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
 
     const result = await observer.observeResolutionCandidates(
       context as never,
       context._ccItems as never,
-      context._cc as never,
+      context._cc as never
     );
 
     expect(result.observationStatus).toBe("confirmed-pending");
@@ -92,16 +88,12 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(
-      suggestion,
-      locator,
-      {} as never,
-    );
+    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
 
     const result = await observer.observeResolutionCandidates(
       context as never,
       context._ccItems as never,
-      context._ccItems[0] as never,
+      context._ccItems[0] as never
     );
 
     expect(result.observationStatus).toBe("mixed-group");
@@ -132,16 +124,12 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(
-      suggestion,
-      locator,
-      {} as never,
-    );
+    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
 
     const result = await observer.observeResolutionCandidates(
       context as never,
       context._ccItems as never,
-      context._cc as never,
+      context._cc as never
     );
 
     expect(result.observationStatus).toBe("confirmed-pending");
@@ -165,22 +153,16 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
         formatTag: "stylistic:track-change:format-1",
         anchorValue: "Ese era el inicio del post mortem reportado por PRIME.",
       }),
-      rangeTCItems: [
-        { id: "tc-format", type: "Formatted", accept: vi.fn(), reject: vi.fn() },
-      ],
+      rangeTCItems: [{ id: "tc-format", type: "Formatted", accept: vi.fn(), reject: vi.fn() }],
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(
-      suggestion,
-      locator,
-      {} as never,
-    );
+    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
 
     const result = await observer.observeResolutionCandidates(
       context as never,
       context._ccItems as never,
-      context._cc as never,
+      context._cc as never
     );
 
     expect(result.observationStatus).toBe("confirmed-pending");

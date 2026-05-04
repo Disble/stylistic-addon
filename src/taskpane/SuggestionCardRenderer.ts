@@ -1,5 +1,3 @@
-/* global document */
-
 /**
  * SuggestionCardRenderer — taskpane-facing facade for suggestion-card rendering.
  *
@@ -19,10 +17,7 @@ import {
 } from "./SuggestionProgressSummary";
 import { wireSuggestionCardInteractions } from "./suggestion-card/SuggestionCardActions";
 import { createSuggestionCard } from "./suggestion-card/SuggestionCardElements";
-import {
-  getRequiredElement,
-  setDisableTrackChangesCtaVisible,
-} from "./TaskpaneUi";
+import { getRequiredElement, setDisableTrackChangesCtaVisible } from "./TaskpaneUi";
 
 export type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
 
@@ -31,22 +26,22 @@ export function buildResultsSummary(
   suggestions: Suggestion[],
   result: ApplySuggestionsResult,
   chunkErrors: string[],
-  isSelection: boolean,
+  isSelection: boolean
 ): string {
   return buildSuggestionProgressSummaryText(
     createSuggestionProgressSummaryModel(suggestions, result, chunkErrors),
-    isSelection,
+    isSelection
   );
 }
 
 /** Builds a natural status-bar message for mixed apply outcomes. */
 export function buildApplyStatusMessage(
   result: ApplySuggestionsResult,
-  isSelection: boolean,
+  isSelection: boolean
 ): string {
   const scopeSuffix = isSelection ? " (selección)" : "";
   const notFoundCount = result.failedSuggestions.filter(
-    (failure) => failure.reason === "not-found",
+    (failure) => failure.reason === "not-found"
   ).length;
   const failedOtherCount = result.failedSuggestions.length - notFoundCount;
 
@@ -77,21 +72,14 @@ export function renderResultsPanel(
   result: ApplySuggestionsResult,
   chunkErrors: string[],
   isSelection: boolean,
-  deps: ResultsPanelDeps,
+  deps: ResultsPanelDeps
 ): void {
   const panel = getRequiredElement("results-panel");
   const summary = getRequiredElement("results-summary");
   const list = getRequiredElement("results-list");
-  const summaryModel = createSuggestionProgressSummaryModel(
-    suggestions,
-    result,
-    chunkErrors,
-  );
+  const summaryModel = createSuggestionProgressSummaryModel(suggestions, result, chunkErrors);
 
-  summary.textContent = buildSuggestionProgressSummaryText(
-    summaryModel,
-    isSelection,
-  );
+  summary.textContent = buildSuggestionProgressSummaryText(summaryModel, isSelection);
   const uiContext = {
     summaryModel,
     summaryElement: summary,
@@ -100,7 +88,7 @@ export function renderResultsPanel(
 
   list.innerHTML = "";
   const cards = suggestions.map((suggestion) =>
-    createSuggestionCard(suggestion, result.failedSuggestions),
+    createSuggestionCard(suggestion, result.failedSuggestions)
   );
 
   for (const card of cards.filter((entry) => !entry.isNotFoundFailure)) {
@@ -115,7 +103,5 @@ export function renderResultsPanel(
   }
 
   panel.style.display = "block";
-  setDisableTrackChangesCtaVisible(
-    result.documentState === "ready-to-disable-track-changes",
-  );
+  setDisableTrackChangesCtaVisible(result.documentState === "ready-to-disable-track-changes");
 }

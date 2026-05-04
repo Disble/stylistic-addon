@@ -18,16 +18,10 @@
 
 import type { TextChunk } from "./chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "./DocumentApplication.types";
-import type {
-  ChunkPollResult,
-  ChunkSubmitResult,
-} from "./mastra/MastraWorkflow.types";
+import type { ChunkPollResult, ChunkSubmitResult } from "./mastra/MastraWorkflow.types";
 import type { ProgressCallback } from "./pipeline/PipelineEvents.types";
 import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
-import type {
-  Suggestion,
-  SuggestionNavigationResult,
-} from "./suggestion/Suggestion.types";
+import type { Suggestion, SuggestionNavigationResult } from "./suggestion/Suggestion.types";
 import type {
   FeedbackPayload,
   ResolutionObservabilityEvent,
@@ -70,7 +64,7 @@ export interface IDocumentPort {
    */
   applySuggestions(
     suggestions: Suggestion[],
-    onProgress?: ProgressCallback,
+    onProgress?: ProgressCallback
   ): Promise<ApplySuggestionsResult>;
 
   /**
@@ -130,9 +124,7 @@ export interface IDocumentPort {
    * Never throws. Returns a semantic result so the UI can inform the user when
    * no safe navigation target exists.
    */
-  navigateToText(
-    target: Suggestion | string,
-  ): Promise<SuggestionNavigationResult>;
+  navigateToText(target: Suggestion | string): Promise<SuggestionNavigationResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,17 +152,14 @@ export interface IAnalysisPort {
   submitChunkAnalysis(
     chunk: TextChunk,
     genero: string,
-    autorSlug: string,
+    autorSlug: string
   ): Promise<ChunkSubmitResult>;
 
   /**
    * Polls an existing workflow run created by `submitChunkAnalysis()`.
    * Returns intermediate or terminal workflow state for the chunk.
    */
-  pollChunkAnalysis(
-    chunkIndex: number,
-    runId: string,
-  ): Promise<ChunkPollResult>;
+  pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult>;
 }
 
 // ---------------------------------------------------------------------------

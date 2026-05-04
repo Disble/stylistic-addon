@@ -13,17 +13,15 @@ export class ResolveSuggestionResultFactory {
     private readonly action: "accept" | "reject",
     private readonly stateInspector: {
       deriveDocumentState(
-        reviewState: DocumentReviewState,
+        reviewState: DocumentReviewState
       ): import("../../../domain/review/DocumentReviewStateMachine").DocumentReviewUiState;
       inspect(context: Word.RequestContext): Promise<DocumentReviewState>;
-    },
+    }
   ) {}
 
   /** Maps a resolution action to its terminal success status. */
   toResolutionStatus(): ResolutionStatus {
-    return this.action === "accept"
-      ? ("accepted" as const)
-      : ("rejected" as const);
+    return this.action === "accept" ? ("accepted" as const) : ("rejected" as const);
   }
 
   /** Builds a document-aware resolution result. */
@@ -34,12 +32,9 @@ export class ResolveSuggestionResultFactory {
     pendingBefore: DocumentReviewState,
     pendingAfter: DocumentReviewState,
     error?: string,
-    executionReport?: ResolutionExecutionReport,
+    executionReport?: ResolutionExecutionReport
   ): SuggestionActionResult {
-    const transition = DocumentReviewStateMachine.evaluateTransition(
-      pendingBefore,
-      pendingAfter,
-    );
+    const transition = DocumentReviewStateMachine.evaluateTransition(pendingBefore, pendingAfter);
 
     return {
       status,
@@ -55,33 +50,18 @@ export class ResolveSuggestionResultFactory {
   /** Builds an observation failure result for fail-closed host evidence. */
   async buildObservationFailureResult(
     context: Word.RequestContext,
-    status:
-      | "identity-lost"
-      | "unobservable"
-      | "ambiguous-location"
-      | "mixed-group",
-    pendingBefore: DocumentReviewState,
+    status: "identity-lost" | "unobservable" | "ambiguous-location" | "mixed-group",
+    pendingBefore: DocumentReviewState
   ): Promise<SuggestionActionResult> {
     const pendingAfter = await this.stateInspector.inspect(context);
     const error = this.buildObservationFailureMessage(status);
 
-    return this.buildResolutionResult(
-      status,
-      0,
-      false,
-      pendingBefore,
-      pendingAfter,
-      error,
-    );
+    return this.buildResolutionResult(status, 0, false, pendingBefore, pendingAfter, error);
   }
 
   /** Converts explicit observation failure status into user-facing Spanish copy. */
   private buildObservationFailureMessage(
-    status:
-      | "identity-lost"
-      | "unobservable"
-      | "ambiguous-location"
-      | "mixed-group",
+    status: "identity-lost" | "unobservable" | "ambiguous-location" | "mixed-group"
   ): string {
     if (status === "identity-lost") {
       return "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.";
@@ -103,7 +83,7 @@ export class ResolveSuggestionResultFactory {
     error: string,
     pendingAfter: DocumentReviewState,
     errorPhase?: ResolutionPhase,
-    executionReport?: ResolutionExecutionReport,
+    executionReport?: ResolutionExecutionReport
   ): SuggestionActionResult {
     return {
       status: "error",

@@ -13,10 +13,10 @@ describe("ApplySuggestionIdentityBuilder", () => {
     });
 
     expect(builder.buildSuggestionTag(suggestion)).toBe(
-      "stylistic:track-change:replace-identity-1",
+      "stylistic:track-change:replace-identity-1"
     );
     expect(builder.buildOperationalWrapperTag(suggestion)).toBe(
-      "stylistic-operational-wrapper:replace-identity-1",
+      "stylistic-operational-wrapper:replace-identity-1"
     );
     expect(builder.buildReplaceIdentity(suggestion)).toEqual({
       suggestionId: "replace-identity-1",
@@ -44,12 +44,10 @@ describe("ApplySuggestionIdentityBuilder", () => {
 
   it("serializes persisted title payloads with the configured prefix", () => {
     const builder = new ApplySuggestionIdentityBuilder();
-    const identity = builder.buildReplaceIdentity(
-      makeSuggestion({ id: "replace-identity-2" }),
-    );
+    const identity = builder.buildReplaceIdentity(makeSuggestion({ id: "replace-identity-2" }));
 
     expect(builder.serializeReplaceIdentity(identity)).toBe(
-      `stylistic-meta-v2:${JSON.stringify(identity)}`,
+      `stylistic-meta-v2:${JSON.stringify(identity)}`
     );
   });
 });

@@ -135,24 +135,19 @@ describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {
       resultFactory,
       stateInspector,
       reporter,
-      errorSerializer,
+      errorSerializer
     );
 
     const result = await orchestrator.execute(context);
 
-    expect(order).toEqual([
-      "execute",
-      "cleanup-comment",
-      "cleanup-metadata",
-      "inspect-after",
-    ]);
+    expect(order).toEqual(["execute", "cleanup-comment", "cleanup-metadata", "inspect-after"]);
     expect(cleanup.deleteResolvedTrackChangeMetadata).toHaveBeenCalledWith(context);
     expect(result.status).toBe("accepted");
     expect(result.pendingAfter).toBe(pendingAfter);
     expect(reporter.emitPhase).toHaveBeenCalledWith(
       "cleanup-metadata",
       "succeeded",
-      expect.objectContaining({ deletedContentControlCount: 2 }),
+      expect.objectContaining({ deletedContentControlCount: 2 })
     );
   });
 
@@ -216,7 +211,7 @@ describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {
       resultFactory,
       stateInspector,
       reporter,
-      errorSerializer,
+      errorSerializer
     );
 
     const result = await orchestrator.execute(context);
@@ -285,7 +280,7 @@ describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {
       resultFactory,
       stateInspector,
       reporter,
-      errorSerializer,
+      errorSerializer
     );
 
     const result = await orchestrator.execute(context);

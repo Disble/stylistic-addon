@@ -5,10 +5,7 @@ import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "./ReplaceIdentityParser";
-import {
-  makeOperationalWrapperTitle,
-  makeSuggestion,
-} from "./WordAdapterActionTestHelper";
+import { makeOperationalWrapperTitle, makeSuggestion } from "./WordAdapterActionTestHelper";
 
 describe("ReplaceIdentityParser", () => {
   it("parses a persisted operational-wrapper title payload", () => {
@@ -50,9 +47,7 @@ describe("ReplaceIdentityParser", () => {
   });
 
   it("returns null when the title payload is malformed JSON", () => {
-    expect(
-      parseReplaceIdentityTitle('stylistic-meta-v2:{"broken":'),
-    ).toBeNull();
+    expect(parseReplaceIdentityTitle('stylistic-meta-v2:{"broken":')).toBeNull();
   });
 
   it("accepts a valid operational-wrapper identity for the matching suggestion", () => {
@@ -67,7 +62,7 @@ describe("ReplaceIdentityParser", () => {
         insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
         deletedValue: suggestion.anchor,
         anchorValue: suggestion.context,
-      }),
+      })
     );
 
     expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(true);
@@ -85,7 +80,7 @@ describe("ReplaceIdentityParser", () => {
         insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
         deletedValue: "texto original con drift del host",
         anchorValue: "Contexto más largo rehidratado por Word.",
-      }),
+      })
     );
 
     expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(false);
@@ -97,7 +92,7 @@ describe("ReplaceIdentityParser", () => {
       makeOperationalWrapperTitle({
         suggestionId: suggestion.id,
         insertedTag: "stylistic:track-change:other",
-      }),
+      })
     );
 
     expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(false);
@@ -114,7 +109,7 @@ describe("ReplaceIdentityParser", () => {
         suggestionId: suggestion.id,
         deletedValue: "",
         anchorValue: "",
-      }),
+      })
     );
 
     expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(false);
@@ -132,15 +127,11 @@ describe("ReplaceIdentityParser", () => {
         insertedTag: `stylistic:${suggestion.type}:${suggestion.id}`,
         deletedValue: suggestion.anchor,
         anchorValue: suggestion.context,
-      }),
+      })
     );
 
-    expect(getDeletedSideLocator(identity, suggestion)).toBe(
-      suggestion.anchor,
-    );
-    expect(getOperationalAnchorLocator(identity, suggestion)).toBe(
-      suggestion.context,
-    );
+    expect(getDeletedSideLocator(identity, suggestion)).toBe(suggestion.anchor);
+    expect(getOperationalAnchorLocator(identity, suggestion)).toBe(suggestion.context);
   });
 
   it("accepts delete-only operational identities without inserted-side metadata", () => {
@@ -156,7 +147,7 @@ describe("ReplaceIdentityParser", () => {
         trackChangeSubtype: "delete-only",
         deleteValue: suggestion.anchor,
         anchorValue: suggestion.context,
-      }),
+      })
     );
 
     expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(true);
@@ -175,7 +166,7 @@ describe("ReplaceIdentityParser", () => {
         trackChangeSubtype: "formatting",
         formatTag: `stylistic:${suggestion.type}:${suggestion.id}`,
         anchorValue: suggestion.context,
-      }),
+      })
     );
 
     expect(isValidOperationalReplaceIdentity(identity, suggestion)).toBe(true);

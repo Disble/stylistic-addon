@@ -13,7 +13,7 @@ export class DocumentReviewStateInspector {
   /** Creates a normalized document-review snapshot. */
   buildDocumentReviewState(
     pendingStylisticArtifacts: number,
-    trackChangesActive: boolean,
+    trackChangesActive: boolean
   ): DocumentReviewState {
     return {
       pendingStylisticArtifacts,
@@ -42,21 +42,15 @@ export class DocumentReviewStateInspector {
     const pendingStylisticArtifacts = allCCs.items.filter(
       (cc) =>
         cc.tag.startsWith(STYLISTIC_TAG_PREFIX) &&
-        !cc.tag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX),
+        !cc.tag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX)
     ).length;
-    const trackChangesActive =
-      context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
+    const trackChangesActive = context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
 
-    return this.buildDocumentReviewState(
-      pendingStylisticArtifacts,
-      trackChangesActive,
-    );
+    return this.buildDocumentReviewState(pendingStylisticArtifacts, trackChangesActive);
   }
 
   /** Reads pending review state after resolution and propagates host failures. */
-  async inspectAfterResolution(
-    context: Word.RequestContext,
-  ): Promise<DocumentReviewState> {
+  async inspectAfterResolution(context: Word.RequestContext): Promise<DocumentReviewState> {
     return this.inspect(context);
   }
 }

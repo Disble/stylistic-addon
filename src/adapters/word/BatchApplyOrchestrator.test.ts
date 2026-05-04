@@ -136,7 +136,7 @@ describe("BatchApplyOrchestrator", () => {
 
     expect(rereadSuggestionPositionHint).toHaveBeenCalledWith(
       expect.objectContaining({ id: "s-overlap" }),
-      latestPatch,
+      latestPatch
     );
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, {
       ...overlapping,
@@ -220,14 +220,14 @@ describe("BatchApplyOrchestrator", () => {
       "applying",
       1,
       3,
-      "Aplicando sugerencia 1 de 3...",
+      "Aplicando sugerencia 1 de 3..."
     );
     expect(onProgress).toHaveBeenNthCalledWith(
       3,
       "applying",
       3,
       3,
-      "Aplicando sugerencia 3 de 3...",
+      "Aplicando sugerencia 3 de 3..."
     );
   });
 });
@@ -243,9 +243,9 @@ function makeOrchestrator(
     deriveDocumentState: () => "idle" | "pending-review" | "ready-to-disable-track-changes";
     rereadSuggestionPositionHint: (
       suggestion: Suggestion,
-      patch: NonNullable<CommandResult["mutationPatch"]>,
+      patch: NonNullable<CommandResult["mutationPatch"]>
     ) => Promise<Suggestion["positionHint"] | undefined>;
-  }> = {},
+  }> = {}
 ): BatchApplyOrchestrator {
   return new BatchApplyOrchestrator({
     ensureTrackChangesActive: vi.fn().mockResolvedValue(false),
@@ -263,7 +263,7 @@ function makeSuggestion(
   id: string,
   start: number,
   end: number,
-  type: Suggestion["type"] = "track-change",
+  type: Suggestion["type"] = "track-change"
 ): Suggestion {
   return {
     id,

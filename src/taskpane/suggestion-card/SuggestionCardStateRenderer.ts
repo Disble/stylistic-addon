@@ -7,11 +7,7 @@ import {
   applySuggestionProgressOutcome,
   buildSuggestionProgressSummaryText,
 } from "../SuggestionProgressSummary";
-import {
-  appendNote,
-  setDisableTrackChangesCtaVisible,
-  showStatus,
-} from "../TaskpaneUi";
+import { appendNote, setDisableTrackChangesCtaVisible, showStatus } from "../TaskpaneUi";
 import { moveSuggestionCardToEnd } from "./SuggestionCardList";
 
 /** Updates the DOM for a suggestion card based on the SM's terminal state. */
@@ -20,7 +16,7 @@ export function applySuggestionCardState(
   state: SuggestionState,
   acceptBtn: HTMLButtonElement | null,
   rejectBtn: HTMLButtonElement | null,
-  errorMessage?: string,
+  errorMessage?: string
 ): void {
   switch (state) {
     case "accepted":
@@ -40,12 +36,12 @@ export function applySuggestionCardState(
         state === "identity-lost"
           ? "(metadata inconsistente; reanalizá la sugerencia)"
           : "(resolución ambigua; reanalizá la sugerencia)",
-        `result-${state}-note`,
+        `result-${state}-note`
       );
       showStatus(
         errorMessage ??
           "La identidad persistida de la sugerencia no permite resolver con seguridad.",
-        "error",
+        "error"
       );
       moveSuggestionCardToEnd(li);
       break;
@@ -54,19 +50,15 @@ export function applySuggestionCardState(
       if (acceptBtn) acceptBtn.disabled = false;
       if (rejectBtn) rejectBtn.disabled = false;
       showStatus(
-        errorMessage ??
-          "No se pudo confirmar el estado de la sugerencia en Word. Reintentá.",
-        "error",
+        errorMessage ?? "No se pudo confirmar el estado de la sugerencia en Word. Reintentá.",
+        "error"
       );
       break;
 
     case "error":
       if (acceptBtn) acceptBtn.disabled = false;
       if (rejectBtn) rejectBtn.disabled = false;
-      showStatus(
-        errorMessage ?? "Error desconocido al resolver sugerencia",
-        "error",
-      );
+      showStatus(errorMessage ?? "Error desconocido al resolver sugerencia", "error");
       break;
 
     default:
@@ -75,17 +67,11 @@ export function applySuggestionCardState(
 }
 
 /** Applies shared taskpane consequences after a workflow-owned resolution. */
-export function applyResolutionWorkflowUi(
-  result: SuggestionResolutionMediatorResult,
-): void {
-  setDisableTrackChangesCtaVisible(
-    result.taskpaneState.showDisableTrackChangesCta,
-  );
+export function applyResolutionWorkflowUi(result: SuggestionResolutionMediatorResult): void {
+  setDisableTrackChangesCtaVisible(result.taskpaneState.showDisableTrackChangesCta);
   const cleanupSection = document.getElementById("cleanup-section");
   if (cleanupSection) {
-    cleanupSection.style.display = result.taskpaneState.showCleanupSection
-      ? "block"
-      : "none";
+    cleanupSection.style.display = result.taskpaneState.showCleanupSection ? "block" : "none";
   }
 }
 
@@ -93,15 +79,11 @@ export function applyResolutionWorkflowUi(
 export function updateResultsSummaryAfterResolution(
   uiContext: SuggestionResolutionUiContext,
   suggestionId: string,
-  result: SuggestionResolutionMediatorResult,
+  result: SuggestionResolutionMediatorResult
 ): void {
-  applySuggestionProgressOutcome(
-    uiContext.summaryModel,
-    suggestionId,
-    result.status,
-  );
+  applySuggestionProgressOutcome(uiContext.summaryModel, suggestionId, result.status);
   uiContext.summaryElement.textContent = buildSuggestionProgressSummaryText(
     uiContext.summaryModel,
-    uiContext.isSelection,
+    uiContext.isSelection
   );
 }

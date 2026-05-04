@@ -11,9 +11,7 @@ describe("DEFAULT_PROFILES", () => {
   });
 
   it("narrativa-literaria profile has correct label", () => {
-    const fiction = DEFAULT_PROFILES.find(
-      (p) => p.id === "narrativa-literaria",
-    );
+    const fiction = DEFAULT_PROFILES.find((p) => p.id === "narrativa-literaria");
     expect(fiction).toBeDefined();
     expect(fiction?.label).toBe("Literatura de ficción");
   });
@@ -43,9 +41,7 @@ describe("DEFAULT_PROFILES", () => {
   });
 
   it("narrativa-literaria profile has correct label", () => {
-    const fiction = DEFAULT_PROFILES.find(
-      (p) => p.id === "narrativa-literaria",
-    );
+    const fiction = DEFAULT_PROFILES.find((p) => p.id === "narrativa-literaria");
     expect(fiction).toBeDefined();
     expect(fiction?.label).toBe("Literatura de ficción");
   });

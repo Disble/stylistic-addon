@@ -20,9 +20,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 }
 
 /** Creates one action result focused on terminal workflow semantics. */
-function makeActionResult(
-  overrides: Partial<SuggestionActionResult> = {},
-): SuggestionActionResult {
+function makeActionResult(overrides: Partial<SuggestionActionResult> = {}): SuggestionActionResult {
   return {
     status: "accepted",
     trackedChangesAffected: 2,
@@ -69,7 +67,7 @@ describe("SuggestionResolutionWorkflow terminal feedback", () => {
         status: "accepted",
         trackedChangesAffected: 2,
         commentDeleted: true,
-      }),
+      })
     );
 
     const result = await workflow.acceptSuggestion(makeSuggestion(), "Buen cambio");
@@ -92,7 +90,7 @@ describe("SuggestionResolutionWorkflow terminal feedback", () => {
           remaining: 0,
           error: "GeneralException",
         },
-      }),
+      })
     );
 
     const result = await workflow.acceptSuggestion(makeSuggestion());
@@ -115,7 +113,7 @@ describe("SuggestionResolutionWorkflow terminal feedback", () => {
           remaining: 0,
           error: "ItemNotFound",
         },
-      }),
+      })
     );
 
     const result = await workflow.rejectSuggestion(makeSuggestion());

@@ -36,9 +36,7 @@ function makeChunk(overrides: Partial<TextChunk> = {}): TextChunk {
 }
 
 /** Builds a poll result fixture with sane defaults. */
-function makePollResult(
-  overrides: Partial<ChunkPollResult> = {},
-): ChunkPollResult {
+function makePollResult(overrides: Partial<ChunkPollResult> = {}): ChunkPollResult {
   return {
     chunkIndex: 0,
     runId: "run-0",
@@ -52,9 +50,7 @@ function makePollResult(
 function makeMockAnalysisPort(): IAnalysisPort {
   return {
     checkConnection: vi.fn().mockResolvedValue(true),
-    submitChunkAnalysis: vi
-      .fn()
-      .mockResolvedValue({ chunkIndex: 0, runId: "run-0" }),
+    submitChunkAnalysis: vi.fn().mockResolvedValue({ chunkIndex: 0, runId: "run-0" }),
     pollChunkAnalysis: vi.fn().mockResolvedValue(makePollResult()),
   };
 }
@@ -76,9 +72,7 @@ function makeMockDocumentPort(): IDocumentPort {
 }
 
 /** Creates the pipeline context consumed by AnalyzeChunksHandler. */
-function makePipelineContext(
-  overrides: Partial<PipelineContext> = {},
-): PipelineContext {
+function makePipelineContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
   return {
     documentPort: makeMockDocumentPort(),
     analysisPort: makeMockAnalysisPort(),
@@ -115,14 +109,14 @@ describe("AnalyzeChunksHandler", () => {
           chunkIndex: 0,
           runId: "run-0",
           suggestions: [makeSuggestion({ id: "s-0" })],
-        }),
+        })
       )
       .mockResolvedValueOnce(
         makePollResult({
           chunkIndex: 1,
           runId: "run-1",
           suggestions: [makeSuggestion({ id: "s-1" })],
-        }),
+        })
       );
 
     const ctx = makePipelineContext({ chunks, analysisPort });
@@ -132,20 +126,17 @@ describe("AnalyzeChunksHandler", () => {
       1,
       chunks[0],
       "general",
-      DEFAULT_AUTHOR_SLUG,
+      DEFAULT_AUTHOR_SLUG
     );
     expect(analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(
       2,
       chunks[1],
       "general",
-      DEFAULT_AUTHOR_SLUG,
+      DEFAULT_AUTHOR_SLUG
     );
     expect(analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(0, "run-0");
     expect(analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(1, "run-1");
-    expect(ctx.rawSuggestions?.map((suggestion) => suggestion.id)).toEqual([
-      "s-0",
-      "s-1",
-    ]);
+    expect(ctx.rawSuggestions?.map((suggestion) => suggestion.id)).toEqual(["s-0", "s-1"]);
     expect(ctx.chunkErrors).toEqual([]);
     expect(next).toHaveBeenCalledOnce();
   });
@@ -161,7 +152,7 @@ describe("AnalyzeChunksHandler", () => {
           chunkIndex: 0,
           runId: "run-0",
           suggestions: [makeSuggestion({ id: "ok" })],
-        }),
+        })
       )
       .mockResolvedValueOnce(
         makePollResult({
@@ -170,7 +161,7 @@ describe("AnalyzeChunksHandler", () => {
           status: "failed",
           suggestions: [],
           error: "Backend timeout",
-        }),
+        })
       );
 
     const ctx = makePipelineContext({
@@ -197,7 +188,7 @@ describe("AnalyzeChunksHandler", () => {
           status: "failed",
           suggestions: [],
           error: "fail 1",
-        }),
+        })
       )
       .mockResolvedValueOnce(
         makePollResult({
@@ -206,7 +197,7 @@ describe("AnalyzeChunksHandler", () => {
           status: "failed",
           suggestions: [],
           error: "fail 2",
-        }),
+        })
       );
 
     const emitter = new PipelineEventEmitter();
@@ -227,7 +218,7 @@ describe("AnalyzeChunksHandler", () => {
   it("aborts with a no-suggestions message when analysis succeeds but finds nothing", async () => {
     const analysisPort = makeMockAnalysisPort();
     (analysisPort.pollChunkAnalysis as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makePollResult({ suggestions: [] }),
+      makePollResult({ suggestions: [] })
     );
     const ctx = makePipelineContext({ analysisPort });
     await handler.handle(ctx, next);
@@ -251,7 +242,7 @@ describe("AnalyzeChunksHandler", () => {
     expect(emitProgress).toHaveBeenCalledWith(
       1,
       2,
-      "Consultando resultado del fragmento 1 de 1...",
+      "Consultando resultado del fragmento 1 de 1..."
     );
   });
 });

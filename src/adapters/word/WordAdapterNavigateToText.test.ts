@@ -56,12 +56,12 @@ describe("WordAdapter.navigateToText", () => {
         makeSuggestion({
           anchor: "fragmento exacto",
           context: "Contexto con fragmento exacto.",
-        }),
-      ),
+        })
+      )
     ).resolves.toEqual({ status: "navigated" });
 
     expect(context.document.contentControls.getByTag).toHaveBeenCalledWith(
-      makeOperationalWrapperTag("s-1"),
+      makeOperationalWrapperTag("s-1")
     );
     expect(select).toHaveBeenCalledOnce();
     expect(context.document.body.search).not.toHaveBeenCalled();
@@ -124,8 +124,8 @@ describe("WordAdapter.navigateToText", () => {
         makeSuggestion({
           anchor: "fragmento exacto",
           context: "Contexto con fragmento exacto.",
-        }),
-      ),
+        })
+      )
     ).resolves.toEqual({ status: "navigated" });
 
     expect(body.search).toHaveBeenCalledWith("Contexto con fragmento exacto.", {
@@ -187,8 +187,8 @@ describe("WordAdapter.navigateToText", () => {
           id: "chunk0-0",
           anchor: "fragmento actual",
           context: "Contexto con fragmento actual.",
-        }),
-      ),
+        })
+      )
     ).resolves.toEqual({ status: "navigated" });
 
     expect(currentSelect).toHaveBeenCalledOnce();

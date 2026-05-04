@@ -62,9 +62,7 @@ type WordRunCallback<T> = (context: any) => Promise<T> | T;
 /**
  * Builds a canonical suggestion fixture for `WordAdapter` tests.
  */
-export function makeSuggestion(
-  overrides: Partial<Suggestion> = {},
-): Suggestion {
+export function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s-1",
@@ -83,9 +81,7 @@ export function makeSuggestion(
  * Installs a `Word.run` mock that resolves against the provided context.
  */
 export function installWordWithContext(context: any) {
-  const run = vi.fn(async <T>(callback: WordRunCallback<T>) =>
-    callback(context),
-  );
+  const run = vi.fn(async <T>(callback: WordRunCallback<T>) => callback(context));
   const wordGlobal = globalThis as unknown as {
     Word?: {
       run: typeof run;
@@ -124,7 +120,7 @@ export function makeParagraph(
     styleBuiltIn: string;
     firstLineIndent: number;
     leftIndent: number;
-  }> = {},
+  }> = {}
 ) {
   return {
     text,

@@ -79,10 +79,7 @@ export interface ResolutionExecutionReport {
 }
 
 /** Scalar metadata carried by best-effort resolution observability records. */
-export type ResolutionObservabilityMetadata = Record<
-  string,
-  string | number | boolean | null
->;
+export type ResolutionObservabilityMetadata = Record<string, string | number | boolean | null>;
 
 /** Structured phase event emitted by resolution workflows. */
 export interface ResolutionObservabilityEvent {
@@ -156,15 +153,13 @@ export interface SuggestionActionResult {
 export type FeedbackDispatchStatus = "sent" | "failed" | "skipped";
 
 /** Shared resolution workflow result consumed by the taskpane. */
-export interface SuggestionResolutionWorkflowResult
-  extends SuggestionActionResult {
+export interface SuggestionResolutionWorkflowResult extends SuggestionActionResult {
   /** Best-effort feedback dispatch outcome observed by the workflow. */
   feedbackStatus: FeedbackDispatchStatus;
 }
 
 /** Resolution result enriched with taskpane-facing mediated review state. */
-export interface SuggestionResolutionMediatorResult
-  extends SuggestionResolutionWorkflowResult {
+export interface SuggestionResolutionMediatorResult extends SuggestionResolutionWorkflowResult {
   /** Centralized taskpane state produced by the explicit mediator. */
   taskpaneState: ReviewTaskpaneState;
 }

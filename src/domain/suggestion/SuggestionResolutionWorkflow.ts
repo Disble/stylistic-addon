@@ -28,13 +28,13 @@ type ResolutionAction = "accept" | "reject";
 export class SuggestionResolutionWorkflow {
   constructor(
     private readonly documentPort: IDocumentPort,
-    private readonly feedbackPort: IFeedbackPort,
+    private readonly feedbackPort: IFeedbackPort
   ) {}
 
   /** Resolves one suggestion as accepted. */
   async acceptSuggestion(
     suggestion: Suggestion,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionWorkflowResult> {
     return this.resolveSuggestion(suggestion, "accept", comment);
   }
@@ -42,7 +42,7 @@ export class SuggestionResolutionWorkflow {
   /** Resolves one suggestion as rejected. */
   async rejectSuggestion(
     suggestion: Suggestion,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionWorkflowResult> {
     return this.resolveSuggestion(suggestion, "reject", comment);
   }
@@ -53,19 +53,14 @@ export class SuggestionResolutionWorkflow {
   private async resolveSuggestion(
     suggestion: Suggestion,
     action: ResolutionAction,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionWorkflowResult> {
     const documentResult =
       action === "accept"
         ? await this.documentPort.acceptSuggestion(suggestion)
         : await this.documentPort.rejectSuggestion(suggestion);
 
-    const feedbackStatus = this.dispatchFeedback(
-      suggestion,
-      action,
-      documentResult,
-      comment,
-    );
+    const feedbackStatus = this.dispatchFeedback(suggestion, action, documentResult, comment);
 
     return {
       ...documentResult,
@@ -80,7 +75,7 @@ export class SuggestionResolutionWorkflow {
     suggestion: Suggestion,
     action: ResolutionAction,
     result: SuggestionActionResult,
-    comment?: string,
+    comment?: string
   ): FeedbackDispatchStatus {
     if (!this.shouldSendFeedback(result)) {
       return "skipped";
@@ -111,7 +106,7 @@ export class SuggestionResolutionWorkflow {
   private buildFeedbackPayload(
     suggestion: Suggestion,
     action: ResolutionAction,
-    comment?: string,
+    comment?: string
   ): FeedbackPayload {
     const trimmedComment = comment?.trim();
 

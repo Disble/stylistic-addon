@@ -6,13 +6,11 @@ describe("ApplySuggestionMutationPatchBuilder", () => {
   it("classifies delete, insert, and replace tracked-change mutations", () => {
     const builder = new ApplySuggestionMutationPatchBuilder();
 
-    expect(builder.classifyChange(makeSuggestion({ suggestedText: "" }))).toBe(
-      "delete",
-    );
+    expect(builder.classifyChange(makeSuggestion({ suggestedText: "" }))).toBe("delete");
     expect(
       builder.classifyChange(
-        makeSuggestion({ anchor: "", context: "", suggestedText: "nuevo texto" }),
-      ),
+        makeSuggestion({ anchor: "", context: "", suggestedText: "nuevo texto" })
+      )
     ).toBe("insert");
     expect(builder.classifyChange(makeSuggestion())).toBe("replace");
   });
@@ -34,8 +32,8 @@ describe("ApplySuggestionMutationPatchBuilder", () => {
             source: "snapshot",
           },
         }),
-        "Antes texto original y después.",
-      ),
+        "Antes texto original y después."
+      )
     ).toEqual({
       suggestionId: "patch-1",
       snapshotVersion: 5,
@@ -53,8 +51,6 @@ describe("ApplySuggestionMutationPatchBuilder", () => {
 
     expect(builder.stringifyUnknownError(new Error("boom"))).toBe("boom");
     expect(builder.stringifyUnknownError("boom")).toBe("boom");
-    expect(builder.stringifyUnknownError({ reason: "boom" })).toBe(
-      '{"reason":"boom"}',
-    );
+    expect(builder.stringifyUnknownError({ reason: "boom" })).toBe('{"reason":"boom"}');
   });
 });

@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  IFeedbackPort,
-  IDocumentPort,
-} from "../ports";
+import type { IFeedbackPort, IDocumentPort } from "../ports";
 import type { Suggestion } from "./Suggestion.types";
 import type { SuggestionActionResult } from "./SuggestionResolutionWorkflow.types";
 import { DEFAULT_AUTHOR_SLUG } from "../../infrastructure/config";
@@ -22,9 +19,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   };
 }
 
-function makeActionResult(
-  overrides: Partial<SuggestionActionResult> = {},
-): SuggestionActionResult {
+function makeActionResult(overrides: Partial<SuggestionActionResult> = {}): SuggestionActionResult {
   return {
     status: "accepted",
     trackedChangesAffected: 1,
@@ -68,7 +63,7 @@ describe("SuggestionResolutionWorkflow", () => {
   it("returns sent feedback status for accepted suggestions and dispatches positive feedback", async () => {
     const suggestion = makeSuggestion();
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
-      makeActionResult({ status: "accepted" }),
+      makeActionResult({ status: "accepted" })
     );
 
     const result = await workflow.acceptSuggestion(suggestion, "Muy buen cambio");
@@ -82,7 +77,7 @@ describe("SuggestionResolutionWorkflow", () => {
         action: "accept",
         suggestionType: suggestion.type,
         comment: "Muy buen cambio",
-      }),
+      })
     );
   });
 
@@ -91,7 +86,7 @@ describe("SuggestionResolutionWorkflow", () => {
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
       makeActionResult({
         status: "accepted",
-      }),
+      })
     );
 
     const result = await workflow.acceptSuggestion(suggestion);
@@ -103,7 +98,7 @@ describe("SuggestionResolutionWorkflow", () => {
   it("returns sent feedback status for rejected suggestions and dispatches negative feedback", async () => {
     const suggestion = makeSuggestion();
     vi.mocked(documentPort.rejectSuggestion).mockResolvedValue(
-      makeActionResult({ status: "rejected" }),
+      makeActionResult({ status: "rejected" })
     );
 
     const result = await workflow.rejectSuggestion(suggestion);
@@ -116,7 +111,7 @@ describe("SuggestionResolutionWorkflow", () => {
         anchor: suggestion.anchor,
         action: "reject",
         suggestionType: suggestion.type,
-      }),
+      })
     );
   });
 
@@ -126,7 +121,7 @@ describe("SuggestionResolutionWorkflow", () => {
         status: "cc-not-found",
         trackedChangesAffected: 0,
         commentDeleted: false,
-      }),
+      })
     );
 
     const result = await workflow.acceptSuggestion(makeSuggestion());
@@ -142,7 +137,7 @@ describe("SuggestionResolutionWorkflow", () => {
         trackedChangesAffected: 0,
         commentDeleted: false,
         error: "El documento está protegido",
-      }),
+      })
     );
 
     const result = await workflow.rejectSuggestion(makeSuggestion());
@@ -157,9 +152,8 @@ describe("SuggestionResolutionWorkflow", () => {
         status: "unobservable",
         trackedChangesAffected: 0,
         commentDeleted: false,
-        error:
-          "Word no expuso suficientes tracked changes para confirmar la resolución.",
-      }),
+        error: "Word no expuso suficientes tracked changes para confirmar la resolución.",
+      })
     );
 
     const result = await workflow.acceptSuggestion(makeSuggestion());
@@ -174,9 +168,8 @@ describe("SuggestionResolutionWorkflow", () => {
         status: "identity-lost",
         trackedChangesAffected: 0,
         commentDeleted: false,
-        error:
-          "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.",
-      }),
+        error: "La metadata operational-wrapper de la sugerencia está incompleta o corrupta.",
+      })
     );
 
     const result = await workflow.acceptSuggestion(makeSuggestion());
@@ -192,7 +185,7 @@ describe("SuggestionResolutionWorkflow", () => {
         trackedChangesAffected: 0,
         commentDeleted: false,
         error: "La ubicacion de la sugerencia es ambigua.",
-      }),
+      })
     );
 
     const result = await workflow.acceptSuggestion(makeSuggestion());
@@ -208,7 +201,7 @@ describe("SuggestionResolutionWorkflow", () => {
         trackedChangesAffected: 0,
         commentDeleted: false,
         error: "El grupo tiene decisiones mixtas.",
-      }),
+      })
     );
 
     const result = await workflow.rejectSuggestion(makeSuggestion());
@@ -219,7 +212,7 @@ describe("SuggestionResolutionWorkflow", () => {
 
   it("returns failed feedback status when the feedback port throws synchronously", async () => {
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
-      makeActionResult({ status: "accepted" }),
+      makeActionResult({ status: "accepted" })
     );
     feedbackPort = {
       sendFeedback: vi.fn(() => {

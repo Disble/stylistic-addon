@@ -41,10 +41,7 @@ describe("TextSearchCore", () => {
   describe("findWhitespaceInsensitiveSlice", () => {
     it("finds a match when document spacing differs", () => {
       expect(
-        findWhitespaceInsensitiveSlice(
-          "texto original",
-          "Contexto con texto\n\noriginal.",
-        ),
+        findWhitespaceInsensitiveSlice("texto original", "Contexto con texto\n\noriginal.")
       ).toBe("texto\n\noriginal");
     });
 
@@ -52,18 +49,15 @@ describe("TextSearchCore", () => {
       expect(
         findWhitespaceInsensitiveSlice(
           '"Ninguna chica habla así"',
-          "\u201CNinguna chica habla así\u201D dijo ella.",
-        ),
+          "\u201CNinguna chica habla así\u201D dijo ella."
+        )
       ).toBe("\u201CNinguna chica habla así\u201D");
     });
 
     it("matches accented and unaccented variants", () => {
-      expect(
-        findWhitespaceInsensitiveSlice(
-          "empezo bien",
-          "aunque empezó bien, luego no.",
-        ),
-      ).toBe("empezó bien");
+      expect(findWhitespaceInsensitiveSlice("empezo bien", "aunque empezó bien, luego no.")).toBe(
+        "empezó bien"
+      );
     });
 
     it("returns null when the search text becomes empty after normalization", () => {
@@ -104,7 +98,7 @@ describe("TextSearchCore", () => {
 
   describe("findFirstAlphanumericOffset", () => {
     it("returns the index of the first alphanumeric character", () => {
-      expect(findFirstAlphanumericOffset('---¿“hola”?')).toBe(5);
+      expect(findFirstAlphanumericOffset("---¿“hola”?")).toBe(5);
     });
 
     it("returns -1 when the text has no alphanumeric characters", () => {

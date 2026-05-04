@@ -7,10 +7,7 @@ import type {
 } from "../../domain/suggestion/Suggestion.types";
 import { SuggestionArtifactLocator } from "./location/SuggestionArtifactLocator";
 import { SuggestionTextRangeLocator } from "./location/SuggestionTextRangeLocator";
-import type {
-  TextLocator,
-  WordSearchContainer,
-} from "./WordTextLocatorContext";
+import type { TextLocator, WordSearchContainer } from "./WordTextLocatorContext";
 
 /**
  * Handles read-only suggestion navigation in Word.
@@ -32,7 +29,7 @@ export class WordSuggestionNavigationAdapter {
   constructor(
     private readonly textLocator: TextLocator,
     artifactLocator = new SuggestionArtifactLocator(),
-    textRangeLocator = new SuggestionTextRangeLocator(textLocator),
+    textRangeLocator = new SuggestionTextRangeLocator(textLocator)
   ) {
     this.artifactLocator = artifactLocator;
     this.textRangeLocator = textRangeLocator;
@@ -42,7 +39,7 @@ export class WordSuggestionNavigationAdapter {
   async searchWithFallback(
     context: Word.RequestContext,
     container: WordSearchContainer,
-    searchText: string,
+    searchText: string
   ): Promise<Word.Range | null> {
     return this.textLocator.locate({ context, container, searchText });
   }
@@ -58,21 +55,15 @@ export class WordSuggestionNavigationAdapter {
    */
   async resolveSuggestionFallbackRange(
     context: Word.RequestContext,
-    suggestion: Suggestion,
+    suggestion: Suggestion
   ): Promise<Word.Range | null> {
-    return this.textRangeLocator.locateAnchorInContext(
-      context,
-      context.document.body,
-      suggestion,
-      { logPrefix: "🧭 [WordSuggestionNavigationAdapter]" },
-    );
+    return this.textRangeLocator.locateAnchorInContext(context, context.document.body, suggestion, {
+      logPrefix: "🧭 [WordSuggestionNavigationAdapter]",
+    });
   }
 
   /** Selects a range if present so Word scrolls the viewport to it. */
-  async selectRange(
-    context: Word.RequestContext,
-    range: Word.Range | null,
-  ): Promise<void> {
+  async selectRange(context: Word.RequestContext, range: Word.Range | null): Promise<void> {
     if (!range) {
       return;
     }
@@ -88,9 +79,7 @@ export class WordSuggestionNavigationAdapter {
    * result so the UI can tell the user when navigation was unsafe, ambiguous, or
    * blocked by Word.
    */
-  async navigateToText(
-    target: Suggestion | string,
-  ): Promise<SuggestionNavigationResult> {
+  async navigateToText(target: Suggestion | string): Promise<SuggestionNavigationResult> {
     try {
       return await Word.run(async (context) => {
         if (typeof target !== "string") {
@@ -100,7 +89,7 @@ export class WordSuggestionNavigationAdapter {
         const range = await this.searchWithFallback(
           context,
           context.document.body as unknown as WordSearchContainer,
-          target,
+          target
         );
 
         if (!range) {
@@ -125,18 +114,12 @@ export class WordSuggestionNavigationAdapter {
    */
   private async navigateToSuggestion(
     context: Word.RequestContext,
-    suggestion: Suggestion,
+    suggestion: Suggestion
   ): Promise<SuggestionNavigationResult> {
     const artifact =
       suggestion.type === "comment-only"
-        ? await this.artifactLocator.locateCommentOnlyArtifact(
-            context,
-            suggestion,
-          )
-        : await this.artifactLocator.locateOperationalWrapper(
-            context,
-            suggestion,
-          );
+        ? await this.artifactLocator.locateCommentOnlyArtifact(context, suggestion)
+        : await this.artifactLocator.locateOperationalWrapper(context, suggestion);
 
     if (artifact.selectedCc) {
       await this.selectRange(context, artifact.selectedCc.getRange());
@@ -147,10 +130,7 @@ export class WordSuggestionNavigationAdapter {
       return this.toAmbiguousNavigationResult(artifact.locateStatus);
     }
 
-    const fallbackRange = await this.resolveSuggestionFallbackRange(
-      context,
-      suggestion,
-    );
+    const fallbackRange = await this.resolveSuggestionFallbackRange(context, suggestion);
     if (!fallbackRange) {
       return { status: "not-found", reason: "context-not-found" };
     }
@@ -161,7 +141,7 @@ export class WordSuggestionNavigationAdapter {
 
   /** Converts strict artifact lookup failures into navigation-safe no-op results. */
   private toAmbiguousNavigationResult(
-    locateStatus: SuggestionObservationStatus | "cc-not-found",
+    locateStatus: SuggestionObservationStatus | "cc-not-found"
   ): SuggestionNavigationResult {
     if (locateStatus === "identity-lost") {
       return { status: "ambiguous", reason: "identity-lost" };

@@ -26,7 +26,7 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
 }
 
 function makeInsertionResult(
-  overrides: Partial<ApplySuggestionsResult> = {},
+  overrides: Partial<ApplySuggestionsResult> = {}
 ): ApplySuggestionsResult {
   return {
     successCount: 1,
@@ -43,7 +43,7 @@ function makeInsertionResult(
 }
 
 function makeMockDocumentPort(
-  result: ApplySuggestionsResult = makeInsertionResult(),
+  result: ApplySuggestionsResult = makeInsertionResult()
 ): IDocumentPort {
   return {
     getTextToAnalyze: vi.fn(),
@@ -70,7 +70,7 @@ function makeMockAnalysisPort(): IAnalysisPort {
 function makePipelineContext(
   pendingSuggestions: Suggestion[],
   documentPort?: IDocumentPort,
-  overrides: Partial<PipelineContext> = {},
+  overrides: Partial<PipelineContext> = {}
 ): PipelineContext {
   return {
     documentPort: documentPort ?? makeMockDocumentPort(),
@@ -104,21 +104,13 @@ describe("ApplySuggestionsHandler", () => {
 
   describe("happy path", () => {
     it("should call documentPort.applySuggestions with pending suggestions", async () => {
-      const suggestions = [
-        makeSuggestion({ id: "s1" }),
-        makeSuggestion({ id: "s2" }),
-      ];
-      const docPort = makeMockDocumentPort(
-        makeInsertionResult({ successCount: 2 }),
-      );
+      const suggestions = [makeSuggestion({ id: "s1" }), makeSuggestion({ id: "s2" })];
+      const docPort = makeMockDocumentPort(makeInsertionResult({ successCount: 2 }));
       const ctx = makePipelineContext(suggestions, docPort);
 
       await handler.handle(ctx, next);
 
-      expect(docPort.applySuggestions).toHaveBeenCalledWith(
-        suggestions,
-        expect.any(Function),
-      );
+      expect(docPort.applySuggestions).toHaveBeenCalledWith(suggestions, expect.any(Function));
     });
 
     it("should store the InsertionResult in ctx.result", async () => {
@@ -178,12 +170,7 @@ describe("ApplySuggestionsHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(emitComplete).toHaveBeenCalledWith(
-        suggestions,
-        result,
-        chunkErrors,
-        true,
-      );
+      expect(emitComplete).toHaveBeenCalledWith(suggestions, result, chunkErrors, true);
     });
 
     it("should pass isSelection=false when analyzing full document", async () => {
@@ -201,7 +188,7 @@ describe("ApplySuggestionsHandler", () => {
         expect.any(Array),
         expect.any(Object),
         expect.any(Array),
-        false,
+        false
       );
     });
 
@@ -221,7 +208,7 @@ describe("ApplySuggestionsHandler", () => {
         expect.any(Array),
         expect.any(Object),
         [],
-        expect.any(Boolean),
+        expect.any(Boolean)
       );
     });
   });
@@ -243,40 +230,21 @@ describe("ApplySuggestionsHandler", () => {
           onProgress?.("applying", 2, 3, "Aplicando sugerencia 2 de 3...");
           onProgress?.("applying", 3, 3, "Aplicando sugerencia 3 de 3...");
           return makeInsertionResult({ successCount: 3 });
-        },
+        }
       );
 
       const ctx = makePipelineContext(
-        [
-          makeSuggestion(),
-          makeSuggestion({ id: "s2" }),
-          makeSuggestion({ id: "s3" }),
-        ],
+        [makeSuggestion(), makeSuggestion({ id: "s2" }), makeSuggestion({ id: "s3" })],
         docPort,
-        { emitter },
+        { emitter }
       );
 
       await handler.handle(ctx, next);
 
       expect(emitProgress).toHaveBeenCalledTimes(3);
-      expect(emitProgress).toHaveBeenNthCalledWith(
-        1,
-        1,
-        3,
-        "Aplicando sugerencia 1 de 3...",
-      );
-      expect(emitProgress).toHaveBeenNthCalledWith(
-        2,
-        2,
-        3,
-        "Aplicando sugerencia 2 de 3...",
-      );
-      expect(emitProgress).toHaveBeenNthCalledWith(
-        3,
-        3,
-        3,
-        "Aplicando sugerencia 3 de 3...",
-      );
+      expect(emitProgress).toHaveBeenNthCalledWith(1, 1, 3, "Aplicando sugerencia 1 de 3...");
+      expect(emitProgress).toHaveBeenNthCalledWith(2, 2, 3, "Aplicando sugerencia 2 de 3...");
+      expect(emitProgress).toHaveBeenNthCalledWith(3, 3, 3, "Aplicando sugerencia 3 de 3...");
     });
   });
 
@@ -349,10 +317,7 @@ describe("ApplySuggestionsHandler", () => {
 
   describe("all suggestions fail", () => {
     it("should store result with all failed and successCount 0", async () => {
-      const failed = [
-        makeSuggestion({ id: "f1" }),
-        makeSuggestion({ id: "f2" }),
-      ];
+      const failed = [makeSuggestion({ id: "f1" }), makeSuggestion({ id: "f2" })];
       const result = makeInsertionResult({
         successCount: 0,
         failedSuggestions: failed.map((suggestion) => ({
@@ -400,10 +365,7 @@ describe("ApplySuggestionsHandler", () => {
 
       await handler.handle(ctx, next);
 
-      expect(docPort.applySuggestions).toHaveBeenCalledWith(
-        [suggestion],
-        expect.any(Function),
-      );
+      expect(docPort.applySuggestions).toHaveBeenCalledWith([suggestion], expect.any(Function));
       expect(ctx.result).toEqual(result);
     });
   });
@@ -429,7 +391,7 @@ describe("ApplySuggestionsHandler", () => {
         expect.any(Array),
         expect.any(Object),
         chunkErrors,
-        expect.any(Boolean),
+        expect.any(Boolean)
       );
     });
   });

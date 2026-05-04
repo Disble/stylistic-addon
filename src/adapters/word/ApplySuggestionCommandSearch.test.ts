@@ -23,10 +23,7 @@ describe("ApplySuggestionCommand search behavior", () => {
   it("returns a distinct error when the surrounding context cannot be located", async () => {
     installWordContext({ contextSearchSequence: [[], [], []] });
 
-    const result = await new ApplySuggestionCommand(
-      makeSuggestion(),
-      textLocator,
-    ).execute();
+    const result = await new ApplySuggestionCommand(makeSuggestion(), textLocator).execute();
 
     expect(result).toEqual({
       success: false,
@@ -41,10 +38,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       anchorSearchSequence: [[], [], []],
     });
 
-    const result = await new ApplySuggestionCommand(
-      makeSuggestion(),
-      textLocator,
-    ).execute();
+    const result = await new ApplySuggestionCommand(makeSuggestion(), textLocator).execute();
 
     expect(result).toEqual({
       success: false,
@@ -56,24 +50,18 @@ describe("ApplySuggestionCommand search behavior", () => {
   it("uses body search for context and context search for anchor before replacing text", async () => {
     const env = installWordContext();
 
-    const result = await new ApplySuggestionCommand(
-      makeSuggestion(),
-      textLocator,
-    ).execute();
+    const result = await new ApplySuggestionCommand(makeSuggestion(), textLocator).execute();
 
     expect(result).toMatchObject({ success: true, commandId: "s1" });
-    expect(env.context.document.body.search).toHaveBeenCalledWith(
-      "Contexto con texto original.",
-      { matchCase: true, matchWholeWord: false },
-    );
+    expect(env.context.document.body.search).toHaveBeenCalledWith("Contexto con texto original.", {
+      matchCase: true,
+      matchWholeWord: false,
+    });
     expect(env.bodyRange.search).toHaveBeenCalledWith("texto original", {
       matchCase: true,
       matchWholeWord: false,
     });
-    expect(env.anchorRange.insertText).toHaveBeenCalledWith(
-      "texto sugerido",
-      "Replace",
-    );
+    expect(env.anchorRange.insertText).toHaveBeenCalledWith("texto sugerido", "Replace");
   });
 
   it("aborts before mutation when the anchor is already covered by a content control", async () => {
@@ -84,10 +72,7 @@ describe("ApplySuggestionCommand search behavior", () => {
       },
     });
 
-    const result = await new ApplySuggestionCommand(
-      makeSuggestion(),
-      textLocator,
-    ).execute();
+    const result = await new ApplySuggestionCommand(makeSuggestion(), textLocator).execute();
 
     expect(result).toEqual({
       success: false,

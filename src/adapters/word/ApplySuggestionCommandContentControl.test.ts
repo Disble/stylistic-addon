@@ -27,13 +27,11 @@ describe("ApplySuggestionCommand content-control recovery", () => {
 
     const result = await new ApplySuggestionCommand(
       makeSuggestion({ type: "comment-only", suggestedText: undefined }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toMatchObject({ success: true, commandId: "s1" });
-    expect(env.anchorRange.insertComment).toHaveBeenCalledWith(
-      "[Estilo]\nMejora la claridad",
-    );
+    expect(env.anchorRange.insertComment).toHaveBeenCalledWith("[Estilo]\nMejora la claridad");
     expect(env.anchorRange.insertContentControl).toHaveBeenCalledOnce();
   });
 
@@ -62,10 +60,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       contextSearchSequence: [[coveredContext], [freshContext]],
     });
 
-    const result = await new ApplySuggestionCommand(
-      makeSuggestion(),
-      textLocator,
-    ).execute();
+    const result = await new ApplySuggestionCommand(makeSuggestion(), textLocator).execute();
 
     expect(result).toMatchObject({ success: false, commandId: "s1" });
     expect(coveredParentCC.delete).not.toHaveBeenCalled();
@@ -98,10 +93,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       contextSearchSequence: [[coveredContext], [freshContext]],
     });
 
-    const result = await new ApplySuggestionCommand(
-      makeSuggestion(),
-      textLocator,
-    ).execute();
+    const result = await new ApplySuggestionCommand(makeSuggestion(), textLocator).execute();
 
     expect(result).toMatchObject({ success: false, commandId: "s1" });
     expect(coveredParentCC.delete).not.toHaveBeenCalled();
@@ -119,22 +111,16 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         context: "Contexto con texto original.",
         type: "track-change",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toMatchObject({ success: true, commandId: "replace-1" });
-    expect(env.operationalWrapper.tag).toBe(
-      "stylistic-operational-wrapper:replace-1",
-    );
-    expect(env.operationalWrapper.title.startsWith(IDENTITY_TITLE_PREFIX)).toBe(
-      true,
-    );
+    expect(env.operationalWrapper.tag).toBe("stylistic-operational-wrapper:replace-1");
+    expect(env.operationalWrapper.title.startsWith(IDENTITY_TITLE_PREFIX)).toBe(true);
     expect(env.cc.tag).toBe("stylistic:track-change:replace-1");
     expect(env.cc.title).toBe("texto original");
 
-    const payload = JSON.parse(
-      env.operationalWrapper.title.slice(IDENTITY_TITLE_PREFIX.length),
-    );
+    const payload = JSON.parse(env.operationalWrapper.title.slice(IDENTITY_TITLE_PREFIX.length));
     expect(payload).toEqual({
       suggestionId: "replace-1",
       version: "operational-wrapper-v1",
@@ -172,10 +158,8 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     env.anchorRange.parentContentControlOrNullObject.tag =
       "stylistic-operational-wrapper:replace-existing";
     env.anchorRange.parentContentControlOrNullObject.isNullObject = false;
-    env.anchorRange.parentContentControlOrNullObject.title =
-      env.operationalWrapper.title;
-    env.anchorRange.parentContentControlOrNullObject.getRange =
-      env.operationalWrapper.getRange;
+    env.anchorRange.parentContentControlOrNullObject.title = env.operationalWrapper.title;
+    env.anchorRange.parentContentControlOrNullObject.getRange = env.operationalWrapper.getRange;
     env.operationalWrapper.tag = "stylistic-operational-wrapper:replace-existing";
     env.operationalWrapper.title = `${IDENTITY_TITLE_PREFIX}${JSON.stringify({
       suggestionId: "replace-existing",
@@ -199,8 +183,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
       groupIndex: 0,
       groupSize: 1,
     })}`;
-    env.anchorRange.parentContentControlOrNullObject.title =
-      env.operationalWrapper.title;
+    env.anchorRange.parentContentControlOrNullObject.title = env.operationalWrapper.title;
 
     const result = await new ApplySuggestionCommand(
       makeSuggestion({
@@ -210,7 +193,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         context: "Contexto con texto original.",
         type: "track-change",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toMatchObject({ success: true, commandId: "replace-existing" });
@@ -245,7 +228,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         suggestedText: "texto sugerido",
         context: "Contexto con texto original.",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toEqual({
@@ -270,7 +253,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         suggestedText: "texto sugerido",
         context: paragraphText,
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toEqual({
@@ -323,12 +306,12 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         context: "Contexto con texto original.",
         type: "track-change",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toMatchObject({ success: true, commandId: "replace-rerange-1" });
     expect(isolatedInsertedRange.insertComment).toHaveBeenCalledWith(
-      "[Estilo]\nMejora la claridad",
+      "[Estilo]\nMejora la claridad"
     );
     expect(isolatedInsertedRange.insertContentControl).toHaveBeenCalledOnce();
   });
@@ -344,7 +327,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         context: "Contexto con texto original.",
         type: "track-change",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toMatchObject({
@@ -362,7 +345,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     });
     expect(env.anchorRange.insertText).toHaveBeenCalledWith("", "Replace");
     expect(env.operationalWrapperRange.insertComment).toHaveBeenCalledWith(
-      "[Estilo]\nMejora la claridad",
+      "[Estilo]\nMejora la claridad"
     );
     expect(env.operationalWrapperRange.insertContentControl).toHaveBeenCalledOnce();
     expect(env.insertedRange.insertComment).not.toHaveBeenCalled();
@@ -380,16 +363,14 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         context: "Contexto con texto original.",
         type: "track-change",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "format-italic-1" });
     expect(env.anchorRange.font.italic).toBe(true);
     expect(env.anchorRange.font.bold).toBe(false);
     expect(env.anchorRange.insertText).not.toHaveBeenCalled();
-    expect(env.anchorRange.insertComment).toHaveBeenCalledWith(
-      "[Estilo]\nMejora la claridad",
-    );
+    expect(env.anchorRange.insertComment).toHaveBeenCalledWith("[Estilo]\nMejora la claridad");
     expect(env.anchorRange.insertContentControl).toHaveBeenCalledTimes(2);
   });
 
@@ -412,7 +393,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         context: "Contexto con texto original.",
         type: "track-change",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toEqual({
@@ -432,7 +413,7 @@ describe("ApplySuggestionCommand content-control recovery", () => {
         suggestedText: undefined,
         anchor: "texto original",
       }),
-      textLocator,
+      textLocator
     ).execute();
 
     expect(result).toEqual({ success: true, commandId: "comment-1" });

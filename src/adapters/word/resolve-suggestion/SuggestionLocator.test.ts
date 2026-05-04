@@ -30,9 +30,7 @@ describe("SuggestionLocator", () => {
     });
     installWordWithContext(context);
 
-    const located = await Word.run((wordContext) =>
-      locator.locateResolutionArtifacts(wordContext),
-    );
+    const located = await Word.run((wordContext) => locator.locateResolutionArtifacts(wordContext));
 
     expect(located.selectedCc).toBe(context._ccItems[1]);
     expect(located.locateStatus).toBe("confirmed-pending");
@@ -56,9 +54,7 @@ describe("SuggestionLocator", () => {
     });
     installWordWithContext(context);
 
-    const located = await Word.run((wordContext) =>
-      locator.locateResolutionArtifacts(wordContext),
-    );
+    const located = await Word.run((wordContext) => locator.locateResolutionArtifacts(wordContext));
 
     expect(located.selectedCc).toBeNull();
     expect(located.locateStatus).toBe("ambiguous-location");
@@ -73,9 +69,7 @@ describe("SuggestionLocator", () => {
     });
     installWordWithContext(context);
 
-    const located = await Word.run((wordContext) =>
-      locator.locateResolutionArtifacts(wordContext),
-    );
+    const located = await Word.run((wordContext) => locator.locateResolutionArtifacts(wordContext));
 
     expect(located.selectedCc).toBeNull();
     expect(located.locateStatus).toBe("ambiguous-location");
@@ -95,7 +89,7 @@ describe("SuggestionLocator", () => {
     installWordWithContext(context);
 
     const located = await Word.run((wordContext) =>
-      locator.locateCommentOnlyArtifacts(wordContext),
+      locator.locateCommentOnlyArtifacts(wordContext)
     );
 
     expect(located.selectedCc).toBe(context._ccItems[0]);
@@ -113,7 +107,7 @@ describe("SuggestionLocator", () => {
     installWordWithContext(context);
 
     const located = await Word.run((wordContext) =>
-      locator.locateCommentOnlyArtifacts(wordContext),
+      locator.locateCommentOnlyArtifacts(wordContext)
     );
 
     expect(located.selectedCc).toBeNull();

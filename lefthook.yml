@@ -1,11 +1,15 @@
 pre-commit:
   commands:
-    biome:
-      run: npm run lint:staged
+    lint:
+      run: bun run lint:fix
       stage_fixed: true
+    architecture-rails:
+      run: bun run check:architecture-rails
     filenames:
-      run: npm run check:filenames
+      run: bun run check:filenames
     complexity:
-      run: npm run check:complexity
+      run: bun run check:complexity
+    react-rails:
+      run: bun run check:react-rails
     typecheck:
-      run: npm run typecheck
+      run: bun run typecheck

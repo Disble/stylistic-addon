@@ -1,5 +1,3 @@
-/* global console */
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FeedbackPayload } from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
 
@@ -28,9 +26,7 @@ vi.mock("@mastra/client-js", () => ({
 import { FEEDBACK_WORKFLOW_ID } from "../../infrastructure/config";
 import { FeedbackAdapter } from "./FeedbackAdapter";
 
-function makePayload(
-  overrides: Partial<FeedbackPayload> = {},
-): FeedbackPayload {
+function makePayload(overrides: Partial<FeedbackPayload> = {}): FeedbackPayload {
   return {
     autorSlug: "disble",
     category: "Redundancia",
@@ -62,9 +58,7 @@ describe("FeedbackAdapter", () => {
     const adapter = new FeedbackAdapter();
     await adapter.sendFeedback(makePayload());
 
-    expect(feedbackAdapterMocks.getWorkflow).toHaveBeenCalledWith(
-      FEEDBACK_WORKFLOW_ID,
-    );
+    expect(feedbackAdapterMocks.getWorkflow).toHaveBeenCalledWith(FEEDBACK_WORKFLOW_ID);
   });
 
   it("calls createRun() then run.start() with the payload as inputData", async () => {
@@ -94,9 +88,7 @@ describe("FeedbackAdapter", () => {
   });
 
   it("swallows errors silently — never throws when createRun rejects", async () => {
-    feedbackAdapterMocks.createRun.mockRejectedValue(
-      new Error("Network error"),
-    );
+    feedbackAdapterMocks.createRun.mockRejectedValue(new Error("Network error"));
 
     const adapter = new FeedbackAdapter();
     // Must not throw

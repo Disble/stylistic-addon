@@ -55,7 +55,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     expect(run).toHaveBeenCalledOnce();
     expect(selection.load).toHaveBeenCalledWith("text");
     expect(selection.paragraphs.load).toHaveBeenCalledWith(
-      "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent",
+      "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
     );
     expect(body.load).not.toHaveBeenCalled();
     expect(body.paragraphs.load).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     });
 
     expect(body.paragraphs.load).toHaveBeenCalledWith(
-      "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent",
+      "items/text,items/styleBuiltIn,items/firstLineIndent,items/leftIndent"
     );
     expect(body.load).not.toHaveBeenCalled();
     expect(context.sync).toHaveBeenCalledTimes(2);
@@ -249,9 +249,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     const error = new Error("Office host unavailable");
     const run = installRejectingWord(error);
 
-    await expect(adapter.getTextToAnalyze()).rejects.toThrow(
-      "Office host unavailable",
-    );
+    await expect(adapter.getTextToAnalyze()).rejects.toThrow("Office host unavailable");
 
     expect(run).toHaveBeenCalledOnce();
   });

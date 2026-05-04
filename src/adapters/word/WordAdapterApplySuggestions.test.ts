@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandResult } from "../../domain/DocumentApplication.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
-import {
-  getCommandMocks,
-  installWordWithContext,
-  makeSuggestion,
-} from "./WordAdapterTestHelper";
+import { getCommandMocks, installWordWithContext, makeSuggestion } from "./WordAdapterTestHelper";
 import { WordAdapter } from "./WordAdapter";
 
 describe("WordAdapter.applySuggestions", () => {
@@ -162,21 +158,18 @@ describe("WordAdapter.applySuggestions", () => {
       adapter as unknown as {
         rereadSuggestionPositionHint: (
           suggestion: Suggestion,
-          patch: NonNullable<CommandResult["mutationPatch"]>,
+          patch: NonNullable<CommandResult["mutationPatch"]>
         ) => Promise<Suggestion["positionHint"] | undefined>;
       }
-    ).rereadSuggestionPositionHint(
-      makeSuggestion({ id: "s-overlap", anchor: "overlap-anchor" }),
-      {
-        suggestionId: "s-legacy",
-        snapshotVersion: 1,
-        originalText: "texto viejo",
-        updatedText: "prefijo overlap-anchor sufijo",
-        deltaLength: -7,
-        affectedStart: 20,
-        affectedEnd: 30,
-      },
-    );
+    ).rereadSuggestionPositionHint(makeSuggestion({ id: "s-overlap", anchor: "overlap-anchor" }), {
+      suggestionId: "s-legacy",
+      snapshotVersion: 1,
+      originalText: "texto viejo",
+      updatedText: "prefijo overlap-anchor sufijo",
+      deltaLength: -7,
+      affectedStart: 20,
+      affectedEnd: 30,
+    });
 
     expect(rereadHint).toEqual({
       start: 8,

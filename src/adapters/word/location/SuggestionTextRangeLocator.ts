@@ -1,10 +1,5 @@
-/* global console */
-
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
-import type {
-  TextLocator,
-  WordSearchContainer,
-} from "../WordTextLocatorContext";
+import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext";
 
 /** Options for diagnostic logging while locating textual suggestion ranges. */
 export type SuggestionTextRangeLocatorOptions = {
@@ -35,7 +30,7 @@ export class SuggestionTextRangeLocator {
     context: Word.RequestContext,
     body: Word.Body,
     suggestion: Suggestion,
-    options: SuggestionTextRangeLocatorOptions = {},
+    options: SuggestionTextRangeLocatorOptions = {}
   ): Promise<Word.Range | null> {
     const contextRange = await this.textLocator.locate({
       context,
@@ -43,33 +38,28 @@ export class SuggestionTextRangeLocator {
       searchText: suggestion.context,
     });
     if (!contextRange) {
-      this.log(
-        options,
-        "context not found — ambiguous-location abort before action",
-      );
+      this.log(options, "context not found — ambiguous-location abort before action");
       return null;
     }
 
     contextRange.load("text");
-    const containingParagraph = contextRange.paragraphs
-      .getFirst()
-      .getRange("Whole");
+    const containingParagraph = contextRange.paragraphs.getFirst().getRange("Whole");
     containingParagraph.load("text");
     await context.sync();
 
     const matchText = contextRange.text;
+    const containingParagraphText = containingParagraph.text;
     this.log(
       options,
-      `contextMatchLen=${matchText.length}, paragraphLen=${containingParagraph.text.length}, anchorIndexInMatch=${matchText.indexOf(suggestion.anchor)}, anchorIndexInParagraph=${containingParagraph.text.indexOf(suggestion.anchor)}`,
+      `contextMatchLen=${matchText.length}, paragraphLen=${containingParagraphText.length}, anchorIndexInMatch=${matchText.indexOf(suggestion.anchor)}, anchorIndexInParagraph=${containingParagraphText.indexOf(suggestion.anchor)}`
     );
 
     const shouldExpandToParagraph =
-      !matchText.includes(suggestion.anchor) &&
-      matchText.length < suggestion.context.length - 20;
+      !matchText.includes(suggestion.anchor) && matchText.length < suggestion.context.length - 20;
     const shouldRetryInParagraphAfterMiss =
       !shouldExpandToParagraph &&
       matchText.length < suggestion.context.length - 20 &&
-      containingParagraph.text.length > matchText.length;
+      containingParagraphText.length > matchText.length;
 
     const searchContainer = shouldExpandToParagraph
       ? (containingParagraph as unknown as WordSearchContainer)
@@ -78,7 +68,7 @@ export class SuggestionTextRangeLocator {
     if (shouldExpandToParagraph) {
       this.log(
         options,
-        `context match (${matchText.length} chars) does not contain anchor — expanding to paragraph (${containingParagraph.text.length} chars)`,
+        `context match (${matchText.length} chars) does not contain anchor — expanding to paragraph (${containingParagraphText.length} chars)`
       );
     }
 
@@ -94,7 +84,7 @@ export class SuggestionTextRangeLocator {
 
     this.log(
       options,
-      `anchor not found inside partial context match (${matchText.length} chars) — retrying in paragraph (${containingParagraph.text.length} chars)`,
+      `anchor not found inside partial context match (${matchText.length} chars) — retrying in paragraph (${containingParagraphText.length} chars)`
     );
 
     return this.textLocator.locate({
@@ -105,10 +95,7 @@ export class SuggestionTextRangeLocator {
   }
 
   /** Emits optional diagnostics using the workflow-specific prefix. */
-  private log(
-    options: SuggestionTextRangeLocatorOptions,
-    message: string,
-  ): void {
+  private log(options: SuggestionTextRangeLocatorOptions, message: string): void {
     if (!options.logPrefix) {
       return;
     }

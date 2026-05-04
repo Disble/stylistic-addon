@@ -4,10 +4,7 @@ import type {
   ApplySuggestionsResult,
   SuggestionApplicationFailure,
 } from "../domain/DocumentApplication.types";
-import type {
-  Suggestion,
-  SuggestionNavigationResult,
-} from "../domain/suggestion/Suggestion.types";
+import type { Suggestion, SuggestionNavigationResult } from "../domain/suggestion/Suggestion.types";
 
 const hoistedTaskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],
@@ -20,16 +17,12 @@ const hoistedTaskpaneMocks = vi.hoisted(() => ({
       trackChangesActive: boolean;
     }>
   >(),
-  getCleanupPreview:
-    vi.fn<() => Promise<{ deletable: number; kept: number }>>(),
-  cleanupResolvedComments:
-    vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
+  getCleanupPreview: vi.fn<() => Promise<{ deletable: number; kept: number }>>(),
+  cleanupResolvedComments: vi.fn<() => Promise<{ deleted: number; kept: number }>>(),
   acceptSuggestion: vi.fn(),
   rejectSuggestion: vi.fn(),
   disableTrackChanges: vi.fn<() => Promise<void>>(),
-  navigateToText: vi.fn<
-    (target: Suggestion | string) => Promise<SuggestionNavigationResult>
-  >(),
+  navigateToText: vi.fn<(target: Suggestion | string) => Promise<SuggestionNavigationResult>>(),
   mastraAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
   feedbackSendFeedback: vi.fn<(payload: any) => Promise<void>>(),
@@ -127,9 +120,7 @@ vi.mock("../adapters/mastra/FeedbackAdapter", () => ({
 /**
  * Builds a canonical taskpane suggestion fixture.
  */
-export function makeSuggestion(
-  overrides: Partial<Suggestion> = {},
-): Suggestion {
+export function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s-1",
@@ -379,9 +370,7 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
       return el.dataset[datasetKey] === value;
     }
 
-    return (
-      (el as any)[attr] === value || (el as any)[`_attr_${attr}`] === value
-    );
+    return (el as any)[attr] === value || (el as any)[`_attr_${attr}`] === value;
   }
 
   const attrMatch = /^\[([^\]="]+)\]$/.exec(selector);
@@ -394,10 +383,7 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
       return el.dataset[datasetKey] !== undefined;
     }
 
-    return (
-      (el as any)[attr] !== undefined ||
-      (el as any)[`_attr_${attr}`] !== undefined
-    );
+    return (el as any)[attr] !== undefined || (el as any)[`_attr_${attr}`] !== undefined;
   }
 
   const classMatch = /^\.(.+)$/.exec(selector);
@@ -463,15 +449,12 @@ export function createTaskpaneDocument(): FakeDocument {
   getRequiredElement(doc, "sideload-msg").style.display = "block";
   getRequiredElement(doc, "app-body").style.display = "none";
   getRequiredElement(doc, "cleanup-section").style.display = "none";
-  getRequiredElement(doc, "disable-track-changes-section").style.display =
-    "none";
+  getRequiredElement(doc, "disable-track-changes-section").style.display = "none";
   getRequiredElement(doc, "results-panel").style.display = "block";
   getRequiredElement(doc, "progress-container").style.display = "none";
   getRequiredElement(doc, "profile-select").value = "narrativa-literaria";
-  getRequiredElement(doc, "btn-analyze-label").textContent =
-    "Analizar y sugerir";
-  getRequiredElement(doc, "btn-cleanup-label").textContent =
-    "Limpiar comentarios resueltos";
+  getRequiredElement(doc, "btn-analyze-label").textContent = "Analizar y sugerir";
+  getRequiredElement(doc, "btn-cleanup-label").textContent = "Limpiar comentarios resueltos";
   getRequiredElement(doc, "btn-disable-track-changes-label").textContent =
     "Desactivar control de cambios";
 
@@ -586,7 +569,7 @@ export function teardownTaskpaneHarness() {
 export async function renderViaEmitter(
   doc: FakeDocument,
   suggestions: Suggestion[],
-  failedIds: string[] = [],
+  failedIds: string[] = []
 ): Promise<FakeElement[]> {
   const taskpaneMocks = getTaskpaneMocks();
   const officeHarness = createOffice();
@@ -605,16 +588,11 @@ export async function renderViaEmitter(
     failedSuggestions,
     pendingAfter: {
       pendingStylisticArtifacts: suggestions.length - failedSuggestions.length,
-      hasPendingStylisticArtifacts:
-        suggestions.length - failedSuggestions.length > 0,
+      hasPendingStylisticArtifacts: suggestions.length - failedSuggestions.length > 0,
       trackChangesActive: suggestions.length - failedSuggestions.length > 0,
     },
-    documentState:
-      suggestions.length - failedSuggestions.length > 0
-        ? "pending-review"
-        : "idle",
-    trackChangesActivatedForBatch:
-      suggestions.length - failedSuggestions.length > 0,
+    documentState: suggestions.length - failedSuggestions.length > 0 ? "pending-review" : "idle",
+    trackChangesActivatedForBatch: suggestions.length - failedSuggestions.length > 0,
   };
 
   taskpaneMocks.run.mockImplementationOnce(async (ctx: any) => {

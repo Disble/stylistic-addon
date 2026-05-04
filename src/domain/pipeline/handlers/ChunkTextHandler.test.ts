@@ -7,9 +7,7 @@ import { ChunkTextHandler } from "./ChunkTextHandler";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeContext(
-  overrides: Partial<PipelineContext> = {},
-): PipelineContext {
+function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
@@ -211,9 +209,7 @@ describe("ChunkTextHandler", () => {
       await handler.handle(ctx, next);
 
       expect(ctx.chunks).toHaveLength(1);
-      expect(ctx.chunks?.[0].text).toBe(
-        "One continuous paragraph without breaks.",
-      );
+      expect(ctx.chunks?.[0].text).toBe("One continuous paragraph without breaks.");
     });
 
     it("handles text from a selection (isSelection = true)", async () => {
