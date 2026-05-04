@@ -20,11 +20,14 @@ import { useApp } from "./useApp";
  * It preserves the existing DOM anchor IDs so the legacy composition root can bind safely during migration.
  */
 export function App({
+  onAnalyze,
+  onCleanup,
+  onDisableTrackChanges,
   onMount,
   title = DEFAULT_APP_TITLE,
   subtitle = DEFAULT_APP_SUBTITLE,
 }: AppProps): React.JSX.Element {
-  const shellState = useApp();
+  const { handleGeneroChange, shellState } = useApp();
 
   React.useEffect(() => {
     onMount?.();
@@ -35,13 +38,23 @@ export function App({
       <TaskpaneHeader title={title} subtitle={subtitle} />
       <AnalysisProfileSection
         isDisabled={shellState.isAnalyzeLoading}
+        onGeneroChange={handleGeneroChange}
         options={ANALYSIS_PROFILE_OPTIONS}
+        selectedGenero={shellState.selectedGenero}
       />
-      <AnalyzeSection isLoading={shellState.isAnalyzeLoading} />
+      <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
       <ProgressPanel progress={shellState.progress} />
       <ResultsPanel />
-      <CleanupSection isVisible={shellState.cleanupVisible} />
-      <DisableTrackChangesSection isVisible={shellState.disableTrackChangesCtaVisible} />
+      <CleanupSection
+        isLoading={shellState.isCleanupLoading}
+        isVisible={shellState.cleanupVisible}
+        onCleanup={onCleanup}
+      />
+      <DisableTrackChangesSection
+        isLoading={shellState.isDisableTrackChangesLoading}
+        isVisible={shellState.disableTrackChangesCtaVisible}
+        onDisableTrackChanges={onDisableTrackChanges}
+      />
       <StatusBar status={shellState.status} />
     </main>
   );

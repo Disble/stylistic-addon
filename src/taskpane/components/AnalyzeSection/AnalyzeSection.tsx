@@ -2,7 +2,7 @@ import * as React from "react";
 import type { AnalyzeSectionProps } from "./AnalyzeSection.types";
 
 /** Renders the primary analysis CTA. */
-export function AnalyzeSection({ isLoading }: AnalyzeSectionProps): React.JSX.Element {
+export function AnalyzeSection({ isLoading, onAnalyze }: AnalyzeSectionProps): React.JSX.Element {
   return (
     <div className="stylistic-section">
       <button
@@ -10,6 +10,9 @@ export function AnalyzeSection({ isLoading }: AnalyzeSectionProps): React.JSX.El
         type="button"
         className="stylistic-btn stylistic-btn--primary"
         disabled={isLoading}
+        onClick={() => {
+          void onAnalyze();
+        }}
       >
         <span id="btn-analyze-label">{isLoading ? "Analizando..." : "Analizar y sugerir"}</span>
       </button>

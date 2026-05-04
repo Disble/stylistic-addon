@@ -115,6 +115,18 @@ export function resetResultsPanelState(): void {
   emitResultsPanelChange();
 }
 
+/** Hides the panel while preserving the last rendered card snapshot. */
+export function hideResultsPanel(): void {
+  internalState = {
+    ...internalState,
+    publicState: {
+      ...internalState.publicState,
+      visible: false,
+    },
+  };
+  emitResultsPanelChange();
+}
+
 /** Toggles the feedback accordion for one card. */
 export function toggleResultsPanelFeedback(cardId: string): void {
   updateResultsPanelCards((cards) =>

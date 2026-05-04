@@ -1,7 +1,12 @@
 import * as React from "react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { createRoot } from "react-dom/client";
-import { bootstrapTaskpane } from "./taskpane";
+import {
+  bootstrapTaskpane,
+  handleAnalyze,
+  handleCleanup,
+  handleDisableTrackChanges,
+} from "./taskpane";
 import { App } from "./components/App";
 
 /**
@@ -30,7 +35,10 @@ function renderTaskpaneShell(): void {
         FluentProvider,
         { theme: webLightTheme },
         React.createElement(App, {
-          onMount: () => bootstrapTaskpane(document, office),
+          onAnalyze: handleAnalyze,
+          onCleanup: handleCleanup,
+          onDisableTrackChanges: handleDisableTrackChanges,
+          onMount: () => bootstrapTaskpane(),
         })
       )
     );

@@ -4,6 +4,9 @@ export type AnalysisProfileOption = Readonly<{
 }>;
 
 export type AppProps = Readonly<{
+  onAnalyze: () => Promise<void> | void;
+  onCleanup: () => Promise<void> | void;
+  onDisableTrackChanges: () => Promise<void> | void;
   onMount?: () => void;
   title?: string;
   subtitle?: string;

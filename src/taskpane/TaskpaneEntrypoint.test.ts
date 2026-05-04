@@ -1,4 +1,6 @@
+import type * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AppProps } from "./components/App";
 import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 import {
   createOffice,
@@ -18,6 +20,20 @@ function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: 
     throw new Error(`Missing fake DOM element: ${id}`);
   }
   return el;
+}
+
+function getRenderedAppProps(reactMocks: ReturnType<typeof getTaskpaneReactMocks>): AppProps {
+  const lastRenderCall = reactMocks.render.mock.calls[reactMocks.render.mock.calls.length - 1];
+  const renderedTree = lastRenderCall?.[0] as
+    | React.ReactElement<{ children?: React.ReactNode }>
+    | undefined;
+  const appElement = renderedTree?.props.children as React.ReactElement<AppProps> | undefined;
+
+  if (!appElement) {
+    throw new Error("Missing rendered App element in React mock tree");
+  }
+
+  return appElement.props;
 }
 
 async function importTaskpaneRuntime() {
@@ -76,10 +92,11 @@ describe("taskpane entrypoint", () => {
     await flushTaskpaneWork();
 
     expect(reactMocks.render).not.toHaveBeenCalled();
-    expect(doc.getElementById("btn-analyze")?.onclick).toBeNull();
 
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
+
+    const appProps = getRenderedAppProps(reactMocks);
 
     expect(reactMocks.render).toHaveBeenCalledOnce();
     expect(taskpaneMocks.orchestratorHandlers).toHaveLength(7);
@@ -88,9 +105,9 @@ describe("taskpane entrypoint", () => {
       MAX_RETRIES,
       RETRY_BASE_DELAY_MS
     );
-    expect(doc.getElementById("btn-analyze")?.onclick).toEqual(expect.any(Function));
-    expect(doc.getElementById("btn-cleanup")?.onclick).toEqual(expect.any(Function));
-    expect(doc.getElementById("btn-disable-track-changes")?.onclick).toEqual(expect.any(Function));
+    expect(appProps.onAnalyze).toEqual(expect.any(Function));
+    expect(appProps.onCleanup).toEqual(expect.any(Function));
+    expect(appProps.onDisableTrackChanges).toEqual(expect.any(Function));
     expect(getTaskpaneShellState().cleanupVisible).toBe(true);
     expect(getTaskpaneShellState().disableTrackChangesCtaVisible).toBe(true);
   });
@@ -128,7 +145,9 @@ describe("taskpane entrypoint", () => {
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
 
-    await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
+    const appProps = getRenderedAppProps(reactMocks);
+
+    await appProps.onAnalyze();
     await flushTaskpaneWork();
     vi.advanceTimersByTime(1000);
     await flushTaskpaneWork();
@@ -163,9 +182,11 @@ describe("taskpane entrypoint", () => {
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
 
-    const firstRun = doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
+    const appProps = getRenderedAppProps(reactMocks);
+
+    const firstRun = appProps.onAnalyze();
     await Promise.resolve();
-    await doc.getElementById("btn-analyze")?.onclick?.({} as MouseEvent);
+    await appProps.onAnalyze();
 
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(warnSpy).toHaveBeenCalledWith(
@@ -188,7 +209,9 @@ describe("taskpane entrypoint", () => {
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
 
-    await doc.getElementById("btn-cleanup")?.onclick?.({} as MouseEvent);
+    const appProps = getRenderedAppProps(reactMocks);
+
+    await appProps.onCleanup();
 
     expect(taskpaneMocks.cleanupResolvedComments).toHaveBeenCalledOnce();
     expect(getTaskpaneShellState().cleanupVisible).toBe(false);
@@ -207,7 +230,9 @@ describe("taskpane entrypoint", () => {
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
 
-    await doc.getElementById("btn-disable-track-changes")?.onclick?.({} as MouseEvent);
+    const appProps = getRenderedAppProps(reactMocks);
+
+    await appProps.onDisableTrackChanges();
 
     expect(taskpaneMocks.disableTrackChanges).toHaveBeenCalledOnce();
     expect(getTaskpaneShellState().disableTrackChangesCtaVisible).toBe(false);

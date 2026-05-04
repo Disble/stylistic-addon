@@ -4,11 +4,11 @@
  * Responsibilities:
  * - Instantiate all adapters, decorators, mediators, and the pipeline.
  * - Initialize after the React shell is mounted and Office confirms the host is Word.
- * - Bind top-level DOM event handlers (analyze, cleanup, disable TC).
+ * - Expose top-level workflow handlers to the React shell.
  * - Register a `PipelineObserver` to relay pipeline events into presentation stores.
  *
- * React now owns shell/results rendering. This module still owns orchestration,
- * top-level host event binding, and publication into presentation facades.
+ * React now owns shell/results rendering and UI event wiring. This module still owns
+ * orchestration and publication into presentation stores/facades.
  *
  * @module taskpane
  */
@@ -32,30 +32,48 @@ import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
 import type { IFeedbackPort } from "../domain/ports";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
+import { hideResultsPanel } from "./ResultsPanelStore";
 import {
   buildApplyStatusMessage,
   type ResultsPanelDeps,
   renderResultsPanel,
 } from "./SuggestionCardRenderer";
 import {
-  getRequiredElement,
-  getSelectedGenero,
-  hideProgress,
-  setCleanupCtaVisible,
-  setAnalyzeLoading,
-  setDisableTrackChangesCtaVisible,
-  showStatus,
-  toUserMessage,
-  updateProgress,
-} from "./TaskpaneUi";
+  getTaskpaneShellState,
+  hideTaskpaneProgress,
+  setTaskpaneAnalyzeLoading,
+  setTaskpaneCleanupVisible,
+  setTaskpaneCleanupLoading,
+  setTaskpaneDisableTrackChangesCtaVisible,
+  setTaskpaneDisableTrackChangesLoading,
+  showTaskpaneStatus,
+  updateTaskpaneProgress,
+} from "./TaskpaneShellStore";
 
-type OfficeLike = {
-  HostType?: {
-    Word?: string | Office.HostType;
-  };
-};
+function toUserMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    if (typeof error === "string") {
+      return error;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Error no serializable";
+    }
+  }
 
-type DocumentLike = Pick<Document, "getElementById">;
+  const officeError = error as Error & { code?: string };
+  switch (officeError.code) {
+    case "AccessDenied":
+      return "El documento está protegido o es de solo lectura.";
+    case "InvalidArgument":
+      return "Argumento inválido al comunicarse con Word.";
+    case "ItemNotFound":
+      return "No se encontró el elemento solicitado en el documento.";
+    default:
+      return officeError.message;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Infrastructure — built once, reused across pipeline runs
@@ -97,31 +115,9 @@ const cardRendererDeps: ResultsPanelDeps = {
 
 /**
  * Initializes taskpane DOM bindings once the React shell already exists.
- * Binds top-level event handlers and rehydrates shell visibility from document state.
+ * Rehydrates shell visibility from document state after the React shell mounts.
  */
-export function bootstrapTaskpane(
-  doc: DocumentLike | undefined = globalThis.document,
-  office: OfficeLike | undefined = globalThis.Office as unknown as OfficeLike | undefined
-): void {
-  if (!doc?.getElementById) {
-    return;
-  }
-
-  const analyzeButton = doc.getElementById("btn-analyze") as HTMLButtonElement | null;
-  const cleanupButton = doc.getElementById("btn-cleanup") as HTMLButtonElement | null;
-  const disableTrackChangesButton = doc.getElementById(
-    "btn-disable-track-changes"
-  ) as HTMLButtonElement | null;
-
-  if (!(analyzeButton && cleanupButton && disableTrackChangesButton)) {
-    return;
-  }
-
-  const wordHost = String(office?.HostType?.Word ?? "Word");
-  analyzeButton.dataset.officeHost = wordHost;
-  analyzeButton.onclick = handleAnalyze;
-  cleanupButton.onclick = handleCleanup;
-  disableTrackChangesButton.onclick = handleDisableTrackChanges;
+export function bootstrapTaskpane(): void {
   void refreshCleanupVisibility();
   void refreshTrackChangesCtaVisibility();
 }
@@ -137,7 +133,7 @@ export function bootstrapTaskpane(
 async function refreshCleanupVisibility(): Promise<void> {
   try {
     const { deletable } = await documentPort.getCleanupPreview();
-    setCleanupCtaVisible(deletable > 0);
+    setTaskpaneCleanupVisible(deletable > 0);
   } catch (error) {
     console.warn("⚠️ [Taskpane] No se pudo calcular la visibilidad de limpieza:", error);
   }
@@ -149,7 +145,7 @@ async function refreshCleanupVisibility(): Promise<void> {
 async function refreshTrackChangesCtaVisibility(): Promise<void> {
   try {
     const taskpaneState = await reviewSessionMediator.rehydrateTaskpaneState();
-    setDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
+    setTaskpaneDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
   } catch (error) {
     console.warn(
       "⚠️ [Taskpane] No se pudo calcular la visibilidad del CTA de Track Changes:",
@@ -169,40 +165,40 @@ async function refreshTrackChangesCtaVisibility(): Promise<void> {
  * then delegates entirely to `PipelineOrchestrator.run()`.
  * All UI updates come back via `PipelineEventEmitter` (Observer pattern).
  */
-async function handleAnalyze(): Promise<void> {
+export async function handleAnalyze(): Promise<void> {
   if (stateMachine.isRunning) {
     console.warn("⚠️ [Taskpane] Pipeline ya en ejecución — ignorando click");
     return;
   }
 
-  setAnalyzeLoading(true);
-  getRequiredElement("results-panel").style.display = "none";
+  setTaskpaneAnalyzeLoading(true);
+  hideResultsPanel();
 
   const emitter = new PipelineEventEmitter();
   const ctx: PipelineContext = {
     documentPort,
     analysisPort,
     emitter,
-    genero: getSelectedGenero(),
+    genero: getTaskpaneShellState().selectedGenero,
     maxChunkSize: DEFAULT_MAX_CHUNK_SIZE,
   };
 
   const uiObserver: PipelineObserver = {
     onPhaseStart(_phase, message) {
-      updateProgress(0, 1, message);
+      updateTaskpaneProgress(0, 1, message);
     },
     onProgress(current, total, message) {
-      updateProgress(current, total, message);
+      updateTaskpaneProgress(current, total, message);
     },
     onAbort(reason) {
-      hideProgress();
-      showStatus(reason, (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success");
+      hideTaskpaneProgress();
+      showTaskpaneStatus(reason, (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success");
     },
     onComplete(suggestions, result, chunkErrors, isSelection) {
-      hideProgress();
+      hideTaskpaneProgress();
       renderResultsPanel(suggestions, result, chunkErrors, isSelection, cardRendererDeps);
       void refreshCleanupVisibility();
-      showStatus(
+      showTaskpaneStatus(
         buildApplyStatusMessage(result, isSelection),
         result.successCount > 0 ? "success" : "error"
       );
@@ -218,11 +214,11 @@ async function handleAnalyze(): Promise<void> {
     console.log(`✅ [Taskpane] Pipeline completado. Abortado: ${ctx.aborted ?? false}`);
   } catch (error) {
     console.error("💥 [Taskpane] Error no capturado en pipeline:", error);
-    hideProgress();
-    showStatus(toUserMessage(error), "error");
+    hideTaskpaneProgress();
+    showTaskpaneStatus(toUserMessage(error), "error");
   } finally {
     stateMachine.reset();
-    setAnalyzeLoading(false);
+    setTaskpaneAnalyzeLoading(false);
     emitter.clear();
   }
 }
@@ -231,24 +227,23 @@ async function handleAnalyze(): Promise<void> {
 // Comment Cleanup Handler
 // ---------------------------------------------------------------------------
 
-async function handleCleanup(): Promise<void> {
+export async function handleCleanup(): Promise<void> {
   console.log("🧽 [Taskpane] Iniciando limpieza de comentarios resueltos...");
-  const btn = document.getElementById("btn-cleanup") as HTMLButtonElement;
-  const label = getRequiredElement("btn-cleanup-label");
+  if (getTaskpaneShellState().isCleanupLoading) {
+    return;
+  }
 
-  btn.disabled = true;
-  label.textContent = "Limpiando...";
+  setTaskpaneCleanupLoading(true);
 
   try {
     const { deleted, kept } = await documentPort.cleanupResolvedComments();
     console.log(`🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`);
-    showStatus(`${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`, "success");
-    setCleanupCtaVisible(kept > 0);
+    showTaskpaneStatus(`${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`, "success");
+    setTaskpaneCleanupVisible(kept > 0);
   } catch (error) {
-    showStatus(toUserMessage(error), "error");
+    showTaskpaneStatus(toUserMessage(error), "error");
   } finally {
-    btn.disabled = false;
-    label.textContent = "Limpiar comentarios resueltos";
+    setTaskpaneCleanupLoading(false);
   }
 }
 
@@ -256,25 +251,20 @@ async function handleCleanup(): Promise<void> {
 // Disable Track Changes Handler
 // ---------------------------------------------------------------------------
 
-async function handleDisableTrackChanges(): Promise<void> {
-  const btn = document.getElementById("btn-disable-track-changes") as HTMLButtonElement | null;
-  const label = document.getElementById("btn-disable-track-changes-label");
-
-  if (!(btn && label)) {
+export async function handleDisableTrackChanges(): Promise<void> {
+  if (getTaskpaneShellState().isDisableTrackChangesLoading) {
     return;
   }
 
-  btn.disabled = true;
-  label.textContent = "Desactivando...";
+  setTaskpaneDisableTrackChangesLoading(true);
 
   try {
     const taskpaneState = await reviewSessionMediator.disableTrackChanges();
-    setDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
-    showStatus("Control de cambios desactivado.", "success");
+    setTaskpaneDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
+    showTaskpaneStatus("Control de cambios desactivado.", "success");
   } catch (error) {
-    showStatus(toUserMessage(error), "error");
+    showTaskpaneStatus(toUserMessage(error), "error");
   } finally {
-    btn.disabled = false;
-    label.textContent = "Desactivar control de cambios";
+    setTaskpaneDisableTrackChangesLoading(false);
   }
 }

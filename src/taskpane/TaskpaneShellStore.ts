@@ -18,7 +18,10 @@ export type TaskpaneShellProgress = Readonly<{
 export type TaskpaneShellState = Readonly<{
   cleanupVisible: boolean;
   disableTrackChangesCtaVisible: boolean;
+  isCleanupLoading: boolean;
+  isDisableTrackChangesLoading: boolean;
   isAnalyzeLoading: boolean;
+  selectedGenero: string;
   progress: TaskpaneShellProgress;
   status: TaskpaneShellStatus;
 }>;
@@ -29,7 +32,10 @@ const HIDE_PROGRESS_DELAY_MS = 1000;
 const INITIAL_STATE: TaskpaneShellState = {
   cleanupVisible: false,
   disableTrackChangesCtaVisible: false,
+  isCleanupLoading: false,
+  isDisableTrackChangesLoading: false,
   isAnalyzeLoading: false,
+  selectedGenero: "narrativa-literaria",
   progress: {
     current: 0,
     total: 1,
@@ -72,9 +78,19 @@ export function setTaskpaneAnalyzeLoading(isAnalyzeLoading: boolean): void {
   updateTaskpaneShellState({ isAnalyzeLoading });
 }
 
+/** Sets the selected analysis profile used by the composition root. */
+export function setTaskpaneSelectedGenero(selectedGenero: string): void {
+  updateTaskpaneShellState({ selectedGenero });
+}
+
 /** Sets the cleanup CTA visibility. */
 export function setTaskpaneCleanupVisible(cleanupVisible: boolean): void {
   updateTaskpaneShellState({ cleanupVisible });
+}
+
+/** Sets the loading state of the cleanup CTA. */
+export function setTaskpaneCleanupLoading(isCleanupLoading: boolean): void {
+  updateTaskpaneShellState({ isCleanupLoading });
 }
 
 /** Sets the Track Changes CTA visibility. */
@@ -82,6 +98,11 @@ export function setTaskpaneDisableTrackChangesCtaVisible(
   disableTrackChangesCtaVisible: boolean
 ): void {
   updateTaskpaneShellState({ disableTrackChangesCtaVisible });
+}
+
+/** Sets the loading state of the Track Changes CTA. */
+export function setTaskpaneDisableTrackChangesLoading(isDisableTrackChangesLoading: boolean): void {
+  updateTaskpaneShellState({ isDisableTrackChangesLoading });
 }
 
 /** Updates the visible progress state. */

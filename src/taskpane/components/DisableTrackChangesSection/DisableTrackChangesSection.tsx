@@ -3,7 +3,9 @@ import type { DisableTrackChangesSectionProps } from "./DisableTrackChangesSecti
 
 /** Renders the Track Changes disable CTA anchor. */
 export function DisableTrackChangesSection({
+  isLoading,
   isVisible,
+  onDisableTrackChanges,
 }: DisableTrackChangesSectionProps): React.JSX.Element {
   return (
     <div
@@ -15,8 +17,14 @@ export function DisableTrackChangesSection({
         id="btn-disable-track-changes"
         type="button"
         className="stylistic-btn stylistic-btn--warning"
+        disabled={isLoading}
+        onClick={() => {
+          void onDisableTrackChanges();
+        }}
       >
-        <span id="btn-disable-track-changes-label">Desactivar control de cambios</span>
+        <span id="btn-disable-track-changes-label">
+          {isLoading ? "Desactivando..." : "Desactivar control de cambios"}
+        </span>
       </button>
     </div>
   );
