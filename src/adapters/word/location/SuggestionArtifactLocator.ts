@@ -79,7 +79,7 @@ export class SuggestionArtifactLocator {
     const result = context.document.contentControls.getByTag(tag);
     // eslint-disable-next-line office-addins/no-navigational-load -- Enumerating a Word collection requires loading `items` before reading `result.items`.
     result.load("items");
-    result.load("items/title");
+    result.load("items/tag,items/title");
     await context.sync();
 
     const candidates = result.items;

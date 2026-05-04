@@ -175,4 +175,20 @@ describe("TaskpaneSuggestionResolution", () => {
       "La ubicación de la sugerencia es ambigua."
     );
   });
+
+  it("re-enables the card and surfaces an error when mediator resolution rejects", async () => {
+    const deps = createResultsPanelDeps({
+      acceptSuggestion: vi.fn().mockRejectedValue(new Error("cleanup preview failed")),
+    });
+    const suggestion = seedResultsPanel(deps);
+
+    await expect(acceptResultsPanelSuggestion(suggestion.id)).resolves.toBeUndefined();
+
+    const card = getResultsPanelState().cards[0];
+    expect(card.state).toBe("error");
+    expect(card.cardGroup).toBe("active");
+    expect(card.hideActions).toBe(false);
+    expect(card.isResolving).toBe(false);
+    expect(getTaskpaneShellState().status.message).toBe("cleanup preview failed");
+  });
 });

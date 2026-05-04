@@ -262,10 +262,33 @@ async function resolveResultsPanelSuggestion(
     )
   );
 
-  const result =
-    action === "accept"
-      ? await deps.acceptSuggestion(card.suggestion, getFeedbackComment(cardId))
-      : await deps.rejectSuggestion(card.suggestion, getFeedbackComment(cardId));
+  let result: SuggestionResolutionMediatorResult;
+
+  try {
+    result =
+      action === "accept"
+        ? await deps.acceptSuggestion(card.suggestion, getFeedbackComment(cardId))
+        : await deps.rejectSuggestion(card.suggestion, getFeedbackComment(cardId));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    showTaskpaneStatus(message || "Error desconocido al resolver sugerencia", "error");
+    updateResultsPanelCards((cards) =>
+      cards.map((entry) =>
+        entry.suggestion.id === cardId
+          ? {
+              ...entry,
+              cardGroup: "active",
+              hideActions: false,
+              isResolving: false,
+              resolutionNote: undefined,
+              state: "error",
+            }
+          : entry
+      )
+    );
+    return;
+  }
 
   const nextState = mapResultStatusToState(result.status);
 

@@ -102,17 +102,12 @@ export class OperationalWrapperGroupResolver {
       identity: ReplaceSuggestionIdentity;
     }>
   ): Promise<boolean> {
-    const relations: Array<ReturnType<Word.Range["compareLocationWith"]>> = [];
-
     for (let index = 0; index < members.length - 1; index += 1) {
       const currentRange = members[index].cc.getRange();
       const nextRange = members[index + 1].cc.getRange();
-      relations.push(currentRange.compareLocationWith(nextRange));
-    }
+      const relation = currentRange.compareLocationWith(nextRange);
+      await context.sync();
 
-    await context.sync();
-
-    for (const relation of relations) {
       if (!this.isContiguousForwardRelation(String(relation.value ?? ""))) {
         return false;
       }
