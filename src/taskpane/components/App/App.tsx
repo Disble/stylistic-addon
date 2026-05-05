@@ -7,8 +7,7 @@ import { ProgressPanel } from "../ProgressPanel";
 import { ResultsPanel } from "../ResultsPanel";
 import { SelectionPreview, useSelectionPreview } from "../SelectionPreview";
 import { StatusBar } from "../StatusBar";
-import { TaskpaneHeader } from "../TaskpaneHeader";
-import { ANALYSIS_PROFILE_OPTIONS, DEFAULT_APP_SUBTITLE, DEFAULT_APP_TITLE } from "./App.constants";
+import { ANALYSIS_PROFILE_OPTIONS } from "./App.constants";
 import type { AppProps } from "./App.types";
 import { useApp } from "./useApp";
 
@@ -21,8 +20,6 @@ export function App({
   onCleanup,
   onDisableTrackChanges,
   onMount,
-  title = DEFAULT_APP_TITLE,
-  subtitle = DEFAULT_APP_SUBTITLE,
 }: AppProps): React.JSX.Element {
   const { handleGeneroChange, shellState } = useApp();
   const selectionPreview = useSelectionPreview();
@@ -33,7 +30,6 @@ export function App({
 
   return (
     <main id="app-body">
-      <TaskpaneHeader title={title} subtitle={subtitle} />
       <AnalysisProfileSection
         isDisabled={shellState.isAnalyzeLoading}
         onGeneroChange={handleGeneroChange}

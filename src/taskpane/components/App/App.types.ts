@@ -8,6 +8,4 @@ export type AppProps = Readonly<{
   onCleanup: () => Promise<void> | void;
   onDisableTrackChanges: () => Promise<void> | void;
   onMount?: () => void;
-  title?: string;
-  subtitle?: string;
 }>;
