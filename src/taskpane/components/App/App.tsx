@@ -41,11 +41,7 @@ export function App({
         selectedGenero={shellState.selectedGenero}
       />
       <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
-      <SelectionPreview
-        isVisible={selectionPreview.isVisible}
-        charCount={selectionPreview.charCount}
-        preview={selectionPreview.preview}
-      />
+      <SelectionPreview {...selectionPreview} />
       <ProgressPanel progress={shellState.progress} />
       <ResultsPanel />
       <CleanupSection

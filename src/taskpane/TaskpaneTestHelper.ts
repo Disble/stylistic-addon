@@ -42,6 +42,35 @@ export function getTaskpaneReactMocks() {
   return hoistedReactMocks;
 }
 
+vi.mock("@fluentui/react-components", () => {
+  const Passthrough = ({ children }: { children?: unknown }) => children as unknown;
+  return {
+    FluentProvider: Passthrough,
+    MessageBar: Passthrough,
+    MessageBarBody: Passthrough,
+    MessageBarTitle: Passthrough,
+    Body1: Passthrough,
+    Caption1Strong: Passthrough,
+    webLightTheme: {},
+    makeStyles: () => () => ({
+      root: "",
+      body: "",
+      quote: "",
+      hint: "",
+    }),
+    tokens: new Proxy(
+      {},
+      {
+        get: () => "",
+      }
+    ),
+  };
+});
+
+vi.mock("@fluentui/react-icons", () => ({
+  TextEditStyleRegular: () => null,
+}));
+
 vi.mock("react-dom/client", () => ({
   createRoot: vi.fn((...args: unknown[]) => {
     hoistedReactMocks.createRoot(...args);

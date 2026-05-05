@@ -1,36 +1,38 @@
 import * as React from "react";
+import {
+  Body1,
+  Caption1Strong,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+} from "@fluentui/react-components";
+import { TextEditStyleRegular } from "@fluentui/react-icons";
 import type { SelectionPreviewProps } from "./SelectionPreview.types";
 
-/** Renders a non-interactive preview of the active Word selection. */
+/** Renders a non-interactive Fluent MessageBar previewing the active Word selection. */
 export function SelectionPreview({
   isVisible,
   charCount,
   preview,
+  classes,
 }: SelectionPreviewProps): React.JSX.Element | null {
   if (!isVisible) {
     return null;
   }
 
   return (
-    <section
+    <MessageBar
       id="selection-preview"
-      className="selection-preview"
-      aria-live="polite"
-      aria-label="Texto seleccionado para analizar"
+      className={classes.root}
+      intent="info"
+      icon={<TextEditStyleRegular aria-hidden="true" />}
+      politeness="polite"
     >
-      <header className="selection-preview__header">
-        <span className="selection-preview__icon" aria-hidden="true">
-          ✎
-        </span>
-        <span className="selection-preview__title">Selección activa</span>
-      </header>
-      <p className="selection-preview__quote">
-        <span className="selection-preview__preview-text">“{preview}”</span>
-      </p>
-      <footer className="selection-preview__footer">
-        <span className="selection-preview__count">{charCount} caracteres</span>
-        <span className="selection-preview__hint">Esto se va a analizar</span>
-      </footer>
-    </section>
+      <MessageBarBody className={classes.body}>
+        <MessageBarTitle>Selección activa · {charCount} caracteres</MessageBarTitle>
+        <Body1 className={classes.quote}>“{preview}”</Body1>
+        <Caption1Strong className={classes.hint}>Esto se va a analizar</Caption1Strong>
+      </MessageBarBody>
+    </MessageBar>
   );
 }

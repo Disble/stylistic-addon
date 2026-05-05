@@ -140,61 +140,6 @@ body {
   cursor: not-allowed;
 }
 
-/* Selection preview */
-.selection-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  margin-bottom: 16px;
-  background: #f3f9ff;
-  border: 1px solid #c7e0f4;
-  border-left: 3px solid #0078d7;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.selection-preview__header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #0078d7;
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.selection-preview__icon {
-  font-size: 14px;
-}
-
-.selection-preview__quote {
-  margin: 0;
-  color: #323130;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.selection-preview__preview-text {
-  font-style: italic;
-  word-break: break-word;
-}
-
-.selection-preview__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  color: #605e5c;
-  font-size: 11px;
-}
-
-.selection-preview__hint {
-  color: #0078d7;
-  font-weight: 600;
-}
-
 /* Progress bar */
 .progress-container {
   margin-bottom: 16px;
