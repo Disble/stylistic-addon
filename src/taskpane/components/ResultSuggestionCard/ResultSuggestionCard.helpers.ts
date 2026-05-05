@@ -1,15 +1,29 @@
 import type { SuggestionApplicationFailure } from "../../../domain/DocumentApplication.types";
+import type { SuggestionSeverity } from "../../../domain/suggestion/Suggestion.types";
 import type { ResultsPanelCardState } from "../../ResultsPanelStore";
 
-/** Returns the rendered card CSS classes from the current view state. */
-export function getResultSuggestionCardClassName(card: ResultsPanelCardState): string {
-  const classes = ["suggestion-card"];
+export type SeverityBadgeColor = "danger" | "warning" | "informative" | "subtle";
 
-  if (card.state !== "pending" && card.state !== "resolving") {
-    classes.push(`result-${card.state}`);
-  }
+const SEVERITY_LABEL: Record<SuggestionSeverity, string> = {
+  high: "alta",
+  medium: "media",
+  low: "baja",
+};
 
-  return classes.join(" ");
+const SEVERITY_COLOR: Record<SuggestionSeverity, SeverityBadgeColor> = {
+  high: "danger",
+  medium: "warning",
+  low: "informative",
+};
+
+/** Maps a suggestion severity to a Fluent Badge color token. */
+export function getSeverityBadgeColor(severity: SuggestionSeverity): SeverityBadgeColor {
+  return SEVERITY_COLOR[severity] ?? "subtle";
+}
+
+/** Returns a humanized severity label for the badge text. */
+export function getSeverityLabel(severity: SuggestionSeverity): string {
+  return SEVERITY_LABEL[severity] ?? severity;
 }
 
 /** Returns the failure copy for a card that never applied successfully. */
@@ -19,7 +33,7 @@ export function getFailedSuggestionCopy(failure: SuggestionApplicationFailure): 
     : `No se pudo aplicar: "${failure.suggestion.anchor}"`;
 }
 
-/** Whether the card should render the comment-only badge. */
+/** Whether the card represents a comment-only suggestion (no diff). */
 export function isCommentOnlyCard(card: ResultsPanelCardState): boolean {
   return card.suggestion.type === "comment-only";
 }

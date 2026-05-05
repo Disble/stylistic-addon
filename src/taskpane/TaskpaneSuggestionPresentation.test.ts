@@ -108,10 +108,11 @@ describe("taskpane suggestion presentation", () => {
 
     const markup = renderCardMarkup("s-co");
 
-    expect(markup).not.toContain("card-diff");
+    expect(markup).not.toContain('data-testid="card-diff"');
     expect(markup).toContain("Entendido");
     expect(markup).toContain("Ignorar");
-    expect(markup).toContain("result-type-badge--comment");
+    expect(markup).toContain('data-testid="card-comment-badge"');
+    expect(markup).toContain("comentario");
   });
 
   it("renders track-change suggestions with diff blocks and symbolic action labels", () => {
@@ -141,9 +142,11 @@ describe("taskpane suggestion presentation", () => {
 
     const markup = renderCardMarkup("s-tc");
 
-    expect(markup).toContain("card-diff");
-    expect(markup).toContain(">✓<");
-    expect(markup).toContain(">✗<");
+    expect(markup).toContain('data-testid="card-diff"');
+    expect(markup).toContain('aria-label="Aceptar sugerencia"');
+    expect(markup).toContain('aria-label="Rechazar sugerencia"');
+    expect(markup).toContain("Aceptar");
+    expect(markup).toContain("Rechazar");
   });
 
   it('keeps "No encontrado" cards after actionable suggestions in store ordering', () => {

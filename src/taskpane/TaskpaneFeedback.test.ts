@@ -115,14 +115,25 @@ describe("taskpane feedback controls", () => {
     resetTaskpaneShellState();
   });
 
-  it("renders a feedback button and accordion for each non-failed suggestion", () => {
+  it("renders a feedback toggle button for each non-failed suggestion", () => {
     seedResultsPanel(createResultsPanelDeps());
 
     const markup = renderCardMarkup("s-1");
 
-    expect(markup).toContain('data-action="feedback"');
-    expect(markup).toContain("feedback-accordion");
-    expect(markup).toContain("feedback-textarea");
+    expect(markup).toContain('data-testid="card-feedback-toggle"');
+    expect(markup).toContain('aria-label="Dejar feedback"');
+    expect(markup).not.toContain('data-testid="card-feedback-textarea"');
+  });
+
+  it("renders the feedback textarea when the accordion is open", () => {
+    const deps = createResultsPanelDeps();
+    const suggestion = seedResultsPanel(deps);
+    toggleResultsPanelFeedback(suggestion.id);
+
+    const markup = renderCardMarkup("s-1");
+
+    expect(markup).toContain('data-testid="card-feedback-textarea"');
+    expect(markup).toContain('aria-label="Cerrar feedback"');
   });
 
   it("omits feedback controls for failed suggestions", () => {
@@ -130,8 +141,8 @@ describe("taskpane feedback controls", () => {
 
     const markup = renderCardMarkup("s-fail");
 
-    expect(markup).not.toContain('data-action="feedback"');
-    expect(markup).not.toContain("feedback-accordion");
+    expect(markup).not.toContain('data-testid="card-feedback-toggle"');
+    expect(markup).not.toContain('data-testid="card-feedback-textarea"');
   });
 
   it("toggles the feedback accordion state when requested", () => {
