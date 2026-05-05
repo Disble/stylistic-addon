@@ -21,6 +21,14 @@ This project uses Bun as its package manager.
 - Prefer `bun install` for dependency installation.
 - Prefer `bun run <script>` for package scripts, even if some legacy tooling or task labels still mention npm.
 
+## Taskpane UI Stack
+
+- React is allowed only under `src/taskpane/**`; do not import React, Fluent UI, or Zustand from domain, adapter, or infrastructure code.
+- Use Fluent UI v9 (`@fluentui/react-components`, `@fluentui/react-icons`) for taskpane UI components and provider-level theming.
+- Use Zustand for React-owned taskpane UI state instead of reintroducing manual `Set<listener>` external stores.
+- Keep `src/taskpane/taskpane.ts` as the Office/host composition root and `src/taskpane/index.tsx` as the React/Fluent provider bootstrap.
+- For taskpane architecture details, read `docs/architecture.md` and `.claude/skills/stylistic-addon-architecture/SKILL.md` before changing the UI stack.
+
 ## Testing Knowledge Capture
 
 - When a bug escapes existing tests, update the relevant local testing skill with the new lesson.

@@ -22,6 +22,7 @@ Load this skill BEFORE writing ANY code in this project. It is the authoritative
 - **Language:** TypeScript 5.4+
 - **Bundler:** Webpack 5
 - **UI:** React 18 + Fluent UI v9 under `src/taskpane/` only. No React/framework imports in `src/domain/`, `src/adapters/`, or `src/infrastructure/`.
+- **Taskpane state:** use Zustand for React-owned taskpane UI stores; do not reintroduce manual `Set<listener>` external-store implementations.
 - **Backend:** Mastra AI framework (`@mastra/client-js` v1.7.1)
 - **Test runner:** Vitest (globals: true, environment: node)
 - **Dev server port:** 3000 | **Mastra default port:** 4111

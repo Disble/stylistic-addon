@@ -108,11 +108,18 @@ system.
 
 ### 3.1 Current component diagram
 
+Presentation is React-owned under `src/taskpane/**`. `taskpane.ts` remains the
+Office/host composition root; `index.tsx` bootstraps React with Fluent UI v9
+providers; taskpane UI state is React-facing and should use Zustand stores rather
+than hand-rolled listener registries.
+
 ```mermaid
 flowchart LR
   subgraph PRESENTATION["Presentation"]
-    TP["taskpane.ts\nComposition Root + DOM rendering"]
-    SCR["SuggestionCardRenderer"]
+    TP["taskpane.ts\nOffice composition root"]
+    IDX["index.tsx\nReact + FluentProvider bootstrap"]
+    APP["React taskpane components"]
+    ZS["Zustand taskpane stores"]
   end
 
   subgraph DOMAIN["Domain / Application"]
@@ -147,6 +154,9 @@ flowchart LR
     COM["Comments"]
   end
 
+  TP --> IDX
+  IDX --> APP
+  APP --> ZS
   TP --> PIPE
   PIPE --> HANDLERS
   HANDLERS --> PORTS
@@ -155,7 +165,7 @@ flowchart LR
   RETRY --> MA
 
   TP --> MED
-  SCR --> MED
+  APP --> MED
   MED --> WF
   MED --> SM
   WF --> WA
@@ -231,7 +241,11 @@ src/
 │   └── chunker.ts
 └── taskpane/
     ├── taskpane.ts
-    ├── SuggestionCardRenderer.ts
+    ├── index.tsx
+    ├── TaskpaneShellStore.ts
+    ├── ResultsPanelStore.ts
+    ├── SelectionPreviewStore.ts
+    ├── components/
     ├── taskpane.html
     └── taskpane.css
 ```
