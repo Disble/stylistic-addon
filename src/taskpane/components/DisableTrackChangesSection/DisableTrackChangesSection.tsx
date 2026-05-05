@@ -1,31 +1,42 @@
 import * as React from "react";
+import { Button, Spinner } from "@fluentui/react-components";
+import { HistoryDismissRegular } from "@fluentui/react-icons";
 import type { DisableTrackChangesSectionProps } from "./DisableTrackChangesSection.types";
+import { useDisableTrackChangesSection } from "./useDisableTrackChangesSection";
 
-/** Renders the Track Changes disable CTA anchor. */
+/** Renders the "disable Track Changes" CTA, warning-styled via palette tokens. */
 export function DisableTrackChangesSection({
   isLoading,
   isVisible,
   onDisableTrackChanges,
-}: DisableTrackChangesSectionProps): React.JSX.Element {
+}: DisableTrackChangesSectionProps): React.JSX.Element | null {
+  const classes = useDisableTrackChangesSection();
+  if (!isVisible) {
+    return null;
+  }
+
+  const icon = isLoading ? (
+    <Spinner size="tiny" data-testid="disable-track-changes-spinner" />
+  ) : (
+    <HistoryDismissRegular aria-hidden="true" />
+  );
+
   return (
-    <div
-      className="stylistic-section"
-      id="disable-track-changes-section"
-      style={{ display: isVisible ? "block" : "none" }}
-    >
-      <button
-        id="btn-disable-track-changes"
-        type="button"
-        className="stylistic-btn stylistic-btn--warning"
+    <div className={classes.root}>
+      <Button
+        appearance="secondary"
+        aria-label="Desactivar control de cambios"
+        className={classes.button}
+        data-testid="disable-track-changes-button"
         disabled={isLoading}
+        icon={icon}
         onClick={() => {
           void onDisableTrackChanges();
         }}
+        type="button"
       >
-        <span id="btn-disable-track-changes-label">
-          {isLoading ? "Desactivando..." : "Desactivar control de cambios"}
-        </span>
-      </button>
+        {isLoading ? "Desactivando..." : "Desactivar control de cambios"}
+      </Button>
     </div>
   );
 }

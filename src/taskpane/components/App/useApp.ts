@@ -5,12 +5,9 @@ import { setTaskpaneSelectedGenero, useTaskpaneShellStore } from "../../Taskpane
 export function useApp() {
   const shellState = useTaskpaneShellStore();
 
-  const handleGeneroChange = React.useCallback<React.ChangeEventHandler<HTMLSelectElement>>(
-    (event) => {
-      setTaskpaneSelectedGenero(event.target.value);
-    },
-    []
-  );
+  const handleGeneroChange = React.useCallback((value: string) => {
+    setTaskpaneSelectedGenero(value);
+  }, []);
 
   return {
     shellState,

@@ -3,3 +3,8 @@ export type CleanupSectionProps = Readonly<{
   isVisible: boolean;
   onCleanup: () => Promise<void> | void;
 }>;
+
+export type CleanupSectionClasses = Readonly<{
+  root: string;
+  button: string;
+}>;

@@ -3,3 +3,8 @@ export type DisableTrackChangesSectionProps = Readonly<{
   isVisible: boolean;
   onDisableTrackChanges: () => Promise<void> | void;
 }>;
+
+export type DisableTrackChangesSectionClasses = Readonly<{
+  root: string;
+  button: string;
+}>;

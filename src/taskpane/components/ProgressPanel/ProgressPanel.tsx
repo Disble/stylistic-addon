@@ -1,27 +1,31 @@
 import * as React from "react";
+import { Caption1, Field, ProgressBar } from "@fluentui/react-components";
 import type { ProgressPanelProps } from "./ProgressPanel.types";
+import { useProgressPanel } from "./useProgressPanel";
 
-/** Renders the progress area used by the legacy pipeline observer. */
-export function ProgressPanel({ progress }: ProgressPanelProps): React.JSX.Element {
-  const progressPercent =
-    progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+/** Renders the determinate pipeline progress bar with its message. */
+export function ProgressPanel({ progress }: ProgressPanelProps): React.JSX.Element | null {
+  const classes = useProgressPanel();
+  if (!progress.visible) {
+    return null;
+  }
+
+  const total = progress.total > 0 ? progress.total : 1;
+  const value = Math.min(progress.current, total);
 
   return (
-    <div
-      id="progress-container"
-      className="progress-container"
-      style={{ display: progress.visible ? "block" : "none" }}
-    >
-      <div className="progress-bar-track">
-        <div
-          id="progress-bar"
-          className="progress-bar-fill"
-          style={{ width: `${progressPercent}%` }}
+    <div className={classes.root} data-testid="progress-panel">
+      <Field validationState="none">
+        <ProgressBar
+          aria-label="Progreso del análisis"
+          data-testid="progress-bar"
+          max={total}
+          value={value}
         />
-      </div>
-      <p id="progress-text" className="progress-text">
+      </Field>
+      <Caption1 className={classes.message} data-testid="progress-message">
         {progress.message}
-      </p>
+      </Caption1>
     </div>
   );
 }

@@ -42,23 +42,94 @@ vi.mock("@fluentui/react-components", () => {
       },
     });
   };
+  const DropdownMock = function DropdownMock({
+    children,
+    onOptionSelect,
+    selectedOptions,
+    value,
+    placeholder: _placeholder,
+    ...rest
+  }: any) {
+    return React.createElement(
+      "div",
+      {
+        ...rest,
+        role: "combobox",
+        "data-selected-value": Array.isArray(selectedOptions) ? selectedOptions[0] : "",
+        "data-display-value": value,
+        onChange: (event: any) => {
+          if (typeof onOptionSelect === "function") {
+            onOptionSelect(event, {
+              optionValue: event?.target?.value ?? "",
+              optionText: event?.target?.value ?? "",
+              selectedOptions: [event?.target?.value ?? ""],
+            });
+          }
+        },
+      },
+      children
+    );
+  };
+  const OptionMock = function OptionMock({ children, value, ...rest }: any) {
+    return React.createElement(
+      "span",
+      { ...rest, role: "option", "data-option-value": value },
+      children
+    );
+  };
+  const FieldMock = function FieldMock({ children, label, validationState, ...rest }: any) {
+    const labelNode = label
+      ? React.createElement("span", { "data-field-label": "true" }, label)
+      : null;
+    return React.createElement(
+      "div",
+      { ...rest, "data-field": "true", "data-validation": validationState ?? "" },
+      labelNode,
+      children
+    );
+  };
+  const ProgressBarMock = function ProgressBarMock({ value, max, ...rest }: any) {
+    const numericMax = typeof max === "number" && max > 0 ? max : 1;
+    const numericValue = typeof value === "number" ? value : 0;
+    const percent = Math.round((numericValue / numericMax) * 100);
+    return React.createElement("div", {
+      ...rest,
+      role: "progressbar",
+      "aria-valuenow": numericValue,
+      "aria-valuemax": numericMax,
+      "data-progress-percent": percent,
+    });
+  };
+  const SpinnerMock = function SpinnerMock({ size: _size, label, ...rest }: any) {
+    return React.createElement(
+      "span",
+      { ...rest, role: "status", "data-spinner": "true" },
+      label ?? null
+    );
+  };
   return {
     FluentProvider: Passthrough,
-    MessageBar: Passthrough,
-    MessageBarBody: Passthrough,
-    MessageBarTitle: Passthrough,
+    MessageBar: renderAs("div", "MessageBar"),
+    MessageBarBody: renderAs("div", "MessageBarBody"),
+    MessageBarTitle: renderAs("strong", "MessageBarTitle"),
     Card: renderAs("section", "Card"),
     CardHeader: renderAs("header", "CardHeader"),
     CardFooter: renderAs("footer", "CardFooter"),
     Badge: renderAs("span", "Badge"),
     Button: renderAs("button", "Button"),
     Textarea: TextareaMock,
+    Dropdown: DropdownMock,
+    Option: OptionMock,
+    Field: FieldMock,
+    ProgressBar: ProgressBarMock,
+    Spinner: SpinnerMock,
     Body1: renderAs("span", "Body1"),
     Body1Strong: renderAs("strong", "Body1Strong"),
     Body2: renderAs("p", "Body2"),
     Caption1: renderAs("span", "Caption1"),
     Caption1Strong: renderAs("span", "Caption1Strong"),
     Subtitle2: renderAs("h3", "Subtitle2"),
+    Title2: renderAs("h2", "Title2"),
     webLightTheme: {},
     makeStyles: () => () =>
       new Proxy(
@@ -83,4 +154,11 @@ vi.mock("@fluentui/react-icons", () => ({
   DismissRegular: () => null,
   CommentRegular: () => null,
   CommentMultipleRegular: () => null,
+  WandRegular: () => null,
+  BroomRegular: () => null,
+  EraserRegular: () => null,
+  DocumentEditRegular: () => null,
+  ArrowSyncRegular: () => null,
+  ChevronDownRegular: () => null,
+  HistoryDismissRegular: () => null,
 }));

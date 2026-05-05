@@ -1,9 +1,14 @@
-import type * as React from "react";
 import type { AnalysisProfileOption } from "../App";
 
 export type AnalysisProfileSectionProps = Readonly<{
   isDisabled: boolean;
-  onGeneroChange: React.ChangeEventHandler<HTMLSelectElement>;
+  onGeneroChange: (value: string) => void;
   options: readonly AnalysisProfileOption[];
   selectedGenero: string;
+}>;
+
+export type AnalysisProfileSectionClasses = Readonly<{
+  root: string;
+  field: string;
+  dropdown: string;
 }>;
