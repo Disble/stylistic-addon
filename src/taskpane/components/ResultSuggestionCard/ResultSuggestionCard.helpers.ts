@@ -2,7 +2,9 @@ import type { SuggestionApplicationFailure } from "../../../domain/DocumentAppli
 import type { SuggestionSeverity } from "../../../domain/suggestion/Suggestion.types";
 import type { ResultsPanelCardState } from "../../ResultsPanelStore";
 
-export type SeverityBadgeColor = "danger" | "warning" | "informative" | "subtle";
+export type CardVisualState = "pending" | "accepted" | "rejected" | "failed" | "not-found";
+
+export type CategoryAccent = "grammar" | "spelling" | "punctuation" | "style" | "neutral";
 
 const SEVERITY_LABEL: Record<SuggestionSeverity, string> = {
   high: "alta",
@@ -10,20 +12,30 @@ const SEVERITY_LABEL: Record<SuggestionSeverity, string> = {
   low: "baja",
 };
 
-const SEVERITY_COLOR: Record<SuggestionSeverity, SeverityBadgeColor> = {
-  high: "danger",
-  medium: "warning",
-  low: "informative",
-};
+const DIACRITIC_PATTERN = /[̀-ͯ]/g;
 
-/** Maps a suggestion severity to a Fluent Badge color token. */
-export function getSeverityBadgeColor(severity: SuggestionSeverity): SeverityBadgeColor {
-  return SEVERITY_COLOR[severity] ?? "subtle";
-}
-
-/** Returns a humanized severity label for the badge text. */
+/** Returns a humanized severity label for inline dot rendering. */
 export function getSeverityLabel(severity: SuggestionSeverity): string {
   return SEVERITY_LABEL[severity] ?? severity;
+}
+
+/** Resolves the visual state used to color the stripe and background tint. */
+export function resolveCardVisualState(card: ResultsPanelCardState): CardVisualState {
+  if (card.cardGroup === "not-found") return "not-found";
+  if (card.isFailed) return "failed";
+  if (card.state === "accepted") return "accepted";
+  if (card.state === "rejected") return "rejected";
+  return "pending";
+}
+
+/** Maps the raw suggestion category to a stable accent slug (tolerant of accents). */
+export function getCategoryAccent(category: string): CategoryAccent {
+  const slug = category.trim().toLowerCase().normalize("NFD").replace(DIACRITIC_PATTERN, "");
+  if (slug.startsWith("gramatic") || slug.startsWith("grammar")) return "grammar";
+  if (slug.startsWith("ortograf") || slug.startsWith("spelling")) return "spelling";
+  if (slug.startsWith("puntuac") || slug.startsWith("punctuation")) return "punctuation";
+  if (slug.startsWith("estilo") || slug.startsWith("style")) return "style";
+  return "neutral";
 }
 
 /** Returns the failure copy for a card that never applied successfully. */

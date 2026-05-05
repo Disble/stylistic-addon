@@ -10,10 +10,46 @@ import {
   Card,
   Textarea,
 } from "@fluentui/react-components";
-import { CheckmarkRegular, CommentRegular, DismissRegular } from "@fluentui/react-icons";
+import {
+  CheckmarkCircleFilled,
+  CheckmarkRegular,
+  CommentRegular,
+  DismissCircleFilled,
+  DismissRegular,
+  ErrorCircleFilled,
+  SearchInfoFilled,
+} from "@fluentui/react-icons";
 import { getFailedSuggestionCopy } from "./ResultSuggestionCard.helpers";
+import type { CardVisualState } from "./ResultSuggestionCard.helpers";
 import type { ResultSuggestionCardProps } from "./ResultSuggestionCard.types";
 import { useResultSuggestionCard } from "./useResultSuggestionCard";
+
+const STATUS_ICON_LABEL: Record<CardVisualState, string | null> = {
+  pending: null,
+  accepted: "Sugerencia aceptada",
+  rejected: "Sugerencia rechazada",
+  failed: "Sugerencia fallida",
+  "not-found": "Sugerencia no encontrada en el documento",
+};
+
+function renderStatusIcon(state: CardVisualState, className: string): React.JSX.Element | null {
+  const label = STATUS_ICON_LABEL[state];
+  if (!label) return null;
+
+  return (
+    <span
+      aria-label={label}
+      className={className}
+      data-testid={`card-status-icon-${state}`}
+      role="img"
+    >
+      {state === "accepted" ? <CheckmarkCircleFilled /> : null}
+      {state === "rejected" ? <DismissCircleFilled /> : null}
+      {state === "failed" ? <ErrorCircleFilled /> : null}
+      {state === "not-found" ? <SearchInfoFilled /> : null}
+    </span>
+  );
+}
 
 /** Renders one suggestion card with Fluent UI v9 components. */
 export function ResultSuggestionCard({
@@ -30,20 +66,27 @@ export function ResultSuggestionCard({
   return (
     <li
       className={classes.root}
+      data-card-state={view.cardVisualState}
+      data-category-accent={view.categoryAccent}
       data-severity={card.suggestion.severity}
       data-suggestion-id={card.suggestion.id}
     >
       <Card className={classes.card}>
-        <span className={classes.severityStripe} aria-hidden="true" />
+        <span className={classes.stateStripe} aria-hidden="true" />
 
         <div className={classes.badgeRow}>
-          <Badge appearance="filled" color="brand">
+          <span className={classes.categoryPill} data-testid="card-category-pill">
             {card.suggestion.category}
-          </Badge>
+          </span>
           {!card.isFailed ? (
-            <Badge appearance="tint" color={view.severityColor}>
-              {view.severityLabel}
-            </Badge>
+            <span
+              aria-label={`Severidad ${view.severityLabel}`}
+              className={classes.severityIndicator}
+              data-testid="card-severity-indicator"
+            >
+              <span className={classes.severityDot} aria-hidden="true" />
+              <span className={classes.severityLabel}>{view.severityLabel}</span>
+            </span>
           ) : null}
           {isCommentOnly ? (
             <Badge
@@ -55,6 +98,7 @@ export function ResultSuggestionCard({
               comentario
             </Badge>
           ) : null}
+          {renderStatusIcon(view.cardVisualState, classes.statusIcon)}
         </div>
 
         {card.failure ? (

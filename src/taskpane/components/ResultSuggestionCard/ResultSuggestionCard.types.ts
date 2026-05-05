@@ -1,5 +1,5 @@
 import type { ResultsPanelCardState } from "../../ResultsPanelStore";
-import type { SeverityBadgeColor } from "./ResultSuggestionCard.helpers";
+import type { CardVisualState, CategoryAccent } from "./ResultSuggestionCard.helpers";
 
 export type ResultSuggestionCardProps = Readonly<{
   card: ResultsPanelCardState;
@@ -13,8 +13,13 @@ export type ResultSuggestionCardProps = Readonly<{
 export type ResultSuggestionCardClasses = Readonly<{
   root: string;
   card: string;
-  severityStripe: string;
+  stateStripe: string;
   badgeRow: string;
+  categoryPill: string;
+  severityIndicator: string;
+  severityDot: string;
+  severityLabel: string;
+  statusIcon: string;
   diff: string;
   original: string;
   suggested: string;
@@ -31,7 +36,8 @@ export type ResultSuggestionCardClasses = Readonly<{
 export type ResultSuggestionCardViewModel = Readonly<{
   classes: ResultSuggestionCardClasses;
   isCommentOnly: boolean;
-  severityColor: SeverityBadgeColor;
+  cardVisualState: CardVisualState;
+  categoryAccent: CategoryAccent;
   severityLabel: string;
   acceptLabel: string;
   rejectLabel: string;
