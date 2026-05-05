@@ -61,13 +61,8 @@ const useResultSuggestionCardStyles = makeStyles({
     rowGap: tokens.spacingVerticalXXS,
     paddingTop: tokens.spacingVerticalXS,
   },
-  diffArrow: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-  },
   original: {
     color: tokens.colorPaletteRedForeground1,
-    textDecorationLine: "line-through",
     overflowWrap: "anywhere",
   },
   suggested: {
@@ -114,9 +109,6 @@ const useResultSuggestionCardStyles = makeStyles({
     columnGap: tokens.spacingHorizontalXS,
     alignItems: "center",
   },
-  primaryAction: {
-    flexGrow: 1,
-  },
   feedbackTextarea: {
     width: "100%",
   },
@@ -136,7 +128,6 @@ export function useResultSuggestionCard(
     severityStripe: `${styles.severityStripeBase} ${severityStripeClass}`.trim(),
     badgeRow: styles.badgeRow,
     diff: styles.diff,
-    diffArrow: styles.diffArrow,
     original: styles.original,
     suggested: styles.suggested,
     justification: styles.justification,
@@ -146,7 +137,6 @@ export function useResultSuggestionCard(
     note: styles.note,
     footer: styles.footer,
     actions: styles.actions,
-    primaryAction: styles.primaryAction,
     feedbackTextarea: styles.feedbackTextarea,
   };
 

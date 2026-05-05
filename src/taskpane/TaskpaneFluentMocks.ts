@@ -83,5 +83,4 @@ vi.mock("@fluentui/react-icons", () => ({
   DismissRegular: () => null,
   CommentRegular: () => null,
   CommentMultipleRegular: () => null,
-  ArrowRightRegular: () => null,
 }));

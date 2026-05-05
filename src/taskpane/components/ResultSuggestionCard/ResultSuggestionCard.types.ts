@@ -16,7 +16,6 @@ export type ResultSuggestionCardClasses = Readonly<{
   severityStripe: string;
   badgeRow: string;
   diff: string;
-  diffArrow: string;
   original: string;
   suggested: string;
   justification: string;
@@ -26,7 +25,6 @@ export type ResultSuggestionCardClasses = Readonly<{
   note: string;
   footer: string;
   actions: string;
-  primaryAction: string;
   feedbackTextarea: string;
 }>;
 

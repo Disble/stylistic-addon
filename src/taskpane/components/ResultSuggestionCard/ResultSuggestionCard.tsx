@@ -10,12 +10,7 @@ import {
   Card,
   Textarea,
 } from "@fluentui/react-components";
-import {
-  ArrowRightRegular,
-  CheckmarkRegular,
-  CommentRegular,
-  DismissRegular,
-} from "@fluentui/react-icons";
+import { CheckmarkRegular, CommentRegular, DismissRegular } from "@fluentui/react-icons";
 import { getFailedSuggestionCopy } from "./ResultSuggestionCard.helpers";
 import type { ResultSuggestionCardProps } from "./ResultSuggestionCard.types";
 import { useResultSuggestionCard } from "./useResultSuggestionCard";
@@ -84,7 +79,6 @@ export function ResultSuggestionCard({
             {!isCommentOnly ? (
               <div className={classes.diff} data-testid="card-diff">
                 <Body1 className={classes.original}>{card.suggestion.anchor}</Body1>
-                <ArrowRightRegular className={classes.diffArrow} aria-hidden="true" />
                 <Body1Strong className={classes.suggested}>
                   {card.suggestion.suggestedText ?? ""}
                 </Body1Strong>
@@ -108,7 +102,6 @@ export function ResultSuggestionCard({
               <Button
                 appearance="primary"
                 aria-label={view.acceptAriaLabel}
-                className={classes.primaryAction}
                 data-action="accept"
                 data-suggestion-id={card.suggestion.id}
                 disabled={card.isResolving}
