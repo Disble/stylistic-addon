@@ -123,6 +123,8 @@ vi.mock("@fluentui/react-components", () => {
     Field: FieldMock,
     ProgressBar: ProgressBarMock,
     Spinner: SpinnerMock,
+    Skeleton: renderAs("div", "Skeleton"),
+    SkeletonItem: renderAs("span", "SkeletonItem"),
     Body1: renderAs("span", "Body1"),
     Body1Strong: renderAs("strong", "Body1Strong"),
     Body2: renderAs("p", "Body2"),

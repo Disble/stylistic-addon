@@ -22,8 +22,20 @@ import {
   setTaskpaneDisableTrackChangesCtaVisible,
   showTaskpaneStatus,
 } from "./TaskpaneShellStore";
+import type { ResultsPanelFilter } from "./ResultsPanelFilters";
 
 type ResultsCardGroup = "active" | "processed" | "not-found";
+
+export type {
+  ResultsPanelCardBucket,
+  ResultsPanelChipCounts,
+  ResultsPanelFilter,
+} from "./ResultsPanelFilters";
+export {
+  computeResultsPanelChipCounts,
+  getResultsPanelCardBucket,
+  selectResultsPanelVisibleCards,
+} from "./ResultsPanelFilters";
 
 export type ResultsPanelCardState = Readonly<{
   cardGroup: ResultsCardGroup;
@@ -41,12 +53,14 @@ export type ResultsPanelCardState = Readonly<{
 }>;
 
 export type ResultsPanelState = Readonly<{
+  activeFilter: ResultsPanelFilter;
   cards: readonly ResultsPanelCardState[];
   summaryText: string;
   visible: boolean;
 }>;
 
 const INITIAL_STATE: ResultsPanelState = {
+  activeFilter: "all",
   cards: [],
   summaryText: "",
   visible: false,
@@ -82,6 +96,7 @@ export function setResultsPanelData(
   context = { deps, isSelection, summaryModel };
   useResultsPanelStore.setState(
     {
+      activeFilter: "all",
       cards: sortCards(cards),
       summaryText: buildSuggestionProgressSummaryText(summaryModel, isSelection),
       visible: true,
@@ -103,6 +118,11 @@ export function resetResultsPanelState(): void {
 /** Hides the panel while preserving the last rendered card snapshot. */
 export function hideResultsPanel(): void {
   useResultsPanelStore.setState({ visible: false });
+}
+
+/** Selects which chip filter the user wants applied to the visible cards. */
+export function setResultsPanelFilter(filter: ResultsPanelFilter): void {
+  useResultsPanelStore.setState({ activeFilter: filter });
 }
 
 /** Toggles the feedback accordion for one card. */

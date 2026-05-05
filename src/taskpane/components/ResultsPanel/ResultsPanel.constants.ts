@@ -1,0 +1,1 @@
+export const SKELETON_PLACEHOLDER_COUNT = 3;
