@@ -7,13 +7,12 @@
  * Focused exclusively on communication: no retry logic (handled by
  * `RetryAnalysisDecorator`), no DOM interaction, no Office.js.
  *
- * The singleton `MastraClient` instance is reused across all calls for
- * connection efficiency.
+ * Mastra clients are created through `MastraClientFactory` so every request can
+ * include the latest Better Auth bearer token.
  *
  * @module MastraAdapter
  */
 
-import { MastraClient } from "@mastra/client-js";
 import type { TextChunk } from "../../domain/chunking/TextChunk.types";
 import type {
   ChunkAnalysisStatus,
@@ -30,12 +29,12 @@ import {
   MASTRA_POLL_BYPASS_ENABLED,
   WORKFLOW_ID,
 } from "../../infrastructure/config";
+import { MastraClientFactory } from "./MastraClientFactory";
 import { MOCK_MASTRA_POLL_OUTPUT } from "./MockMastraPollOutputFactory";
 
-/** Singleton Mastra client instance, reused across all calls. */
-const client = new MastraClient({ baseUrl: MASTRA_BASE_URL });
-
 export class MastraAdapter implements IAnalysisPort {
+  constructor(private readonly clientFactory = new MastraClientFactory()) {}
+
   /**
    * Checks whether the Mastra backend is reachable and the editorial
    * workflow is registered. Never throws — returns `false` on any error.
@@ -52,7 +51,7 @@ export class MastraAdapter implements IAnalysisPort {
       console.log(
         `🔌 [MastraAdapter] Verificando → ${MASTRA_BASE_URL}, workflow: "${WORKFLOW_ID}"`
       );
-      const workflow = client.getWorkflow(WORKFLOW_ID);
+      const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
       await workflow.details();
       console.log("🔌 [MastraAdapter] ✅ Conexión exitosa");
       return true;
@@ -86,7 +85,7 @@ export class MastraAdapter implements IAnalysisPort {
     );
 
     try {
-      const workflow = client.getWorkflow(WORKFLOW_ID);
+      const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
       const run = await workflow.createRun();
       const runId = this.extractRunId(run);
 
@@ -123,7 +122,7 @@ export class MastraAdapter implements IAnalysisPort {
       return this.buildBypassedPollResult(chunkIndex, runId);
     }
 
-    const workflow = client.getWorkflow(WORKFLOW_ID);
+    const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
     const state = await workflow.runById(runId, {
       fields: ["result", "error"],
       withNestedWorkflows: false,

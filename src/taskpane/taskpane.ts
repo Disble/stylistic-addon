@@ -14,8 +14,12 @@
  */
 
 import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
+import { BetterAuthAdapter } from "../adapters/auth/BetterAuthAdapter";
 import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
+import { MastraClientFactory } from "../adapters/mastra/MastraClientFactory";
 import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability/ConsoleResolutionObservabilityAdapter";
+import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
+import { OfficeDialogAuthAdapter } from "../adapters/auth/OfficeDialogAuthAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
@@ -39,6 +43,14 @@ import {
   type ResultsPanelDeps,
   renderResultsPanel,
 } from "./SuggestionCardRenderer";
+import {
+  getTaskpaneAuthToken,
+  setTaskpaneAuthenticated,
+  setTaskpaneAuthLoading,
+  setTaskpaneSigningIn,
+  setTaskpaneSigningOut,
+  setTaskpaneUnauthenticated,
+} from "./TaskpaneAuthStore";
 import {
   getTaskpaneShellState,
   hideTaskpaneProgress,
@@ -82,13 +94,17 @@ function toUserMessage(error: unknown): string {
 
 const observabilityPort = new ConsoleResolutionObservabilityAdapter();
 const documentPort = new WordAdapter(undefined, observabilityPort);
+const authPort = new BetterAuthAdapter();
+const authSessionStoragePort = new OfficeAuthSessionStorageAdapter();
+const officeDialogAuthAdapter = new OfficeDialogAuthAdapter();
+const mastraClientFactory = new MastraClientFactory(getTaskpaneAuthToken);
 const analysisPort = new RetryAnalysisDecorator(
-  new MastraAdapter(),
+  new MastraAdapter(mastraClientFactory),
   MAX_RETRIES,
   RETRY_BASE_DELAY_MS
 );
 
-const feedbackPort: IFeedbackPort = new FeedbackAdapter();
+const feedbackPort: IFeedbackPort = new FeedbackAdapter(mastraClientFactory);
 const reviewSessionMediator = new ReviewSessionMediator(documentPort, feedbackPort);
 
 const orchestrator = new PipelineOrchestrator([
@@ -119,9 +135,65 @@ const cardRendererDeps: ResultsPanelDeps = {
  * Rehydrates shell visibility from document state after the React shell mounts.
  */
 export function bootstrapTaskpane(): void {
+  void bootstrapAuthSession();
   void refreshCleanupVisibility();
   void refreshTrackChangesCtaVisibility();
   documentPort.subscribeSelectionChanges(setSelectionPreviewSnapshot);
+}
+
+/** Restores and validates a persisted Better Auth session during taskpane boot. */
+async function bootstrapAuthSession(): Promise<void> {
+  setTaskpaneAuthLoading();
+  try {
+    const persisted = await authSessionStoragePort.restore();
+    if (!persisted) {
+      setTaskpaneUnauthenticated();
+      return;
+    }
+
+    const validSession = await authPort.getSession(persisted.token);
+    if (!validSession) {
+      await authSessionStoragePort.clear();
+      setTaskpaneUnauthenticated();
+      return;
+    }
+
+    await authSessionStoragePort.persist(validSession);
+    setTaskpaneAuthenticated(validSession);
+  } catch (error) {
+    setTaskpaneUnauthenticated(toUserMessage(error));
+  }
+}
+
+/** Starts the OAuth flow through Office Dialog API and persists the session. */
+export async function handleSignIn(): Promise<void> {
+  setTaskpaneSigningIn(true);
+  try {
+    const session = await officeDialogAuthAdapter.signIn();
+    await authSessionStoragePort.persist(session);
+    setTaskpaneAuthenticated(session);
+    showTaskpaneStatus("Sesión iniciada correctamente.", "success");
+  } catch (error) {
+    setTaskpaneUnauthenticated(toUserMessage(error));
+  } finally {
+    setTaskpaneSigningIn(false);
+  }
+}
+
+/** Revokes the Better Auth session and clears all local auth state. */
+export async function handleSignOut(): Promise<void> {
+  const token = getTaskpaneAuthToken();
+  setTaskpaneSigningOut(true);
+  try {
+    await authPort.signOut(token);
+  } catch (error) {
+    console.warn("⚠️ [Taskpane] No se pudo revocar sesión en backend:", error);
+  } finally {
+    await authSessionStoragePort.clear();
+    setTaskpaneUnauthenticated();
+    setTaskpaneSigningOut(false);
+    showTaskpaneStatus("Sesión cerrada.", "success");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +240,11 @@ async function refreshTrackChangesCtaVisibility(): Promise<void> {
  * All UI updates come back via `PipelineEventEmitter` (Observer pattern).
  */
 export async function handleAnalyze(): Promise<void> {
+  if (!getTaskpaneAuthToken()) {
+    showTaskpaneStatus("Iniciá sesión con Google antes de analizar.", "error");
+    return;
+  }
+
   if (stateMachine.isRunning) {
     console.warn("⚠️ [Taskpane] Pipeline ya en ejecución — ignorando click");
     return;

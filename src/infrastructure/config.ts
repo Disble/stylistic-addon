@@ -17,6 +17,18 @@ import type { Profile } from "../domain/Profile.types";
 /** Base URL of the Mastra server. */
 export const MASTRA_BASE_URL = "http://localhost:4111";
 
+/** Better Auth base path mounted by the Mastra backend custom route. */
+export const BETTER_AUTH_BASE_PATH = "/auth";
+
+/** Backend page that completes OAuth on the same origin as Better Auth cookies. */
+export const AUTH_COMPLETE_URL = `${MASTRA_BASE_URL}/auth-complete`;
+
+/** Taskpane-hosted dialog page used as the first URL for Office OAuth. */
+export const AUTH_DIALOG_PATH = "/auth-dialog.html";
+
+/** Storage key for the Better Auth bearer session in OfficeRuntime.storage. */
+export const AUTH_SESSION_STORAGE_KEY = "stylistic.auth.session.v1";
+
 /** Identifier of the editorial workflow registered in Mastra. */
 export const WORKFLOW_ID = "stylistic-workflow";
 

@@ -46,3 +46,4 @@ Thumbs.db
 .claude/settings.local.json
 .claude/skills/mastra
 .ignore/
+docs/google-auth-debug-bitacora.md

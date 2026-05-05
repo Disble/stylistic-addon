@@ -6,6 +6,8 @@ import {
   handleAnalyze,
   handleCleanup,
   handleDisableTrackChanges,
+  handleSignIn,
+  handleSignOut,
 } from "./taskpane";
 import { App } from "./components/App";
 
@@ -38,6 +40,8 @@ function renderTaskpaneShell(): void {
           onAnalyze: handleAnalyze,
           onCleanup: handleCleanup,
           onDisableTrackChanges: handleDisableTrackChanges,
+          onSignIn: handleSignIn,
+          onSignOut: handleSignOut,
           onMount: () => bootstrapTaskpane(),
         })
       )
