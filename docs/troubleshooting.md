@@ -76,6 +76,52 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 ---
 
+## UI / Layout Issues
+
+### Taskpane content sticks to the top and the rest stays grey
+
+**Symptom:** The white card with the workflow only spans the height of its
+content. Below it, the body background color (grey `#fafafa`) is visible. The
+`SettingsToolbar` does not pin to the bottom.
+
+**Cause:** The full-height chain is broken. `#app-body` declares
+`height: 100%`, but its parents must each be `100%` too — including the `<div>`
+that `FluentProvider` injects between `#container` and the React subtree. If
+any link in the chain is auto-sized, `#app-body` collapses to its content
+height and the workflow's `flex: 1` has no remaining space to grow into.
+
+**Fix:** keep this rule in `taskpane.css` so the chain reaches `#app-body`:
+
+```css
+#container,
+#container > * {
+  height: 100%;
+}
+```
+
+`> *` covers the `FluentProvider` wrapper without coupling to the internal
+`.fui-FluentProvider` class.
+
+---
+
+### Vertical scrollbar appears on the taskpane even though content fits
+
+**Symptom:** A scrollbar shows up on the right edge of the taskpane while the
+visible content clearly fits in the viewport (e.g. only the profile selector
+and analyze button are rendered).
+
+**Cause:** `#app-body` declares `height: 100%` *and* a non-zero `padding`. The
+default `box-sizing` is `content-box`, so the rendered height is
+`100% + padding-top + padding-bottom`, overflowing the parent by the padding
+amount and forcing the scrollbar.
+
+**Fix:** add `box-sizing: border-box` to `#app-body` (already in
+`taskpane.css`). Whenever you introduce a new full-height container with
+padding, repeat this — `content-box` is the silent killer of Office task pane
+layouts.
+
+---
+
 ## Backend Connection Issues
 
 ### Login dialog closes with error 12006 but Google eventually succeeds

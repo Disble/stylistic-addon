@@ -7,14 +7,23 @@ import { DisableTrackChangesSection } from "../DisableTrackChangesSection";
 import { ProgressPanel } from "../ProgressPanel";
 import { ResultsPanel } from "../ResultsPanel";
 import { SelectionPreview, useSelectionPreview } from "../SelectionPreview";
+import { SettingsToolbar } from "../SettingsToolbar";
+import { SettingsView } from "../SettingsView";
 import { StatusBar } from "../StatusBar";
 import { ANALYSIS_PROFILE_OPTIONS } from "./App.constants";
 import type { AppProps } from "./App.types";
-import { useApp } from "./useApp";
+import { useApp, useAppClasses } from "./useApp";
 
 /**
  * React shell for the taskpane.
- * It preserves the existing DOM anchor IDs so the legacy composition root can bind safely during migration.
+ *
+ * Renders one of three top-level surfaces based on auth + view state:
+ * - unauthenticated → `AuthSection` (login screen, no toolbar, no settings access)
+ * - authenticated + `view === "settings"` → `SettingsView` (account + future setting groups)
+ * - authenticated + `view === "main"` → analysis workflow + persistent `SettingsToolbar`
+ *
+ * Preserves the legacy `#app-body` DOM anchor so `taskpane.css` can keep owning the
+ * outer flex layout (height chain + padding) without a port through Griffel.
  */
 export function App({
   onAnalyze,
@@ -24,49 +33,75 @@ export function App({
   onSignOut,
   onMount,
 }: AppProps): React.JSX.Element {
-  const { authState, handleGeneroChange, shellState } = useApp();
+  const {
+    authState,
+    shellState,
+    viewState,
+    handleGeneroChange,
+    handleOpenSettings,
+    handleCloseSettings,
+  } = useApp();
+  const classes = useAppClasses();
   const selectionPreview = useSelectionPreview();
 
   React.useEffect(() => {
     onMount?.();
   }, [onMount]);
 
+  if (authState.status !== "authenticated") {
+    return (
+      <main id="app-body">
+        <AuthSection
+          error={authState.error}
+          isSigningIn={authState.isSigningIn}
+          onSignIn={onSignIn}
+          status={authState.status}
+        />
+      </main>
+    );
+  }
+
+  if (viewState.view === "settings") {
+    return (
+      <main id="app-body">
+        <SettingsView
+          isSigningOut={authState.isSigningOut}
+          onBack={handleCloseSettings}
+          onSignOut={onSignOut}
+          session={authState.session}
+        />
+      </main>
+    );
+  }
+
   return (
     <main id="app-body">
-      <AuthSection
-        error={authState.error}
-        isSigningIn={authState.isSigningIn}
-        isSigningOut={authState.isSigningOut}
-        onSignIn={onSignIn}
-        onSignOut={onSignOut}
-        session={authState.session}
-        status={authState.status}
-      />
-      {authState.status !== "authenticated" ? null : (
-        <>
-      <AnalysisProfileSection
-        isDisabled={shellState.isAnalyzeLoading}
-        onGeneroChange={handleGeneroChange}
-        options={ANALYSIS_PROFILE_OPTIONS}
-        selectedGenero={shellState.selectedGenero}
-      />
-      <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
-      <SelectionPreview {...selectionPreview} />
-      <ProgressPanel progress={shellState.progress} />
-      <ResultsPanel />
-      <CleanupSection
-        isLoading={shellState.isCleanupLoading}
-        isVisible={shellState.cleanupVisible}
-        onCleanup={onCleanup}
-      />
-      <DisableTrackChangesSection
-        isLoading={shellState.isDisableTrackChangesLoading}
-        isVisible={shellState.disableTrackChangesCtaVisible}
-        onDisableTrackChanges={onDisableTrackChanges}
-      />
-      <StatusBar status={shellState.status} />
-        </>
-      )}
+      <div className={classes.workflow}>
+        <AnalysisProfileSection
+          isDisabled={shellState.isAnalyzeLoading}
+          onGeneroChange={handleGeneroChange}
+          options={ANALYSIS_PROFILE_OPTIONS}
+          selectedGenero={shellState.selectedGenero}
+        />
+        <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
+        <SelectionPreview {...selectionPreview} />
+        <ProgressPanel progress={shellState.progress} />
+        <ResultsPanel />
+        <CleanupSection
+          isLoading={shellState.isCleanupLoading}
+          isVisible={shellState.cleanupVisible}
+          onCleanup={onCleanup}
+        />
+        <DisableTrackChangesSection
+          isLoading={shellState.isDisableTrackChangesLoading}
+          isVisible={shellState.disableTrackChangesCtaVisible}
+          onDisableTrackChanges={onDisableTrackChanges}
+        />
+        <StatusBar status={shellState.status} />
+      </div>
+      <div className={classes.toolbar}>
+        <SettingsToolbar onOpenSettings={handleOpenSettings} />
+      </div>
     </main>
   );
 }

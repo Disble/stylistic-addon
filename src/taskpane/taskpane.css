@@ -7,9 +7,15 @@ body {
   background: #fafafa;
 }
 
+#container,
+#container > * {
+  height: 100%;
+}
+
 #app-body {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   padding: 20px 16px 0;
   height: 100%;
   overflow: hidden;

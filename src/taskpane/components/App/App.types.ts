@@ -11,3 +11,8 @@ export type AppProps = Readonly<{
   onSignOut: () => Promise<void> | void;
   onMount?: () => void;
 }>;
+
+export type AppClasses = Readonly<{
+  workflow: string;
+  toolbar: string;
+}>;

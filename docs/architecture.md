@@ -101,6 +101,37 @@ taskpane opens a same-origin dialog page and resolves only from
 real Word hosts can emit transient 12006 events while the dialog is still
 navigating and later sends a valid success message.
 
+### 2.6 Taskpane shell — main vs settings views
+
+The taskpane shell is a state-driven view switcher, not a single page. Three
+surfaces are mutually exclusive at the App level:
+
+- **unauthenticated** → `AuthSection` only (login screen). No toolbar, no gear,
+  no settings entry point.
+- **authenticated + `view === "main"`** → analysis workflow (profile selector,
+  analyze CTA, progress, results, cleanup CTAs, status bar) plus a persistent
+  bottom `SettingsToolbar` exposing the gear icon.
+- **authenticated + `view === "settings"`** → `SettingsView` page (back arrow,
+  "Settings" title, `AccountSettings` row with email + Log out). Designed to
+  host additional setting groups (display language, defaults, etc.) over time
+  without touching the shell.
+
+Active view is owned by `TaskpaneViewStore` (Zustand) with a single field
+`view: "main" | "settings"`. Toggling is mediated by `setTaskpaneView`. Auth
+status keeps living in `TaskpaneAuthStore`; the two stores are composed at the
+App level rather than merged so each presentational surface keeps a focused
+contract.
+
+Account/logout controls intentionally do **not** appear in the main workflow.
+The session is consolidated into the secondary settings page so the primary
+real estate stays dedicated to analysis. Components must follow the strict
+folder anatomy required by `checkReactComponentRails.mjs` (`index.ts`,
+`Component.tsx`, `Component.types.ts`, optional `useComponent.ts`).
+
+`AuthSection` is **narrowed** to the loading/unauthenticated branches only;
+once `status === "authenticated"`, the component is no longer rendered and the
+App takes over the surface decision.
+
 ---
 
 ## 3. Current system overview
@@ -286,6 +317,7 @@ src/
     ├── auth-dialog.ts
     ├── TaskpaneAuthStore.ts
     ├── TaskpaneShellStore.ts
+    ├── TaskpaneViewStore.ts
     ├── ResultsPanelStore.ts
     ├── SelectionPreviewStore.ts
     ├── components/

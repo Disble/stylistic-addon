@@ -1,17 +1,18 @@
 import * as React from "react";
 import { Button, MessageBar, MessageBarBody, Spinner } from "@fluentui/react-components";
-import { ArrowExitRegular, PersonRegular } from "@fluentui/react-icons";
+import { PersonRegular } from "@fluentui/react-icons";
 import type { AuthSectionProps } from "./AuthSection.types";
 import { useAuthSection } from "./useAuthSection";
 
-/** Renders login/logout controls for the taskpane. */
+/**
+ * Renders the pre-app gate: a loading indicator while the persisted session is verified,
+ * or a login screen when the user has no active session. Once authenticated, the App
+ * shell takes over and this section is no longer rendered.
+ */
 export function AuthSection({
   error,
   isSigningIn,
-  isSigningOut,
   onSignIn,
-  onSignOut,
-  session,
   status,
 }: AuthSectionProps): React.JSX.Element {
   const classes = useAuthSection();
@@ -21,29 +22,6 @@ export function AuthSection({
       <section className={classes.root}>
         <div className={classes.content}>
           <Spinner label="Verificando sesión..." size="small" />
-        </div>
-      </section>
-    );
-  }
-
-  if (status === "authenticated") {
-    return (
-      <section className={classes.root}>
-        <div className={classes.content}>
-          <div className={classes.title}>Sesión activa</div>
-          <div className={classes.description}>{session?.user.email ?? session?.user.name ?? "Usuario autenticado"}</div>
-          <Button
-            appearance="secondary"
-            className={classes.button}
-            disabled={isSigningOut}
-            icon={isSigningOut ? <Spinner size="tiny" /> : <ArrowExitRegular aria-hidden="true" />}
-            onClick={() => {
-              void onSignOut();
-            }}
-            type="button"
-          >
-            {isSigningOut ? "Cerrando sesión..." : "Cerrar sesión"}
-          </Button>
         </div>
       </section>
     );
