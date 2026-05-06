@@ -6,7 +6,13 @@ type AuthBridgeSessionResponse = Readonly<{
   error?: string;
 }>;
 
-/** Posts a typed auth result from the dialog runtime back to the taskpane. */
+/**
+ * Posts a typed auth result from the dialog runtime back to the taskpane.
+ *
+ * This function intentionally fails loudly when Office.js is missing. Optional
+ * chaining hid a real host integration bug during the OAuth implementation: the
+ * dialog had a valid session but never notified the parent taskpane.
+ */
 function postDialogMessage(message: unknown): void {
   const ui = globalThis.Office?.context?.ui as
     | { messageParent?: (message: string) => void }
@@ -19,7 +25,14 @@ function postDialogMessage(message: unknown): void {
   ui.messageParent(JSON.stringify(message));
 }
 
-/** Waits for Office.js before the dialog uses messageParent or redirects. */
+/**
+ * Waits for Office.js before the dialog uses messageParent or redirects.
+ *
+ * The official Office fallback-auth sample wraps dialog work in `Office.onReady`.
+ * We do the same before both phases: creating the provider URL and exchanging the
+ * backend bridge code. That keeps the dialog runtime ready for the final
+ * `messageParent` call regardless of provider redirects.
+ */
 function waitForOfficeReady(): Promise<void> {
   return new Promise((resolve, reject) => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -45,7 +58,14 @@ function waitForOfficeReady(): Promise<void> {
   });
 }
 
-/** Exchanges a one-time backend bridge code for the authenticated session. */
+/**
+ * Exchanges a one-time backend bridge code for the authenticated session.
+ *
+ * The backend creates this code at `/auth-complete` after Better Auth can read
+ * the callback cookie. The add-in origin then consumes the code exactly once so
+ * the taskpane receives a normal `AuthSession` without relying on cross-origin
+ * cookies inside the Office WebView.
+ */
 async function exchangeBridgeCode(bridgeCode: string): Promise<unknown> {
   const url = new URL("/auth-bridge-session", MASTRA_BASE_URL);
   url.searchParams.set("code", bridgeCode);
@@ -59,7 +79,14 @@ async function exchangeBridgeCode(bridgeCode: string): Promise<unknown> {
   return payload.session;
 }
 
-/** Runs the OAuth dialog bridge page. */
+/**
+ * Runs the two-phase OAuth dialog bridge page.
+ *
+ * Phase 1 receives `callbackUrl`, creates the Google provider URL inside the
+ * dialog runtime, and redirects. Phase 2 receives `authBridgeCode`, exchanges it
+ * for the Better Auth bearer session, and posts the session to the parent
+ * taskpane.
+ */
 async function runAuthDialog(): Promise<void> {
   const params = new URLSearchParams(globalThis.location.search);
   const callbackUrl = params.get("callbackUrl");

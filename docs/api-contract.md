@@ -6,7 +6,8 @@ This document specifies what the Stylistic frontend (Word add-in) expects from t
 
 - **Framework:** [Mastra](https://mastra.ai/) (TypeScript AI framework)
 - **Communication:** The frontend uses `@mastra/client-js` v1.7.1 to call the workflow
-- **Protocol:** Mastra's built-in HTTP API (no custom REST endpoints needed)
+- **Protocol:** Mastra's built-in HTTP API for workflows, plus Better Auth routes for login/session management
+- **Authentication:** Better Auth bearer session token sent as `Authorization: Bearer <token>` on Mastra workflow calls
 
 ## Workflow Definition
 
@@ -37,6 +38,26 @@ Important: in this SDK version, `status` is always included in the response meta
 
 - **Default URL:** `http://localhost:4111` (Mastra's default port)
 - **CORS:** Must allow requests from `https://localhost:3000` (add-in dev server)
+
+### Authentication Contract
+
+Before calling the workflow, the taskpane must have a valid Better Auth session.
+The backend is expected to expose:
+
+| Route | Purpose |
+| --- | --- |
+| `/auth/*` | Better Auth sign-in, callback, session, and logout routes. |
+| `/auth-complete` | Backend OAuth completion bridge used after Google callback. |
+| `/auth-bridge-session` | One-time code exchange used by the Office Dialog page. |
+
+The add-in stores the Better Auth session token with `OfficeRuntime.storage` and
+creates Mastra clients with the current bearer token. If the backend returns 401
+for a protected workflow call, the taskpane should clear the local session and
+require the user to sign in again.
+
+The add-in must not store Google provider access/refresh tokens. Provider tokens
+belong to the backend/auth provider boundary; the frontend only uses the Better
+Auth session token.
 
 ## Input Schema
 

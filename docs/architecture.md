@@ -83,6 +83,24 @@ must stop owning location, observation, cleanup, and result mapping in one file.
 The command should orchestrate collaborators. The collaborators should own the
 real responsibilities.
 
+### 2.5 Authentication is a host/application boundary
+
+Authentication is part of the add-in application boundary, not editorial domain
+logic. The domain owns auth/session ports and session types; adapters own Better
+Auth, Office Dialog API, and OfficeRuntime storage details.
+
+The taskpane stores auth state in Zustand only for presentation. The persistent
+source of truth is `OfficeRuntime.storage` through
+`OfficeAuthSessionStorageAdapter`. Do not persist bearer tokens in Word document
+settings, custom XML parts, or Content Controls; those are document-scoped and
+can travel with files.
+
+The OAuth dialog follows the official Office fallback-auth pattern: the parent
+taskpane opens a same-origin dialog page and resolves only from
+`DialogMessageReceived`. `DialogEventReceived` is not treated as fatal because
+real Word hosts can emit transient 12006 events while the dialog is still
+navigating and later sends a valid success message.
+
 ---
 
 ## 3. Current system overview
@@ -123,7 +141,7 @@ flowchart LR
   end
 
   subgraph DOMAIN["Domain / Application"]
-    PORTS["ports.ts\nIDocumentPort / IAnalysisPort / IFeedbackPort"]
+    PORTS["ports.ts\nIDocumentPort / IAnalysisPort / IFeedbackPort / IAuthPort"]
     PIPE["PipelineOrchestrator"]
     HANDLERS["Read / Check / Chunk / Analyze / Guard / Apply Handlers"]
     MED["ReviewSessionMediator"]
@@ -143,8 +161,16 @@ flowchart LR
 
   subgraph BACKEND["Adapters / Backend"]
     MA["MastraAdapter"]
+    MCF["MastraClientFactory\nBearer token headers"]
     RETRY["RetryAnalysisDecorator"]
     FB["FeedbackAdapter / MockFeedbackAdapter"]
+  end
+
+  subgraph AUTH["Adapters / Auth"]
+    BA["BetterAuthAdapter"]
+    ODA["OfficeDialogAuthAdapter"]
+    STORE["OfficeAuthSessionStorageAdapter"]
+    DIALOG["auth-dialog.ts\nOffice Dialog bridge"]
   end
 
   subgraph HOST["Word Host Artifacts"]
@@ -158,11 +184,15 @@ flowchart LR
   IDX --> APP
   APP --> ZS
   TP --> PIPE
+  TP --> ODA
+  TP --> STORE
   PIPE --> HANDLERS
   HANDLERS --> PORTS
   HANDLERS --> WA
   HANDLERS --> RETRY
   RETRY --> MA
+  MA --> MCF
+  FB --> MCF
 
   TP --> MED
   APP --> MED
@@ -185,6 +215,9 @@ flowchart LR
   DOC --> CCC
   DOC --> TC
   DOC --> COM
+
+  ODA --> DIALOG
+  DIALOG --> BA
 ```
 
 ### 3.2 Current file map
@@ -192,6 +225,8 @@ flowchart LR
 ```text
 src/
 ├── domain/
+│   ├── auth/
+│   │   └── AuthSession.types.ts
 │   ├── types.ts
 │   ├── ports.ts
 │   ├── pipeline/
@@ -213,6 +248,10 @@ src/
 │   └── suggestion/
 │       └── SuggestionResolutionWorkflow.ts
 ├── adapters/
+│   ├── auth/
+│   │   ├── BetterAuthAdapter.ts
+│   │   ├── OfficeAuthSessionStorageAdapter.ts
+│   │   └── OfficeDialogAuthAdapter.ts
 │   ├── word/
 │   │   ├── WordAdapter.ts
 │   │   ├── ApplySuggestionCommand.ts
@@ -234,6 +273,7 @@ src/
 │   ├── mastra/
 │   │   ├── MastraAdapter.ts
 │   │   ├── FeedbackAdapter.ts
+│   │   ├── MastraClientFactory.ts
 │   │   └── MockFeedbackAdapter.ts
 │   └── RetryAnalysisDecorator.ts
 ├── infrastructure/
@@ -242,6 +282,9 @@ src/
 └── taskpane/
     ├── taskpane.ts
     ├── index.tsx
+    ├── auth-dialog.html
+    ├── auth-dialog.ts
+    ├── TaskpaneAuthStore.ts
     ├── TaskpaneShellStore.ts
     ├── ResultsPanelStore.ts
     ├── SelectionPreviewStore.ts

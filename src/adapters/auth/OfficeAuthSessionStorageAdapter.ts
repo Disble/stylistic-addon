@@ -10,6 +10,8 @@ import { AUTH_SESSION_STORAGE_KEY } from "../../infrastructure/config";
  * This adapter intentionally has no localStorage fallback: if the Office host
  * cannot provide global add-in storage, the taskpane should surface a controlled
  * unsupported-session state instead of silently weakening persistence semantics.
+ * Do not move this token into document settings or custom XML parts; those are
+ * document-scoped artifacts and can travel with files.
  */
 export class OfficeAuthSessionStorageAdapter implements IAuthSessionStoragePort {
   /** Restores the persisted session from OfficeRuntime.storage. */

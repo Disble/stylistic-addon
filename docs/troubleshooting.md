@@ -78,6 +78,64 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 ## Backend Connection Issues
 
+### Login dialog closes with error 12006 but Google eventually succeeds
+
+**Symptom:** The taskpane reports that the authentication dialog closed before
+login completed, while the dialog or backend logs show the OAuth callback/session
+eventually succeeded.
+
+**Cause:** Do not treat every `DialogEventReceived` 12006 as a fatal login
+failure. In real Word hosts, 12006 can appear while the dialog is still
+navigating. The confirmed implementation resolves login only from
+`DialogMessageReceived`, following the official Office fallback-auth sample.
+
+**Fix:** Verify `OfficeDialogAuthAdapter` does not reject from
+`DialogEventReceived`. The dialog page must load Office.js, wait for
+`Office.onReady()`, and post `{ type: "stylistic-auth-success", session }` with
+`Office.context.ui.messageParent`.
+
+---
+
+### Login reaches Google but returns `state_security_mismatch`
+
+**Symptom:** Google redirects back to the backend, but backend logs show Better
+Auth errors similar to `state_security_mismatch` or `State not persisted
+correctly`.
+
+**Cause:** The Office Dialog flow crosses taskpane/backend/provider runtimes, and
+the temporary signed OAuth state cookie can be unavailable on callback.
+
+**Fix:** Backend auth must keep OAuth state in the database with:
+
+```ts
+account: {
+  storeStateStrategy: "database",
+  skipStateCookieCheck: true,
+}
+```
+
+The `verification` table must also exist. In the backend, run:
+
+```bash
+bun run db:auth:apply
+```
+
+---
+
+### Login succeeds but analysis says the backend is unauthorized
+
+**Symptom:** The taskpane shows an active session, but workflow calls fail with
+401/unauthorized.
+
+**Cause:** The Mastra client was created without the latest Better Auth bearer
+token, or a stale client instance kept old headers after login/logout.
+
+**Fix:** Mastra workflow adapters must use `MastraClientFactory`, which creates a
+client with the current token snapshot for each call. Do not reintroduce a module
+level `new MastraClient({ baseUrl })` singleton.
+
+---
+
 ### "Backend no disponible"
 
 **Symptom:** Clicking "Analizar y sugerir" shows this error immediately.
