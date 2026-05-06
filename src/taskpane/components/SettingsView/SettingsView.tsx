@@ -2,12 +2,14 @@ import * as React from "react";
 import { Button } from "@fluentui/react-components";
 import { ArrowLeftRegular } from "@fluentui/react-icons";
 import { AccountSettings } from "../AccountSettings";
+import { AnalysisProfileSection } from "../AnalysisProfileSection";
 import type { SettingsViewProps } from "./SettingsView.types";
 import { useSettingsView } from "./useSettingsView";
 
 /**
  * Renders the secondary settings page accessed from the main toolbar gear.
- * Designed to host additional setting groups (display language, defaults, etc.) over time.
+ * Hosts user-level configuration that does not belong in the per-run flow:
+ * account info, analysis-profile selection, etc.
  */
 export function SettingsView({
   isSigningOut,
@@ -15,7 +17,13 @@ export function SettingsView({
   onSignOut,
   session,
 }: SettingsViewProps): React.JSX.Element {
-  const classes = useSettingsView();
+  const {
+    classes,
+    analysisProfileOptions,
+    isAnalysisProfileDisabled,
+    selectedGenero,
+    handleGeneroChange,
+  } = useSettingsView();
 
   return (
     <section className={classes.root} aria-label="Settings">
@@ -37,6 +45,12 @@ export function SettingsView({
           isSigningOut={isSigningOut}
           onSignOut={onSignOut}
           session={session}
+        />
+        <AnalysisProfileSection
+          isDisabled={isAnalysisProfileDisabled}
+          onGeneroChange={handleGeneroChange}
+          options={analysisProfileOptions}
+          selectedGenero={selectedGenero}
         />
       </div>
     </section>

@@ -1,2 +1,2 @@
 export { App } from "./App";
-export type { AppProps, AnalysisProfileOption } from "./App.types";
+export type { AppProps } from "./App.types";

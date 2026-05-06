@@ -55,6 +55,11 @@ creates Mastra clients with the current bearer token. If the backend returns 401
 for a protected workflow call, the taskpane should clear the local session and
 require the user to sign in again.
 
+The add-in also stores the user-selected analysis profile in
+`OfficeRuntime.storage`, but that preference remains frontend-owned state. The
+backend should trust the incoming `genero` value in each workflow call; it does
+not need a separate preference endpoint for profile persistence.
+
 The add-in must not store Google provider access/refresh tokens. Provider tokens
 belong to the backend/auth provider boundary; the frontend only uses the Better
 Auth session token.

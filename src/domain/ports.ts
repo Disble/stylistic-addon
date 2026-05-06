@@ -66,6 +66,31 @@ export interface IAuthSessionStoragePort {
 }
 
 // ---------------------------------------------------------------------------
+// User Preferences Port
+// ---------------------------------------------------------------------------
+
+/**
+ * Persistent storage boundary for user-level preferences that survive across
+ * documents and sessions (e.g., chosen analysis profile, future UI prefs).
+ *
+ * Adapters MUST be cross-document, per-user — preferences are configuration
+ * about the user, not about the document. When a backend-backed implementation
+ * arrives, the contract stays the same and only the adapter is swapped.
+ */
+export interface IUserPreferencesPort {
+  /**
+   * Returns the user's stored analysis-profile id, or `undefined` when no
+   * preference is persisted or the persisted value is not a non-empty string.
+   * Implementations MUST NOT validate the id against the domain whitelist —
+   * the composition root performs that semantic check before hydrating state.
+   */
+  getAnalysisProfile(): Promise<string | undefined>;
+
+  /** Persists the user's selected analysis-profile id. */
+  setAnalysisProfile(value: string): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
 // Document Port
 // ---------------------------------------------------------------------------
 

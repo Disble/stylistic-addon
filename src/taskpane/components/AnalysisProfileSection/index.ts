@@ -1,2 +1,5 @@
 export { AnalysisProfileSection } from "./AnalysisProfileSection";
-export type { AnalysisProfileSectionProps } from "./AnalysisProfileSection.types";
+export type {
+  AnalysisProfileOption,
+  AnalysisProfileSectionProps,
+} from "./AnalysisProfileSection.types";

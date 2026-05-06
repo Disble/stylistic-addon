@@ -1,4 +1,7 @@
-import type { AnalysisProfileOption } from "../App";
+export type AnalysisProfileOption = Readonly<{
+  value: string;
+  label: string;
+}>;
 
 export type AnalysisProfileSectionProps = Readonly<{
   isDisabled: boolean;

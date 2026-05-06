@@ -29,6 +29,9 @@ export const AUTH_DIALOG_PATH = "/auth-dialog.html";
 /** Storage key for the Better Auth bearer session in OfficeRuntime.storage. */
 export const AUTH_SESSION_STORAGE_KEY = "stylistic.auth.session.v1";
 
+/** Storage key for the user-selected analysis profile in OfficeRuntime.storage. */
+export const ANALYSIS_PROFILE_STORAGE_KEY = "stylistic.preferences.analysis-profile.v1";
+
 /** Identifier of the editorial workflow registered in Mastra. */
 export const WORKFLOW_ID = "stylistic-workflow";
 

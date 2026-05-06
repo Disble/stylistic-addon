@@ -607,6 +607,7 @@ export function resetTaskpaneHarness() {
 
   delete (globalThis as any).document;
   delete (globalThis as any).Office;
+  delete (globalThis as any).OfficeRuntime;
 }
 
 /**
@@ -616,4 +617,5 @@ export function teardownTaskpaneHarness() {
   vi.useRealTimers();
   delete (globalThis as any).document;
   delete (globalThis as any).Office;
+  delete (globalThis as any).OfficeRuntime;
 }

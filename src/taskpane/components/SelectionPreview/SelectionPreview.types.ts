@@ -1,8 +1,7 @@
 export type SelectionPreviewClasses = Readonly<{
   root: string;
-  body: string;
-  quote: string;
-  hint: string;
+  icon: string;
+  label: string;
 }>;
 
 export type SelectionPreviewProps = Readonly<{

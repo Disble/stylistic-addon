@@ -1,15 +1,13 @@
 import * as React from "react";
-import {
-  Body1,
-  Caption1Strong,
-  MessageBar,
-  MessageBarBody,
-  MessageBarTitle,
-} from "@fluentui/react-components";
+import { Tooltip } from "@fluentui/react-components";
 import { TextEditStyleRegular } from "@fluentui/react-icons";
 import type { SelectionPreviewProps } from "./SelectionPreview.types";
 
-/** Renders a non-interactive Fluent MessageBar previewing the active Word selection. */
+/**
+ * Single-line status strip showing the active Word selection char count.
+ * The full truncated quote is exposed via Tooltip on hover/focus to keep
+ * vertical real estate for the primary content (suggestion cards).
+ */
 export function SelectionPreview({
   isVisible,
   charCount,
@@ -21,19 +19,24 @@ export function SelectionPreview({
   }
 
   return (
-    <MessageBar
-      id="selection-preview"
-      className={classes.root}
-      intent="info"
-      icon={<TextEditStyleRegular aria-hidden="true" />}
-      layout="multiline"
-      politeness="polite"
+    <Tooltip
+      content={`“${preview}”`}
+      relationship="description"
+      positioning="below-start"
+      withArrow
     >
-      <MessageBarBody className={classes.body}>
-        <MessageBarTitle>Selección activa · {charCount} caracteres</MessageBarTitle>
-        <Body1 className={classes.quote}>“{preview}”</Body1>
-        <Caption1Strong className={classes.hint}>Esto se va a analizar</Caption1Strong>
-      </MessageBarBody>
-    </MessageBar>
+      <div
+        id="selection-preview"
+        className={classes.root}
+        role="status"
+        aria-live="polite"
+        tabIndex={0}
+      >
+        <TextEditStyleRegular className={classes.icon} aria-hidden="true" />
+        <span className={classes.label}>
+          Selección activa · {charCount} caracteres
+        </span>
+      </div>
+    </Tooltip>
   );
 }

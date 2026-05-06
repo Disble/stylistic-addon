@@ -20,6 +20,7 @@ import { MastraClientFactory } from "../adapters/mastra/MastraClientFactory";
 import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability/ConsoleResolutionObservabilityAdapter";
 import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
 import { OfficeDialogAuthAdapter } from "../adapters/auth/OfficeDialogAuthAdapter";
+import { OfficeUserPreferencesAdapter } from "../adapters/preferences/OfficeUserPreferencesAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
@@ -33,9 +34,14 @@ import type { PipelineContext } from "../domain/pipeline/PipelineContext";
 import { PipelineEventEmitter, type PipelineObserver } from "../domain/pipeline/PipelineEvents";
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
-import type { IFeedbackPort } from "../domain/ports";
+import type { IFeedbackPort, IUserPreferencesPort } from "../domain/ports";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
-import { DEFAULT_MAX_CHUNK_SIZE, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
+import {
+  DEFAULT_MAX_CHUNK_SIZE,
+  DEFAULT_PROFILES,
+  MAX_RETRIES,
+  RETRY_BASE_DELAY_MS,
+} from "../infrastructure/config";
 import { hideResultsPanel } from "./ResultsPanelStore";
 import { setSelectionPreviewSnapshot } from "./SelectionPreviewStore";
 import {
@@ -59,8 +65,10 @@ import {
   setTaskpaneCleanupLoading,
   setTaskpaneDisableTrackChangesCtaVisible,
   setTaskpaneDisableTrackChangesLoading,
+  setTaskpaneSelectedGenero,
   showTaskpaneStatus,
   updateTaskpaneProgress,
+  useTaskpaneShellStore,
 } from "./TaskpaneShellStore";
 
 function toUserMessage(error: unknown): string {
@@ -97,6 +105,7 @@ const documentPort = new WordAdapter(undefined, observabilityPort);
 const authPort = new BetterAuthAdapter();
 const authSessionStoragePort = new OfficeAuthSessionStorageAdapter();
 const officeDialogAuthAdapter = new OfficeDialogAuthAdapter();
+const userPreferencesPort: IUserPreferencesPort = new OfficeUserPreferencesAdapter();
 const mastraClientFactory = new MastraClientFactory(getTaskpaneAuthToken);
 const analysisPort = new RetryAnalysisDecorator(
   new MastraAdapter(mastraClientFactory),
@@ -136,10 +145,41 @@ const cardRendererDeps: ResultsPanelDeps = {
  */
 export function bootstrapTaskpane(): void {
   void bootstrapAuthSession();
+  void bootstrapAnalysisProfile();
   void refreshCleanupVisibility();
   void refreshTrackChangesCtaVisibility();
   documentPort.subscribeSelectionChanges(setSelectionPreviewSnapshot);
 }
+
+const KNOWN_ANALYSIS_PROFILE_IDS = new Set(DEFAULT_PROFILES.map((profile) => profile.id));
+
+/**
+ * Loads the user's persisted analysis-profile preference and hydrates the
+ * shell store. Validates the stored value against the domain whitelist so
+ * that legacy/unknown ids degrade silently to the in-store default. Restoring
+ * the preference during bootstrap intentionally reuses the same shell-store
+ * setter as the UI so there is only one state transition path.
+ */
+async function bootstrapAnalysisProfile(): Promise<void> {
+  try {
+    const stored = await userPreferencesPort.getAnalysisProfile();
+    if (stored && KNOWN_ANALYSIS_PROFILE_IDS.has(stored)) {
+      setTaskpaneSelectedGenero(stored);
+    }
+  } catch (error) {
+    console.warn("⚠️ [Taskpane] No se pudo restaurar el perfil de análisis:", error);
+  }
+}
+
+useTaskpaneShellStore.subscribe((state, prevState) => {
+  if (state.selectedGenero === prevState.selectedGenero) {
+    return;
+  }
+
+  void userPreferencesPort.setAnalysisProfile(state.selectedGenero).catch((error) => {
+    console.warn("⚠️ [Taskpane] No se pudo guardar el perfil de análisis:", error);
+  });
+});
 
 /** Restores and validates a persisted Better Auth session during taskpane boot. */
 async function bootstrapAuthSession(): Promise<void> {

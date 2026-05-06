@@ -40,14 +40,47 @@ async function importTaskpaneRuntime() {
   await importTaskpane();
 
   const resultsPanelStore = await import("./ResultsPanelStore");
+  const taskpaneAuthStore = await import("./TaskpaneAuthStore");
   const taskpaneShellStore = await import("./TaskpaneShellStore");
 
   return {
     getResultsPanelState: resultsPanelStore.getResultsPanelState,
     resetResultsPanelState: resultsPanelStore.resetResultsPanelState,
+    setTaskpaneAuthenticated: taskpaneAuthStore.setTaskpaneAuthenticated,
     getTaskpaneShellState: taskpaneShellStore.getTaskpaneShellState,
     resetTaskpaneShellState: taskpaneShellStore.resetTaskpaneShellState,
+    setTaskpaneSelectedGenero: taskpaneShellStore.setTaskpaneSelectedGenero,
   };
+}
+
+const AUTHENTICATED_SESSION = {
+  token: "token-de-prueba",
+  user: {
+    id: "u-1",
+    email: "test@example.com",
+  },
+} as const;
+
+type OfficeRuntimeStorageMock = {
+  getItem: ReturnType<typeof vi.fn>;
+  setItem: ReturnType<typeof vi.fn>;
+  removeItem: ReturnType<typeof vi.fn>;
+};
+
+function installOfficeRuntime(storage?: OfficeRuntimeStorageMock): OfficeRuntimeStorageMock {
+  const resolvedStorage =
+    storage ??
+    ({
+      getItem: vi.fn().mockResolvedValue(null),
+      setItem: vi.fn().mockResolvedValue(undefined),
+      removeItem: vi.fn().mockResolvedValue(undefined),
+    } satisfies OfficeRuntimeStorageMock);
+
+  (
+    globalThis as unknown as { OfficeRuntime?: { storage?: OfficeRuntimeStorageMock } }
+  ).OfficeRuntime = storage ? { storage: resolvedStorage } : undefined;
+
+  return resolvedStorage;
 }
 
 async function flushTaskpaneWork(times = 8) {
@@ -141,9 +174,11 @@ describe("taskpane entrypoint", () => {
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({ deletable: 0, kept: 0 });
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({ deletable: 1, kept: 0 });
 
-    const { getResultsPanelState, getTaskpaneShellState } = await importTaskpaneRuntime();
+    const { getResultsPanelState, getTaskpaneShellState, setTaskpaneAuthenticated } =
+      await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
 
@@ -178,9 +213,10 @@ describe("taskpane entrypoint", () => {
 
     taskpaneMocks.run.mockImplementationOnce(() => runDeferred.promise);
 
-    await importTaskpaneRuntime();
+    const { setTaskpaneAuthenticated } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
 
@@ -217,6 +253,67 @@ describe("taskpane entrypoint", () => {
     expect(getTaskpaneShellState().cleanupVisible).toBe(false);
     expect(getTaskpaneShellState().status.message).toBe(
       "2 comentario(s) eliminado(s), 0 conservado(s)."
+    );
+  });
+
+  it("hydrates the persisted analysis profile only when the stored id is known", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    const storage = installOfficeRuntime({
+      getItem: vi.fn().mockResolvedValue("ensayo-academico"),
+      setItem: vi.fn().mockResolvedValue(undefined),
+      removeItem: vi.fn().mockResolvedValue(undefined),
+    });
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+
+    expect(storage.getItem).toHaveBeenCalledWith("stylistic.preferences.analysis-profile.v1");
+    expect(getTaskpaneShellState().selectedGenero).toBe("ensayo-academico");
+  });
+
+  it("ignores invalid persisted analysis profile ids and keeps the default", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    installOfficeRuntime({
+      getItem: vi.fn().mockResolvedValue("perfil-inexistente"),
+      setItem: vi.fn().mockResolvedValue(undefined),
+      removeItem: vi.fn().mockResolvedValue(undefined),
+    });
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().selectedGenero).toBe("narrativa-literaria");
+  });
+
+  it("persists analysis profile changes after bootstrap", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    const storage = installOfficeRuntime({
+      getItem: vi.fn().mockResolvedValue(null),
+      setItem: vi.fn().mockResolvedValue(undefined),
+      removeItem: vi.fn().mockResolvedValue(undefined),
+    });
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    const { setTaskpaneSelectedGenero: setSelectedGeneroFromStore } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+
+    setSelectedGeneroFromStore("general");
+    await flushTaskpaneWork();
+
+    expect(storage.setItem).toHaveBeenCalledWith(
+      "stylistic.preferences.analysis-profile.v1",
+      "general"
     );
   });
 

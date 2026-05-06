@@ -1,7 +1,7 @@
 import * as React from "react";
 import { makeStyles } from "@fluentui/react-components";
 import { useTaskpaneAuthStore } from "../../TaskpaneAuthStore";
-import { setTaskpaneSelectedGenero, useTaskpaneShellStore } from "../../TaskpaneShellStore";
+import { useTaskpaneShellStore } from "../../TaskpaneShellStore";
 import { setTaskpaneView, useTaskpaneViewStore } from "../../TaskpaneViewStore";
 import type { AppClasses } from "./App.types";
 
@@ -40,10 +40,6 @@ export function useApp() {
   const shellState = useTaskpaneShellStore();
   const viewState = useTaskpaneViewStore();
 
-  const handleGeneroChange = React.useCallback((value: string) => {
-    setTaskpaneSelectedGenero(value);
-  }, []);
-
   const handleOpenSettings = React.useCallback(() => {
     setTaskpaneView("settings");
   }, []);
@@ -56,7 +52,6 @@ export function useApp() {
     authState,
     shellState,
     viewState,
-    handleGeneroChange,
     handleOpenSettings,
     handleCloseSettings,
   };

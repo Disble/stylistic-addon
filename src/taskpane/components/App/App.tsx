@@ -1,5 +1,4 @@
 import * as React from "react";
-import { AnalysisProfileSection } from "../AnalysisProfileSection";
 import { AnalyzeSection } from "../AnalyzeSection";
 import { AuthSection } from "../AuthSection";
 import { CleanupSection } from "../CleanupSection";
@@ -10,7 +9,6 @@ import { SelectionPreview, useSelectionPreview } from "../SelectionPreview";
 import { SettingsToolbar } from "../SettingsToolbar";
 import { SettingsView } from "../SettingsView";
 import { StatusBar } from "../StatusBar";
-import { ANALYSIS_PROFILE_OPTIONS } from "./App.constants";
 import type { AppProps } from "./App.types";
 import { useApp, useAppClasses } from "./useApp";
 
@@ -19,7 +17,7 @@ import { useApp, useAppClasses } from "./useApp";
  *
  * Renders one of three top-level surfaces based on auth + view state:
  * - unauthenticated → `AuthSection` (login screen, no toolbar, no settings access)
- * - authenticated + `view === "settings"` → `SettingsView` (account + future setting groups)
+ * - authenticated + `view === "settings"` → `SettingsView` (account + analysis-profile + future setting groups)
  * - authenticated + `view === "main"` → analysis workflow + persistent `SettingsToolbar`
  *
  * Preserves the legacy `#app-body` DOM anchor so `taskpane.css` can keep owning the
@@ -37,7 +35,6 @@ export function App({
     authState,
     shellState,
     viewState,
-    handleGeneroChange,
     handleOpenSettings,
     handleCloseSettings,
   } = useApp();
@@ -77,12 +74,6 @@ export function App({
   return (
     <main id="app-body">
       <div className={classes.workflow}>
-        <AnalysisProfileSection
-          isDisabled={shellState.isAnalyzeLoading}
-          onGeneroChange={handleGeneroChange}
-          options={ANALYSIS_PROFILE_OPTIONS}
-          selectedGenero={shellState.selectedGenero}
-        />
         <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
         <SelectionPreview {...selectionPreview} />
         <ProgressPanel progress={shellState.progress} />

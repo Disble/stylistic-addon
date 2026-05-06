@@ -108,13 +108,14 @@ surfaces are mutually exclusive at the App level:
 
 - **unauthenticated** → `AuthSection` only (login screen). No toolbar, no gear,
   no settings entry point.
-- **authenticated + `view === "main"`** → analysis workflow (profile selector,
-  analyze CTA, progress, results, cleanup CTAs, status bar) plus a persistent
-  bottom `SettingsToolbar` exposing the gear icon.
+- **authenticated + `view === "main"`** → analysis workflow (analyze CTA,
+  selection preview, progress, results, cleanup CTAs, status bar) plus a
+  persistent bottom `SettingsToolbar` exposing the gear icon.
 - **authenticated + `view === "settings"`** → `SettingsView` page (back arrow,
-  "Settings" title, `AccountSettings` row with email + Log out). Designed to
-  host additional setting groups (display language, defaults, etc.) over time
-  without touching the shell.
+  "Settings" title, `AccountSettings` row with email + Log out, and the
+  analysis-profile preference selector). Designed to host additional setting
+  groups (display language, defaults, etc.) over time without touching the
+  shell.
 
 Active view is owned by `TaskpaneViewStore` (Zustand) with a single field
 `view: "main" | "settings"`. Toggling is mediated by `setTaskpaneView`. Auth
@@ -127,6 +128,17 @@ The session is consolidated into the secondary settings page so the primary
 real estate stays dedicated to analysis. Components must follow the strict
 folder anatomy required by `checkReactComponentRails.mjs` (`index.ts`,
 `Component.tsx`, `Component.types.ts`, optional `useComponent.ts`).
+
+The analysis profile is also a **settings-owned user preference**, not a
+per-run workflow input controlled from the main screen. The canonical profile
+list lives in `src/infrastructure/config.ts` as `DEFAULT_PROFILES`; UI options
+must be derived from that single source of truth instead of duplicating labels
+in taskpane-local constants. The persisted selection is restored from
+`OfficeRuntime.storage` through `OfficeUserPreferencesAdapter` during
+`bootstrapTaskpane()`, then mirrored into `TaskpaneShellStore.selectedGenero`.
+While an analysis run is active, the selector in `SettingsView` must stay
+disabled so the persisted preference cannot diverge from the pipeline snapshot
+already in flight.
 
 `AuthSection` is **narrowed** to the loading/unauthenticated branches only;
 once `status === "authenticated"`, the component is no longer rendered and the
