@@ -5,6 +5,7 @@ import type { SelectionPreviewProps } from "./SelectionPreview.types";
 
 const useSelectionPreviewStyles = makeStyles({
   root: {
+    flexShrink: 0,
     marginBottom: tokens.spacingVerticalM,
   },
   body: {

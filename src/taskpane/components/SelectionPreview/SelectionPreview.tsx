@@ -26,6 +26,7 @@ export function SelectionPreview({
       className={classes.root}
       intent="info"
       icon={<TextEditStyleRegular aria-hidden="true" />}
+      layout="multiline"
       politeness="polite"
     >
       <MessageBarBody className={classes.body}>
