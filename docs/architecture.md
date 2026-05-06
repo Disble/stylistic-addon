@@ -110,7 +110,15 @@ surfaces are mutually exclusive at the App level:
   no settings entry point.
 - **authenticated + `view === "main"`** → analysis workflow (analyze CTA,
   selection preview, progress, results, cleanup CTAs, status bar) plus a
-  persistent bottom `SettingsToolbar` exposing the gear icon.
+  persistent bottom `SettingsToolbar` exposing the gear icon. The workflow
+  itself has two presentational modes derived from runtime state: an **idle
+  hero** mode (`HeroEmptyState` wrapping the analyze CTA and selection chip
+  around a brand illustration) when no analysis is running, no progress is
+  visible, and no results have been rendered; and an **active** mode (flat
+  `AnalyzeSection` → `SelectionPreview` → `ProgressPanel` → `ResultsPanel`
+  layout) once the user has triggered analysis or there are results on
+  screen. The branch is owned by the `App` shell via an `isIdle` selector
+  composed from `TaskpaneShellStore` and `ResultsPanelStore`.
 - **authenticated + `view === "settings"`** → `SettingsView` page (back arrow,
   "Settings" title, `AccountSettings` row with email + Log out, and the
   analysis-profile preference selector). Designed to host additional setting

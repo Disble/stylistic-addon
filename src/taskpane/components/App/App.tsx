@@ -3,6 +3,7 @@ import { AnalyzeSection } from "../AnalyzeSection";
 import { AuthSection } from "../AuthSection";
 import { CleanupSection } from "../CleanupSection";
 import { DisableTrackChangesSection } from "../DisableTrackChangesSection";
+import { HeroEmptyState } from "../HeroEmptyState";
 import { ProgressPanel } from "../ProgressPanel";
 import { ResultsPanel } from "../ResultsPanel";
 import { SelectionPreview, useSelectionPreview } from "../SelectionPreview";
@@ -35,6 +36,7 @@ export function App({
     authState,
     shellState,
     viewState,
+    isIdle,
     handleOpenSettings,
     handleCloseSettings,
   } = useApp();
@@ -71,13 +73,27 @@ export function App({
     );
   }
 
+  const analyzeSection = (
+    <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
+  );
+  const selectionPreviewSection = <SelectionPreview {...selectionPreview} />;
+
   return (
     <main id="app-body">
       <div className={classes.workflow}>
-        <AnalyzeSection isLoading={shellState.isAnalyzeLoading} onAnalyze={onAnalyze} />
-        <SelectionPreview {...selectionPreview} />
-        <ProgressPanel progress={shellState.progress} />
-        <ResultsPanel />
+        {isIdle ? (
+          <HeroEmptyState>
+            {analyzeSection}
+            {selectionPreviewSection}
+          </HeroEmptyState>
+        ) : (
+          <>
+            {analyzeSection}
+            {selectionPreviewSection}
+            <ProgressPanel progress={shellState.progress} />
+            <ResultsPanel />
+          </>
+        )}
         <CleanupSection
           isLoading={shellState.isCleanupLoading}
           isVisible={shellState.cleanupVisible}

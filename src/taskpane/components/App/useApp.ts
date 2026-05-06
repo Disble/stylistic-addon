@@ -1,5 +1,6 @@
 import * as React from "react";
 import { makeStyles } from "@fluentui/react-components";
+import { useResultsPanelStore } from "../../ResultsPanelStore";
 import { useTaskpaneAuthStore } from "../../TaskpaneAuthStore";
 import { useTaskpaneShellStore } from "../../TaskpaneShellStore";
 import { setTaskpaneView, useTaskpaneViewStore } from "../../TaskpaneViewStore";
@@ -39,6 +40,9 @@ export function useApp() {
   const authState = useTaskpaneAuthStore();
   const shellState = useTaskpaneShellStore();
   const viewState = useTaskpaneViewStore();
+  const resultsVisible = useResultsPanelStore((state) => state.visible);
+
+  const isIdle = !shellState.isAnalyzeLoading && !shellState.progress.visible && !resultsVisible;
 
   const handleOpenSettings = React.useCallback(() => {
     setTaskpaneView("settings");
@@ -52,6 +56,7 @@ export function useApp() {
     authState,
     shellState,
     viewState,
+    isIdle,
     handleOpenSettings,
     handleCloseSettings,
   };
