@@ -1,12 +1,7 @@
 import * as React from "react";
 import type { ResultsSummaryChipsProps } from "./ResultsSummaryChips.types";
-import {
-  buildResultsSummaryChips,
-  resolveChipClassName,
-} from "./ResultsSummaryChips.helpers";
-import {
-  useResultsSummaryChips,
-} from "./ResultsSummaryChips.hooks";
+import { buildResultsSummaryChips, resolveChipClassName } from "./ResultsSummaryChips.helpers";
+import { useResultsSummaryChips } from "./ResultsSummaryChips.hooks";
 
 /** Renders the sticky chips toolbar that filters the results list. */
 export function ResultsSummaryChips({

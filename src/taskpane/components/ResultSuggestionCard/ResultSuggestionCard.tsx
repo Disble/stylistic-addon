@@ -70,9 +70,13 @@ export function ResultSuggestionCard({
 
     return (
       <>
-        <Caption1Strong className={classes.failureLabel}>{getFailedSuggestionCopy(failure)}</Caption1Strong>
+        <Caption1Strong className={classes.failureLabel}>
+          {getFailedSuggestionCopy(failure)}
+        </Caption1Strong>
         <Body2 className={classes.justification}>{card.suggestion.justification}</Body2>
-        {failureDetail ? <Caption1 className={classes.failureDetail}>{failureDetail}</Caption1> : null}
+        {failureDetail ? (
+          <Caption1 className={classes.failureDetail}>{failureDetail}</Caption1>
+        ) : null}
       </>
     );
   };
@@ -89,7 +93,9 @@ export function ResultSuggestionCard({
       {view.showDiff ? (
         <div className={classes.diff} data-testid="card-diff">
           <Body1 className={classes.original}>{card.suggestion.anchor}</Body1>
-          <Body1Strong className={classes.suggested}>{card.suggestion.suggestedText ?? ""}</Body1Strong>
+          <Body1Strong className={classes.suggested}>
+            {card.suggestion.suggestedText ?? ""}
+          </Body1Strong>
         </div>
       ) : null}
       <Body2 className={classes.justification}>{card.suggestion.justification}</Body2>
@@ -103,8 +109,12 @@ export function ResultSuggestionCard({
 
     return (
       <>
-        {card.navigationNote ? <Caption1 className={classes.note}>{card.navigationNote}</Caption1> : null}
-        {card.resolutionNote ? <Caption1 className={classes.note}>{card.resolutionNote}</Caption1> : null}
+        {card.navigationNote ? (
+          <Caption1 className={classes.note}>{card.navigationNote}</Caption1>
+        ) : null}
+        {card.resolutionNote ? (
+          <Caption1 className={classes.note}>{card.resolutionNote}</Caption1>
+        ) : null}
       </>
     );
   };
