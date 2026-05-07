@@ -30,11 +30,11 @@ Promote the existing contract to an invariant at resolution time:
 
 | Area | Impact | Description |
 |------|--------|-------------|
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modified | Remove the non-replace execution branch and enforce a track-change invariant |
-| `src/adapters/word/resolution/SuggestionResolutionObserver.ts` | Modified | Remove non-replace observation normalization for tracked-change resolution |
-| `src/adapters/word/resolution/ResolutionSnapshotObserver.ts` | Modified | Treat tracked-change suggestions as replace snapshots by contract |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modified | Delete tests that only defend non-replace tracked-change recovery |
-| `src/adapters/word/WordAdapterRejectSuggestion.test.ts` | Modified | Delete non-replace-specific coverage if present |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modified | Remove the non-replace execution branch and enforce a track-change invariant |
+| `src/adapters/word/resolve-suggestion/SuggestionResolutionObserver.ts` | Modified | Remove non-replace observation normalization for tracked-change resolution |
+| `src/adapters/word/resolve-suggestion/ResolutionSnapshotObserver.ts` | Modified | Treat tracked-change suggestions as replace snapshots by contract |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modified | Delete tests that only defend non-replace tracked-change recovery |
+| `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` | Modified | Delete non-replace-specific coverage if present |
 | `openspec/changes/remove-non-replace-resolution-path/*` | New | SDD artifacts for the contract-hardening refactor |
 
 ## Risks
@@ -52,7 +52,7 @@ Revert the refactor and restore the removed branch/tests if real host evidence p
 
 - `src/adapters/mastra/MastraAdapter.ts` suggestion validation contract
 - `src/adapters/word/ApplySuggestionCommand.ts` tracked-change insertion contract
-- Current resolution workflow in `src/adapters/word/ResolveSuggestionCommand.ts`
+- Current resolution workflow in `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`
 
 ## Success Criteria
 

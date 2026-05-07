@@ -88,8 +88,8 @@ No `makeStyles(...)` call should appear in `ComponentName.tsx`,
 
 ### Hooks file rules
 
-Component-owned hooks live in `ComponentName.hooks.ts`, not in
-`useComponentName.ts`.
+Component-owned hooks live in `ComponentName.hooks.ts`; the old
+`useComponentName.ts` shape is deprecated and invalid in this repo.
 
 ```ts
 // ComponentName.hooks.ts

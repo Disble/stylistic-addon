@@ -33,9 +33,9 @@ For replace, the semantic order remains action-dependent: `Added -> Deleted` for
 
 | Area | Impact | Description |
 |------|--------|-------------|
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modified | Remove redundant fallback branches and consolidate recovery around one semantic retry model |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modified | Replace fallback-specific tests with retained-contract coverage |
-| `src/adapters/word/WordAdapterRejectSuggestion.test.ts` | Modified | Replace fallback-specific tests with retained-contract coverage |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modified | Remove redundant fallback branches and consolidate recovery around one semantic retry model |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modified | Replace fallback-specific tests with retained-contract coverage |
+| `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` | Modified | Replace fallback-specific tests with retained-contract coverage |
 | `openspec/changes/collapse-replace-resolution-fallbacks/*` | New | Proposal, spec, design, and tasks for the refactor |
 
 ## Risks
@@ -51,7 +51,7 @@ Revert the `ResolveSuggestionCommand` refactor and restore the deleted fallback-
 
 ## Dependencies
 
-- Current workflow in `src/adapters/word/ResolveSuggestionCommand.ts`
+- Current workflow in `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`
 - Existing focused adapter suites for accept/reject replace resolution
 
 ## Success Criteria

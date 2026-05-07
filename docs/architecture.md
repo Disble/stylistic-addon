@@ -18,6 +18,11 @@ Complementary documents:
 - [`linting-and-file-anatomy.md`](./linting-and-file-anatomy.md)
   defines the ESLint-driven file anatomy rules for types, styles, constants,
   hooks, helpers, tests, and component folders.
+- [`testing.md`](./testing.md)
+  defines the canonical testing strategy, confidence tiers, and regression
+  workflow.
+- [`debugging.md`](./debugging.md)
+  defines the evidence-first debugging workflow and investigation ladder.
 
 ---
 
@@ -138,7 +143,8 @@ Account/logout controls intentionally do **not** appear in the main workflow.
 The session is consolidated into the secondary settings page so the primary
 real estate stays dedicated to analysis. Components must follow the strict
 folder anatomy required by `checkReactComponentRails.mjs` (`index.ts`,
-`Component.tsx`, `Component.types.ts`, optional `useComponent.ts`).
+`Component.tsx`, `Component.types.ts`, optional `Component.hooks.ts`, sibling
+`__tests__/`).
 
 The analysis profile is also a **settings-owned user preference**, not a
 per-run workflow input controlled from the main screen. The canonical profile

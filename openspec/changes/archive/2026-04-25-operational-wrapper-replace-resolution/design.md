@@ -71,11 +71,11 @@ Unvalidated area remains explicit: mixed decisions inside a contiguous group are
 | `src/domain/types.ts` | Modify | Add wrapper/group metadata and `ResolutionAbortReason` |
 | `src/adapters/word/ApplySuggestionCommand.ts` | Modify | Persist wrapper identity; remove replace full-body rescue/scoring |
 | `src/adapters/word/ReplaceIdentityParser.ts` | Replace | Strict parser/validator only; delete scoring helpers |
-| `src/adapters/word/resolution/SuggestionLocator.ts` | Replace | Exact wrapper lookup with ambiguity detection, no ranking |
-| `src/adapters/word/resolution/OperationalWrapperGroupResolver.ts` | Create | Expand contiguous group from the seed wrapper |
-| `src/adapters/word/resolution/SuggestionResolutionObserver.ts` | Modify | Observe groups, mixed decisions, and non-Stylistic preservation |
-| `src/adapters/word/resolution/ReplaceResolutionOrchestrator.ts` | Modify | Execute all-or-nothing group strategy |
-| `src/adapters/word/resolution/SuggestionResolutionCleanup.ts` / `src/adapters/word/cleanup/CommentCleanup.ts` | Modify | Enforce comments-only cleanup; make replace CC deletion unreachable |
+| `src/adapters/word/resolve-suggestion/SuggestionLocator.ts` | Replace | Exact wrapper lookup with ambiguity detection, no ranking |
+| `src/adapters/word/resolve-suggestion/OperationalWrapperGroupResolver.ts` | Create | Expand contiguous group from the seed wrapper |
+| `src/adapters/word/resolve-suggestion/SuggestionResolutionObserver.ts` | Modify | Observe groups, mixed decisions, and non-Stylistic preservation |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionTrackChangeOrchestrator.ts` | Modify | Execute all-or-nothing group strategy |
+| `src/adapters/word/resolve-suggestion/SuggestionResolutionCleanup.ts` / `src/adapters/word/cleanup/CommentCleanup.ts` | Modify | Enforce comments-only cleanup; make replace CC deletion unreachable |
 
 ## Verification / No-Legacy Validation
 

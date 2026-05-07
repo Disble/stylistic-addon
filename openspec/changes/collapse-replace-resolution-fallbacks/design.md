@@ -78,9 +78,9 @@ flowchart TD
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modify | Remove `applyAtomically` usage, body-text recovery, and non-replace dedicated fallback wording/branches; consolidate to one retry policy |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modify | Remove tests that only defend discarded fallbacks and add retained-contract RED cases |
-| `src/adapters/word/WordAdapterRejectSuggestion.test.ts` | Modify | Remove tests that only defend discarded fallbacks and add retained-contract RED cases |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modify | Remove `applyAtomically` usage, body-text recovery, and non-replace dedicated fallback wording/branches; consolidate to one retry policy |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modify | Remove tests that only defend discarded fallbacks and add retained-contract RED cases |
+| `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` | Modify | Remove tests that only defend discarded fallbacks and add retained-contract RED cases |
 
 ## Interfaces / Contracts
 

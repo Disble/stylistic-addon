@@ -1,5 +1,9 @@
 # Verification Report: Operational Wrapper Replace Resolution
 
+> Historical verification artifact. Command strings and test paths below reflect
+> the repo state at execution time. For current commands and canonical test
+> locations, prefer `docs/testing.md` and Bun-based scripts from `package.json`.
+
 **Change**: `operational-wrapper-replace-resolution`  
 **Mode**: Standard verify (no `openspec/config.yaml`; no strict TDD config found)  
 **Date**: 2026-04-25
@@ -22,8 +26,8 @@ The prior cleanup-evidence warning is now sufficiently addressed. The cleanup pr
 
 | Command | Result |
 |---|---|
-| `npm run typecheck` | ✅ passed |
-| `npm run test -- src/adapters/word/resolution/SuggestionResolutionCleanup.test.ts src/adapters/word/cleanup/CommentCleanup.test.ts` | ✅ 2 files / 15 tests passed |
+| `bun run typecheck` | ✅ passed |
+| `bun run test -- src/adapters/word/resolve-suggestion/__tests__/SuggestionResolutionCleanup.test.ts src/adapters/word/cleanup/__tests__/CommentCleanup.test.ts` | ✅ 2 files / 15 tests passed |
 | Static searches for `cleanupResolvedSuggestionAnchor`, legacy ranking/scoring helpers, and replace fallback remnants | ✅ passed (no active production remnants found) |
 
 ## Spec compliance matrix
@@ -80,12 +84,12 @@ None.
 - `openspec/changes/operational-wrapper-replace-resolution/tasks.md`
 - `openspec/changes/operational-wrapper-replace-resolution/verify-report.md` (previous report)
 - `openspec/changes/operational-wrapper-replace-resolution/apply-progress.md`
-- `src/adapters/word/resolution/SuggestionResolutionCleanup.ts`
-- `src/adapters/word/resolution/SuggestionResolutionCleanup.test.ts`
+- `src/adapters/word/resolve-suggestion/SuggestionResolutionCleanup.ts`
+- `src/adapters/word/resolve-suggestion/__tests__/SuggestionResolutionCleanup.test.ts`
 - `src/adapters/word/cleanup/CommentCleanup.ts`
 - `src/adapters/word/cleanup/CommentCleanup.test.ts`
-- `src/adapters/word/ResolveSuggestionCommand.ts`
-- `src/adapters/word/resolution/ResolutionContext.ts`
+- `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`
+- `src/adapters/word/resolve-suggestion/ResolutionContext.ts`
 
 ## Next recommended
 

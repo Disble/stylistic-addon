@@ -25,11 +25,11 @@ Keep `ResolveSuggestionCommand` as the template/orchestrator. Add a small strate
 
 | Area | Impact | Description |
 |------|--------|-------------|
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modified | Replace inline `accept`/`reject` branching with strategy usage |
-| `src/adapters/word/resolution/TrackedChangeResolutionExecutor.ts` | Modified | Read step priority from the shared strategy instead of duplicating action checks |
-| `src/adapters/word/resolution/*` | New | Add the replace strategy contract/implementation |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modified | Keep accept behavior coverage after extraction |
-| `src/adapters/word/WordAdapterRejectSuggestion.test.ts` | Modified | Keep reject behavior coverage after extraction |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modified | Replace inline `accept`/`reject` branching with strategy usage |
+| `src/adapters/word/resolve-suggestion/TrackedChangeResolutionExecutor.ts` | Modified | Read step priority from the shared strategy instead of duplicating action checks |
+| `src/adapters/word/resolve-suggestion/*` | New | Add the replace strategy contract/implementation |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modified | Keep accept behavior coverage after extraction |
+| `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` | Modified | Keep reject behavior coverage after extraction |
 
 ## Risks
 
@@ -44,8 +44,8 @@ Revert the strategy extraction commit and restore the direct inline action branc
 
 ## Dependencies
 
-- Current replace workflow in `src/adapters/word/ResolveSuggestionCommand.ts`
-- Current ordering logic in `src/adapters/word/resolution/TrackedChangeResolutionExecutor.ts`
+- Current replace workflow in `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`
+- Current ordering logic in `src/adapters/word/resolve-suggestion/TrackedChangeResolutionExecutor.ts`
 
 ## Success Criteria
 

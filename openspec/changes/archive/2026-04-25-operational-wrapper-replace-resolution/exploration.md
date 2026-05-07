@@ -16,11 +16,11 @@ No `openspec/config.yaml` exists in the repo today, so this exploration follows 
 ### Affected Areas
 - `src/adapters/word/ApplySuggestionCommand.ts` — writes `compound-v2`, removes existing wrappers, and already aborts ambiguous full-body anchor fallback.
 - `src/adapters/word/ReplaceIdentityParser.ts` — validates/scoring logic for persisted replace identity and the natural extension point for wrapper-related identity rules.
-- `src/adapters/word/resolution/SuggestionLocator.ts` — ranks duplicate CC candidates and is the right place for wrapper-level selection policy.
-- `src/adapters/word/resolution/SuggestionResolutionObserver.ts` — collects evidence sources and currently groups candidates only by semantic side.
-- `src/adapters/word/resolution/ResolutionContext.ts` — current observation contract would need expansion if contiguous grouping becomes first-class.
-- `src/adapters/word/resolution/ReplaceResolutionOrchestrator.ts` — consumes semantic candidates and would need to honor any stronger grouping/abort rules.
-- `src/adapters/word/resolution/SuggestionResolutionCleanup.ts` — owns per-suggestion cleanup after certified resolution.
+- `src/adapters/word/resolve-suggestion/SuggestionLocator.ts` — ranks duplicate CC candidates and is the right place for wrapper-level selection policy.
+- `src/adapters/word/resolve-suggestion/SuggestionResolutionObserver.ts` — collects evidence sources and currently groups candidates only by semantic side.
+- `src/adapters/word/resolve-suggestion/ResolutionContext.ts` — current observation contract would need expansion if contiguous grouping becomes first-class.
+- `src/adapters/word/resolve-suggestion/ResolveSuggestionTrackChangeOrchestrator.ts` — consumes semantic candidates and would need to honor any stronger grouping/abort rules.
+- `src/adapters/word/resolve-suggestion/SuggestionResolutionCleanup.ts` — owns per-suggestion cleanup after certified resolution.
 - `src/adapters/word/cleanup/CommentCleanup.ts` — owns bulk resolved-comment cleanup and is the natural boundary for comments-only cleanup policy.
 - `src/domain/suggestion/SuggestionResolutionWorkflow.ts` — already owns feedback suppression for ambiguous states and should stay the app-level owner of terminal semantics.
 - `openspec/specs/replace-resolution-workflow/spec.md` and `openspec/changes/replace-suggestion-identity/*` — define the current replace identity/resolution baseline this new change should relate to without reusing.

@@ -95,7 +95,7 @@ interface ReplaceSuggestionIdentity {
 | Unit | `0 observed` → `unobservable` | `WordAdapterAccept/RejectSuggestion.test.ts` |
 | Unit | feedback skipped on ambiguous states | `SuggestionResolutionWorkflow.test.ts` |
 | Unit | valid state transitions for new states | `SuggestionStateMachine.test.ts` |
-| Integration-ish | taskpane rendering for `unobservable` / `identity-lost` | `TaskpaneSuggestionResolution.test.ts` |
+| Integration-ish | taskpane rendering for `unobservable` / `identity-lost` | `src/taskpane/__tests__/TaskpaneSuggestionResolution.test.ts` |
 | Regression | reject bare-ID as unsupported and certify `compound-v2`/corrupt metadata paths | action test helpers + adapter tests |
 
 ## Migration / Rollout

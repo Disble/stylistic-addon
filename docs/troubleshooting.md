@@ -4,7 +4,7 @@ Common issues and their solutions when developing or using Stylistic.
 
 ## Development Issues
 
-### `npm start` fails with certificate errors
+### `bun run start` fails with certificate errors
 
 **Symptom:** The dev server starts but Word rejects the connection, or the browser shows `ERR_CERT_AUTHORITY_INVALID`.
 
@@ -16,7 +16,7 @@ Common issues and their solutions when developing or using Stylistic.
 npx office-addin-dev-certs install
 ```
 
-This generates and trusts a local CA certificate. Restart with `npm start` after installing.
+This generates and trusts a local CA certificate. Restart with `bun run start` after installing.
 
 ---
 
@@ -28,7 +28,7 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Fix:**
 
-1. Make sure you ran `npm start` (not just the dev server).
+1. Make sure you ran `bun run start` (not just the dev server).
 2. If using Word Online, manually sideload: **Insert** > **Add-ins** > **Upload My Add-in** > select `manifest.xml`.
 3. Check the browser console (F12) for errors — the Office.js CDN may be blocked.
 
@@ -42,13 +42,13 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Fix:**
 
-1. If using `npm run watch`, check that webpack recompiled (look for output in the terminal).
+1. If using `bun run watch`, check that webpack recompiled (look for output in the terminal).
 2. Close and reopen the task pane in Word.
 3. Hard-refresh: in Word Online, press `Ctrl+Shift+R`. In Word Desktop, close and reopen the document.
 
 ---
 
-### `npm run validate` reports manifest errors
+### `bun run validate` reports manifest errors
 
 **Symptom:** The validator flags issues in `manifest.xml`.
 
@@ -58,13 +58,13 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 - **URL mismatch:** In production builds, update the `urlProd` variable in `webpack.config.js` from `https://www.contoso.com/` to your actual deployment URL.
 - **Requirement set version:** The manifest requires WordApi 1.6. If testing on an older version of Word, this will fail at load time (not validation time).
 
-**Note:** For manifest-specific validation, run `npm run manifest:validate`. The `npm run validate` command runs lint + filename checks + complexity checks.
+**Note:** For manifest-specific validation, run `bun run manifest:validate`. The `bun run validate` command runs lint + architecture rails + filename checks + complexity checks + React rails + typecheck. It does **not** validate the manifest.
 
 ---
 
-### Build fails with TypeScript errors after adding new files
+### `bun run build` fails with TypeScript errors after adding new files
 
-**Symptom:** `npm run build` fails with type errors in new `.ts` files.
+**Symptom:** `bun run build` fails with type errors in new `.ts` files.
 
 **Cause:** The Babel-based build pipeline doesn't perform type checking — it strips types and transpiles. If you see TypeScript errors, they come from the editor (VS Code) or a separate `tsc` check.
 
@@ -72,7 +72,7 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 1. Make sure your new file is under `src/` (not excluded in `tsconfig.json`).
 2. Verify imports use relative paths (e.g., `"../lib/types"`, not absolute paths).
-3. Run `npx tsc --noEmit` to see all type errors.
+3. Run `bun run typecheck` to see all type errors.
 
 ---
 
@@ -431,9 +431,9 @@ contract.
 If your issue isn't listed here:
 
 1. Check the browser console (F12) for JavaScript errors.
-2. Run `npm run manifest:validate` to check the manifest.
-3. Run `npm run validate` to run lint + filename checks + complexity checks.
-3. Try `npm stop && npm start` for a clean restart.
+2. Run `bun run manifest:validate` to check the manifest.
+3. Run `bun run validate` to run lint + rails + typecheck without building.
+4. Try `bun run stop && bun run start` for a clean restart.
 4. Verify the Mastra server is running and responsive.
 5. Open an issue in the repository with:
    - The error message (screenshot or text)

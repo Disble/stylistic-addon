@@ -54,7 +54,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed walkthrough.
 - **Severity levels** — suggestions include severity (high/medium/low) for prioritization
 - **Reliability first** — retry logic with exponential backoff, partial success reporting, preserve-and-restore tracking mode
 - **Non-destructive** — preserves the document's original tracking mode after analysis
-- **Simple UI** — one-click analysis with a profile dropdown, progress bar, and results panel
+- **Simple UI** — one-click analysis from the main view, with profile management in Settings, progress feedback, and results review
 - **Extensible** — new analysis rules require only backend prompt changes, no frontend modifications
 
 ## Quick Start
@@ -95,8 +95,8 @@ This starts the dev server on `https://localhost:3000` and sideloads the add-in 
 ### Try It
 
 1. Click **"Continuar con Google"** and complete login in the Office Dialog.
-2. Select an analysis profile from the dropdown (General, Formal, or Académico).
-3. Click **"Analizar y sugerir"**.
+2. Open **Settings** from the gear icon if you need to change the analysis profile.
+3. Click **"Analizar y sugerir"** from the main view.
 4. Watch the progress bar as chunks are analyzed and suggestions are applied.
 5. Open the **Review** tab to accept or reject tracked changes.
 6. Click **"Limpiar comentarios resueltos"** to remove comments from resolved changes.
@@ -179,8 +179,12 @@ The add-in requires **WordApi 1.6** for `changeTrackingMode` and tracked change 
 | Document | Description |
 |---|---|
 | [Architecture](docs/architecture.md) | System design, data flow, and design decisions |
+| [Review Domain & Track Changes](docs/review-domain-and-track-changes.md) | Frontend domain language and Track Changes lifecycle policy |
+| [Linting & File Anatomy](docs/linting-and-file-anatomy.md) | Enforced file anatomy, component contracts, and `__tests__/` placement |
+| [Testing](docs/testing.md) | Canonical testing strategy, tiers, and verification workflow |
+| [Debugging](docs/debugging.md) | Evidence-first debugging workflow and investigation ladder |
 | [API Contract](docs/api-contract.md) | Backend requirements (Mastra workflow input/output) |
-| [Troubleshooting](docs/troubleshooting.md) | Common auth, backend, and Word-host issues |
+| [Troubleshooting](docs/troubleshooting.md) | Common auth, backend, host, and operational issues |
 | [Adding Rules](docs/adding-rules.md) | How to extend editorial analysis rules |
 
 ## Known Limitations

@@ -569,13 +569,13 @@ En castellano brutal:
 
 ## Archivos más relevantes en esta investigación
 
-- `src/adapters/word/ResolveSuggestionCommand.ts`
-- `src/adapters/word/resolution/SuggestionResolutionObserver.ts`
-- `src/adapters/word/resolution/TrackedChangeResolutionExecutor.ts`
-- `src/adapters/word/resolution/SuggestionLocator.ts`
+- `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`
+- `src/adapters/word/resolve-suggestion/SuggestionResolutionObserver.ts`
+- `src/adapters/word/resolve-suggestion/ResolveSuggestionTrackChangeOrchestrator.ts`
+- `src/adapters/word/resolve-suggestion/SuggestionLocator.ts`
 - `src/adapters/word/WordAdapterActionTestHelper.ts`
-- `src/adapters/word/WordAdapterAcceptSuggestion.test.ts`
-- `src/adapters/word/WordAdapterRejectSuggestion.test.ts`
+- `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts`
+- `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts`
 - `src/adapters/word/ApplySuggestionCommand.ts`
 - `src/adapters/word/ReplaceIdentityParser.ts`
 

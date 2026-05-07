@@ -9,7 +9,7 @@ Refactor only the policy seam, not the workflow. `ResolveSuggestionCommand` rema
 | Decision | Choice | Alternatives | Rationale |
 |---|---|---|---|
 | Strategy scope | Policy-only strategy | Separate accept/reject command classes | The workflow is shared; only a few replace decisions vary |
-| Strategy location | `src/adapters/word/resolution/` | Keep helper methods inside command | The executor also needs the same policy |
+| Strategy location | `src/adapters/word/resolve-suggestion/` | Keep helper methods inside command | The orchestrators/executors also need the same policy |
 | Wiring | Build once in `ResolveSuggestionCommand` and pass to executor | Let each class infer from `action` independently | One source of truth avoids behavioral drift |
 
 ## Data Flow
@@ -26,11 +26,11 @@ ResolveSuggestionCommand
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/adapters/word/resolution/ReplaceResolutionStrategyContext.ts` | Create | Define the policy contract and concrete accept/reject strategy creation |
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modify | Replace inline order/label branching with strategy usage |
-| `src/adapters/word/resolution/TrackedChangeResolutionExecutor.ts` | Modify | Consume strategy priority instead of raw action checks |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modify | Keep accept ordering/contract assertions stable through refactor |
-| `src/adapters/word/WordAdapterRejectSuggestion.test.ts` | Modify | Keep reject ordering/contract assertions stable through refactor |
+| `src/adapters/word/resolve-suggestion/ReplaceResolutionStrategyContext.ts` | Create | Define the policy contract and concrete accept/reject strategy creation |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modify | Replace inline order/label branching with strategy usage |
+| `src/adapters/word/resolve-suggestion/TrackedChangeResolutionExecutor.ts` | Modify | Consume strategy priority instead of raw action checks |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modify | Keep accept ordering/contract assertions stable through refactor |
+| `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` | Modify | Keep reject ordering/contract assertions stable through refactor |
 
 ## Interfaces / Contracts
 

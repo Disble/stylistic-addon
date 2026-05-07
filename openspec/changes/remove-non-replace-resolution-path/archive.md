@@ -15,7 +15,7 @@ Completed. Tracked-change resolution now has only two supported outcomes at the 
 ## Validation
 
 - Focused adapter tests: 11 passed, 0 failed.
-- Problems check: clean for `src/adapters/word/ResolveSuggestionCommand.ts`, `src/adapters/word/resolution/SuggestionResolutionObserver.ts`, `src/adapters/word/resolution/ResolutionSnapshotObserver.ts`, and `src/adapters/word/WordAdapterAcceptSuggestion.test.ts`.
+- Problems check: clean for `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`, `src/adapters/word/resolve-suggestion/SuggestionResolutionObserver.ts`, and `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts`.
 - Code search: no remaining `non-replace` or `isReplaceSuggestion()` branch markers in `src/adapters/word/**`.
 
 ## Residual Risk

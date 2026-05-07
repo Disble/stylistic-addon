@@ -101,13 +101,13 @@ flowchart TD
 
 At this handoff point, the repository is already partially simplified:
 
-- `src/adapters/word/ResolveSuggestionCommand.ts`
+- `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`
   - `tryAtomicAcceptReplaceFallback(...)` is already removed.
   - `tryAtomicAcceptStepFallback(...)` is already removed.
   - the now-unused `buildReplaceFailureOutcome(...)` helper is already removed.
-- `src/adapters/word/WordAdapterAcceptSuggestion.test.ts`
+- `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts`
   - the suite is pruned to 17 focused replace-workflow tests.
-- `src/adapters/word/WordAdapterRejectSuggestion.test.ts`
+- `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts`
   - the suite is pruned to 16 focused replace-workflow tests.
 - Test helpers were updated to install `globalThis.Word` directly instead of relying on `vi.stubGlobal`, because that API was unavailable in the active Bun/Vitest runtime.
 
@@ -117,9 +117,9 @@ The next agent should continue from verification and focused pruning, not from r
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modify | Remove early atomic accept fallback branches while preserving semantic execution, post-execute atomic retry, fresh semantic recovery, and fail-closed verification |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modify | Keep only accept coverage for semantic ordering, representative evidence sources, fresh re-observation, bounded post-execute retry, and fail-closed behavior |
-| `src/adapters/word/WordAdapterRejectSuggestion.test.ts` | Modify | Keep only reject coverage for semantic ordering, representative evidence sources, fresh re-observation, stale-proxy replacement, and fail-closed behavior |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modify | Remove early atomic accept fallback branches while preserving semantic execution, post-execute atomic retry, fresh semantic recovery, and fail-closed verification |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modify | Keep only accept coverage for semantic ordering, representative evidence sources, fresh re-observation, bounded post-execute retry, and fail-closed behavior |
+| `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` | Modify | Keep only reject coverage for semantic ordering, representative evidence sources, fresh re-observation, stale-proxy replacement, and fail-closed behavior |
 
 ## Interfaces / Contracts
 
@@ -134,7 +134,7 @@ The next agent should continue from verification and focused pruning, not from r
 
 | Layer | What to Test | Approach |
 |-------|-------------|----------|
-| Adapter-focused | Accept/reject semantic ordering and fresh re-observation | Vitest tests against `WordAdapterAcceptSuggestion.test.ts` and `WordAdapterRejectSuggestion.test.ts` with fresh proxy scenarios |
+| Adapter-focused | Accept/reject semantic ordering and fresh re-observation | Vitest tests against `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` and `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` with fresh proxy scenarios |
 | Adapter-focused | Bounded post-execute atomic retry and fresh semantic recovery | Focused accept tests that prove retry happens only after fresh post-execute evidence |
 | Adapter-focused | Fail-closed resolution when pending CC-scoped tracked changes remain | Assert terminal error/no-success outcomes instead of optimistic cleanup |
 | Adapter-focused | Identity degradation rules | Assert `unobservable` for zero visible tracked changes and `identity-lost` for corrupt `compound-v2` metadata |
@@ -144,12 +144,12 @@ The next agent should continue from verification and focused pruning, not from r
 
 Focused adapter validation currently passes:
 
-- `npx vitest run "src/adapters/word/WordAdapterAcceptSuggestion.test.ts" "src/adapters/word/WordAdapterRejectSuggestion.test.ts"`
+- `bun run test -- src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts`
 - Result: 2 files passed, 33 tests passed
 
 Additional focused helper-impact validation also passes:
 
-- `npx vitest run "src/adapters/word/ApplySuggestionCommand.test.ts"`
+- `bun run test -- src/adapters/word/__tests__/ApplySuggestionCommand.test.ts`
 - Result: file passed
 
 ## Handoff Notes For The Next Agent

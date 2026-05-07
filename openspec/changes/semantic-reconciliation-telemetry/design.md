@@ -88,10 +88,10 @@ interface ResolutionTelemetryEvent {
 |---|---|---|
 | `src/domain/types.ts` | Modify | Add execution-report, warning, and telemetry event/result metadata types. |
 | `src/domain/ports.ts` | Modify | Add `ITelemetryPort` as best-effort observability contract. |
-| `src/adapters/word/resolution/TrackedChangeResolutionExecutor.ts` | Modify | Return `ResolutionExecutionReport`. |
-| `src/adapters/word/resolution/SuggestionResolutionReconciler.ts` | Create | Re-observe after failures and classify semantic outcome. |
-| `src/adapters/word/resolution/SuggestionResolutionCleanup.ts` | Modify | Return warnings instead of rethrowing late cleanup failures. |
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modify | Orchestrate report, reconciliation, telemetry, and warning-aware result mapping. |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionOperationalExecutor.ts` | Modify | Return `ResolutionExecutionReport`. |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionTrackChangeOrchestrator.ts` | Modify | Re-observe after failures and classify semantic outcome. |
+| `src/adapters/word/resolve-suggestion/SuggestionResolutionCleanup.ts` | Modify | Return warnings instead of rethrowing late cleanup failures. |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modify | Orchestrate report, reconciliation, telemetry, and warning-aware result mapping. |
 | `src/adapters/telemetry/ConsoleTelemetryAdapter.ts` | Create | Default sink that logs structured events without affecting behavior. |
 | `src/domain/suggestion/SuggestionResolutionWorkflow.ts` | Modify | Preserve terminal status + warnings and emit feedback only from semantic outcome. |
 | `src/domain/suggestion/SuggestionStateMachine.ts`, `src/taskpane/SuggestionCardRenderer.ts` | Modify | Support terminal-warning UI semantics. |
@@ -101,9 +101,9 @@ interface ResolutionTelemetryEvent {
 
 | Layer | What to Test | Approach |
 |---|---|---|
-| Tier 1 adapter | Partial accept/reject, late cleanup failure, semantic reconciliation | `WordAdapterAcceptSuggestion.test.ts`, `WordAdapterRejectSuggestion.test.ts` |
+| Tier 1 adapter | Partial accept/reject, late cleanup failure, semantic reconciliation | `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts`, `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` |
 | Tier 1 resolution modules | execution reports, reconciler classification, telemetry swallowing | focused resolution collaborator tests |
-| Tier 2 taskpane | terminal warning state, no action resurrection | `TaskpaneSuggestionResolution.test.ts` |
+| Tier 2 taskpane | terminal warning state, no action resurrection | `src/taskpane/__tests__/TaskpaneSuggestionResolution.test.ts` |
 | Docs/policy | telemetry naming and invariants | `docs/TELEMETRY.md` review during implementation |
 
 ## Migration / Rollout

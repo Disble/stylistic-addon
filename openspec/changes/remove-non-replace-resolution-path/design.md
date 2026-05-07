@@ -32,11 +32,11 @@ Resolve suggestion
 
 | File | Action | Description |
 |------|--------|-------------|
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modify | Replace `isReplaceSuggestion` heuristic with tracked-change contract assertion and remove non-replace execution path |
-| `src/adapters/word/resolution/SuggestionResolutionObserver.ts` | Modify | Remove non-replace tracked-change observation branch |
-| `src/adapters/word/resolution/ResolutionSnapshotObserver.ts` | Modify | Derive replace snapshot mode directly from suggestion type/contract |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modify | Delete impossible non-replace contract tests |
-| `src/adapters/word/WordAdapterRejectSuggestion.test.ts` | Modify | Delete impossible non-replace contract tests if any exist |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modify | Replace `isReplaceSuggestion` heuristic with tracked-change contract assertion and remove non-replace execution path |
+| `src/adapters/word/resolve-suggestion/SuggestionResolutionObserver.ts` | Modify | Remove non-replace tracked-change observation branch |
+| `src/adapters/word/resolve-suggestion/ResolutionSnapshotObserver.ts` | Modify | Derive replace snapshot mode directly from suggestion type/contract |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modify | Delete impossible non-replace contract tests |
+| `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` | Modify | Delete impossible non-replace contract tests if any exist |
 
 ## Interfaces / Contracts
 
