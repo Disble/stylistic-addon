@@ -1,9 +1,7 @@
-type ReplaceTrackedChangeSide = "Added" | "Deleted";
-
-/** Compact tracked-change payload used in observability snapshots. */
-export type TrackedChangeLogEntry = {
-  type: string;
-};
+import type {
+  ReplaceTrackedChangeSide,
+  TrackedChangeLogEntry,
+} from "./ResolutionObservationContext.types";
 
 /** Builds one stable tracked-change entry for cross-phase workflow logs. */
 export function describeTrackedChangeForLog(

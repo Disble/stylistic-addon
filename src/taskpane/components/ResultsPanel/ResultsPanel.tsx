@@ -3,7 +3,7 @@ import { Caption1, Skeleton, SkeletonItem } from "@fluentui/react-components";
 import { ResultSuggestionCard } from "../ResultSuggestionCard";
 import { ResultsSummaryChips } from "../ResultsSummaryChips";
 import { SKELETON_PLACEHOLDER_COUNT } from "./ResultsPanel.constants";
-import { useResultsPanel } from "./useResultsPanel";
+import { useResultsPanel } from "./ResultsPanel.hooks";
 
 /** Renders the chips toolbar, filtered suggestion list, and skeleton loading state. */
 export function ResultsPanel(): React.JSX.Element | null {

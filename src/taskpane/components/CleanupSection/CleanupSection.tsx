@@ -2,7 +2,7 @@ import * as React from "react";
 import { Button, Spinner } from "@fluentui/react-components";
 import { BroomRegular } from "@fluentui/react-icons";
 import type { CleanupSectionProps } from "./CleanupSection.types";
-import { useCleanupSection } from "./useCleanupSection";
+import { useCleanupSection } from "./CleanupSection.hooks";
 
 /** Renders the resolved-comments cleanup CTA. */
 export function CleanupSection({

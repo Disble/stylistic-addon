@@ -18,8 +18,9 @@
 
 import type { Suggestion } from "../../suggestion/Suggestion.types";
 import type { PipelineContext } from "../PipelineContext";
-import type { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
+/** Removes semantically duplicated suggestions before application. */
 export class DeduplicateHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const raw = ctx.rawSuggestions!;

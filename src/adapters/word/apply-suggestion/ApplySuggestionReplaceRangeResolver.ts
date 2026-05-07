@@ -1,20 +1,10 @@
 /* global Word, console */
 
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
-import {
-  type ApplySuggestionRangeCandidateDiagnostics,
-  applySuggestionObservability,
-} from "../../observability/ConsoleApplySuggestionObservabilityAdapter";
-import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext";
-
-/** Reviewed text pair read from one Word range. */
-interface ApplySuggestionReviewedText {
-  /** Current visible reviewed text. */
-  current: string;
-
-  /** Original reviewed text still associated with the range. */
-  original: string;
-}
+import { applySuggestionObservability } from "../../observability/ConsoleApplySuggestionObservabilityAdapter";
+import type { ApplySuggestionRangeCandidateDiagnostics } from "../../observability/ConsoleApplySuggestionObservabilityAdapter.types";
+import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext.types";
+import type { ApplySuggestionReviewedText } from "./ApplySuggestionReplaceRangeResolver.types";
 
 /**
  * Re-locates the inserted/current side for replace suggestion annotation.

@@ -1,6 +1,8 @@
 /* global Word, console, OfficeExtension */
 
 import { isStylisticComment } from "../StylisticCommentBuilder";
+import { STYLISTIC_TAG_PREFIX } from "../../../infrastructure/config";
+import { OVERLAPPING_RELATIONS } from "./CommentCleanup.constants";
 
 /**
  * Comment cleanup — Range Colocation pattern for orphaned comment removal.
@@ -25,21 +27,10 @@ import { isStylisticComment } from "../StylisticCommentBuilder";
  * @module CommentCleanup
  */
 
-/** Tag prefix that identifies any active Stylistic suggestion Content Control. */
-export const STYLISTIC_TAG_PREFIX = "stylistic:";
-
-/** All `LocationRelation` values that indicate spatial overlap. */
-export const OVERLAPPING_RELATIONS: string[] = [
-  "Equal",
-  "Contains",
-  "ContainsStart",
-  "ContainsEnd",
-  "Inside",
-  "InsideStart",
-  "InsideEnd",
-  "OverlapsBefore",
-  "OverlapsAfter",
-];
+/** Returns whether a Word `LocationRelation` indicates spatial overlap. */
+export function isOverlappingRelation(relation: string): boolean {
+  return OVERLAPPING_RELATIONS.includes(relation);
+}
 
 /**
  * Deletes Stylistic comments that are no longer colocated with an active
@@ -100,7 +91,7 @@ export async function getCleanupPreview(): Promise<{
 
     for (let i = 0; i < stylisticComments.length; i++) {
       const hasColocatedCC = ccRanges.some((_, j) =>
-        OVERLAPPING_RELATIONS.includes(comparisons[i][j].value as string)
+        isOverlappingRelation(comparisons[i][j].value as string)
       );
 
       if (hasColocatedCC) {
@@ -178,7 +169,7 @@ export async function cleanupResolvedComments(): Promise<{
 
     for (let i = 0; i < stylisticComments.length; i++) {
       const hasColocatedCC = ccRanges.some((_, j) =>
-        OVERLAPPING_RELATIONS.includes(comparisons[i][j].value as string)
+        isOverlappingRelation(comparisons[i][j].value as string)
       );
 
       if (hasColocatedCC) {

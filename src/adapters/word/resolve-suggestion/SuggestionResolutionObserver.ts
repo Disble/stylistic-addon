@@ -7,7 +7,7 @@ import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "../ReplaceIdentityParser";
-import type { TextLocator } from "../WordTextLocatorContext";
+import type { TextLocator } from "../WordTextLocatorContext.types";
 import { OperationalWrapperGroupResolver } from "./OperationalWrapperGroupResolver";
 import type {
   ColocatedCommentContext,
@@ -17,8 +17,7 @@ import type {
   ResolutionTrackedChangeCollection,
 } from "./ResolutionContext";
 import type { SuggestionLocator } from "./SuggestionLocator";
-
-type ReplaceTrackedChangeSide = "Added" | "Deleted";
+import type { ReplaceTrackedChangeSide } from "./SuggestionResolutionObserver.types";
 
 /**
  * Observes resolution state strictly from operational wrapper scopes.

@@ -1,6 +1,16 @@
-import type { ResultsPanelCardState } from "../../ResultsPanelStore";
-import type { CardVisualState, CategoryAccent } from "./ResultSuggestionCard.helpers";
+import type { ResultsPanelCardState } from "../../ResultsPanelStore.types";
+import type { useResultSuggestionCardStyles } from "./ResultSuggestionCard.styles";
 
+/** Visual state used to tint one rendered suggestion card. */
+export type CardVisualState = "pending" | "accepted" | "rejected" | "failed" | "not-found";
+
+/** Accent slug used to color the category pill. */
+export type CategoryAccent = "grammar" | "spelling" | "punctuation" | "style" | "neutral";
+
+/** Griffel style hook return type consumed by card helper resolvers. */
+export type ResultSuggestionCardStyles = ReturnType<typeof useResultSuggestionCardStyles>;
+
+/** Props required to render one suggestion card in the results panel. */
 export type ResultSuggestionCardProps = Readonly<{
   card: ResultsPanelCardState;
   onAccept: (cardId: string) => Promise<void>;
@@ -10,6 +20,7 @@ export type ResultSuggestionCardProps = Readonly<{
   onToggleFeedback: (cardId: string) => void;
 }>;
 
+/** Griffel class slots consumed by the result suggestion card. */
 export type ResultSuggestionCardClasses = Readonly<{
   root: string;
   card: string;
@@ -33,6 +44,7 @@ export type ResultSuggestionCardClasses = Readonly<{
   feedbackTextarea: string;
 }>;
 
+/** View model consumed by the result suggestion card component. */
 export type ResultSuggestionCardViewModel = Readonly<{
   classes: ResultSuggestionCardClasses;
   isCommentOnly: boolean;

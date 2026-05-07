@@ -7,7 +7,7 @@ import type {
 } from "../../domain/suggestion/Suggestion.types";
 import { SuggestionArtifactLocator } from "./location/SuggestionArtifactLocator";
 import { SuggestionTextRangeLocator } from "./location/SuggestionTextRangeLocator";
-import type { TextLocator, WordSearchContainer } from "./WordTextLocatorContext";
+import type { TextLocator, WordSearchContainer } from "./WordTextLocatorContext.types";
 
 /**
  * Handles read-only suggestion navigation in Word.

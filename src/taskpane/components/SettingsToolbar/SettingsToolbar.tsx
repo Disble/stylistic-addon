@@ -2,7 +2,7 @@ import * as React from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
 import type { SettingsToolbarProps } from "./SettingsToolbar.types";
-import { useSettingsToolbar } from "./useSettingsToolbar";
+import { useSettingsToolbar } from "./SettingsToolbar.hooks";
 
 /** Persistent footer toolbar exposing access to the settings view. */
 export function SettingsToolbar({

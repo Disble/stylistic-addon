@@ -27,14 +27,12 @@ import { ResolveSuggestionCommand } from "./resolve-suggestion/ResolveSuggestion
 import { WordAppliedSuggestionInspector } from "./WordAppliedSuggestionInspector";
 import { WordSelectionMonitorAdapter } from "./WordSelectionMonitorAdapter";
 import { WordSuggestionNavigationAdapter } from "./WordSuggestionNavigationAdapter";
-import {
-  getDefaultTextLocator,
-  type TextLocator,
-  type WordSearchContainer,
-} from "./WordTextLocatorContext";
+import type { TextLocator, WordSearchContainer } from "./WordTextLocatorContext.types";
+import { getDefaultTextLocator } from "./WordTextLocatorContext";
 import { WordTextSourceAdapter } from "./WordTextSourceAdapter";
 import { WordTrackChangesAdapter } from "./WordTrackChangesAdapter";
 
+/** Facade that exposes document-review operations through Office.js. */
 export class WordAdapter implements IDocumentPort {
   private readonly textSourceAdapter = new WordTextSourceAdapter();
 

@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { HeroEmptyStateProps } from "./HeroEmptyState.types";
-import { useHeroEmptyState } from "./useHeroEmptyState";
+import { useHeroEmptyState } from "./HeroEmptyState.hooks";
 
 /**
  * First-impression surface shown when the taskpane is idle (no analysis

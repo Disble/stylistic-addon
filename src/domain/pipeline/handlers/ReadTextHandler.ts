@@ -11,11 +11,9 @@
  */
 
 import type { PipelineContext } from "../PipelineContext";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
-export interface PipelineHandler {
-  handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void>;
-}
-
+/** Reads the text source that will enter the analysis pipeline. */
 export class ReadTextHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     console.log("📖 [ReadTextHandler] Fase 1: Resolviendo texto a analizar...");

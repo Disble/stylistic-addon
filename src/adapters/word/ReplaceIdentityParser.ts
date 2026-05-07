@@ -3,9 +3,7 @@ import type {
   Suggestion,
 } from "../../domain/suggestion/Suggestion.types";
 import { STYLISTIC_IDENTITY_TITLE_PREFIX, STYLISTIC_TAG_PREFIX } from "../../infrastructure/config";
-import { TrackChangeSubtypeResolver } from "./apply-suggestion/TrackChangeSubtypeResolver";
-
-const subtypeResolver = new TrackChangeSubtypeResolver();
+import { resolvePersistedTrackChangeSubtype } from "./ReplaceIdentityParser.helpers";
 
 /**
  * Parses persisted operational-wrapper identity metadata from a Content Control
@@ -54,9 +52,7 @@ export function isValidOperationalReplaceIdentity(
   }
 
   const expectedTag = `${STYLISTIC_TAG_PREFIX}${suggestion.type}:${suggestion.id}`;
-  const subtypeResolution = subtypeResolver.resolve(suggestion);
-  const expectedSubtype =
-    subtypeResolution.subtype === "insert" ? "replace" : subtypeResolution.subtype;
+  const expectedSubtype = resolvePersistedTrackChangeSubtype(suggestion);
   const persistedSubtype = identity.trackChangeSubtype ?? "replace";
 
   if (persistedSubtype !== expectedSubtype) {

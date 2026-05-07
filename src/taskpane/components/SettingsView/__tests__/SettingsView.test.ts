@@ -2,7 +2,7 @@ import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { AnalysisProfileSectionProps } from "../../AnalysisProfileSection";
 import { SettingsView } from "../SettingsView";
-import { useSettingsView } from "../useSettingsView";
+import { useSettingsView } from "../SettingsView.hooks";
 
 vi.mock("../../AccountSettings", () => ({
   AccountSettings: (props: unknown) => React.createElement("account-settings", props),
@@ -13,7 +13,7 @@ vi.mock("../../AnalysisProfileSection", () => ({
     React.createElement("analysis-profile-section", props),
 }));
 
-vi.mock("../useSettingsView", () => ({
+vi.mock("../SettingsView.hooks", () => ({
   useSettingsView: vi.fn(),
 }));
 

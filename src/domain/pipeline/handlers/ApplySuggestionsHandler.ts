@@ -16,8 +16,9 @@
 
 import type { PipelineContext } from "../PipelineContext";
 import type { AnalysisPhase, ProgressCallback } from "../PipelineEvents.types";
-import type { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
+/** Applies pending suggestions through the document port. */
 export class ApplySuggestionsHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const pending = ctx.pendingSuggestions!;

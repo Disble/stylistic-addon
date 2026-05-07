@@ -17,8 +17,9 @@
  */
 
 import type { PipelineContext } from "../PipelineContext";
-import type { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
+/** Filters out suggestions that are already present as pending Stylistic artifacts. */
 export class GuardAppliedHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     console.log("🛡️ [GuardAppliedHandler] Fase 5b: Verificando sugerencias ya aplicadas...");

@@ -97,7 +97,7 @@ function isTestFile(stem) {
 }
 
 function isTestHelperFile(stem) {
-  return stem.endsWith("TestHelper");
+  return stem.endsWith("TestHelper") || stem.includes("TestHelper.");
 }
 
 async function pathExists(filePath) {

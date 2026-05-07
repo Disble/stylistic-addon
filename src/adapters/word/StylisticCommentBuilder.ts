@@ -7,10 +7,7 @@
  * their persisted content signature, not from `authorName`.
  */
 
-type CommentLike = {
-  authorName?: string;
-  content?: string;
-};
+import type { CommentLike } from "./StylisticCommentBuilder.types";
 
 /**
  * Normalizes Word comment text line endings so identification logic is stable

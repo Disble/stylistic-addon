@@ -1,10 +1,10 @@
 /* global Word */
 
-import {
-  DocumentReviewStateMachine,
-  type DocumentReviewUiState,
-} from "../../domain/review/DocumentReviewStateMachine";
-import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
+import { DocumentReviewStateMachine } from "../../domain/review/DocumentReviewStateMachine";
+import type {
+  DocumentReviewState,
+  DocumentReviewUiState,
+} from "../../domain/review/DocumentReviewStateMachine.types";
 import { STYLISTIC_TAG_PREFIX } from "../../infrastructure/config";
 
 /** Owns document review state and Track Changes lifecycle concerns. */

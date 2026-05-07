@@ -14,32 +14,15 @@ import {
   findUniqueLocatorSubstring,
   findWhitespaceInsensitiveSlice,
 } from "../../core/text-search/TextSearchCore";
+import { stringifyUnknownError } from "./WordTextLocatorAdapter.helpers";
 import type {
   TextLocator,
   WordSearchContainer,
   WordTextLocationRequest,
-} from "./WordTextLocatorContext";
+} from "./WordTextLocatorContext.types";
+import type { WordTextLocationResult } from "./WordTextLocatorAdapter.types";
 
-/** Result contract for one Word text-location request. */
-type WordTextLocationResult = Word.Range | null;
-
-/** Converts unknown error values into a stable string. */
-function stringifyUnknownError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return Object.prototype.toString.call(error);
-  }
-}
-
+/** Locates Word ranges using text-search heuristics plus Office.js search. */
 export class WordTextLocatorAdapter implements TextLocator {
   /** Detects Word search rejections caused by invalid or too-long strings. */
   private static isSearchInvalidError(error: unknown): boolean {

@@ -1,11 +1,6 @@
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
-import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext";
-
-/** Options for diagnostic logging while locating textual suggestion ranges. */
-export type SuggestionTextRangeLocatorOptions = {
-  commandId?: string;
-  logPrefix?: string;
-};
+import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext.types";
+import type { SuggestionTextRangeLocatorOptions } from "./SuggestionTextRangeLocator.types";
 
 /**
  * Locates a suggestion anchor inside its surrounding context without mutation.

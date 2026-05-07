@@ -2,7 +2,7 @@ import * as React from "react";
 import { Button, Spinner } from "@fluentui/react-components";
 import { WandRegular } from "@fluentui/react-icons";
 import type { AnalyzeSectionProps } from "./AnalyzeSection.types";
-import { useAnalyzeSection } from "./useAnalyzeSection";
+import { useAnalyzeSection } from "./AnalyzeSection.hooks";
 
 /** Renders the primary "analyze" CTA with a wand icon and inline spinner. */
 export function AnalyzeSection({ isLoading, onAnalyze }: AnalyzeSectionProps): React.JSX.Element {

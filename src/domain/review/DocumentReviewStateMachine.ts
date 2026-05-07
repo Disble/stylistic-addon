@@ -23,20 +23,9 @@ import type {
   DocumentReviewTransition,
   DocumentReviewUiState,
 } from "./DocumentReviewStateMachine.types";
+import { DOCUMENT_REVIEW_TRANSITIONS } from "./DocumentReviewStateMachine.constants";
 
-export type {
-  DocumentReviewState,
-  DocumentReviewTransition,
-  DocumentReviewUiState,
-  ReviewTaskpaneState,
-} from "./DocumentReviewStateMachine.types";
-
-const TRANSITIONS: Record<DocumentReviewUiState, DocumentReviewUiState[]> = {
-  idle: ["idle", "pending-review", "ready-to-disable-track-changes"],
-  "pending-review": ["pending-review", "ready-to-disable-track-changes", "idle"],
-  "ready-to-disable-track-changes": ["ready-to-disable-track-changes", "pending-review", "idle"],
-};
-
+/** Raised when the review UI machine receives an impossible transition. */
 export class InvalidDocumentReviewTransitionError extends Error {
   constructor(
     from: DocumentReviewUiState,
@@ -150,8 +139,12 @@ export class DocumentReviewStateMachine {
    * Applies one validated state transition.
    */
   private transitionTo(next: DocumentReviewUiState): void {
-    if (!TRANSITIONS[this.current].includes(next)) {
-      throw new InvalidDocumentReviewTransitionError(this.current, next, TRANSITIONS[this.current]);
+    if (!DOCUMENT_REVIEW_TRANSITIONS[this.current].includes(next)) {
+      throw new InvalidDocumentReviewTransitionError(
+        this.current,
+        next,
+        DOCUMENT_REVIEW_TRANSITIONS[this.current]
+      );
     }
 
     if (this.current === next) {

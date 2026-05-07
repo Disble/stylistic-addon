@@ -1,71 +1,10 @@
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
-
-export type ParentCC = {
-  tag: string;
-  isNullObject: boolean;
-  load: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
-  title?: string;
-  getRange?: ReturnType<typeof vi.fn>;
-};
-
-export type MockRange = {
-  text: string;
-  font: { italic: boolean; bold: boolean };
-  load: ReturnType<typeof vi.fn>;
-  search: ReturnType<typeof vi.fn>;
-  insertText: ReturnType<typeof vi.fn>;
-  getReviewedText: ReturnType<typeof vi.fn>;
-  insertComment: ReturnType<typeof vi.fn>;
-  insertContentControl: ReturnType<typeof vi.fn>;
-  parentContentControlOrNullObject: ParentCC;
-  paragraphs: {
-    getFirst: ReturnType<typeof vi.fn>;
-  };
-};
-
-type RangeCollection = {
-  items: MockRange[];
-  load: ReturnType<typeof vi.fn>;
-};
-
-export type ApplyCommandTestContext = {
-  context: {
-    document: {
-      body: MockRange & { search: ReturnType<typeof vi.fn>; text: string };
-      load: ReturnType<typeof vi.fn>;
-      changeTrackingMode: string;
-    };
-    sync: ReturnType<typeof vi.fn>;
-  };
-  bodyRange: MockRange;
-  anchorRange: MockRange;
-  insertedRange: {
-    text: string;
-    font: { italic: boolean; bold: boolean };
-    getReviewedText: ReturnType<typeof vi.fn>;
-    paragraphs: {
-      getFirst: ReturnType<typeof vi.fn>;
-    };
-    search: ReturnType<typeof vi.fn>;
-    insertContentControl: ReturnType<typeof vi.fn>;
-    insertComment: ReturnType<typeof vi.fn>;
-  };
-  cc: {
-    tag: string;
-    title: string;
-    appearance: string;
-    cannotDelete: boolean;
-  };
-  operationalWrapper: {
-    tag: string;
-    title: string;
-    appearance: string;
-    cannotDelete: boolean;
-    getRange: ReturnType<typeof vi.fn>;
-  };
-  operationalWrapperRange: MockRange;
-};
+import type {
+  ApplyCommandTestContext,
+  MockRange,
+  ParentCC,
+  RangeCollection,
+} from "./ApplySuggestionCommandTestHelper.types";
 
 function createRangeCollection(items: MockRange[]): RangeCollection {
   return { items, load: vi.fn() };
@@ -75,11 +14,13 @@ function createClientResult<T>(value: T) {
   return { value };
 }
 
+/** Creates a deterministic Word search mock that returns one range batch per call. */
 export function createSearchMock(sequence: MockRange[][]): ReturnType<typeof vi.fn> {
   let index = 0;
   return vi.fn(() => createRangeCollection(sequence[index++] ?? []));
 }
 
+/** Creates a fake Word range with configurable reviewed text and search behavior. */
 export function createRange(options: {
   text: string;
   searchSequence?: MockRange[][];
@@ -161,6 +102,7 @@ export function createRange(options: {
   };
 }
 
+/** Builds a default suggestion fixture for apply-suggestion command tests. */
 export function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
@@ -176,6 +118,7 @@ export function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion 
   };
 }
 
+/** Installs a fake Word context tailored for apply-suggestion command scenarios. */
 export function installWordContext(
   options: {
     documentText?: string;

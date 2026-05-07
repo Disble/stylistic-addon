@@ -16,11 +16,10 @@ import type { Suggestion } from "./Suggestion.types";
 import type {
   FeedbackDispatchStatus,
   FeedbackPayload,
+  ResolutionAction,
   SuggestionActionResult,
   SuggestionResolutionWorkflowResult,
 } from "./SuggestionResolutionWorkflow.types";
-
-type ResolutionAction = "accept" | "reject";
 
 /**
  * Workflow-oriented façade for suggestion resolution semantics.

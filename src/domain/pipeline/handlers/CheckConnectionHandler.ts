@@ -12,8 +12,9 @@
 
 import { MASTRA_POLL_BYPASS_ENABLED } from "../../../infrastructure/config";
 import type { PipelineContext } from "../PipelineContext";
-import type { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
+/** Verifies backend reachability before the costly analysis phases start. */
 export class CheckConnectionHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     console.log("🔌 [CheckConnectionHandler] Fase 2: Verificando conexión...");

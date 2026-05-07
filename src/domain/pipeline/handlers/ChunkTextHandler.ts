@@ -16,8 +16,9 @@
 
 import { splitText } from "../../../infrastructure/chunker";
 import type { PipelineContext } from "../PipelineContext";
-import type { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
+/** Splits the resolved text into backend-sized chunks. */
 export class ChunkTextHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const scope = ctx.isSelection ? "selección" : "documento";

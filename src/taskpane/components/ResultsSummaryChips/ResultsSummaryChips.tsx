@@ -3,8 +3,10 @@ import type { ResultsSummaryChipsProps } from "./ResultsSummaryChips.types";
 import {
   buildResultsSummaryChips,
   resolveChipClassName,
+} from "./ResultsSummaryChips.helpers";
+import {
   useResultsSummaryChips,
-} from "./useResultsSummaryChips";
+} from "./ResultsSummaryChips.hooks";
 
 /** Renders the sticky chips toolbar that filters the results list. */
 export function ResultsSummaryChips({

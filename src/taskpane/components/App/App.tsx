@@ -11,7 +11,7 @@ import { SettingsToolbar } from "../SettingsToolbar";
 import { SettingsView } from "../SettingsView";
 import { StatusBar } from "../StatusBar";
 import type { AppProps } from "./App.types";
-import { useApp, useAppClasses } from "./useApp";
+import { useApp, useAppClasses } from "./App.hooks";
 
 /**
  * React shell for the taskpane.

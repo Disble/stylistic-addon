@@ -1,86 +1,17 @@
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type {
+  MockComment,
+  MockCommentRange,
+  MockRangeWithTrackedChanges,
+  MockTrackedChange,
+  MockTrackedChangeCollection,
+  MockWordGlobal,
+  ResolveSuggestionContext,
+} from "./WordAdapterActionTestHelper.types";
 
 const OPERATIONAL_WRAPPER_TITLE_PREFIX = "stylistic-meta-v2:";
 const OPERATIONAL_WRAPPER_TAG_PREFIX = "stylistic-operational-wrapper:";
 const COMMENT_ONLY_TAG_PREFIX = "stylistic:comment-only:";
-
-type MockTrackedChange = {
-  id?: string;
-  text?: string;
-  type?: string;
-  accept?: ReturnType<typeof vi.fn>;
-  reject?: ReturnType<typeof vi.fn>;
-  getRange?: ReturnType<typeof vi.fn>;
-};
-
-type MockRangeWithTrackedChanges = {
-  compareLocationWith: ReturnType<typeof vi.fn>;
-  getTrackedChanges: ReturnType<typeof vi.fn>;
-};
-
-type MockTrackedChangeCollection = {
-  items: MockTrackedChange[];
-  load: ReturnType<typeof vi.fn>;
-  acceptAll: ReturnType<typeof vi.fn>;
-  rejectAll: ReturnType<typeof vi.fn>;
-};
-
-type MockComment = {
-  authorName?: string;
-  content?: string;
-  getRange: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
-};
-
-type MockCommentRange = {
-  compareLocationWith: ReturnType<typeof vi.fn>;
-  getTrackedChanges: ReturnType<typeof vi.fn>;
-};
-
-type ResolveSuggestionContext = {
-  document: {
-    contentControls: {
-      getByTag: ReturnType<typeof vi.fn>;
-      load: ReturnType<typeof vi.fn>;
-      items: Array<{ tag: string }>;
-    };
-    load: ReturnType<typeof vi.fn>;
-    changeTrackingMode: string;
-    body: {
-      search: ReturnType<typeof vi.fn>;
-      load: ReturnType<typeof vi.fn>;
-      text: string;
-      getComments: ReturnType<typeof vi.fn>;
-      getTrackedChanges: ReturnType<typeof vi.fn>;
-    };
-  };
-  sync: ReturnType<typeof vi.fn>;
-  _ccsCollection: { items: unknown[]; load: ReturnType<typeof vi.fn> };
-  _commentsCollection: { items: MockComment[]; load: ReturnType<typeof vi.fn> };
-  _bodyTCCollection: { items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> };
-  _rangeTCCollection: { items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> };
-  _commentRangeTCCollections: Array<{ items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> }>;
-  _ccItems: Array<{
-    title: string;
-    tag: string;
-    load: ReturnType<typeof vi.fn>;
-    getTrackedChanges: ReturnType<typeof vi.fn>;
-    getRange: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  }>;
-  _cc: {
-    title: string;
-    tag: string;
-    load: ReturnType<typeof vi.fn>;
-    getTrackedChanges: ReturnType<typeof vi.fn>;
-    getRange: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  };
-};
-
-type MockWordGlobal = {
-  run: ReturnType<typeof vi.fn>;
-};
 
 /**
  * Builds a canonical suggestion fixture for WordAdapter action tests.

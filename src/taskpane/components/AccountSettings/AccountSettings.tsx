@@ -2,7 +2,7 @@ import * as React from "react";
 import { Button, Spinner } from "@fluentui/react-components";
 import { ArrowExitRegular, PersonRegular } from "@fluentui/react-icons";
 import type { AccountSettingsProps } from "./AccountSettings.types";
-import { useAccountSettings } from "./useAccountSettings";
+import { useAccountSettings } from "./AccountSettings.hooks";
 
 /** Renders the account row with the active session email and a logout action. */
 export function AccountSettings({

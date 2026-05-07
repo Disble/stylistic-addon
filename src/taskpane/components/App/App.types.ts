@@ -1,3 +1,4 @@
+/** Root taskpane application callbacks provided by the composition layer. */
 export type AppProps = Readonly<{
   onAnalyze: () => Promise<void> | void;
   onCleanup: () => Promise<void> | void;
@@ -7,6 +8,7 @@ export type AppProps = Readonly<{
   onMount?: () => void;
 }>;
 
+/** Griffel class slots consumed by the App component. */
 export type AppClasses = Readonly<{
   workflow: string;
   toolbar: string;

@@ -10,18 +10,7 @@ import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "../ReplaceIdentityParser";
-
-/** Result of locating persisted Word artifacts for one suggestion. */
-export type LocatedSuggestionArtifactResult = {
-  /** All Content Controls returned by Word for the exact lookup tag. */
-  candidates: Word.ContentControl[];
-
-  /** The single safe Content Control candidate, or null when lookup is unsafe. */
-  selectedCc: Word.ContentControl | null;
-
-  /** Semantic lookup status consumed by navigation and resolution workflows. */
-  locateStatus: SuggestionObservationStatus | "cc-not-found";
-};
+import type { LocatedSuggestionArtifactResult } from "./SuggestionArtifactLocator.types";
 
 /**
  * Locates persisted Stylistic Word artifacts without mutating or selecting.
@@ -77,7 +66,6 @@ export class SuggestionArtifactLocator {
     tag: string
   ): Promise<LocatedSuggestionArtifactResult> {
     const result = context.document.contentControls.getByTag(tag);
-    // eslint-disable-next-line office-addins/no-navigational-load -- Enumerating a Word collection requires loading `items` before reading `result.items`.
     result.load("items");
     result.load("items/tag,items/title");
     await context.sync();

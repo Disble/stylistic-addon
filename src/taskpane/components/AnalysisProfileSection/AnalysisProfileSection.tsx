@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Dropdown, Field, Option } from "@fluentui/react-components";
 import type { AnalysisProfileSectionProps } from "./AnalysisProfileSection.types";
-import { useAnalysisProfileSection } from "./useAnalysisProfileSection";
+import { useAnalysisProfileSection } from "./AnalysisProfileSection.hooks";
 
 /** Renders the analysis-profile selector using a Fluent Dropdown inside a labelled Field. */
 export function AnalysisProfileSection({

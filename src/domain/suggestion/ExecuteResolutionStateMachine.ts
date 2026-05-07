@@ -1,30 +1,10 @@
 /* global console */
 
 import type { ResolutionPhase } from "./SuggestionResolutionWorkflow.types";
+import type { ExecuteResolutionState } from "./ExecuteResolutionStateMachine.types";
+import { EXECUTE_RESOLUTION_STATE_TRANSITIONS } from "./ExecuteResolutionStateMachine.constants";
 
-export type ExecuteResolutionState =
-  | "idle"
-  | "locating"
-  | "observing-before"
-  | "executing"
-  | "cleaning-comment"
-  | "cleaning-anchor"
-  | "inspecting-after"
-  | "completed"
-  | "failed";
-
-const TRANSITIONS: Record<ExecuteResolutionState, ExecuteResolutionState[]> = {
-  idle: ["locating", "failed"],
-  locating: ["observing-before", "failed", "completed"],
-  "observing-before": ["executing", "failed", "completed"],
-  executing: ["cleaning-comment", "failed"],
-  "cleaning-comment": ["cleaning-anchor", "failed"],
-  "cleaning-anchor": ["inspecting-after", "failed"],
-  "inspecting-after": ["completed", "failed"],
-  completed: [],
-  failed: [],
-};
-
+/** Raised when the internal resolution workflow transitions illegally. */
 export class InvalidExecuteResolutionTransitionError extends Error {
   constructor(
     from: ExecuteResolutionState,
@@ -51,7 +31,7 @@ export class ExecuteResolutionStateMachine {
 
   /** Returns true when no more transitions are possible. */
   get isTerminal(): boolean {
-    return TRANSITIONS[this.current].length === 0;
+    return EXECUTE_RESOLUTION_STATE_TRANSITIONS[this.current].length === 0;
   }
 
   /** Returns the semantic phase represented by the current state. */
@@ -80,7 +60,7 @@ export class ExecuteResolutionStateMachine {
 
   /** Returns true when the given transition is allowed from the current state. */
   canTransition(to: ExecuteResolutionState): boolean {
-    return TRANSITIONS[this.current].includes(to);
+    return EXECUTE_RESOLUTION_STATE_TRANSITIONS[this.current].includes(to);
   }
 
   /** Applies one validated transition. */
@@ -89,7 +69,7 @@ export class ExecuteResolutionStateMachine {
       throw new InvalidExecuteResolutionTransitionError(
         this.current,
         to,
-        TRANSITIONS[this.current]
+        EXECUTE_RESOLUTION_STATE_TRANSITIONS[this.current]
       );
     }
 

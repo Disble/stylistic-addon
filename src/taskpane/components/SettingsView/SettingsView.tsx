@@ -4,7 +4,7 @@ import { ArrowLeftRegular } from "@fluentui/react-icons";
 import { AccountSettings } from "../AccountSettings";
 import { AnalysisProfileSection } from "../AnalysisProfileSection";
 import type { SettingsViewProps } from "./SettingsView.types";
-import { useSettingsView } from "./useSettingsView";
+import { useSettingsView } from "./SettingsView.hooks";
 
 /**
  * Renders the secondary settings page accessed from the main toolbar gear.

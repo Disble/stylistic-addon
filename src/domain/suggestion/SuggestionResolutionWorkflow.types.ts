@@ -163,3 +163,5 @@ export interface SuggestionResolutionMediatorResult extends SuggestionResolution
   /** Centralized taskpane state produced by the explicit mediator. */
   taskpaneState: ReviewTaskpaneState;
 }
+/** User-driven suggestion resolution action. */
+export type ResolutionAction = "accept" | "reject";

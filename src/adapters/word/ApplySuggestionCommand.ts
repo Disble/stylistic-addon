@@ -38,12 +38,10 @@ import { ApplySuggestionIdentityBuilder } from "./apply-suggestion/ApplySuggesti
 import { ApplySuggestionMutationPatchBuilder } from "./apply-suggestion/ApplySuggestionMutationPatchBuilder";
 import { ApplySuggestionOperationalWrapperResolver } from "./apply-suggestion/ApplySuggestionOperationalWrapperResolver";
 import { ApplySuggestionReplaceRangeResolver } from "./apply-suggestion/ApplySuggestionReplaceRangeResolver";
-import {
-  type TrackChangeSubtypeResolution,
-  TrackChangeSubtypeResolver,
-} from "./apply-suggestion/TrackChangeSubtypeResolver";
+import type { TrackChangeSubtypeResolution } from "./apply-suggestion/TrackChangeSubtypeResolver.types";
+import { TrackChangeSubtypeResolver } from "./apply-suggestion/TrackChangeSubtypeResolver";
 import { buildStylisticCommentContent } from "./StylisticCommentBuilder";
-import type { TextLocator } from "./WordTextLocatorContext";
+import type { TextLocator } from "./WordTextLocatorContext.types";
 
 /**
  * A Command that applies one `Suggestion` as a tracked change in Word.

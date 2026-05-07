@@ -32,6 +32,7 @@ import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import type { ChunkPollResult, ChunkSubmitResult } from "../domain/mastra/MastraWorkflow.types";
 import type { IAnalysisPort } from "../domain/ports";
 
+/** Adds retry and backoff semantics to an analysis port. */
 export class RetryAnalysisDecorator implements IAnalysisPort {
   constructor(
     private readonly wrapped: IAnalysisPort,

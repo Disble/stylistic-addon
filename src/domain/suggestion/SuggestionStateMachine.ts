@@ -21,27 +21,9 @@
 
 import type { SuggestionState } from "./Suggestion.types";
 import type { SuggestionActionResult } from "./SuggestionResolutionWorkflow.types";
+import { SUGGESTION_STATE_TRANSITIONS } from "./SuggestionStateMachine.constants";
 
-const TRANSITIONS: Record<SuggestionState, SuggestionState[]> = {
-  pending: ["resolving"],
-  resolving: [
-    "accepted",
-    "rejected",
-    "unobservable",
-    "identity-lost",
-    "ambiguous-location",
-    "mixed-group",
-    "error",
-  ],
-  accepted: [],
-  rejected: [],
-  unobservable: ["resolving"],
-  "identity-lost": [],
-  "ambiguous-location": [],
-  "mixed-group": [],
-  error: ["resolving"],
-};
-
+/** Raised when a suggestion card attempts an invalid state transition. */
 export class InvalidSuggestionTransitionError extends Error {
   constructor(from: SuggestionState, to: SuggestionState, allowed: SuggestionState[]) {
     super(
@@ -52,6 +34,7 @@ export class InvalidSuggestionTransitionError extends Error {
   }
 }
 
+/** Enforces valid taskpane state transitions for one suggestion card. */
 export class SuggestionStateMachine {
   private current: SuggestionState = "pending";
 
@@ -62,7 +45,7 @@ export class SuggestionStateMachine {
 
   /** `true` when state is terminal (no further transitions possible). */
   get isTerminal(): boolean {
-    return TRANSITIONS[this.current].length === 0;
+    return SUGGESTION_STATE_TRANSITIONS[this.current].length === 0;
   }
 
   /** `true` when an async resolution is in-flight. */
@@ -72,7 +55,7 @@ export class SuggestionStateMachine {
 
   /** Returns `true` if the given transition is valid from the current state. */
   canTransition(to: SuggestionState): boolean {
-    return TRANSITIONS[this.current].includes(to);
+    return SUGGESTION_STATE_TRANSITIONS[this.current].includes(to);
   }
 
   /**
@@ -81,7 +64,11 @@ export class SuggestionStateMachine {
    */
   transition(to: SuggestionState): void {
     if (!this.canTransition(to)) {
-      throw new InvalidSuggestionTransitionError(this.current, to, TRANSITIONS[this.current]);
+      throw new InvalidSuggestionTransitionError(
+        this.current,
+        to,
+        SUGGESTION_STATE_TRANSITIONS[this.current]
+      );
     }
     console.log(`🔄 [SuggestionStateMachine] ${this.current} → ${to}`);
     this.current = to;

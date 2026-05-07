@@ -2,31 +2,11 @@ import { createAuthClient } from "better-auth/client";
 import type { AuthSession, SocialSignInRequest } from "../../domain/auth/AuthSession.types";
 import type { IAuthPort } from "../../domain/ports";
 import { BETTER_AUTH_BASE_PATH, MASTRA_BASE_URL } from "../../infrastructure/config";
-
-type BetterAuthResponse<T> = Readonly<{
-  data?: T | null;
-  error?: unknown;
-}>;
-
-type BetterAuthErrorPayload = Readonly<{
-  message?: string;
-  status?: number;
-  statusText?: string;
-  code?: string;
-}>;
-
-type BetterAuthSessionPayload = Readonly<{
-  session?: {
-    token?: string;
-    expiresAt?: string | Date | null;
-  } | null;
-  user?: {
-    id?: string;
-    name?: string | null;
-    email?: string | null;
-    image?: string | null;
-  } | null;
-}>;
+import type {
+  BetterAuthErrorPayload,
+  BetterAuthResponse,
+  BetterAuthSessionPayload,
+} from "./BetterAuthAdapter.types";
 
 /**
  * Better Auth client adapter used by the taskpane and OAuth dialog.

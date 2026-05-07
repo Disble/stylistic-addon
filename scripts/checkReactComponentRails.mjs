@@ -7,6 +7,8 @@ const componentsDirectory = path.join(taskpaneDirectory, "components");
 const allowedRootFiles = new Set(["index.ts"]);
 const allowedSupportingFileSuffixes = [
   ".types.ts",
+  ".styles.ts",
+  ".hooks.ts",
   ".constants.ts",
   ".helpers.ts",
   ".schema.ts",
@@ -67,10 +69,11 @@ function validateAllowedComponentFile(componentName, fileName, componentDirector
     "index.ts",
     `${componentName}.tsx`,
     `${componentName}.types.ts`,
+    `${componentName}.styles.ts`,
+    `${componentName}.hooks.ts`,
     `${componentName}.constants.ts`,
     `${componentName}.helpers.ts`,
     `${componentName}.schema.ts`,
-    `use${componentName}.ts`,
   ]);
 
   if (allowedFiles.has(fileName)) {
@@ -78,7 +81,7 @@ function validateAllowedComponentFile(componentName, fileName, componentDirector
   }
 
   errors.push(
-    `${relativePath(path.join(componentDirectory, fileName))}: unsupported component anatomy file. Use ${componentName}.tsx, ${componentName}.types.ts, optional constants/helpers/schema, use${componentName}.ts, index.ts, or __tests__/.`,
+    `${relativePath(path.join(componentDirectory, fileName))}: unsupported component anatomy file. Use ${componentName}.tsx, ${componentName}.types.ts, optional styles/hooks/constants/helpers/schema, index.ts, or __tests__/.`,
   );
 }
 
@@ -119,11 +122,15 @@ async function validateTsxContent(componentName, componentDirectory, errors) {
     },
     {
       pattern: /^\s*(export\s+)?function\s+use[A-Z]/m,
-      message: "component hooks belong in useComponentName.ts, not in the TSX file.",
+      message: "component hooks belong in ComponentName.hooks.ts, not in the TSX file.",
     },
     {
       pattern: /^\s*(export\s+)?const\s+use[A-Z][A-Za-z0-9]*\s*=/m,
-      message: "component hooks belong in useComponentName.ts, not in the TSX file.",
+      message: "component hooks belong in ComponentName.hooks.ts, not in the TSX file.",
+    },
+    {
+      pattern: /\bmakeStyles\s*\(/m,
+      message: "Fluent UI style factories belong in ComponentName.styles.ts, not in the TSX file.",
     },
   ];
 

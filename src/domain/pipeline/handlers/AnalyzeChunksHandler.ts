@@ -13,23 +13,11 @@
  */
 
 import { DEFAULT_AUTHOR_SLUG, POLL_INTERVAL_MS } from "../../../infrastructure/config";
-import type { Suggestion } from "../../suggestion/Suggestion.types";
 import type { PipelineContext } from "../PipelineContext";
-import type { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineHandler } from "./ReadTextHandler.types";
+import type { AnalysisState, AnalyzeChunk } from "./AnalyzeChunksHandler.types";
 
-type AnalyzeChunk = NonNullable<PipelineContext["chunks"]>[number];
-
-type AnalysisState = {
-  scope: string;
-  chunks: NonNullable<PipelineContext["chunks"]>;
-  allSuggestions: Suggestion[];
-  chunkErrors: string[];
-  pendingRuns: Map<number, string>;
-  totalSteps: number;
-  submittedCount: number;
-  completedCount: number;
-};
-
+/** Coordinates chunk submission and polling for the analysis phase. */
 export class AnalyzeChunksHandler implements PipelineHandler {
   constructor(private readonly pollIntervalMs: number = POLL_INTERVAL_MS) {}
 

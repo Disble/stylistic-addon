@@ -1,6 +1,6 @@
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import { SuggestionTextRangeLocator } from "../location/SuggestionTextRangeLocator";
-import type { TextLocator } from "../WordTextLocatorContext";
+import type { TextLocator } from "../WordTextLocatorContext.types";
 
 /**
  * Resolves the live Word range for the suggestion anchor.

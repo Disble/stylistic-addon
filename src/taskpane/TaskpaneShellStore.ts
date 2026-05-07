@@ -1,59 +1,18 @@
 import { create } from "zustand";
-
-export type TaskpaneStatusType = "success" | "error";
-
-export type TaskpaneShellStatus = Readonly<{
-  message: string;
-  type: TaskpaneStatusType;
-  visible: boolean;
-}>;
-
-export type TaskpaneShellProgress = Readonly<{
-  current: number;
-  total: number;
-  message: string;
-  visible: boolean;
-}>;
-
-export type TaskpaneShellState = Readonly<{
-  cleanupVisible: boolean;
-  disableTrackChangesCtaVisible: boolean;
-  isCleanupLoading: boolean;
-  isDisableTrackChangesLoading: boolean;
-  isAnalyzeLoading: boolean;
-  selectedGenero: string;
-  progress: TaskpaneShellProgress;
-  status: TaskpaneShellStatus;
-}>;
-
-const STATUS_DISPLAY_MS = 4000;
-const HIDE_PROGRESS_DELAY_MS = 1000;
-
-const INITIAL_STATE: TaskpaneShellState = {
-  cleanupVisible: false,
-  disableTrackChangesCtaVisible: false,
-  isCleanupLoading: false,
-  isDisableTrackChangesLoading: false,
-  isAnalyzeLoading: false,
-  selectedGenero: "narrativa-literaria",
-  progress: {
-    current: 0,
-    total: 1,
-    message: "",
-    visible: false,
-  },
-  status: {
-    message: "",
-    type: "success",
-    visible: false,
-  },
-};
+import {
+  HIDE_PROGRESS_DELAY_MS,
+  INITIAL_TASKPANE_SHELL_STATE,
+  STATUS_DISPLAY_MS,
+} from "./TaskpaneShellStore.constants";
+import type { TaskpaneShellState, TaskpaneStatusType } from "./TaskpaneShellStore.types";
 
 let hideProgressTimeoutId: ReturnType<typeof setTimeout> | undefined;
 let hideStatusTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
 /** Zustand store holding the reactive taskpane shell state. */
-export const useTaskpaneShellStore = create<TaskpaneShellState>()(() => INITIAL_STATE);
+export const useTaskpaneShellStore = create<TaskpaneShellState>()(
+  () => INITIAL_TASKPANE_SHELL_STATE
+);
 
 /** Returns the current immutable shell state snapshot. */
 export function getTaskpaneShellState(): TaskpaneShellState {
@@ -145,5 +104,5 @@ export function resetTaskpaneShellState(): void {
   clearTimeout(hideStatusTimeoutId);
   hideProgressTimeoutId = undefined;
   hideStatusTimeoutId = undefined;
-  useTaskpaneShellStore.setState(INITIAL_STATE, true);
+  useTaskpaneShellStore.setState(INITIAL_TASKPANE_SHELL_STATE, true);
 }

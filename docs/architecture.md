@@ -15,6 +15,9 @@ Complementary documents:
   defines the frontend domain and the Track Changes lifecycle policy.
 - [`replace-suggestion-identity-proposal.md`](./replace-suggestion-identity-proposal.md)
   records the compound identity correction for replace suggestions.
+- [`linting-and-file-anatomy.md`](./linting-and-file-anatomy.md)
+  defines the ESLint-driven file anatomy rules for types, styles, constants,
+  hooks, helpers, tests, and component folders.
 
 ---
 

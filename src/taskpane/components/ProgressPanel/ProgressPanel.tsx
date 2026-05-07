@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Caption1, Field, ProgressBar } from "@fluentui/react-components";
 import type { ProgressPanelProps } from "./ProgressPanel.types";
-import { useProgressPanel } from "./useProgressPanel";
+import { useProgressPanel } from "./ProgressPanel.hooks";
 
 /** Renders the determinate pipeline progress bar with its message. */
 export function ProgressPanel({ progress }: ProgressPanelProps): React.JSX.Element | null {

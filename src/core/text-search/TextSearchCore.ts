@@ -8,14 +8,8 @@
  * @module TextSearchCore
  */
 
-/** Indexed representation of normalized text for slice reconstruction. */
-export type IndexedText = {
-  text: string;
-  indices: number[];
-};
-
-/** Default max candidate length tolerated by Word search. */
-const DEFAULT_WORD_SEARCH_MAX_LENGTH = 256;
+import type { IndexedText } from "./TextSearchCore.types";
+import { DEFAULT_WORD_SEARCH_MAX_LENGTH } from "./TextSearchCore.constants";
 
 /**
  * Normalizes a single character for cross-source comparison.

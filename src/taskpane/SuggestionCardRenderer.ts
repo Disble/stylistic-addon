@@ -17,8 +17,6 @@ import {
 } from "./SuggestionProgressSummary";
 import { setResultsPanelData } from "./ResultsPanelStore";
 
-export type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
-
 /** Builds the summary sentence displayed above the rendered suggestion list. */
 export function buildResultsSummary(
   suggestions: Suggestion[],

@@ -1,8 +1,8 @@
-import {
-  DocumentReviewStateMachine,
-  type DocumentReviewUiState,
-} from "../../../domain/review/DocumentReviewStateMachine";
-import type { DocumentReviewState } from "../../../domain/review/DocumentReviewStateMachine.types";
+import { DocumentReviewStateMachine } from "../../../domain/review/DocumentReviewStateMachine";
+import type {
+  DocumentReviewState,
+  DocumentReviewUiState,
+} from "../../../domain/review/DocumentReviewStateMachine.types";
 import {
   STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
   STYLISTIC_TAG_PREFIX,

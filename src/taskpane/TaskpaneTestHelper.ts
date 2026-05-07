@@ -3,6 +3,7 @@ import * as React from "react";
 
 import type { Suggestion, SuggestionNavigationResult } from "../domain/suggestion/Suggestion.types";
 import "./TaskpaneFluentMocks";
+import type { ReadyCallback } from "./TaskpaneTestHelper.types";
 
 const hoistedTaskpaneMocks = vi.hoisted(() => ({
   orchestratorHandlers: [] as unknown[],
@@ -211,6 +212,7 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Minimal DOMTokenList replacement used by taskpane tests. */
 export class FakeClassList {
   private readonly classes = new Set<string>();
 
@@ -245,6 +247,7 @@ export class FakeClassList {
   }
 }
 
+/** Fake DOM element used to exercise taskpane flows without a browser. */
 export class FakeElement {
   style = { display: "", width: "" };
   dataset: Record<string, string> = {};
@@ -445,6 +448,7 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
   return false;
 }
 
+/** Fake document implementation used by the taskpane harness. */
 export class FakeDocument {
   private readonly elements = new Map<string, FakeElement>();
 
@@ -510,8 +514,6 @@ export function createTaskpaneDocument(): FakeDocument {
 
   return doc;
 }
-
-type ReadyCallback = (info: { host: string }) => void;
 
 /**
  * Creates a controllable `Office.onReady` harness for taskpane tests.

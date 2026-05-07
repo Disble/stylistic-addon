@@ -14,7 +14,6 @@ import {
   applySuggestionProgressOutcome,
   buildSuggestionProgressSummaryText,
   createSuggestionProgressSummaryModel,
-  type SuggestionProgressSummaryModel,
 } from "./SuggestionProgressSummary";
 import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
 import {
@@ -22,60 +21,19 @@ import {
   setTaskpaneDisableTrackChangesCtaVisible,
   showTaskpaneStatus,
 } from "./TaskpaneShellStore";
-import type { ResultsPanelFilter } from "./ResultsPanelFilters";
-
-type ResultsCardGroup = "active" | "processed" | "not-found";
-
-export type {
-  ResultsPanelCardBucket,
-  ResultsPanelChipCounts,
-  ResultsPanelFilter,
-} from "./ResultsPanelFilters";
-export {
-  computeResultsPanelChipCounts,
-  getResultsPanelCardBucket,
-  selectResultsPanelVisibleCards,
-} from "./ResultsPanelFilters";
-
-export type ResultsPanelCardState = Readonly<{
-  cardGroup: ResultsCardGroup;
-  feedbackComment: string;
-  feedbackOpen: boolean;
-  failure?: SuggestionApplicationFailure;
-  hideActions: boolean;
-  isFailed: boolean;
-  isNotFoundFailure: boolean;
-  isResolving: boolean;
-  navigationNote?: string;
-  resolutionNote?: string;
-  state: SuggestionState;
-  suggestion: Suggestion;
-}>;
-
-export type ResultsPanelState = Readonly<{
-  activeFilter: ResultsPanelFilter;
-  cards: readonly ResultsPanelCardState[];
-  summaryText: string;
-  visible: boolean;
-}>;
-
-const INITIAL_STATE: ResultsPanelState = {
-  activeFilter: "all",
-  cards: [],
-  summaryText: "",
-  visible: false,
-};
-
-type ResultsPanelContext = {
-  deps?: ResultsPanelDeps;
-  isSelection: boolean;
-  summaryModel?: SuggestionProgressSummaryModel;
-};
+import { INITIAL_RESULTS_PANEL_STATE } from "./ResultsPanelStore.constants";
+import type { ResultsPanelFilter } from "./ResultsPanelFilters.types";
+import type {
+  ResultsCardGroup,
+  ResultsPanelCardState,
+  ResultsPanelContext,
+  ResultsPanelState,
+} from "./ResultsPanelStore.types";
 
 let context: ResultsPanelContext = { isSelection: false };
 
 /** Zustand store holding the reactive results-panel state. */
-export const useResultsPanelStore = create<ResultsPanelState>()(() => INITIAL_STATE);
+export const useResultsPanelStore = create<ResultsPanelState>()(() => INITIAL_RESULTS_PANEL_STATE);
 
 /** Returns the current public results-panel snapshot. */
 export function getResultsPanelState(): ResultsPanelState {
@@ -112,7 +70,7 @@ export function setResultsPanelData(
 /** Clears the panel back to its initial hidden state. */
 export function resetResultsPanelState(): void {
   context = { isSelection: false };
-  useResultsPanelStore.setState(INITIAL_STATE, true);
+  useResultsPanelStore.setState(INITIAL_RESULTS_PANEL_STATE, true);
 }
 
 /** Hides the panel while preserving the last rendered card snapshot. */

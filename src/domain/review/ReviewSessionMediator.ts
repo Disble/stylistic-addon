@@ -19,8 +19,7 @@ import { SuggestionResolutionWorkflow } from "../suggestion/SuggestionResolution
 import type { SuggestionResolutionMediatorResult } from "../suggestion/SuggestionResolutionWorkflow.types";
 import { DocumentReviewStateMachine } from "./DocumentReviewStateMachine";
 import type { ReviewTaskpaneState } from "./DocumentReviewStateMachine.types";
-
-type ResolutionAction = "accept" | "reject";
+import type { ResolutionAction } from "./ReviewSessionMediator.types";
 
 /**
  * Explicit mediator for taskpane review coordination.

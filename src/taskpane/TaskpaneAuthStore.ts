@@ -1,24 +1,10 @@
 import { create } from "zustand";
 import type { AuthSession } from "../domain/auth/AuthSession.types";
-
-export type TaskpaneAuthStatus = "loading" | "authenticated" | "unauthenticated";
-
-export type TaskpaneAuthState = Readonly<{
-  status: TaskpaneAuthStatus;
-  session?: AuthSession;
-  error?: string;
-  isSigningIn: boolean;
-  isSigningOut: boolean;
-}>;
-
-const INITIAL_AUTH_STATE: TaskpaneAuthState = {
-  status: "loading",
-  isSigningIn: false,
-  isSigningOut: false,
-};
+import { INITIAL_TASKPANE_AUTH_STATE } from "./TaskpaneAuthStore.constants";
+import type { TaskpaneAuthState } from "./TaskpaneAuthStore.types";
 
 /** Zustand store for React-owned auth presentation state. */
-export const useTaskpaneAuthStore = create<TaskpaneAuthState>()(() => INITIAL_AUTH_STATE);
+export const useTaskpaneAuthStore = create<TaskpaneAuthState>()(() => INITIAL_TASKPANE_AUTH_STATE);
 
 /** Returns the current bearer token used by authenticated Mastra adapters. */
 export function getTaskpaneAuthToken(): string | undefined {
@@ -64,5 +50,5 @@ export function setTaskpaneSigningOut(isSigningOut: boolean): void {
 
 /** Resets auth state for deterministic tests. */
 export function resetTaskpaneAuthState(): void {
-  useTaskpaneAuthStore.setState(INITIAL_AUTH_STATE, true);
+  useTaskpaneAuthStore.setState(INITIAL_TASKPANE_AUTH_STATE, true);
 }

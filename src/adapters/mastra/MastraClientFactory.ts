@@ -1,8 +1,6 @@
 import { MastraClient } from "@mastra/client-js";
 import { MASTRA_BASE_URL } from "../../infrastructure/config";
-
-/** Supplies the current Better Auth bearer token for Mastra requests. */
-export type MastraAuthTokenProvider = () => string | undefined;
+import type { MastraAuthTokenProvider } from "./MastraClientFactory.types";
 
 /**
  * Creates Mastra clients with the latest Better Auth bearer token.

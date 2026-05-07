@@ -1,10 +1,6 @@
 import type { AuthSession } from "../../domain/auth/AuthSession.types";
 import { AUTH_COMPLETE_URL, AUTH_DIALOG_PATH } from "../../infrastructure/config";
-
-type DialogMessage = Readonly<
-  | { type: "stylistic-auth-success"; session: AuthSession }
-  | { type: "stylistic-auth-error"; message: string }
->;
+import type { DialogMessage } from "./OfficeDialogAuthAdapter.types";
 
 /**
  * Coordinates OAuth through the Office Dialog API.

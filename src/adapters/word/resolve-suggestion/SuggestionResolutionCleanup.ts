@@ -3,12 +3,7 @@ import {
   STYLISTIC_TAG_PREFIX,
 } from "../../../infrastructure/config";
 import type { ColocatedCommentContext } from "./ResolutionContext";
-
-/** Result of deleting resolved suggestion-owned metadata artifacts. */
-export type ResolvedTrackChangeMetadataCleanupResult = {
-  deletedContentControls: string[];
-  failedContentControls: Array<{ tag: string; error: string }>;
-};
+import type { ResolvedTrackChangeMetadataCleanupResult } from "./SuggestionResolutionCleanup.types";
 
 /**
  * Owns cleanup policy after tracked changes were already resolved.

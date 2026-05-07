@@ -1,20 +1,14 @@
 /* global Office, Word, console */
 
 import type { SelectionSnapshot } from "../../domain/selection/SelectionSnapshot.types";
-
-const DEFAULT_PREVIEW_MAX_CHARS = 80;
-
-const EMPTY_SNAPSHOT: SelectionSnapshot = {
-  hasSelection: false,
-  charCount: 0,
-  preview: "",
-};
-
-interface SelectionMonitorOptions {
-  previewMaxChars?: number;
-}
-
-type SelectionListener = (snapshot: SelectionSnapshot) => void;
+import type {
+  SelectionListener,
+  SelectionMonitorOptions,
+} from "./WordSelectionMonitorAdapter.types";
+import {
+  DEFAULT_PREVIEW_MAX_CHARS,
+  EMPTY_SELECTION_SNAPSHOT,
+} from "./WordSelectionMonitorAdapter.constants";
 
 /**
  * Bridges Office.js `DocumentSelectionChanged` events into a multiplexed
@@ -29,7 +23,7 @@ export class WordSelectionMonitorAdapter {
 
   private isHandlerRegistered = false;
 
-  private latestSnapshot: SelectionSnapshot = EMPTY_SNAPSHOT;
+  private latestSnapshot: SelectionSnapshot = EMPTY_SELECTION_SNAPSHOT;
 
   constructor(options: SelectionMonitorOptions = {}) {
     this.previewMaxChars = options.previewMaxChars ?? DEFAULT_PREVIEW_MAX_CHARS;
@@ -77,14 +71,14 @@ export class WordSelectionMonitorAdapter {
       this.emit(this.buildSnapshot(selectionText));
     } catch (error) {
       console.warn("⚠️ [WordSelectionMonitor] Error leyendo selección:", error);
-      this.emit(EMPTY_SNAPSHOT);
+      this.emit(EMPTY_SELECTION_SNAPSHOT);
     }
   }
 
   private buildSnapshot(rawText: string): SelectionSnapshot {
     const trimmedHasContent = rawText.trim().length > 0;
     if (!trimmedHasContent) {
-      return EMPTY_SNAPSHOT;
+      return EMPTY_SELECTION_SNAPSHOT;
     }
     const normalized = rawText.replace(/\s+/g, " ").trim();
     const preview =

@@ -21,42 +21,12 @@ import type {
   SuggestionApplicationFailureReason,
 } from "../../domain/DocumentApplication.types";
 import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.types";
-import type { DocumentReviewUiState } from "../../domain/review/DocumentReviewStateMachine";
-import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import { applySuggestionObservability } from "../observability/ConsoleApplySuggestionObservabilityAdapter";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
+import { areComparableSnapshotHints } from "./BatchApplyOrchestrator.helpers";
+import type { BatchApplyDependencies } from "./BatchApplyOrchestrator.types";
 import { getDefaultTextLocator } from "./WordTextLocatorContext";
-
-const textLocator = getDefaultTextLocator();
-
-/** Injected capabilities required by the orchestrator. */
-type BatchApplyDependencies = {
-  /** Enables Track Changes lazily; returns `true` when newly activated. */
-  ensureTrackChangesActive: () => Promise<boolean>;
-  /** Returns the current document-derived review state. */
-  getDocumentReviewState: () => Promise<DocumentReviewState>;
-  /** Derives the explicit UI state from a review snapshot. */
-  deriveDocumentState: (state: DocumentReviewState) => DocumentReviewUiState;
-  /** Optionally refreshes one snapshot hint when local patch reseed is insufficient. */
-  rereadSuggestionPositionHint?: (
-    suggestion: Suggestion,
-    patch: NonNullable<CommandResult["mutationPatch"]>
-  ) => Promise<Suggestion["positionHint"] | undefined>;
-};
-
-/** Returns true when two hints belong to the same comparable snapshot scope. */
-function areComparableSnapshotHints(
-  left: Suggestion["positionHint"],
-  right: Suggestion["positionHint"]
-): left is NonNullable<Suggestion["positionHint"]> {
-  return (
-    left?.source === "snapshot" &&
-    right?.source === "snapshot" &&
-    left.snapshotVersion === right.snapshotVersion &&
-    left.paragraphId === right.paragraphId
-  );
-}
 
 /**
  * Orchestrates batch suggestion application.
@@ -68,6 +38,8 @@ function areComparableSnapshotHints(
  * ```
  */
 export class BatchApplyOrchestrator {
+  private readonly textLocator = getDefaultTextLocator();
+
   constructor(private readonly deps: BatchApplyDependencies) {}
 
   /**
@@ -227,7 +199,7 @@ export class BatchApplyOrchestrator {
    * Executes one suggestion command and normalizes unexpected thrown errors.
    */
   private async executeSuggestionCommand(suggestion: Suggestion): Promise<CommandResult> {
-    const command = new ApplySuggestionCommand(suggestion, textLocator);
+    const command = new ApplySuggestionCommand(suggestion, this.textLocator);
 
     try {
       return await command.execute();

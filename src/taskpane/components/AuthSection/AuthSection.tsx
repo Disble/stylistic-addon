@@ -2,7 +2,7 @@ import * as React from "react";
 import { Button, MessageBar, MessageBarBody, Spinner } from "@fluentui/react-components";
 import { PersonRegular } from "@fluentui/react-icons";
 import type { AuthSectionProps } from "./AuthSection.types";
-import { useAuthSection } from "./useAuthSection";
+import { useAuthSection } from "./AuthSection.hooks";
 
 /**
  * Renders the pre-app gate: a loading indicator while the persisted session is verified,

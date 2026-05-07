@@ -1,5 +1,6 @@
 import type { CommandResult } from "../../domain/DocumentApplication.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type { WordRunCallback } from "./WordAdapterTestHelper.types";
 
 const hoistedCommandMocks = vi.hoisted(() => ({
   constructor: vi.fn<(suggestion: Suggestion) => void>(),
@@ -56,8 +57,6 @@ vi.mock("./cleanup/CommentCleanup", () => ({
   ],
   STYLISTIC_TAG_PREFIX: "stylistic:",
 }));
-
-type WordRunCallback<T> = (context: any) => Promise<T> | T;
 
 /**
  * Builds a canonical suggestion fixture for `WordAdapter` tests.

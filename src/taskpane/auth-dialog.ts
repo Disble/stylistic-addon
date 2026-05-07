@@ -1,10 +1,6 @@
 import { BetterAuthAdapter } from "../adapters/auth/BetterAuthAdapter";
 import { MASTRA_BASE_URL } from "../infrastructure/config";
-
-type AuthBridgeSessionResponse = Readonly<{
-  session?: unknown;
-  error?: string;
-}>;
+import type { AuthBridgeSessionResponse } from "./auth-dialog.types";
 
 /**
  * Posts a typed auth result from the dialog runtime back to the taskpane.

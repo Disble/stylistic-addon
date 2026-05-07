@@ -31,7 +31,8 @@ import { DeduplicateHandler } from "../domain/pipeline/handlers/DeduplicateHandl
 import { GuardAppliedHandler } from "../domain/pipeline/handlers/GuardAppliedHandler";
 import { ReadTextHandler } from "../domain/pipeline/handlers/ReadTextHandler";
 import type { PipelineContext } from "../domain/pipeline/PipelineContext";
-import { PipelineEventEmitter, type PipelineObserver } from "../domain/pipeline/PipelineEvents";
+import type { PipelineObserver } from "../domain/pipeline/PipelineEvents.types";
+import { PipelineEventEmitter } from "../domain/pipeline/PipelineEvents";
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
 import type { IFeedbackPort, IUserPreferencesPort } from "../domain/ports";
@@ -44,11 +45,8 @@ import {
 } from "../infrastructure/config";
 import { hideResultsPanel } from "./ResultsPanelStore";
 import { setSelectionPreviewSnapshot } from "./SelectionPreviewStore";
-import {
-  buildApplyStatusMessage,
-  type ResultsPanelDeps,
-  renderResultsPanel,
-} from "./SuggestionCardRenderer";
+import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
+import { buildApplyStatusMessage, renderResultsPanel } from "./SuggestionCardRenderer";
 import {
   getTaskpaneAuthToken,
   setTaskpaneAuthenticated,
@@ -346,6 +344,7 @@ export async function handleAnalyze(): Promise<void> {
 // Comment Cleanup Handler
 // ---------------------------------------------------------------------------
 
+/** Cleans up resolved Stylistic comments from the active document. */
 export async function handleCleanup(): Promise<void> {
   console.log("🧽 [Taskpane] Iniciando limpieza de comentarios resueltos...");
   if (getTaskpaneShellState().isCleanupLoading) {
@@ -370,6 +369,7 @@ export async function handleCleanup(): Promise<void> {
 // Disable Track Changes Handler
 // ---------------------------------------------------------------------------
 
+/** Disables Track Changes through the review-session workflow. */
 export async function handleDisableTrackChanges(): Promise<void> {
   if (getTaskpaneShellState().isDisableTrackChangesLoading) {
     return;

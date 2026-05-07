@@ -30,8 +30,9 @@ import {
   WORKFLOW_ID,
 } from "../../infrastructure/config";
 import { MastraClientFactory } from "./MastraClientFactory";
-import { MOCK_MASTRA_POLL_OUTPUT } from "./MockMastraPollOutputFactory";
+import { createMockMastraPollOutput } from "./MockMastraPollOutputFactory";
 
+/** Bridges the analysis port to the Mastra workflow client. */
 export class MastraAdapter implements IAnalysisPort {
   constructor(private readonly clientFactory = new MastraClientFactory()) {}
 
@@ -272,7 +273,7 @@ export class MastraAdapter implements IAnalysisPort {
       };
     }
 
-    const suggestions = this.mapSuggestions(MOCK_MASTRA_POLL_OUTPUT.suggestions, chunkIndex);
+    const suggestions = this.mapSuggestions(createMockMastraPollOutput().suggestions, chunkIndex);
     console.log(
       `🧪 [MastraAdapter] Poll bypass activo para chunk #${chunkIndex} → ${suggestions.length} sugerencias mockeadas`
     );

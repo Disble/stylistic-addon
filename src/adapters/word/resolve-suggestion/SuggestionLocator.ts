@@ -1,5 +1,5 @@
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
-import { OVERLAPPING_RELATIONS } from "../cleanup/CommentCleanup";
+import { isOverlappingRelation } from "../cleanup/CommentCleanup";
 import { SuggestionArtifactLocator } from "../location/SuggestionArtifactLocator";
 import { isStylisticComment } from "../StylisticCommentBuilder";
 import type { ColocatedCommentContext, LocatedSuggestionArtifacts } from "./ResolutionContext";
@@ -53,7 +53,7 @@ export class SuggestionLocator {
       const locationResult = commentRange.compareLocationWith(ccRange);
       await context.sync();
 
-      if (OVERLAPPING_RELATIONS.includes(locationResult.value as string)) {
+      if (isOverlappingRelation(locationResult.value as string)) {
         return { comment, range: commentRange };
       }
     }

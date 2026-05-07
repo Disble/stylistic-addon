@@ -15,9 +15,7 @@
 
 import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import { DEFAULT_MAX_CHUNK_SIZE } from "./config";
-
-/** Regex that matches paragraph separators: one or more blank lines. */
-const PARAGRAPH_SEPARATOR = /\r?\n\s*\r?\n/;
+import { PARAGRAPH_SEPARATOR } from "./chunker.constants";
 
 /**
  * Splits a document's full text into chunks that respect paragraph boundaries.

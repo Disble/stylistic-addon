@@ -14,7 +14,7 @@ export class ResolveSuggestionResultFactory {
     private readonly stateInspector: {
       deriveDocumentState(
         reviewState: DocumentReviewState
-      ): import("../../../domain/review/DocumentReviewStateMachine").DocumentReviewUiState;
+      ): import("../../../domain/review/DocumentReviewStateMachine.types").DocumentReviewUiState;
       inspect(context: Word.RequestContext): Promise<DocumentReviewState>;
     }
   ) {}

@@ -17,6 +17,7 @@ import type { FeedbackPayload } from "../../domain/suggestion/SuggestionResoluti
 import { FEEDBACK_WORKFLOW_ID } from "../../infrastructure/config";
 import { MastraClientFactory } from "./MastraClientFactory";
 
+/** Sends non-blocking feedback events to the Mastra feedback workflow. */
 export class FeedbackAdapter implements IFeedbackPort {
   constructor(private readonly clientFactory = new MastraClientFactory()) {}
 

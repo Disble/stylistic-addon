@@ -2,7 +2,7 @@ import * as React from "react";
 import { Button, Spinner } from "@fluentui/react-components";
 import { HistoryDismissRegular } from "@fluentui/react-icons";
 import type { DisableTrackChangesSectionProps } from "./DisableTrackChangesSection.types";
-import { useDisableTrackChangesSection } from "./useDisableTrackChangesSection";
+import { useDisableTrackChangesSection } from "./DisableTrackChangesSection.hooks";
 
 /** Renders the "disable Track Changes" CTA, warning-styled via palette tokens. */
 export function DisableTrackChangesSection({

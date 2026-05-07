@@ -1,5 +1,6 @@
-import type { ResultsPanelChipCounts, ResultsPanelFilter } from "../../ResultsPanelStore";
+import type { ResultsPanelChipCounts, ResultsPanelFilter } from "../../ResultsPanelFilters.types";
 
+/** Props required to render results-summary filter chips. */
 export type ResultsSummaryChipsProps = Readonly<{
   activeFilter: ResultsPanelFilter;
   counts: ResultsPanelChipCounts;
@@ -7,6 +8,7 @@ export type ResultsSummaryChipsProps = Readonly<{
   summaryText: string;
 }>;
 
+/** Griffel class slots consumed by the results-summary chips. */
 export type ResultsSummaryChipsClasses = Readonly<{
   root: string;
   chip: string;
@@ -15,6 +17,7 @@ export type ResultsSummaryChipsClasses = Readonly<{
   chipCount: string;
 }>;
 
+/** View model for one summary chip rendered above the results list. */
 export type ResultsSummaryChipDescriptor = Readonly<{
   filter: ResultsPanelFilter;
   label: string;
