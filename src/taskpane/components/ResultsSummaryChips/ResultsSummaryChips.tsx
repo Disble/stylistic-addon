@@ -19,11 +19,10 @@ export function ResultsSummaryChips({
   const chips = buildResultsSummaryChips(counts);
 
   return (
-    <div
+    <section
       aria-label={summaryText || "Filtrar sugerencias"}
       className={classes.root}
       data-testid="results-summary-chips"
-      role="group"
     >
       {chips.map((chip) => {
         const isActive = chip.filter === activeFilter;
@@ -44,6 +43,6 @@ export function ResultsSummaryChips({
           </button>
         );
       })}
-    </div>
+    </section>
   );
 }

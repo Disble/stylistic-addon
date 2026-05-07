@@ -47,14 +47,16 @@ export class SuggestionLocator {
 
     const stylisticComments = comments.items.filter(isStylisticComment);
     const ccRange = cc.getRange();
+    const commentRanges = stylisticComments.map((comment) => comment.getRange());
+    const locationResults = commentRanges.map((commentRange) =>
+      commentRange.compareLocationWith(ccRange)
+    );
 
-    for (const comment of stylisticComments) {
-      const commentRange = comment.getRange();
-      const locationResult = commentRange.compareLocationWith(ccRange);
-      await context.sync();
+    await context.sync();
 
-      if (isOverlappingRelation(locationResult.value as string)) {
-        return { comment, range: commentRange };
+    for (let index = 0; index < stylisticComments.length; index += 1) {
+      if (isOverlappingRelation(locationResults[index].value as string)) {
+        return { comment: stylisticComments[index], range: commentRanges[index] };
       }
     }
 

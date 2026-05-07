@@ -66,7 +66,9 @@ export class SuggestionArtifactLocator {
     tag: string
   ): Promise<LocatedSuggestionArtifactResult> {
     const result = context.document.contentControls.getByTag(tag);
+    // eslint-disable-next-line office-addins/no-navigational-load -- ContentControlCollection.items must be loaded before exact-tag lookup can read matched controls.
     result.load("items");
+    // eslint-disable-next-line office-addins/no-navigational-load -- Exact-tag validation needs the matched controls' scalar metadata in the same batch.
     result.load("items/tag,items/title");
     await context.sync();
 

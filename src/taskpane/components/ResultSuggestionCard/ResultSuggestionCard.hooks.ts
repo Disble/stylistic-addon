@@ -8,6 +8,8 @@ import {
   resolveSeverityDotClass,
   resolveStatusIconClass,
   resolveStripeClass,
+  shouldShowSeverity,
+  shouldShowSuggestionDiff,
 } from "./ResultSuggestionCard.helpers";
 import { useResultSuggestionCardStyles } from "./ResultSuggestionCard.styles";
 import type {
@@ -54,6 +56,8 @@ export function useResultSuggestionCard(
   return {
     classes,
     isCommentOnly,
+    showDiff: shouldShowSuggestionDiff(card),
+    showSeverity: shouldShowSeverity(card),
     cardVisualState,
     categoryAccent,
     severityLabel: getSeverityLabel(card.suggestion.severity),

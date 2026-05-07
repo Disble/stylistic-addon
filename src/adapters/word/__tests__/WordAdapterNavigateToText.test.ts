@@ -9,6 +9,8 @@ import {
   makeSuggestion,
 } from "../WordAdapterActionTestHelper";
 
+type LocatedRange = Awaited<ReturnType<NonNullable<TextLocator["locate"]>>>;
+
 describe("WordAdapter.navigateToText", () => {
   let adapter: WordAdapter;
 
@@ -231,7 +233,7 @@ describe("WordAdapter.navigateToText", () => {
 
   it("delegates plain-string navigation to the injected text locator", async () => {
     const select = vi.fn();
-    const locatedRange = { select } as unknown as Word.Range;
+    const locatedRange = { select } as unknown as LocatedRange;
     const locate = vi.fn(async () => locatedRange);
     const textLocator: TextLocator = { locate };
     const body = {
@@ -263,7 +265,7 @@ describe("WordAdapter.navigateToText", () => {
 
   it("delegates suggestion fallback navigation to the injected text locator", async () => {
     const anchorSelect = vi.fn();
-    const anchorRange = { select: anchorSelect } as unknown as Word.Range;
+    const anchorRange = { select: anchorSelect } as unknown as LocatedRange;
     const contextRange = {
       load: vi.fn(),
       text: "Contexto con fragmento exacto.",
@@ -272,7 +274,7 @@ describe("WordAdapter.navigateToText", () => {
           getRange: vi.fn(() => ({ load: vi.fn(), text: "unused" })),
         })),
       },
-    } as unknown as Word.Range;
+    } as unknown as LocatedRange;
     const locate = vi
       .fn<NonNullable<TextLocator["locate"]>>()
       .mockResolvedValueOnce(contextRange)

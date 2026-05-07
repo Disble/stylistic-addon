@@ -290,7 +290,7 @@ export class BatchApplyOrchestrator {
     }
 
     const appliedHint = appliedSuggestion.positionHint;
-    if (!appliedHint || appliedHint.source !== "snapshot") {
+    if (appliedHint?.source !== "snapshot") {
       return;
     }
 
@@ -300,7 +300,7 @@ export class BatchApplyOrchestrator {
       }
 
       const hint = suggestion.positionHint;
-      if (!hint || hint.source !== "snapshot") {
+      if (hint?.source !== "snapshot") {
         continue;
       }
 
@@ -336,7 +336,7 @@ export class BatchApplyOrchestrator {
     patch: CommandResult["mutationPatch"]
   ): Promise<void> {
     const hint = suggestion.positionHint;
-    if (!hint || hint.source !== "snapshot" || hint.requiresLocalReread !== true) {
+    if (hint?.source !== "snapshot" || hint.requiresLocalReread !== true) {
       return;
     }
 

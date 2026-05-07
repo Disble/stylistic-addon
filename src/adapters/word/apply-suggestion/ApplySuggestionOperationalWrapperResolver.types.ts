@@ -8,15 +8,15 @@ export type ParentOperationalContentControl = Word.ContentControl & {
 /** Result of resolving or creating an operational wrapper. */
 export type ApplySuggestionOperationalWrapperResolution =
   | {
+      /** Successful resolution branch. */
+      kind: "success";
+
       /** Reusable or newly created wrapper. */
       wrapper: Word.ContentControl;
-
-      /** No error when wrapper resolution succeeded. */
-      error?: undefined;
     }
   | {
-      /** No wrapper is available when resolution fails closed. */
-      wrapper?: undefined;
+      /** Fail-closed resolution branch. */
+      kind: "error";
 
       /** Stable fail-closed error message. */
       error: string;

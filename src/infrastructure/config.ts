@@ -94,7 +94,7 @@ export const SUGGESTION_CARD_REORDER_ANIMATION_MS = 500;
  * keeps the rest of the pipeline and UI flow unchanged while letting the backend
  * rest completely during debugging sessions.
  */
-export const MASTRA_POLL_BYPASS_ENABLED = true;
+export const MASTRA_POLL_BYPASS_ENABLED = false;
 
 // ---------------------------------------------------------------------------
 // Word Artifact Identity

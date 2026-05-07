@@ -51,6 +51,16 @@ export function isCommentOnlyCard(card: ResultsPanelCardState): boolean {
   return card.suggestion.type === "comment-only";
 }
 
+/** Whether the card should render the original-vs-suggested diff block. */
+export function shouldShowSuggestionDiff(card: ResultsPanelCardState): boolean {
+  return card.suggestion.type !== "comment-only";
+}
+
+/** Whether the card should render the severity badge. */
+export function shouldShowSeverity(card: ResultsPanelCardState): boolean {
+  return card.isFailed !== true;
+}
+
 /** Resolves the outer card state class for one suggestion state. */
 export function resolveCardStateClass(
   styles: ResultSuggestionCardStyles,

@@ -48,6 +48,8 @@ export type ResultSuggestionCardClasses = Readonly<{
 export type ResultSuggestionCardViewModel = Readonly<{
   classes: ResultSuggestionCardClasses;
   isCommentOnly: boolean;
+  showDiff: boolean;
+  showSeverity: boolean;
   cardVisualState: CardVisualState;
   categoryAccent: CategoryAccent;
   severityLabel: string;

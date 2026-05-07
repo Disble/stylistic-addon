@@ -261,16 +261,16 @@ export function makeResolveSuggestionContext({
     items,
     load: vi.fn(),
     acceptAll: vi.fn(() => {
-      for (const trackedChange of [...items]) {
+      items.forEach((trackedChange) => {
         const accept = trackedChange.accept as (() => unknown) | undefined;
         accept?.();
-      }
+      });
     }),
     rejectAll: vi.fn(() => {
-      for (const trackedChange of [...items]) {
+      items.forEach((trackedChange) => {
         const reject = trackedChange.reject as (() => unknown) | undefined;
         reject?.();
-      }
+      });
     }),
   });
 

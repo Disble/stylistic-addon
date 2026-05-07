@@ -3,6 +3,10 @@ import { makeStyles, tokens } from "@fluentui/react-components";
 /** Creates Griffel classes for the results-summary filter chips. */
 export const useResultsSummaryChipsStyles = makeStyles({
   root: {
+    minWidth: 0,
+    margin: 0,
+    paddingLeft: 0,
+    paddingRight: 0,
     position: "sticky",
     top: 0,
     zIndex: 1,
@@ -13,9 +17,18 @@ export const useResultsSummaryChipsStyles = makeStyles({
     paddingTop: tokens.spacingVerticalS,
     paddingBottom: tokens.spacingVerticalS,
     backgroundColor: tokens.colorNeutralBackground1,
+    borderTopWidth: 0,
+    borderRightWidth: 0,
     borderBottomWidth: "1px",
+    borderLeftWidth: 0,
+    borderTopStyle: "solid",
+    borderRightStyle: "solid",
     borderBottomStyle: "solid",
+    borderLeftStyle: "solid",
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
     borderBottomColor: tokens.colorNeutralStroke2,
+    borderLeftColor: "transparent",
   },
   chip: {
     display: "inline-flex",

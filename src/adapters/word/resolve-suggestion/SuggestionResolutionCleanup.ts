@@ -164,6 +164,34 @@ export class SuggestionResolutionCleanup {
 
   /** Converts unknown host exceptions to stable diagnostics. */
   private stringifyError(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === "string") {
+      return error;
+    }
+
+    if (error && typeof error === "object") {
+      if ("message" in error && typeof error.message === "string") {
+        return error.message;
+      }
+
+      if ("code" in error && typeof error.code === "string") {
+        return error.code;
+      }
+
+      return "Unknown object error";
+    }
+
+    if (typeof error === "number" || typeof error === "bigint" || typeof error === "boolean") {
+      return error.toString();
+    }
+
+    if (typeof error === "symbol") {
+      return error.description ?? error.toString();
+    }
+
+    return "Unknown error";
   }
 }

@@ -124,7 +124,7 @@ export class ApplySuggestionCommand {
         const operationalWrapperResult =
           await this.operationalWrapperResolver.resolveOperationalWrapper(context, range);
 
-        if (operationalWrapperResult?.error) {
+        if (operationalWrapperResult.kind === "error") {
           console.log(
             `♻️ [ApplySuggestionCommand] "${this.id}": CC existente detectado — covered-by-existing-cc abort before mutation`
           );
@@ -160,7 +160,7 @@ export class ApplySuggestionCommand {
           paragraphPreview: containingParagraphText.substring(0, 180),
         });
 
-        const operationalWrapper = operationalWrapperResult.wrapper ?? null;
+        const operationalWrapper = operationalWrapperResult.wrapper;
         const mutationRange = operationalWrapper
           ? await this.operationalWrapperResolver.resolveAnchorInsideWrapper(
               context,
@@ -184,7 +184,7 @@ export class ApplySuggestionCommand {
         const annotationRange = await this.applyNativeTrackChangeMutation(
           context,
           mutationRange,
-          operationalWrapper!.getRange(),
+          operationalWrapper.getRange(),
           subtypeResolution
         );
 

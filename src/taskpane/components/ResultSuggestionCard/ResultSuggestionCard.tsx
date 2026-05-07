@@ -61,13 +61,16 @@ export function ResultSuggestionCard({
   };
 
   const renderFailureContent = (): React.JSX.Element => {
-    const failureDetail = card.failure?.reason !== "not-found" ? card.failure?.message : null;
+    const failure = card.failure;
+    if (failure == null) {
+      return <></>;
+    }
+
+    const failureDetail = failure?.reason === "not-found" ? null : failure?.message;
 
     return (
       <>
-        <Caption1Strong className={classes.failureLabel}>
-          {getFailedSuggestionCopy(card.failure!)}
-        </Caption1Strong>
+        <Caption1Strong className={classes.failureLabel}>{getFailedSuggestionCopy(failure)}</Caption1Strong>
         <Body2 className={classes.justification}>{card.suggestion.justification}</Body2>
         {failureDetail ? <Caption1 className={classes.failureDetail}>{failureDetail}</Caption1> : null}
       </>
@@ -83,7 +86,7 @@ export function ResultSuggestionCard({
         void onNavigate(card.suggestion.id);
       }}
     >
-      {!isCommentOnly ? (
+      {view.showDiff ? (
         <div className={classes.diff} data-testid="card-diff">
           <Body1 className={classes.original}>{card.suggestion.anchor}</Body1>
           <Body1Strong className={classes.suggested}>{card.suggestion.suggestedText ?? ""}</Body1Strong>
@@ -187,7 +190,7 @@ export function ResultSuggestionCard({
           <span className={classes.categoryPill} data-testid="card-category-pill">
             {card.suggestion.category}
           </span>
-          {!card.isFailed ? (
+          {view.showSeverity ? (
             <span
               aria-label={`Severidad ${view.severityLabel}`}
               className={classes.severityIndicator}

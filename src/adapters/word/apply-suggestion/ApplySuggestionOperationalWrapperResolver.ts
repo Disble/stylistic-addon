@@ -79,6 +79,7 @@ export class ApplySuggestionOperationalWrapperResolver {
 
     if (parentCC.isNullObject) {
       return {
+        kind: "success",
         wrapper: await this.createOperationalWrapper(context, anchorRange),
       };
     }
@@ -92,10 +93,11 @@ export class ApplySuggestionOperationalWrapperResolver {
         applySuggestionObservability.warnNonOperationalStylisticContentControl(this.suggestion.id, {
           existingTag,
         });
-        return { error: "Anchor cubierto por un Content Control existente" };
+        return { kind: "error", error: "Anchor cubierto por un Content Control existente" };
       }
 
       return {
+        kind: "success",
         wrapper: await this.createOperationalWrapper(context, anchorRange),
       };
     }
@@ -110,7 +112,7 @@ export class ApplySuggestionOperationalWrapperResolver {
         existingTag,
         title: parentCC.title ?? "",
       });
-      return { error: "Anchor cubierto por un Content Control existente" };
+      return { kind: "error", error: "Anchor cubierto por un Content Control existente" };
     }
 
     applySuggestionObservability.logReusingOperationalWrapper(this.suggestion.id, {
@@ -118,7 +120,7 @@ export class ApplySuggestionOperationalWrapperResolver {
       title: parentCC.title ?? "",
     });
 
-    return { wrapper: parentCC };
+    return { kind: "success", wrapper: parentCC };
   }
 
   /** Re-finds the anchor inside the operational wrapper so mutation scope matches the wrapper. */

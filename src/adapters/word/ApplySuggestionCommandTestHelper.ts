@@ -203,9 +203,7 @@ export function installWordContext(
     [anchorRange],
     ...(options.insertedRange?.searchSequence ?? [[insertedRange]]),
   ];
-  operationalWrapperRange.search = createSearchMock(
-    wrapperSearchSequence
-  ) as typeof operationalWrapperRange.search;
+  operationalWrapperRange.search = createSearchMock(wrapperSearchSequence);
   const bodyRange = createRange({
     text: contextText,
     searchSequence: anchorSearchSequence,
