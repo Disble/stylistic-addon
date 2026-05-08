@@ -237,6 +237,26 @@ level `new MastraClient({ baseUrl })` singleton.
 
 **Symptom:** The results panel shows suggestions as "applied", but no tracked changes are visible in the document.
 
+---
+
+### Analysis fails with a document-identity error
+
+**Symptom:** Analysis or feedback fails with an error saying Stylistic could not
+read or persist the document identity.
+
+**Cause:** The add-in now requires `Office.context.document.settings` to persist
+the stable `documentUuid` used by both workflows. If the host does not expose
+document settings, or if saving settings fails, the frontend fails closed.
+
+**Fix:**
+
+1. Verify the add-in is running in a Word host that supports document settings.
+2. Make sure the document is editable and not blocked by host restrictions that
+   prevent saving settings metadata.
+3. If the host is expected to support settings, inspect the Office runtime and
+   console for `Office.context.document.settings` availability and `saveAsync`
+   failures.
+
 **Possible causes:**
 
 1. **Track Changes display is off.** Go to **Review** > **All Markup** (ensure it's not set to "No Markup" or "Original").

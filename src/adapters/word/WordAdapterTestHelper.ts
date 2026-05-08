@@ -111,6 +111,63 @@ export function installRejectingWord(error: Error) {
 }
 
 /**
+ * Installs an `Office.context.document.settings` mock for document identity tests.
+ */
+export function installOfficeDocumentSettings(
+  options: {
+    existingValue?: unknown;
+    saveErrorMessage?: string;
+  } = {}
+) {
+  const get = vi.fn((_key: string) => options.existingValue);
+  const set = vi.fn();
+  const saveAsync = vi.fn((callback: (result: Office.AsyncResult<void>) => void) => {
+    if (options.saveErrorMessage) {
+      callback({
+        status: "failed" as unknown as Office.AsyncResultStatus,
+        error: { message: options.saveErrorMessage } as Office.Error,
+      } as Office.AsyncResult<void>);
+      return;
+    }
+
+    callback({
+      status: "succeeded" as unknown as Office.AsyncResultStatus,
+      value: undefined,
+    } as Office.AsyncResult<void>);
+  });
+
+  const settings = { get, set, saveAsync } as unknown as Office.Settings;
+  const officeGlobal = globalThis as unknown as {
+    Office?: {
+      AsyncResultStatus?: Record<string, string>;
+      context?: {
+        document?: {
+          settings?: Office.Settings;
+        };
+      };
+    };
+  };
+
+  officeGlobal.Office = {
+    ...(officeGlobal.Office ?? {}),
+    AsyncResultStatus: {
+      Succeeded: "succeeded",
+      Failed: "failed",
+      ...(officeGlobal.Office?.AsyncResultStatus ?? {}),
+    },
+    context: {
+      ...(officeGlobal.Office?.context ?? {}),
+      document: {
+        ...(officeGlobal.Office?.context?.document ?? {}),
+        settings,
+      },
+    },
+  };
+
+  return { settings, get, set, saveAsync };
+}
+
+/**
  * Builds a paragraph snapshot compatible with `getTextToAnalyze()` tests.
  */
 export function makeParagraph(

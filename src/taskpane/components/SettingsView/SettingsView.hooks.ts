@@ -1,3 +1,4 @@
+import type { AnalysisProfileId } from "../../../domain/Profile.types";
 import * as React from "react";
 import { setTaskpaneSelectedGenero, useTaskpaneShellStore } from "../../TaskpaneShellStore";
 import { ANALYSIS_PROFILE_OPTIONS } from "./SettingsView.constants";
@@ -29,7 +30,7 @@ export function useSettingsView(): SettingsViewState {
   const selectedGenero = useTaskpaneShellStore((state) => state.selectedGenero);
   const isAnalysisProfileDisabled = useTaskpaneShellStore((state) => state.isAnalyzeLoading);
 
-  const handleGeneroChange = React.useCallback((value: string) => {
+  const handleGeneroChange = React.useCallback((value: AnalysisProfileId) => {
     setTaskpaneSelectedGenero(value);
   }, []);
 

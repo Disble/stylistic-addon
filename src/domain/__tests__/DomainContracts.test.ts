@@ -170,6 +170,7 @@ describe("domain types (compile-time checks)", () => {
     expectTypeOf<IDocumentPort["getDocumentReviewState"]>().toEqualTypeOf<
       () => Promise<DocumentReviewState>
     >();
+    expectTypeOf<IDocumentPort["getDocumentUuid"]>().toEqualTypeOf<() => Promise<string>>();
     expectTypeOf<IDocumentPort["disableTrackChanges"]>().toEqualTypeOf<() => Promise<void>>();
   });
 });
@@ -177,7 +178,7 @@ describe("domain types (compile-time checks)", () => {
 describe("IFeedbackPort (compile-time checks)", () => {
   it("preserves the feedback payload shape", () => {
     const feedbackMinimal: FeedbackPayload = {
-      autorSlug: "disble",
+      documentUuid: "11111111-1111-4111-8111-111111111111",
       category: "Redundancia",
       context: "Frase con completamente necesario.",
       anchor: "completamente necesario",
@@ -188,7 +189,7 @@ describe("IFeedbackPort (compile-time checks)", () => {
       suggestionType: "track-change",
     };
     const feedbackWithComment: FeedbackPayload = {
-      autorSlug: "disble",
+      documentUuid: "11111111-1111-4111-8111-111111111111",
       category: "Muletilla",
       context: "Frase con básicamente.",
       anchor: "básicamente",

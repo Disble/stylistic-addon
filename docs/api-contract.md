@@ -9,9 +9,9 @@ This document specifies what the Stylistic frontend (Word add-in) expects from t
 - **Protocol:** Mastra's built-in HTTP API for workflows, plus Better Auth routes for login/session management
 - **Authentication:** Better Auth bearer session token sent as `Authorization: Bearer <token>` on Mastra workflow calls
 
-## Workflow Definition
+## Workflow Definitions
 
-### Workflow ID
+### 1. `stylistic-workflow`
 
 ```
 stylistic-workflow
@@ -44,11 +44,11 @@ Important: in this SDK version, `status` is always included in the response meta
 Before calling the workflow, the taskpane must have a valid Better Auth session.
 The backend is expected to expose:
 
-| Route | Purpose |
-| --- | --- |
-| `/auth/*` | Better Auth sign-in, callback, session, and logout routes. |
-| `/auth-complete` | Backend OAuth completion bridge used after Google callback. |
-| `/auth-bridge-session` | One-time code exchange used by the Office Dialog page. |
+| Route                  | Purpose                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `/auth/*`              | Better Auth sign-in, callback, session, and logout routes.  |
+| `/auth-complete`       | Backend OAuth completion bridge used after Google callback. |
+| `/auth-bridge-session` | One-time code exchange used by the Office Dialog page.      |
 
 The add-in stores the Better Auth session token with `OfficeRuntime.storage` and
 creates Mastra clients with the current bearer token. If the backend returns 401
@@ -57,8 +57,10 @@ require the user to sign in again.
 
 The add-in also stores the user-selected analysis profile in
 `OfficeRuntime.storage`, but that preference remains frontend-owned state. The
-backend should trust the incoming `genero` value in each workflow call; it does
-not need a separate preference endpoint for profile persistence.
+selection is validated against the frontend's supported `AnalysisProfileId`
+whitelist during bootstrap, then forwarded as `genero` in each workflow call.
+The backend should trust the incoming `genero` value; it does not need a
+separate preference endpoint for profile persistence.
 
 The add-in must not store Google provider access/refresh tokens. Provider tokens
 belong to the backend/auth provider boundary; the frontend only uses the Better
@@ -66,18 +68,24 @@ Auth session token.
 
 ## Input Schema
 
-The workflow must accept this `inputData`:
+The analysis workflow must accept this `inputData`:
 
 ```typescript
 interface WorkflowInput {
   /** Text to analyze (up to ~100K characters). */
   text: string;
 
-  /** Editorial genre for analysis style. */
-  genero: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
+  /** Stable document UUID generated and persisted by the add-in. */
+  documentUuid: string;
 
-  /** Author slug for personalization and author tracking. */
-  autorSlug: string;
+  /** Editorial genre for analysis style. */
+  genero?: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
+
+  /** Optional document title shown/stored by the backend. */
+  title?: string;
+
+  /** Optional document-level processing preferences. */
+  processingConfig?: Record<string, unknown>;
 }
 ```
 
@@ -86,16 +94,31 @@ interface WorkflowInput {
 ```json
 {
   "text": "Básicamente, es completamente necesario utilizar este periodo de tiempo con el objetivo de realizar la tarea.",
+  "documentUuid": "11111111-1111-4111-8111-111111111111",
   "genero": "general",
-  "autorSlug": "Disble"
+  "title": "Draft chapter 03",
+  "processingConfig": {
+    "chunking": {
+      "mode": "default"
+    }
+  },
 }
 ```
 
 ### Notes on Input Fields
 
 - **`text`** — The frontend chunks large documents at paragraph boundaries and sends each chunk as a separate workflow execution. The backend receives plain text and should not assume anything about document structure.
-- **`genero`** — Determines the editorial analysis style. Supported values: `narrativa-literaria`, `ensayo-academico`, `periodismo-cultural`, `general`.
-- **`autorSlug`** — Author identifier for personalization and author tracking. Currently defaults to `"Disble"`. Backend can use this to maintain author-specific writing profiles.
+- **`documentUuid`** — Stable add-in-generated UUID that identifies the Word document across analysis and feedback flows. The add-in persists it in `Office.context.document.settings` and reuses it across runs.
+- **`genero`** — Optional document-level editorial style. Supported values: `narrativa-literaria`, `ensayo-academico`, `periodismo-cultural`, `general`. Backend default remains `general`.
+- **`title`** — Optional document title metadata sent by the add-in.
+- **`processingConfig`** — Optional document-level processing preferences that the backend stores with the document context.
+
+### Contract Rules
+
+- Normal analysis must enter through `stylistic-workflow`.
+- The add-in must **not** call `POST /documents/resolve` before analysis. The backend resolves document context and auto-upserts persisted document data inside the workflow when `documentUuid` is present.
+- The frontend sends `documentUuid` on every analysis request; `autorSlug` is no longer part of the add-in contract.
+- The contract is document-based, not author-slug-based.
 
 ## Output Format
 
@@ -205,11 +228,11 @@ interface WorkflowOutput {
 
 ### Severity Guidelines
 
-| Severity | When to use | Example |
-|---|---|---|
-| `high` | Clear errors, redundancies, grammatical issues | "periodo de tiempo" → "periodo" |
-| `medium` | Stylistic improvements, filler words | "Básicamente, " → "" |
-| `low` | Minor preferences, optional simplifications | "utilizar" → "usar" |
+| Severity | When to use                                    | Example                         |
+| -------- | ---------------------------------------------- | ------------------------------- |
+| `high`   | Clear errors, redundancies, grammatical issues | "periodo de tiempo" → "periodo" |
+| `medium` | Stylistic improvements, filler words           | "Básicamente, " → ""            |
+| `low`    | Minor preferences, optional simplifications    | "utilizar" → "usar"             |
 
 ## Critical Constraint: context.includes(anchor)
 
@@ -226,6 +249,7 @@ contract must therefore provide enough context to make `context -> anchor`
 localization safe.
 
 **Do:**
+
 - Return `"completamente necesario"` (exact match from input)
 - Ensure `context.includes(anchor)` is true
 - Include trailing punctuation/spaces if they're part of the replacement (e.g., `"Básicamente, "` to remove the comma and space)
@@ -235,6 +259,7 @@ localization safe.
   `"*post mortem*"` for italic or `"**PRIME**"` for bold.
 
 **Don't:**
+
 - Return `"Completamente necesario"` (wrong capitalization)
 - Return `"completamente  necesario"` (extra space)
 - Return an anchor that is not contained in context
@@ -247,12 +272,12 @@ localization safe.
 
 The `genero` field tells the workflow what analysis style to apply:
 
-| Genre | Description |
-|---|---|
-| `general` | Everyday writing improvements |
-| `narrativa-literaria` | Literary narrative style |
-| `ensayo-academico` | Academic essay style |
-| `periodismo-cultural` | Cultural journalism style |
+| Genre                 | Description                   |
+| --------------------- | ----------------------------- |
+| `general`             | Everyday writing improvements |
+| `narrativa-literaria` | Literary narrative style      |
+| `ensayo-academico`    | Academic essay style          |
+| `periodismo-cultural` | Cultural journalism style     |
 
 ## Error Handling
 
@@ -273,10 +298,52 @@ The backend does **not** need to implement error responses — Mastra handles HT
 
 The frontend splits documents into chunks of up to 100,000 characters. The backend should expect:
 
-| Chunk Size | Words (~) | Processing Time |
-|---|---|---|
-| < 5K chars | < 800 words | < 10s |
-| 5K–30K chars | 800–5K words | 10–30s |
-| 30K–100K chars | 5K–16K words | 30–120s |
+| Chunk Size     | Words (~)    | Processing Time |
+| -------------- | ------------ | --------------- |
+| < 5K chars     | < 800 words  | < 10s           |
+| 5K–30K chars   | 800–5K words | 10–30s          |
+| 30K–100K chars | 5K–16K words | 30–120s         |
 
 The backend should be able to handle 100K characters in a single workflow execution without timing out. If the backend's AI model has a smaller context window, the workflow should handle internal sub-chunking transparently.
+
+---
+
+## 2. `feedback-workflow`
+
+Explicit suggestion feedback is fire-and-forget from the add-in point of view and uses the same document-scoped identity model as analysis.
+
+The frontend calls this workflow via:
+
+```typescript
+const workflow = client.getWorkflow("feedback-workflow");
+const run = await workflow.createRun();
+await run.start({ inputData: payload });
+```
+
+The add-in does not poll for a semantic result today. Feedback must remain non-blocking for UX.
+
+### Input Schema
+
+```typescript
+interface FeedbackWorkflowInput {
+  /** Stable document UUID generated and persisted by the add-in. */
+  documentUuid: string;
+
+  category: string;
+  context: string;
+  anchor: string;
+  suggestedText?: string;
+  justification: string;
+  action: "accept" | "reject";
+  severity: "high" | "medium" | "low";
+  suggestionType: "track-change" | "comment-only";
+  comment?: string;
+}
+```
+
+### Feedback Contract Rules
+
+- The payload key is `documentUuid`.
+- The backend updates persisted `document_style_profile` data using that `documentUuid`.
+- Feedback remains fire-and-forget and must never block the resolution UX.
+- `FeedbackPayload`, `SuggestionResolutionWorkflow`, and `FeedbackAdapter` must stay aligned with this document-based contract.

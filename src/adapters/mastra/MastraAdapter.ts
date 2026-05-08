@@ -20,6 +20,7 @@ import type {
   ChunkSubmitResult,
   WorkflowInput,
   WorkflowOutput,
+  WorkflowSubmitContext,
   WorkflowSuggestion,
 } from "../../domain/mastra/MastraWorkflow.types";
 import type { IAnalysisPort } from "../../domain/ports";
@@ -69,8 +70,7 @@ export class MastraAdapter implements IAnalysisPort {
    */
   async submitChunkAnalysis(
     chunk: TextChunk,
-    genero: string,
-    autorSlug: string
+    input: WorkflowSubmitContext
   ): Promise<ChunkSubmitResult> {
     if (MASTRA_POLL_BYPASS_ENABLED) {
       return this.buildBypassedSubmitResult(chunk.index);
@@ -78,11 +78,12 @@ export class MastraAdapter implements IAnalysisPort {
 
     const inputData: WorkflowInput = {
       text: chunk.text,
-      genero: genero as WorkflowInput["genero"],
-      autorSlug,
+      ...input,
     };
+
+    const generoLabel = input.genero ?? "sin-genero";
     console.log(
-      `🤖 [MastraAdapter] submitChunkAnalysis #${chunk.index} — ${chunk.text.length} chars, genero: "${genero}", autor: "${autorSlug}"`
+      `🤖 [MastraAdapter] submitChunkAnalysis #${chunk.index} — ${chunk.text.length} chars, genero: "${generoLabel}", documentUuid: "${input.documentUuid}"`
     );
 
     try {

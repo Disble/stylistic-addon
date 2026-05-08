@@ -19,8 +19,13 @@
 import type { TextChunk } from "./chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "./DocumentApplication.types";
 import type { AuthSession, SocialSignInRequest } from "./auth/AuthSession.types";
-import type { ChunkPollResult, ChunkSubmitResult } from "./mastra/MastraWorkflow.types";
+import type {
+  ChunkPollResult,
+  ChunkSubmitResult,
+  WorkflowSubmitContext,
+} from "./mastra/MastraWorkflow.types";
 import type { ProgressCallback } from "./pipeline/PipelineEvents.types";
+import type { AnalysisProfileId } from "./Profile.types";
 import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
 import type { SelectionSnapshot } from "./selection/SelectionSnapshot.types";
 import type { Suggestion, SuggestionNavigationResult } from "./suggestion/Suggestion.types";
@@ -86,8 +91,8 @@ export interface IUserPreferencesPort {
    */
   getAnalysisProfile(): Promise<string | undefined>;
 
-  /** Persists the user's selected analysis-profile id. */
-  setAnalysisProfile(value: string): Promise<void>;
+  /** Persists the user's selected, already-validated analysis-profile id. */
+  setAnalysisProfile(value: AnalysisProfileId): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +107,13 @@ export interface IUserPreferencesPort {
  * any pipeline or UI code.
  */
 export interface IDocumentPort {
+  /**
+   * Returns the stable document UUID persisted inside the active Word document.
+   * Implementations must create and persist one when the document has not been
+   * initialized yet.
+   */
+  getDocumentUuid(): Promise<string>;
+
   /**
    * Resolves the text to analyze: returns the current selection if non-empty,
    * otherwise falls back to the full document body.
@@ -219,11 +231,7 @@ export interface IAnalysisPort {
    * Submits a text chunk for asynchronous workflow execution.
    * Returns the `runId` required for later polling.
    */
-  submitChunkAnalysis(
-    chunk: TextChunk,
-    genero: string,
-    autorSlug: string
-  ): Promise<ChunkSubmitResult>;
+  submitChunkAnalysis(chunk: TextChunk, input: WorkflowSubmitContext): Promise<ChunkSubmitResult>;
 
   /**
    * Polls an existing workflow run created by `submitChunkAnalysis()`.

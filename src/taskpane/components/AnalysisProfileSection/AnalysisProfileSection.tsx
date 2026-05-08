@@ -22,8 +22,9 @@ export function AnalysisProfileSection({
           data-testid="profile-dropdown"
           disabled={isDisabled}
           onOptionSelect={(_event, data) => {
-            if (typeof data.optionValue === "string") {
-              onGeneroChange(data.optionValue);
+            const selectedOption = options.find((option) => option.value === data.optionValue);
+            if (selectedOption) {
+              onGeneroChange(selectedOption.value);
             }
           }}
           selectedOptions={[selectedGenero]}

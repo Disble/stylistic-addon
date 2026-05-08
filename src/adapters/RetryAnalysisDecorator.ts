@@ -29,7 +29,11 @@
  */
 
 import type { TextChunk } from "../domain/chunking/TextChunk.types";
-import type { ChunkPollResult, ChunkSubmitResult } from "../domain/mastra/MastraWorkflow.types";
+import type {
+  ChunkPollResult,
+  ChunkSubmitResult,
+  WorkflowSubmitContext,
+} from "../domain/mastra/MastraWorkflow.types";
 import type { IAnalysisPort } from "../domain/ports";
 
 /** Adds retry and backoff semantics to an analysis port. */
@@ -51,8 +55,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
    */
   async submitChunkAnalysis(
     chunk: TextChunk,
-    genero: string,
-    autorSlug: string
+    input: WorkflowSubmitContext
   ): Promise<ChunkSubmitResult> {
     let lastError = "Unknown analysis error";
 
@@ -66,7 +69,7 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
       }
 
       try {
-        const result = await this.wrapped.submitChunkAnalysis(chunk, genero, autorSlug);
+        const result = await this.wrapped.submitChunkAnalysis(chunk, input);
 
         if (this.hasRunId(result.runId)) {
           return result;

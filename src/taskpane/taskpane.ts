@@ -35,6 +35,7 @@ import type { PipelineObserver } from "../domain/pipeline/PipelineEvents.types";
 import { PipelineEventEmitter } from "../domain/pipeline/PipelineEvents";
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
+import type { AnalysisProfileId } from "../domain/Profile.types";
 import type { IFeedbackPort, IUserPreferencesPort } from "../domain/ports";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import {
@@ -149,19 +150,26 @@ export function bootstrapTaskpane(): void {
   documentPort.subscribeSelectionChanges(setSelectionPreviewSnapshot);
 }
 
-const KNOWN_ANALYSIS_PROFILE_IDS = new Set(DEFAULT_PROFILES.map((profile) => profile.id));
+const KNOWN_ANALYSIS_PROFILE_IDS = new Set<AnalysisProfileId>(
+  DEFAULT_PROFILES.map((profile) => profile.id)
+);
+
+/** Narrows persisted storage values to supported analysis-profile identifiers. */
+function isAnalysisProfileId(value: string): value is AnalysisProfileId {
+  return KNOWN_ANALYSIS_PROFILE_IDS.has(value as AnalysisProfileId);
+}
 
 /**
  * Loads the user's persisted analysis-profile preference and hydrates the
- * shell store. Validates the stored value against the domain whitelist so
- * that legacy/unknown ids degrade silently to the in-store default. Restoring
+ * shell store. Validates the raw stored value against the supported profile
+ * whitelist so unsupported/unknown ids degrade silently to the in-store default. Restoring
  * the preference during bootstrap intentionally reuses the same shell-store
  * setter as the UI so there is only one state transition path.
  */
 async function bootstrapAnalysisProfile(): Promise<void> {
   try {
     const stored = await userPreferencesPort.getAnalysisProfile();
-    if (stored && KNOWN_ANALYSIS_PROFILE_IDS.has(stored)) {
+    if (stored && isAnalysisProfileId(stored)) {
       setTaskpaneSelectedGenero(stored);
     }
   } catch (error) {

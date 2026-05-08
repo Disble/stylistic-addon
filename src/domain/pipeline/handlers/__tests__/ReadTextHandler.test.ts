@@ -10,6 +10,7 @@ import { ReadTextHandler } from "../ReadTextHandler";
 function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
+    getDocumentUuid: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
     applySuggestions: vi.fn(),
     getCleanupPreview: vi.fn(),
@@ -61,6 +62,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Hello world",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -73,6 +75,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Some document text",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -85,6 +88,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Content",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -97,6 +101,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Content",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -116,12 +121,14 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Selected text",
         isSelection: true,
+        documentUuid: "doc-uuid-selection",
       });
 
       await handler.handle(ctx, next);
 
       expect(ctx.isSelection).toBe(true);
       expect(ctx.text).toBe("Selected text");
+      expect(ctx.documentUuid).toBe("doc-uuid-selection");
     });
 
     it("calls next() for selection text", async () => {
@@ -129,6 +136,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Selected",
         isSelection: true,
+        documentUuid: "doc-uuid-selection",
       });
 
       await handler.handle(ctx, next);
@@ -151,6 +159,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Content",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -167,6 +176,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Content",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -184,6 +194,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "",
         isSelection: false,
+        documentUuid: "doc-uuid-empty",
       });
 
       await handler.handle(ctx, next);
@@ -201,6 +212,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "",
         isSelection: false,
+        documentUuid: "doc-uuid-empty",
       });
 
       await handler.handle(ctx, next);
@@ -219,6 +231,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "",
         isSelection: false,
+        documentUuid: "doc-uuid-empty",
       });
 
       await handler.handle(ctx, next);
@@ -233,6 +246,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "   \n\t  ",
         isSelection: false,
+        documentUuid: "doc-uuid-empty",
       });
 
       await handler.handle(ctx, next);
@@ -246,6 +260,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "",
         isSelection: false,
+        documentUuid: "doc-uuid-empty",
       });
 
       await handler.handle(ctx, next);
@@ -265,6 +280,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "a",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -287,6 +303,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: "Content",
         isSelection: false,
+        documentUuid: "doc-uuid-1",
       });
 
       await handler.handle(ctx, next);
@@ -300,6 +317,7 @@ describe("ReadTextHandler", () => {
       vi.mocked(ctx.documentPort.getTextToAnalyze).mockResolvedValue({
         text: largeText,
         isSelection: false,
+        documentUuid: "doc-uuid-large",
       });
 
       await handler.handle(ctx, next);

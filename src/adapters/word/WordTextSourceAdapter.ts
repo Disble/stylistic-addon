@@ -2,12 +2,18 @@ import type { TextSource } from "../../domain/TextSource.types";
 import { PARAGRAPH_LOAD_FIELDS } from "./WordTextSourceAdapter.constants";
 import { buildStructuredParagraphText } from "./WordTextSourceAdapter.helpers";
 import type { ParagraphSnapshot } from "./WordTextSourceAdapter.types";
+import { WordDocumentIdentityAdapter } from "./WordDocumentIdentityAdapter";
 
 /** Reads and normalizes the Word text source for analysis. */
 export class WordTextSourceAdapter {
+  constructor(
+    private readonly documentIdentityAdapter: WordDocumentIdentityAdapter = new WordDocumentIdentityAdapter()
+  ) {}
+
   /** Resolves selection text first, then falls back to the full body. */
   async getTextToAnalyze(): Promise<TextSource> {
     console.log("📖 [WordAdapter] Resolviendo texto a analizar...");
+    const documentUuid = await this.documentIdentityAdapter.getDocumentUuid();
     return Word.run(async (context) => {
       const selection = context.document.getSelection();
       // eslint-disable-next-line office-addins/no-navigational-load -- Word paragraph collections must load `paragraphs/items` before projecting paragraph members.
@@ -25,7 +31,7 @@ export class WordTextSourceAdapter {
 
       if (selectionText && selectionText.trim().length > 0) {
         console.log(`📖 [WordAdapter] Selección activa — ${selectionText.length} chars`);
-        return { text: selectionText, isSelection: true };
+        return { text: selectionText, isSelection: true, documentUuid };
       }
 
       const body = context.document.body;
@@ -36,13 +42,13 @@ export class WordTextSourceAdapter {
       const bodyText = buildStructuredParagraphText(body.paragraphs.items as ParagraphSnapshot[]);
       if (bodyText.length > 0) {
         console.log(`📖 [WordAdapter] Documento completo — ${bodyText.length} chars`);
-        return { text: bodyText, isSelection: false };
+        return { text: bodyText, isSelection: false, documentUuid };
       }
 
       body.load("text");
       await context.sync();
       console.log(`📖 [WordAdapter] Documento completo — ${body.text.length} chars`);
-      return { text: body.text, isSelection: false };
+      return { text: body.text, isSelection: false, documentUuid };
     });
   }
 }

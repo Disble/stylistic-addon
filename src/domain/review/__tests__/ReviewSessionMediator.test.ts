@@ -40,6 +40,7 @@ describe("ReviewSessionMediator", () => {
   beforeEach(() => {
     documentPort = {
       getTextToAnalyze: vi.fn(),
+      getDocumentUuid: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
       getAppliedOriginalTexts: vi.fn(),
       applySuggestions: vi.fn(),
       getCleanupPreview: vi.fn().mockResolvedValue({ deletable: 0, kept: 1 }),

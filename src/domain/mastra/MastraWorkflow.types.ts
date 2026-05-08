@@ -4,16 +4,38 @@ import type {
   SuggestionType,
 } from "../suggestion/Suggestion.types";
 
+/** Editorial genres supported by the analysis workflow. */
+export type WorkflowGenero =
+  | "narrativa-literaria"
+  | "ensayo-academico"
+  | "periodismo-cultural"
+  | "general";
+
+/** Opaque document-level processing preferences forwarded to the backend. */
+export type WorkflowProcessingConfig = Record<string, unknown>;
+
+/** Document-scoped metadata submitted alongside each chunk analysis. */
+export interface WorkflowSubmitContext {
+  /** Stable document UUID generated and persisted by the add-in. */
+  documentUuid: string;
+
+  /** Editorial genre for analysis style. */
+  genero?: WorkflowGenero;
+
+  /** Optional document title shown or stored by the backend. */
+  title?: string;
+
+  /** Optional document-level processing preferences. */
+  processingConfig?: WorkflowProcessingConfig;
+}
+
 /** Input data sent to the Mastra stylistic workflow for each chunk. */
-export interface WorkflowInput {
+export interface WorkflowInput extends WorkflowSubmitContext {
   /** Text to analyze. */
   text: string;
 
   /** Genre identifier matching the backend enum. */
-  genero: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
-
-  /** Author slug in kebab-case used to load the author profile. */
-  autorSlug: string;
+  genero?: WorkflowGenero;
 }
 
 /** Raw suggestion shape as returned by the Mastra workflow. */

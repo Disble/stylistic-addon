@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { IFeedbackPort, IDocumentPort } from "../../ports";
 import type { Suggestion } from "../Suggestion.types";
 import type { SuggestionActionResult } from "../SuggestionResolutionWorkflow.types";
-import { DEFAULT_AUTHOR_SLUG } from "../../../infrastructure/config";
 import { SuggestionResolutionWorkflow } from "../SuggestionResolutionWorkflow";
 
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
@@ -38,10 +37,12 @@ describe("SuggestionResolutionWorkflow", () => {
   let documentPort: IDocumentPort;
   let feedbackPort: IFeedbackPort;
   let workflow: SuggestionResolutionWorkflow;
+  const documentUuid = "11111111-1111-4111-8111-111111111111";
 
   beforeEach(() => {
     documentPort = {
       getTextToAnalyze: vi.fn(),
+      getDocumentUuid: vi.fn().mockResolvedValue(documentUuid),
       getAppliedOriginalTexts: vi.fn(),
       applySuggestions: vi.fn(),
       getCleanupPreview: vi.fn(),
@@ -71,7 +72,7 @@ describe("SuggestionResolutionWorkflow", () => {
     expect(result.feedbackStatus).toBe("sent");
     expect(feedbackPort.sendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
-        autorSlug: DEFAULT_AUTHOR_SLUG,
+        documentUuid,
         context: suggestion.context,
         anchor: suggestion.anchor,
         action: "accept",
@@ -106,7 +107,7 @@ describe("SuggestionResolutionWorkflow", () => {
     expect(result.feedbackStatus).toBe("sent");
     expect(feedbackPort.sendFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
-        autorSlug: DEFAULT_AUTHOR_SLUG,
+        documentUuid,
         context: suggestion.context,
         anchor: suggestion.anchor,
         action: "reject",
@@ -224,5 +225,17 @@ describe("SuggestionResolutionWorkflow", () => {
     const result = await workflow.acceptSuggestion(makeSuggestion());
 
     expect(result.feedbackStatus).toBe("failed");
+  });
+
+  it("returns failed feedback status when document identity lookup fails", async () => {
+    vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
+      makeActionResult({ status: "accepted" })
+    );
+    vi.mocked(documentPort.getDocumentUuid).mockRejectedValue(new Error("settings unavailable"));
+
+    const result = await workflow.acceptSuggestion(makeSuggestion());
+
+    expect(result.feedbackStatus).toBe("failed");
+    expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
   });
 });

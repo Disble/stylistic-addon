@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { AnalysisProfileId } from "../domain/Profile.types";
 import {
   HIDE_PROGRESS_DELAY_MS,
   INITIAL_TASKPANE_SHELL_STATE,
@@ -25,7 +26,7 @@ export function setTaskpaneAnalyzeLoading(isAnalyzeLoading: boolean): void {
 }
 
 /** Sets the selected analysis profile used by the composition root. */
-export function setTaskpaneSelectedGenero(selectedGenero: string): void {
+export function setTaskpaneSelectedGenero(selectedGenero: AnalysisProfileId): void {
   useTaskpaneShellStore.setState({ selectedGenero });
 }
 

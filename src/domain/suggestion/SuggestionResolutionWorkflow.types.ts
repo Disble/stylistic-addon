@@ -6,8 +6,8 @@ import type { SuggestionSeverity, SuggestionType } from "./Suggestion.types";
 
 /** Payload sent to the Mastra feedback workflow. */
 export interface FeedbackPayload {
-  /** Author profile slug that should receive the feedback update. */
-  autorSlug: string;
+  /** Stable UUID of the active Word document. */
+  documentUuid: string;
 
   /** Editorial category label. */
   category: string;

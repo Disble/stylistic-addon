@@ -1,6 +1,7 @@
 /* global OfficeRuntime */
 
 import type { IUserPreferencesPort } from "../../domain/ports";
+import type { AnalysisProfileId } from "../../domain/Profile.types";
 import { ANALYSIS_PROFILE_STORAGE_KEY } from "../../infrastructure/config";
 
 /**
@@ -13,7 +14,7 @@ import { ANALYSIS_PROFILE_STORAGE_KEY } from "../../infrastructure/config";
  * surface a controlled unsupported state, not silently weaken persistence.
  */
 export class OfficeUserPreferencesAdapter implements IUserPreferencesPort {
-  /** Reads the persisted analysis-profile id, returning undefined when absent or invalid. */
+  /** Reads the raw persisted analysis-profile id, returning undefined when absent or empty. */
   async getAnalysisProfile(): Promise<string | undefined> {
     const raw = await this.getStorage().getItem(ANALYSIS_PROFILE_STORAGE_KEY);
     if (typeof raw !== "string" || raw.length === 0) {
@@ -22,8 +23,8 @@ export class OfficeUserPreferencesAdapter implements IUserPreferencesPort {
     return raw;
   }
 
-  /** Persists the analysis-profile id under the dedicated storage key. */
-  async setAnalysisProfile(value: string): Promise<void> {
+  /** Persists a validated analysis-profile id under the dedicated storage key. */
+  async setAnalysisProfile(value: AnalysisProfileId): Promise<void> {
     await this.getStorage().setItem(ANALYSIS_PROFILE_STORAGE_KEY, value);
   }
 

@@ -1,3 +1,5 @@
+import type { AnalysisProfileId } from "../domain/Profile.types";
+
 /** Visual intent of the transient taskpane status bar. */
 export type TaskpaneStatusType = "success" | "error";
 
@@ -23,7 +25,7 @@ export type TaskpaneShellState = Readonly<{
   isCleanupLoading: boolean;
   isDisableTrackChangesLoading: boolean;
   isAnalyzeLoading: boolean;
-  selectedGenero: string;
+  selectedGenero: AnalysisProfileId;
   progress: TaskpaneShellProgress;
   status: TaskpaneShellStatus;
 }>;

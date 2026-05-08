@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "../WordAdapter";
 import {
+  installOfficeDocumentSettings,
   installRejectingWord,
   installWordWithContext,
   makeParagraph,
@@ -9,9 +10,11 @@ import {
 describe("WordAdapter.getTextToAnalyze", () => {
   let adapter: WordAdapter;
   let logSpy: ReturnType<typeof vi.spyOn>;
+  const documentUuid = "11111111-1111-4111-8111-111111111111";
 
   beforeEach(() => {
     vi.clearAllMocks();
+    installOfficeDocumentSettings({ existingValue: documentUuid });
     adapter = new WordAdapter();
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   });
@@ -50,6 +53,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     await expect(adapter.getTextToAnalyze()).resolves.toEqual({
       text: "Texto seleccionado",
       isSelection: true,
+      documentUuid,
     });
 
     expect(run).toHaveBeenCalledOnce();
@@ -92,6 +96,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     await expect(adapter.getTextToAnalyze()).resolves.toEqual({
       text: "Texto completo del documento",
       isSelection: false,
+      documentUuid,
     });
 
     expect(body.paragraphs.load).toHaveBeenCalledWith(
@@ -135,6 +140,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     await expect(adapter.getTextToAnalyze()).resolves.toEqual({
       text: "Título\n\nPárrafo actual\n\n\tSegundo párrafo con sangría.",
       isSelection: false,
+      documentUuid,
     });
   });
 
@@ -171,6 +177,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     await expect(adapter.getTextToAnalyze()).resolves.toEqual({
       text: "Capítulo 1\n\nPrimer párrafo del capítulo.",
       isSelection: false,
+      documentUuid,
     });
   });
 
@@ -209,6 +216,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     await expect(adapter.getTextToAnalyze()).resolves.toEqual({
       text: "Primer párrafo.\n\n\tSegundo párrafo con sangría visual.",
       isSelection: false,
+      documentUuid,
     });
   });
 
@@ -242,6 +250,7 @@ describe("WordAdapter.getTextToAnalyze", () => {
     await expect(adapter.getTextToAnalyze()).resolves.toEqual({
       text: "",
       isSelection: false,
+      documentUuid,
     });
   });
 

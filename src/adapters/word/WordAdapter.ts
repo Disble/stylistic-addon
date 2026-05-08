@@ -27,6 +27,7 @@ import { ResolveSuggestionCommand } from "./resolve-suggestion/ResolveSuggestion
 import { WordAppliedSuggestionInspector } from "./WordAppliedSuggestionInspector";
 import { WordSelectionMonitorAdapter } from "./WordSelectionMonitorAdapter";
 import { WordSuggestionNavigationAdapter } from "./WordSuggestionNavigationAdapter";
+import { WordDocumentIdentityAdapter } from "./WordDocumentIdentityAdapter";
 import type { TextLocator, WordSearchContainer } from "./WordTextLocatorContext.types";
 import { getDefaultTextLocator } from "./WordTextLocatorContext";
 import { WordTextSourceAdapter } from "./WordTextSourceAdapter";
@@ -34,7 +35,9 @@ import { WordTrackChangesAdapter } from "./WordTrackChangesAdapter";
 
 /** Facade that exposes document-review operations through Office.js. */
 export class WordAdapter implements IDocumentPort {
-  private readonly textSourceAdapter = new WordTextSourceAdapter();
+  private readonly documentIdentityAdapter = new WordDocumentIdentityAdapter();
+
+  private readonly textSourceAdapter = new WordTextSourceAdapter(this.documentIdentityAdapter);
 
   private readonly appliedSuggestionInspector = new WordAppliedSuggestionInspector();
 
@@ -54,6 +57,11 @@ export class WordAdapter implements IDocumentPort {
   /** Resolves the text to analyze from selection or full document. */
   async getTextToAnalyze(): Promise<TextSource> {
     return this.textSourceAdapter.getTextToAnalyze();
+  }
+
+  /** Returns the stable persisted UUID associated with the active Word document. */
+  async getDocumentUuid(): Promise<string> {
+    return this.documentIdentityAdapter.getDocumentUuid();
   }
 
   /** Returns the set of original texts already applied as Stylistic suggestions. */

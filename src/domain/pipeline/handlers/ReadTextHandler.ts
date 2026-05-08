@@ -19,7 +19,7 @@ export class ReadTextHandler implements PipelineHandler {
     console.log("📖 [ReadTextHandler] Fase 1: Resolviendo texto a analizar...");
     ctx.emitter.emitPhaseStart("reading", "Leyendo texto...");
 
-    const { text, isSelection } = await ctx.documentPort.getTextToAnalyze();
+    const { text, isSelection, documentUuid } = await ctx.documentPort.getTextToAnalyze();
     const scope = isSelection ? "selección" : "documento";
     console.log(
       `📖 [ReadTextHandler] ${isSelection ? "Selección" : "Documento"} — ${text.length} chars`
@@ -35,6 +35,7 @@ export class ReadTextHandler implements PipelineHandler {
 
     ctx.text = text;
     ctx.isSelection = isSelection;
+    ctx.documentUuid = documentUuid;
     ctx.emitter.emitPhaseComplete("reading");
     console.log(`📖 [ReadTextHandler] OK — ${text.length} chars (${scope})`);
 

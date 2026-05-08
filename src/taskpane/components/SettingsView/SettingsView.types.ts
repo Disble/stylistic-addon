@@ -1,4 +1,5 @@
 import type { AuthSession } from "../../../domain/auth/AuthSession.types";
+import type { AnalysisProfileId } from "../../../domain/Profile.types";
 import type { AnalysisProfileOption } from "../AnalysisProfileSection";
 
 /** Props required to render the full settings view. */
@@ -23,6 +24,6 @@ export type SettingsViewState = Readonly<{
   classes: SettingsViewClasses;
   analysisProfileOptions: readonly AnalysisProfileOption[];
   isAnalysisProfileDisabled: boolean;
-  selectedGenero: string;
-  handleGeneroChange: (value: string) => void;
+  selectedGenero: AnalysisProfileId;
+  handleGeneroChange: (value: AnalysisProfileId) => void;
 }>;

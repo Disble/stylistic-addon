@@ -13,6 +13,7 @@
 
 import type { TextChunk } from "../chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "../DocumentApplication.types";
+import type { AnalysisProfileId } from "../Profile.types";
 import type { IAnalysisPort, IDocumentPort } from "../ports";
 import type { Suggestion } from "../suggestion/Suggestion.types";
 import type { PipelineEventEmitter } from "./PipelineEvents";
@@ -27,7 +28,7 @@ import type { PipelineEventEmitter } from "./PipelineEvents";
  * - `maxChunkSize` — character limit per chunk
  *
  * Mutable fields (populated progressively by handlers):
- * - `text`, `isSelection` — set by ReadTextHandler
+ * - `text`, `isSelection`, `documentUuid` — set by ReadTextHandler
  * - `chunks` — set by ChunkTextHandler
  * - `rawSuggestions`, `chunkErrors` — set by AnalyzeChunksHandler
  * - `uniqueSuggestions` — set by DeduplicateHandler
@@ -48,7 +49,7 @@ export interface PipelineContext {
   readonly emitter: PipelineEventEmitter;
 
   /** The genre selected by the user, sent to the stylistic workflow (e.g., "narrativa-literaria", "general"). */
-  readonly genero: string;
+  readonly genero: AnalysisProfileId;
 
   /** Maximum characters per chunk sent to the backend. */
   readonly maxChunkSize: number;
@@ -56,6 +57,7 @@ export interface PipelineContext {
   // --- Set by ReadTextHandler ---
   text?: string;
   isSelection?: boolean;
+  documentUuid?: string;
 
   // --- Set by ChunkTextHandler ---
   chunks?: TextChunk[];

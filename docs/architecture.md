@@ -69,6 +69,11 @@ document is. `DocumentReviewState` is derived from document artifacts, and
 `DocumentReviewStateMachine` interprets that snapshot into explicit UI semantics.
 This rule remains unchanged.
 
+That same boundary now owns Stylistic's stable `documentUuid`. The add-in
+persists document identity in `Office.context.document.settings` through the
+document adapter boundary so analysis and feedback stay tied to the actual Word
+file instead of user-scoped storage.
+
 ### 2.3 Search is a technical capability, not a business domain module
 
 The project needs a reusable text-location capability, but it should not be
@@ -152,7 +157,8 @@ list lives in `src/infrastructure/config.ts` as `DEFAULT_PROFILES`; UI options
 must be derived from that single source of truth instead of duplicating labels
 in taskpane-local constants. The persisted selection is restored from
 `OfficeRuntime.storage` through `OfficeUserPreferencesAdapter` during
-`bootstrapTaskpane()`, then mirrored into `TaskpaneShellStore.selectedGenero`.
+`bootstrapTaskpane()`, validated against the supported `AnalysisProfileId`
+whitelist, then mirrored into `TaskpaneShellStore.selectedGenero`.
 While an analysis run is active, the selector in `SettingsView` must stay
 disabled so the persisted preference cannot diverge from the pipeline snapshot
 already in flight.

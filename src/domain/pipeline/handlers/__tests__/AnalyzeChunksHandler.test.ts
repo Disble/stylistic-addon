@@ -2,7 +2,6 @@ import type { IAnalysisPort, IDocumentPort } from "../../../ports";
 import type { TextChunk } from "../../../chunking/TextChunk.types";
 import type { ChunkPollResult } from "../../../mastra/MastraWorkflow.types";
 import type { Suggestion } from "../../../suggestion/Suggestion.types";
-import { DEFAULT_AUTHOR_SLUG } from "../../../../infrastructure/config";
 import type { PipelineContext } from "../../PipelineContext";
 import { PipelineEventEmitter } from "../../PipelineEvents";
 import { AnalyzeChunksHandler } from "../AnalyzeChunksHandler";
@@ -59,6 +58,7 @@ function makeMockAnalysisPort(): IAnalysisPort {
 function makeMockDocumentPort(): IDocumentPort {
   return {
     getTextToAnalyze: vi.fn(),
+    getDocumentUuid: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
     applySuggestions: vi.fn(),
     getCleanupPreview: vi.fn(),
@@ -82,6 +82,7 @@ function makePipelineContext(overrides: Partial<PipelineContext> = {}): Pipeline
     maxChunkSize: 100_000,
     chunks: [makeChunk()],
     isSelection: false,
+    documentUuid: "11111111-1111-4111-8111-111111111111",
     ...overrides,
   } as PipelineContext;
 }
@@ -123,18 +124,14 @@ describe("AnalyzeChunksHandler", () => {
     const ctx = makePipelineContext({ chunks, analysisPort });
     await handler.handle(ctx, next);
 
-    expect(analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(
-      1,
-      chunks[0],
-      "general",
-      DEFAULT_AUTHOR_SLUG
-    );
-    expect(analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(
-      2,
-      chunks[1],
-      "general",
-      DEFAULT_AUTHOR_SLUG
-    );
+    expect(analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(1, chunks[0], {
+      documentUuid: "11111111-1111-4111-8111-111111111111",
+      genero: "general",
+    });
+    expect(analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(2, chunks[1], {
+      documentUuid: "11111111-1111-4111-8111-111111111111",
+      genero: "general",
+    });
     expect(analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(0, "run-0");
     expect(analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(1, "run-1");
     expect(ctx.rawSuggestions?.map((suggestion) => suggestion.id)).toEqual(["s-0", "s-1"]);

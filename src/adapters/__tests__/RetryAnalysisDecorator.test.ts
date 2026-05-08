@@ -1,6 +1,10 @@
 import type { IAnalysisPort } from "../../domain/ports";
 import type { TextChunk } from "../../domain/chunking/TextChunk.types";
-import type { ChunkPollResult, ChunkSubmitResult } from "../../domain/mastra/MastraWorkflow.types";
+import type {
+  ChunkPollResult,
+  ChunkSubmitResult,
+  WorkflowSubmitContext,
+} from "../../domain/mastra/MastraWorkflow.types";
 import { RetryAnalysisDecorator } from "../RetryAnalysisDecorator";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +47,14 @@ function pollRunning(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResu
 
 function pollSuccess(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResult {
   return { chunkIndex, runId, status: "success", suggestions: [] };
+}
+
+function makeSubmitContext(overrides: Partial<WorkflowSubmitContext> = {}): WorkflowSubmitContext {
+  return {
+    documentUuid: "11111111-1111-4111-8111-111111111111",
+    genero: "general",
+    ...overrides,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +122,7 @@ describe("RetryAnalysisDecorator", () => {
     it("returns the first successful submission without retrying", async () => {
       mockPort.submitChunkAnalysis.mockResolvedValue(submitSuccess(0, "run-123"));
 
-      const result = await decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const result = await decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext());
 
       expect(result).toEqual({ chunkIndex: 0, runId: "run-123" });
       expect(mockPort.submitChunkAnalysis).toHaveBeenCalledOnce();
@@ -122,7 +134,7 @@ describe("RetryAnalysisDecorator", () => {
         .mockResolvedValueOnce(submitFailure(0, "temporary submit failure"))
         .mockResolvedValueOnce(submitSuccess(0, "run-456"));
 
-      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const promise = decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext());
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
 
       await expect(promise).resolves.toEqual({
@@ -135,7 +147,7 @@ describe("RetryAnalysisDecorator", () => {
     it("retries thrown submit errors and returns a normalized failure after exhaustion", async () => {
       mockPort.submitChunkAnalysis.mockRejectedValue(new Error("socket hang up"));
 
-      const promise = decorator.submitChunkAnalysis(makeChunk(), "general", "Disble");
+      const promise = decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext());
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 2);
       await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 4);
@@ -155,7 +167,7 @@ describe("RetryAnalysisDecorator", () => {
       mockPort.submitChunkAnalysis.mockRejectedValue(error);
 
       await expect(
-        decorator.submitChunkAnalysis(makeChunk(), "general", "Disble")
+        decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext())
       ).resolves.toEqual({
         chunkIndex: 0,
         error: "Chunk 1: HTTP error! status: 400",

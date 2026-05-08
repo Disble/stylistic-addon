@@ -9,9 +9,12 @@ import { WordTextSourceAdapter } from "../WordTextSourceAdapter";
 describe("WordTextSourceAdapter", () => {
   let adapter: WordTextSourceAdapter;
   let logSpy: ReturnType<typeof vi.spyOn>;
+  const documentUuid = "11111111-1111-4111-8111-111111111111";
 
   beforeEach(() => {
-    adapter = new WordTextSourceAdapter();
+    adapter = new WordTextSourceAdapter({
+      getDocumentUuid: vi.fn().mockResolvedValue(documentUuid),
+    } as never);
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
@@ -41,6 +44,7 @@ describe("WordTextSourceAdapter", () => {
     await expect(adapter.getTextToAnalyze()).resolves.toEqual({
       text: "Texto seleccionado",
       isSelection: true,
+      documentUuid,
     });
   });
 

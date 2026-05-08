@@ -10,7 +10,6 @@
  * The document remains the source of truth for pending Stylistic artifacts.
  */
 
-import { DEFAULT_AUTHOR_SLUG } from "../../infrastructure/config";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
 import type { Suggestion } from "./Suggestion.types";
 import type {
@@ -59,7 +58,7 @@ export class SuggestionResolutionWorkflow {
         ? await this.documentPort.acceptSuggestion(suggestion)
         : await this.documentPort.rejectSuggestion(suggestion);
 
-    const feedbackStatus = this.dispatchFeedback(suggestion, action, documentResult, comment);
+    const feedbackStatus = await this.dispatchFeedback(suggestion, action, documentResult, comment);
 
     return {
       ...documentResult,
@@ -70,18 +69,18 @@ export class SuggestionResolutionWorkflow {
   /**
    * Sends feedback best-effort without delaying the resolution outcome.
    */
-  private dispatchFeedback(
+  private async dispatchFeedback(
     suggestion: Suggestion,
     action: ResolutionAction,
     result: SuggestionActionResult,
     comment?: string
-  ): FeedbackDispatchStatus {
+  ): Promise<FeedbackDispatchStatus> {
     if (!this.shouldSendFeedback(result)) {
       return "skipped";
     }
 
     try {
-      const payload = this.buildFeedbackPayload(suggestion, action, comment);
+      const payload = await this.buildFeedbackPayload(suggestion, action, comment);
       const feedbackPromise = this.feedbackPort.sendFeedback(payload);
       void feedbackPromise.catch(() => undefined);
       return "sent";
@@ -102,15 +101,16 @@ export class SuggestionResolutionWorkflow {
   /**
    * Creates the feedback payload that mirrors the user's explicit action.
    */
-  private buildFeedbackPayload(
+  private async buildFeedbackPayload(
     suggestion: Suggestion,
     action: ResolutionAction,
     comment?: string
-  ): FeedbackPayload {
+  ): Promise<FeedbackPayload> {
     const trimmedComment = comment?.trim();
+    const documentUuid = await this.documentPort.getDocumentUuid();
 
     return {
-      autorSlug: DEFAULT_AUTHOR_SLUG,
+      documentUuid,
       category: suggestion.category,
       context: suggestion.context,
       anchor: suggestion.anchor,

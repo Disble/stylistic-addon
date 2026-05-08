@@ -1,15 +1,17 @@
+import type { AnalysisProfileId } from "../../../domain/Profile.types";
+
 /** Selectable editorial profile option shown in the analyze section. */
 export type AnalysisProfileOption = Readonly<{
-  value: string;
+  value: AnalysisProfileId;
   label: string;
 }>;
 
 /** Props required to render the analysis-profile selector section. */
 export type AnalysisProfileSectionProps = Readonly<{
   isDisabled: boolean;
-  onGeneroChange: (value: string) => void;
+  onGeneroChange: (value: AnalysisProfileId) => void;
   options: readonly AnalysisProfileOption[];
-  selectedGenero: string;
+  selectedGenero: AnalysisProfileId;
 }>;
 
 /** Griffel class slots consumed by the analysis-profile section. */

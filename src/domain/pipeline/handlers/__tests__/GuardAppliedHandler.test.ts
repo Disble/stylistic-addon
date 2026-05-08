@@ -40,6 +40,7 @@ function makeCommentOnlySuggestion(overrides: Partial<Suggestion> = {}): Suggest
 function makeMockDocumentPort(appliedTexts: Set<string> = new Set()): IDocumentPort {
   return {
     getTextToAnalyze: vi.fn(),
+    getDocumentUuid: vi.fn(),
     getAppliedOriginalTexts: vi.fn().mockResolvedValue(appliedTexts),
     applySuggestions: vi.fn(),
     getCleanupPreview: vi.fn(),

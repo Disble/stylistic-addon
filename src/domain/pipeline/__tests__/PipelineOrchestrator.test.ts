@@ -9,6 +9,7 @@ import { PipelineOrchestrator } from "../PipelineOrchestrator";
 function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
   const documentPort: IDocumentPort = {
     getTextToAnalyze: vi.fn(),
+    getDocumentUuid: vi.fn(),
     getAppliedOriginalTexts: vi.fn(),
     applySuggestions: vi.fn(),
     getCleanupPreview: vi.fn(),

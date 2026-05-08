@@ -177,19 +177,18 @@ describe("MastraAdapter", () => {
     const { MastraAdapter } = await importAdapterModule();
     const adapter = new MastraAdapter();
 
-    const result = await adapter.submitChunkAnalysis(
-      makeChunk({ text: "Hola mundo", index: 4 }),
-      "narrativa-literaria",
-      "maria-garcia"
-    );
+    const result = await adapter.submitChunkAnalysis(makeChunk({ text: "Hola mundo", index: 4 }), {
+      documentUuid: "11111111-1111-4111-8111-111111111111",
+      genero: "narrativa-literaria",
+    });
 
     expect(mastraMocks.getWorkflow).toHaveBeenCalledWith(WORKFLOW_ID);
     expect(mastraMocks.createRun).toHaveBeenCalledOnce();
     expect(mastraMocks.start).toHaveBeenCalledWith({
       inputData: {
         text: "Hola mundo",
+        documentUuid: "11111111-1111-4111-8111-111111111111",
         genero: "narrativa-literaria",
-        autorSlug: "maria-garcia",
       },
     });
     expect(result).toEqual({ chunkIndex: 4, runId: "run-from-create-run" });
@@ -200,7 +199,10 @@ describe("MastraAdapter", () => {
     const { MastraAdapter } = await importAdapterModule();
     const adapter = new MastraAdapter();
 
-    const result = await adapter.submitChunkAnalysis(makeChunk(), "general", "disble");
+    const result = await adapter.submitChunkAnalysis(makeChunk(), {
+      documentUuid: "11111111-1111-4111-8111-111111111111",
+      genero: "general",
+    });
 
     expect(result).toEqual({
       chunkIndex: 2,

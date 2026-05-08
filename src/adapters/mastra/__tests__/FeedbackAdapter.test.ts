@@ -28,7 +28,7 @@ import { FeedbackAdapter } from "../FeedbackAdapter";
 
 function makePayload(overrides: Partial<FeedbackPayload> = {}): FeedbackPayload {
   return {
-    autorSlug: "disble",
+    documentUuid: "11111111-1111-4111-8111-111111111111",
     category: "Redundancia",
     context: "Frase con completamente necesario.",
     anchor: "completamente necesario",

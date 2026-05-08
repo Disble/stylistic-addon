@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PROFILES, FEEDBACK_WORKFLOW_ID } from "../config";
+import { DEFAULT_PROFILES, DOCUMENT_UUID_SETTINGS_KEY, FEEDBACK_WORKFLOW_ID } from "../config";
 
 describe("DEFAULT_PROFILES", () => {
   it("contains all expected profile ids", () => {
@@ -28,6 +28,12 @@ describe("DEFAULT_PROFILES", () => {
 describe("FEEDBACK_WORKFLOW_ID", () => {
   it('equals "feedback-workflow"', () => {
     expect(FEEDBACK_WORKFLOW_ID).toBe("feedback-workflow");
+  });
+});
+
+describe("DOCUMENT_UUID_SETTINGS_KEY", () => {
+  it('equals "stylistic.document.uuid.v1"', () => {
+    expect(DOCUMENT_UUID_SETTINGS_KEY).toBe("stylistic.document.uuid.v1");
   });
 });
 

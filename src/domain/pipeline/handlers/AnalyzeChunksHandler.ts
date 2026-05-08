@@ -12,7 +12,7 @@
  * @module AnalyzeChunksHandler
  */
 
-import { DEFAULT_AUTHOR_SLUG, POLL_INTERVAL_MS } from "../../../infrastructure/config";
+import { POLL_INTERVAL_MS } from "../../../infrastructure/config";
 import type { PipelineContext } from "../PipelineContext";
 import type { PipelineHandler } from "./ReadTextHandler.types";
 import type { AnalysisState, AnalyzeChunk } from "./AnalyzeChunksHandler.types";
@@ -84,11 +84,10 @@ export class AnalyzeChunksHandler implements PipelineHandler {
       `🤖 [AnalyzeChunksHandler] Encolando chunk ${chunk.index + 1}/${state.chunks.length} (${chunk.text.length} chars)`
     );
 
-    const submitResult = await ctx.analysisPort.submitChunkAnalysis(
-      chunk,
-      ctx.genero,
-      DEFAULT_AUTHOR_SLUG
-    );
+    const submitResult = await ctx.analysisPort.submitChunkAnalysis(chunk, {
+      documentUuid: ctx.documentUuid!,
+      genero: ctx.genero,
+    });
     state.submittedCount += 1;
 
     console.log(this.getSubmitLogMessage(chunk.index, submitResult.runId, submitResult.error));
