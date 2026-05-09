@@ -1,3 +1,8 @@
+import type {
+  SettingsLoadPreferences,
+  SettingsSavePreferences,
+} from "../SettingsView/SettingsView.types";
+
 /** Root taskpane application callbacks provided by the composition layer. */
 export type AppProps = Readonly<{
   onAnalyze: () => Promise<void> | void;
@@ -5,6 +10,8 @@ export type AppProps = Readonly<{
   onDisableTrackChanges: () => Promise<void> | void;
   onSignIn: () => Promise<void> | void;
   onSignOut: () => Promise<void> | void;
+  loadPreferences: SettingsLoadPreferences;
+  savePreferences: SettingsSavePreferences;
   onMount?: () => void;
 }>;
 

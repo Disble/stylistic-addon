@@ -297,7 +297,9 @@ describe("taskpane entrypoint", () => {
     expect(getTaskpaneShellState().selectedGenero).toBe("narrativa-literaria");
   });
 
-  it("persists analysis profile changes after bootstrap", async () => {
+  it("does NOT auto-persist analysis profile changes after bootstrap", async () => {
+    // Settings is now draft + Save: changing the shell store directly must
+    // not write to OfficeRuntime. Persistence only happens via the save flow.
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
     const storage = installOfficeRuntime({
@@ -311,14 +313,126 @@ describe("taskpane entrypoint", () => {
     const { setTaskpaneSelectedGenero: setSelectedGeneroFromStore } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
+    storage.setItem.mockClear();
 
     setSelectedGeneroFromStore("general");
     await flushTaskpaneWork();
 
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
+  it("exposes loadPreferences as an App prop wired to the backend endpoint", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    installOfficeRuntime();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          correctionInstructions: "Vigilá X.",
+          correctionInstructionsMaxLength: 4000,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+    (globalThis as any).fetch = fetchMock;
+
+    await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+
+    const appProps = getRenderedAppProps(reactMocks);
+    const result = await appProps.loadPreferences();
+
+    expect(result).toEqual({
+      correctionInstructions: "Vigilá X.",
+      correctionInstructionsMaxLength: 4000,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:4111/user/preferences",
+      expect.objectContaining({ method: "GET" })
+    );
+  });
+
+  it("exposes savePreferences as an App prop and persists profile + instructions atomically", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    const storage = installOfficeRuntime({
+      getItem: vi.fn().mockResolvedValue(null),
+      setItem: vi.fn().mockResolvedValue(undefined),
+      removeItem: vi.fn().mockResolvedValue(undefined),
+    });
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    const putResponseBody = {
+      correctionInstructions: "Vigilá Y.",
+      correctionInstructionsMaxLength: 4000,
+    };
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify(putResponseBody), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+    );
+    (globalThis as any).fetch = fetchMock;
+
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    storage.setItem.mockClear();
+
+    const appProps = getRenderedAppProps(reactMocks);
+    const result = await appProps.savePreferences("Vigilá Y.", "general");
+
+    expect(result).toEqual(putResponseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:4111/user/preferences",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ correctionInstructions: "Vigilá Y." }),
+      })
+    );
     expect(storage.setItem).toHaveBeenCalledWith(
       "stylistic.preferences.analysis-profile.v1",
       "general"
     );
+    expect(getTaskpaneShellState().selectedGenero).toBe("general");
+  });
+
+  it("does NOT persist the profile when the backend save fails", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    const storage = installOfficeRuntime({
+      getItem: vi.fn().mockResolvedValue(null),
+      setItem: vi.fn().mockResolvedValue(undefined),
+      removeItem: vi.fn().mockResolvedValue(undefined),
+    });
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "unauthenticated" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    (globalThis as any).fetch = fetchMock;
+
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    storage.setItem.mockClear();
+    const initialProfile = getTaskpaneShellState().selectedGenero;
+
+    const appProps = getRenderedAppProps(reactMocks);
+
+    await expect(appProps.savePreferences("Vigilá Y.", "general")).rejects.toMatchObject({
+      reason: "unauthenticated",
+    });
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(getTaskpaneShellState().selectedGenero).toBe(initialProfile);
   });
 
   it("delegates disabling Track Changes and hides the CTA afterward", async () => {

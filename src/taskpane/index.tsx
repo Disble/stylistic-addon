@@ -6,6 +6,8 @@ import {
   handleAnalyze,
   handleCleanup,
   handleDisableTrackChanges,
+  handleLoadPreferences,
+  handleSavePreferences,
   handleSignIn,
   handleSignOut,
 } from "./taskpane";
@@ -42,6 +44,8 @@ function renderTaskpaneShell(): void {
           onDisableTrackChanges: handleDisableTrackChanges,
           onSignIn: handleSignIn,
           onSignOut: handleSignOut,
+          loadPreferences: handleLoadPreferences,
+          savePreferences: handleSavePreferences,
           onMount: () => bootstrapTaskpane(),
         })
       )

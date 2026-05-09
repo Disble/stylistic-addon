@@ -30,6 +30,8 @@ export function App({
   onDisableTrackChanges,
   onSignIn,
   onSignOut,
+  loadPreferences,
+  savePreferences,
   onMount,
 }: AppProps): React.JSX.Element {
   const {
@@ -65,8 +67,10 @@ export function App({
       <main id="app-body">
         <SettingsView
           isSigningOut={authState.isSigningOut}
+          loadPreferences={loadPreferences}
           onBack={handleCloseSettings}
           onSignOut={onSignOut}
+          savePreferences={savePreferences}
           session={authState.session}
         />
       </main>

@@ -21,6 +21,7 @@ import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability
 import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
 import { OfficeDialogAuthAdapter } from "../adapters/auth/OfficeDialogAuthAdapter";
 import { OfficeUserPreferencesAdapter } from "../adapters/preferences/OfficeUserPreferencesAdapter";
+import { BackendUserCorrectionPreferencesAdapter } from "../adapters/preferences/BackendUserCorrectionPreferencesAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
@@ -36,11 +37,18 @@ import { PipelineEventEmitter } from "../domain/pipeline/PipelineEvents";
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
 import type { AnalysisProfileId } from "../domain/Profile.types";
-import type { IFeedbackPort, IUserPreferencesPort } from "../domain/ports";
+import type {
+  IFeedbackPort,
+  IUserCorrectionPreferencesPort,
+  IUserPreferencesPort,
+} from "../domain/ports";
+import type { UserCorrectionPreferences } from "../domain/user-preferences/UserCorrectionPreferences.types";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
+import { HttpClient } from "../infrastructure/http/HttpClient";
 import {
   DEFAULT_MAX_CHUNK_SIZE,
   DEFAULT_PROFILES,
+  MASTRA_BASE_URL,
   MAX_RETRIES,
   RETRY_BASE_DELAY_MS,
 } from "../infrastructure/config";
@@ -67,7 +75,6 @@ import {
   setTaskpaneSelectedGenero,
   showTaskpaneStatus,
   updateTaskpaneProgress,
-  useTaskpaneShellStore,
 } from "./TaskpaneShellStore";
 
 function toUserMessage(error: unknown): string {
@@ -105,6 +112,12 @@ const authPort = new BetterAuthAdapter();
 const authSessionStoragePort = new OfficeAuthSessionStorageAdapter();
 const officeDialogAuthAdapter = new OfficeDialogAuthAdapter();
 const userPreferencesPort: IUserPreferencesPort = new OfficeUserPreferencesAdapter();
+const httpClient = new HttpClient({
+  baseUrl: MASTRA_BASE_URL,
+  getAuthToken: getTaskpaneAuthToken,
+});
+const userCorrectionPreferencesPort: IUserCorrectionPreferencesPort =
+  new BackendUserCorrectionPreferencesAdapter(httpClient);
 const mastraClientFactory = new MastraClientFactory(getTaskpaneAuthToken);
 const analysisPort = new RetryAnalysisDecorator(
   new MastraAdapter(mastraClientFactory),
@@ -177,15 +190,31 @@ async function bootstrapAnalysisProfile(): Promise<void> {
   }
 }
 
-useTaskpaneShellStore.subscribe((state, prevState) => {
-  if (state.selectedGenero === prevState.selectedGenero) {
-    return;
-  }
+/**
+ * Loads the user's correction-instruction preferences from the backend.
+ * Used by the settings page to hydrate its draft state when it opens.
+ */
+export async function handleLoadPreferences(): Promise<UserCorrectionPreferences> {
+  return userCorrectionPreferencesPort.load();
+}
 
-  void userPreferencesPort.setAnalysisProfile(state.selectedGenero).catch((error) => {
-    console.warn("⚠️ [Taskpane] No se pudo guardar el perfil de análisis:", error);
-  });
-});
+/**
+ * Persists the full settings form atomically:
+ * - PUT correction instructions to the backend (most likely to fail).
+ * - Persist the analysis profile in OfficeRuntime storage.
+ * - Commit the new profile into the shell store on success.
+ *
+ * Throws on any failure so the settings page can render an inline message.
+ */
+export async function handleSavePreferences(
+  correctionInstructions: string | null,
+  analysisProfile: AnalysisProfileId
+): Promise<UserCorrectionPreferences> {
+  const result = await userCorrectionPreferencesPort.save(correctionInstructions);
+  await userPreferencesPort.setAnalysisProfile(analysisProfile);
+  setTaskpaneSelectedGenero(analysisProfile);
+  return result;
+}
 
 /** Restores and validates a persisted Better Auth session during taskpane boot. */
 async function bootstrapAuthSession(): Promise<void> {
