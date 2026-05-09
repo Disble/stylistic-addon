@@ -36,6 +36,7 @@ import type {
   SuggestionActionResult,
 } from "./suggestion/SuggestionResolutionWorkflow.types";
 import type { TextSource } from "./TextSource.types";
+import type { UserCorrectionPreferences } from "./user-preferences/UserCorrectionPreferences.types";
 
 // ---------------------------------------------------------------------------
 // Auth Ports
@@ -93,6 +94,29 @@ export interface IUserPreferencesPort {
 
   /** Persists the user's selected, already-validated analysis-profile id. */
   setAnalysisProfile(value: AnalysisProfileId): Promise<void>;
+}
+
+/**
+ * Backend-backed boundary for the user's global correction-instruction
+ * preferences. Distinct from {@link IUserPreferencesPort} because:
+ *
+ * - It is server-owned and authenticated, not OfficeRuntime-local.
+ * - It carries a backend-echoed max-length contract used for UX validation.
+ * - It exposes `null` semantics for the "no instructions" state, so passing
+ *   `null` to {@link save} means "clear the persisted value".
+ *
+ * Adapters MUST translate transport-level failures into a
+ * {@link UserCorrectionPreferencesError} with a domain-meaningful reason.
+ */
+export interface IUserCorrectionPreferencesPort {
+  /** Loads the user's current correction-instruction preferences. */
+  load(): Promise<UserCorrectionPreferences>;
+
+  /**
+   * Persists the user's correction instructions. Sending `null` clears the
+   * stored value. The backend trims whitespace and may collapse to `null`.
+   */
+  save(correctionInstructions: string | null): Promise<UserCorrectionPreferences>;
 }
 
 // ---------------------------------------------------------------------------
