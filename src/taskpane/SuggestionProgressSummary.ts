@@ -25,14 +25,17 @@ export function createSuggestionProgressSummaryModel(
   result: ApplySuggestionsResult,
   chunkErrors: string[]
 ): SuggestionProgressSummaryModel {
-  const failedSuggestionIds = new Set(
-    result.failedSuggestions.map((failure) => failure.suggestion.id)
-  );
-  const appliedStates = new Map(
-    suggestions
-      .filter((suggestion) => !failedSuggestionIds.has(suggestion.id))
-      .map((suggestion) => [suggestion.id, "pending" as AppliedSuggestionProgressState])
-  );
+  const failedSuggestionIds = new Set<string>();
+  for (const failure of result.failedSuggestions) {
+    failedSuggestionIds.add(failure.suggestion.id);
+  }
+
+  const appliedStates = new Map<string, AppliedSuggestionProgressState>();
+  for (const suggestion of suggestions) {
+    if (!failedSuggestionIds.has(suggestion.id)) {
+      appliedStates.set(suggestion.id, "pending");
+    }
+  }
 
   return {
     total: suggestions.length,
@@ -134,8 +137,14 @@ function countAppliedState(
   model: SuggestionProgressSummaryModel,
   state: AppliedSuggestionProgressState
 ): number {
-  return Array.from(model.appliedStates.values()).filter((currentState) => currentState === state)
-    .length;
+  let count = 0;
+  for (const currentState of model.appliedStates.values()) {
+    if (currentState === state) {
+      count += 1;
+    }
+  }
+
+  return count;
 }
 
 /** Returns the singular or plural copy for a count. */

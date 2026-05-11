@@ -154,9 +154,12 @@ export async function handleRetryAnalysisQuery(
   );
 
   const successfulPolls = settled.filter((result) => result.status === "success");
-  const stillRetryable = settled
-    .filter((result) => result.status === "retryable-failure")
-    .map<ChunkRunReference>((result) => ({ chunkIndex: result.chunkIndex, runId: result.runId }));
+  const stillRetryable: ChunkRunReference[] = [];
+  for (const result of settled) {
+    if (result.status === "retryable-failure") {
+      stillRetryable.push({ chunkIndex: result.chunkIndex, runId: result.runId });
+    }
+  }
   const terminalErrors = settled.filter(
     (result) => result.status !== "success" && result.status !== "retryable-failure"
   );
@@ -252,13 +255,9 @@ export async function handleAnalyze(runtime: TaskpaneAnalysisHandlersRuntime): P
         clearTaskpaneAnalysisError();
       }
 
-      const statusType = retryKind
-        ? "error"
-        : ctx.shouldCancelAnalysis?.()
-          ? "success"
-          : (ctx.chunkErrors?.length ?? 0) > 0
-            ? "error"
-            : "success";
+      const hasAbortError = Boolean(retryKind) || (ctx.chunkErrors?.length ?? 0) > 0;
+      const statusType: "success" | "error" = hasAbortError ? "error" : "success";
+
       showTaskpaneStatus(reason, statusType);
     },
     onComplete(suggestions, result, chunkErrors, isSelection) {

@@ -1,6 +1,7 @@
-import { CORRECTION_INSTRUCTIONS_MAX_LENGTH } from "../../../domain/user-preferences/UserCorrectionPreferences.constants";
 import { DEFAULT_PROFILES } from "../../../infrastructure/config";
 import type { AnalysisProfileOption } from "../AnalysisProfileSection";
+
+export { CORRECTION_INSTRUCTIONS_MAX_LENGTH as INITIAL_CORRECTION_INSTRUCTIONS_MAX_LENGTH } from "../../../domain/user-preferences/UserCorrectionPreferences.constants";
 
 /** Selectable analysis-profile options derived from the canonical profile list. */
 export const ANALYSIS_PROFILE_OPTIONS: readonly AnalysisProfileOption[] = DEFAULT_PROFILES.map(
@@ -9,12 +10,6 @@ export const ANALYSIS_PROFILE_OPTIONS: readonly AnalysisProfileOption[] = DEFAUL
     label: profile.label,
   })
 );
-
-/**
- * Initial fallback for the correction-instructions max length used while the
- * GET request is in flight. The backend echoes the authoritative value.
- */
-export const INITIAL_CORRECTION_INSTRUCTIONS_MAX_LENGTH = CORRECTION_INSTRUCTIONS_MAX_LENGTH;
 
 /** Inline + status-bar message shown when the save flow fails generically. */
 export const SETTINGS_SAVE_GENERIC_ERROR_MESSAGE = "No se pudo guardar la configuración.";

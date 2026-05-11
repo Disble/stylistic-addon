@@ -55,39 +55,55 @@ export function useSettingsView(deps: SettingsViewHookDeps): SettingsViewState {
   const persistedProfile = useTaskpaneShellStore((state) => state.selectedGenero);
   const isFormDisabled = useTaskpaneShellStore((state) => state.isAnalyzeLoading);
 
-  const [profileDraft, setProfileDraft] = React.useState<AnalysisProfileId>(persistedProfile);
-  const [correctionInstructionsSnapshot, setCorrectionInstructionsSnapshot] = React.useState<
-    string | null
-  >(null);
-  const [correctionInstructionsDraft, setCorrectionInstructionsDraft] = React.useState<string>("");
-  const [maxLength, setMaxLength] = React.useState<number>(
-    INITIAL_CORRECTION_INSTRUCTIONS_MAX_LENGTH
-  );
-  const [isLoadingPreferences, setIsLoadingPreferences] = React.useState<boolean>(true);
-  const [isSaving, setIsSaving] = React.useState<boolean>(false);
-  const [saveError, setSaveError] = React.useState<string | undefined>(undefined);
+  const [state, setState] = React.useState<{
+    profileDraftOverride: AnalysisProfileId | null;
+    correctionInstructionsSnapshot: string | null;
+    correctionInstructionsDraft: string;
+    maxLength: number;
+    isLoadingPreferences: boolean;
+    isSaving: boolean;
+    saveError: string | undefined;
+  }>({
+    profileDraftOverride: null,
+    correctionInstructionsSnapshot: null,
+    correctionInstructionsDraft: "",
+    maxLength: INITIAL_CORRECTION_INSTRUCTIONS_MAX_LENGTH,
+    isLoadingPreferences: true,
+    isSaving: false,
+    saveError: undefined,
+  });
 
   const { loadPreferences, savePreferences } = deps;
+  const profileDraft = state.profileDraftOverride ?? persistedProfile;
 
   React.useEffect(() => {
     let cancelled = false;
-    setIsLoadingPreferences(true);
+    setState((current) => ({ ...current, isLoadingPreferences: true }));
 
     void (async () => {
+      let nextSnapshot: string | null | undefined;
+      let nextDraft: string | undefined;
+      let nextMaxLength: number | undefined;
+
       try {
         const preferences = await loadPreferences();
-        if (cancelled) return;
-        setCorrectionInstructionsSnapshot(preferences.correctionInstructions);
-        setCorrectionInstructionsDraft(
-          correctionInstructionsToDraft(preferences.correctionInstructions)
-        );
-        setMaxLength(preferences.correctionInstructionsMaxLength);
+        nextSnapshot = preferences.correctionInstructions;
+        nextDraft = correctionInstructionsToDraft(preferences.correctionInstructions);
+        nextMaxLength = preferences.correctionInstructionsMaxLength;
       } catch (error) {
         // Swallowed by design — see hook JSDoc. Real failures resurface on Save.
         console.warn("⚠️ [Settings] No se pudieron precargar las preferencias:", error);
       } finally {
         if (!cancelled) {
-          setIsLoadingPreferences(false);
+          setState((current) => ({
+            ...current,
+            correctionInstructionsSnapshot:
+              nextSnapshot === undefined ? current.correctionInstructionsSnapshot : nextSnapshot,
+            correctionInstructionsDraft:
+              nextDraft === undefined ? current.correctionInstructionsDraft : nextDraft,
+            maxLength: nextMaxLength === undefined ? current.maxLength : nextMaxLength,
+            isLoadingPreferences: false,
+          }));
         }
       }
     })();
@@ -97,49 +113,50 @@ export function useSettingsView(deps: SettingsViewHookDeps): SettingsViewState {
     };
   }, [loadPreferences]);
 
-  React.useEffect(() => {
-    setProfileDraft(persistedProfile);
-  }, [persistedProfile]);
-
   const onProfileChange = React.useCallback((value: AnalysisProfileId) => {
-    setProfileDraft(value);
-    setSaveError(undefined);
+    setState((current) => ({ ...current, profileDraftOverride: value, saveError: undefined }));
   }, []);
 
   const onCorrectionInstructionsChange = React.useCallback((value: string) => {
-    setCorrectionInstructionsDraft(value);
-    setSaveError(undefined);
+    setState((current) => ({
+      ...current,
+      correctionInstructionsDraft: value,
+      saveError: undefined,
+    }));
   }, []);
 
   const isInstructionsDirty =
-    normalizeCorrectionInstructions(correctionInstructionsDraft) !== correctionInstructionsSnapshot;
+    normalizeCorrectionInstructions(state.correctionInstructionsDraft) !==
+    state.correctionInstructionsSnapshot;
   const isProfileDirty = profileDraft !== persistedProfile;
   const isDirty = isInstructionsDirty || isProfileDirty;
 
   const onSave = React.useCallback(() => {
-    if (isSaving) return;
-    setIsSaving(true);
-    setSaveError(undefined);
+    if (state.isSaving) return;
+    setState((current) => ({ ...current, isSaving: true, saveError: undefined }));
+
     void (async () => {
       try {
-        const normalized = normalizeCorrectionInstructions(correctionInstructionsDraft);
+        const normalized = normalizeCorrectionInstructions(state.correctionInstructionsDraft);
         const result = await savePreferences(normalized, profileDraft);
-        setCorrectionInstructionsSnapshot(result.correctionInstructions);
-        setCorrectionInstructionsDraft(
-          correctionInstructionsToDraft(result.correctionInstructions)
-        );
-        setMaxLength(result.correctionInstructionsMaxLength);
+        setState((current) => ({
+          ...current,
+          profileDraftOverride: null,
+          correctionInstructionsSnapshot: result.correctionInstructions,
+          correctionInstructionsDraft: correctionInstructionsToDraft(result.correctionInstructions),
+          maxLength: result.correctionInstructionsMaxLength,
+        }));
         showTaskpaneStatus(SETTINGS_SAVE_SUCCESS_MESSAGE, "success");
       } catch (error) {
         console.error("🔴 [Settings] Save failed:", error);
         const message = describeSaveError(error);
-        setSaveError(message);
+        setState((current) => ({ ...current, saveError: message }));
         showTaskpaneStatus(message, "error");
       } finally {
-        setIsSaving(false);
+        setState((current) => ({ ...current, isSaving: false }));
       }
     })();
-  }, [correctionInstructionsDraft, isSaving, profileDraft, savePreferences]);
+  }, [profileDraft, savePreferences, state.correctionInstructionsDraft, state.isSaving]);
 
   return {
     classes,
@@ -147,13 +164,13 @@ export function useSettingsView(deps: SettingsViewHookDeps): SettingsViewState {
     isFormDisabled,
     profileDraft,
     onProfileChange,
-    correctionInstructionsDraft,
-    correctionInstructionsMaxLength: maxLength,
-    isLoadingPreferences,
+    correctionInstructionsDraft: state.correctionInstructionsDraft,
+    correctionInstructionsMaxLength: state.maxLength,
+    isLoadingPreferences: state.isLoadingPreferences,
     onCorrectionInstructionsChange,
     isDirty,
-    isSaving,
-    saveError,
+    isSaving: state.isSaving,
+    saveError: state.saveError,
     onSave,
   };
 }

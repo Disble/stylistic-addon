@@ -6,11 +6,26 @@ import { vi } from "vitest";
  */
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .split("&")
+    .join("&amp;")
+    .split("<")
+    .join("&lt;")
+    .split(">")
+    .join("&gt;")
+    .split('"')
+    .join("&quot;")
+    .split("'")
+    .join("&#39;");
+}
+
+/** Converts data-* attribute names to the fake DOM dataset camelCase key. */
+function toDatasetKey(value: string): string {
+  const [head = "", ...tail] = value.split("-");
+  return tail.reduce(
+    (datasetKey, segment) =>
+      datasetKey + (segment.length === 0 ? "" : segment[0].toUpperCase() + segment.slice(1)),
+    head
+  );
 }
 
 /** Minimal DOMTokenList replacement used by taskpane tests. */
@@ -202,9 +217,7 @@ export class FakeElement {
   setAttribute(name: string, value: string) {
     (this as any)[`_attr_${name}`] = value;
     if (name.startsWith("data-")) {
-      const datasetKey = name
-        .slice(5)
-        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      const datasetKey = toDatasetKey(name.slice(5));
       this.dataset[datasetKey] = value;
     }
   }
@@ -219,9 +232,7 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
   if (attrEqMatch) {
     const [, attr, value] = attrEqMatch;
     if (attr.startsWith("data-")) {
-      const datasetKey = attr
-        .slice(5)
-        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      const datasetKey = toDatasetKey(attr.slice(5));
       return el.dataset[datasetKey] === value;
     }
 
@@ -232,9 +243,7 @@ function matchesSelector(el: FakeElement, selector: string): boolean {
   if (attrMatch) {
     const [, attr] = attrMatch;
     if (attr.startsWith("data-")) {
-      const datasetKey = attr
-        .slice(5)
-        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      const datasetKey = toDatasetKey(attr.slice(5));
       return el.dataset[datasetKey] !== undefined;
     }
 
@@ -300,11 +309,16 @@ export function createTaskpaneDocument(): FakeDocument {
     "btn-disable-track-changes-label",
   ]);
 
-  getRequiredElement(doc, "app-body").style.display = "flex";
-  getRequiredElement(doc, "cleanup-section").style.display = "none";
-  getRequiredElement(doc, "disable-track-changes-section").style.display = "none";
-  getRequiredElement(doc, "results-panel").style.display = "block";
-  getRequiredElement(doc, "progress-container").style.display = "none";
+  for (const [elementId, display] of [
+    ["app-body", "flex"],
+    ["cleanup-section", "none"],
+    ["disable-track-changes-section", "none"],
+    ["results-panel", "block"],
+    ["progress-container", "none"],
+  ] as const) {
+    getRequiredElement(doc, elementId).style.display = display;
+  }
+
   getRequiredElement(doc, "profile-select").value = "narrativa-literaria";
   getRequiredElement(doc, "btn-analyze-label").textContent = "Analizar y sugerir";
   getRequiredElement(doc, "btn-cleanup-label").textContent = "Limpiar comentarios resueltos";

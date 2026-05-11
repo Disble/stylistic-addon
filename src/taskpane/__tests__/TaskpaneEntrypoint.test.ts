@@ -43,9 +43,11 @@ function getRenderedAppProps(reactMocks: ReturnType<typeof getTaskpaneReactMocks
 async function importTaskpaneRuntime() {
   await importTaskpane();
 
-  const resultsPanelStore = await import("../ResultsPanelStore");
-  const taskpaneAuthStore = await import("../TaskpaneAuthStore");
-  const taskpaneShellStore = await import("../TaskpaneShellStore");
+  const [resultsPanelStore, taskpaneAuthStore, taskpaneShellStore] = await Promise.all([
+    import("../ResultsPanelStore"),
+    import("../TaskpaneAuthStore"),
+    import("../TaskpaneShellStore"),
+  ]);
 
   return {
     getResultsPanelState: resultsPanelStore.getResultsPanelState,
@@ -88,9 +90,10 @@ function installOfficeRuntime(storage?: OfficeRuntimeStorageMock): OfficeRuntime
 }
 
 async function flushTaskpaneWork(times = 8) {
-  for (let index = 0; index < times; index += 1) {
-    await Promise.resolve();
-  }
+  await Array.from({ length: times }).reduce<Promise<void>>(
+    (pending) => pending.then(() => undefined),
+    Promise.resolve()
+  );
 }
 
 describe("taskpane entrypoint", () => {
