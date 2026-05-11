@@ -176,7 +176,7 @@ export class FakeElement {
       this.onclick({} as MouseEvent);
     }
     for (const handler of this.listeners.get("click") ?? []) {
-      handler({} as MouseEvent);
+      handler({});
     }
   }
 
