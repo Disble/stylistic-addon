@@ -13,6 +13,7 @@
  */
 
 import { POLL_INTERVAL_MS } from "../../../infrastructure/config";
+import type { ChunkRunReference } from "../../mastra/MastraWorkflow.types";
 import type { PipelineContext } from "../PipelineContext";
 import type { PipelineHandler } from "./ReadTextHandler.types";
 import type { AnalysisState, AnalyzeChunk } from "./AnalyzeChunksHandler.types";
@@ -24,6 +25,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
   /** Coordinates chunk submission, polling, and abort handling for analysis. */
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const state = this.createAnalysisState(ctx);
+    this.syncRunReferences(ctx, state);
 
     console.log(
       `🤖 [AnalyzeChunksHandler] Fase 4: Analizando ${state.chunks.length} chunk(s) con Mastra...`
@@ -51,6 +53,8 @@ export class AnalyzeChunksHandler implements PipelineHandler {
       allSuggestions: [],
       chunkErrors: [],
       pendingRuns: new Map<number, string>(),
+      activeRunReferences: new Map<number, ChunkRunReference>(),
+      retryableRunReferences: new Map<number, ChunkRunReference>(),
       totalSteps: Math.max(chunks.length * 2, 1),
       submittedCount: 0,
       completedCount: 0,
@@ -60,6 +64,9 @@ export class AnalyzeChunksHandler implements PipelineHandler {
   /** Submits every chunk to the backend and records pending runs or submit errors. */
   private async submitChunks(ctx: PipelineContext, state: AnalysisState): Promise<void> {
     for (const chunk of state.chunks) {
+      if (ctx.shouldCancelAnalysis?.()) {
+        return;
+      }
       await this.submitChunk(ctx, state, chunk);
     }
   }
@@ -92,6 +99,15 @@ export class AnalyzeChunksHandler implements PipelineHandler {
 
     console.log(this.getSubmitLogMessage(chunk.index, submitResult.runId, submitResult.error));
 
+    if (submitResult.runId) {
+      state.pendingRuns.set(chunk.index, submitResult.runId);
+      state.activeRunReferences.set(chunk.index, {
+        chunkIndex: chunk.index,
+        runId: submitResult.runId,
+      });
+      this.syncRunReferences(ctx, state);
+    }
+
     ctx.emitter.emitProgress(
       state.submittedCount,
       state.totalSteps,
@@ -99,7 +115,6 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     );
 
     if (submitResult.runId) {
-      state.pendingRuns.set(chunk.index, submitResult.runId);
       return;
     }
 
@@ -111,6 +126,13 @@ export class AnalyzeChunksHandler implements PipelineHandler {
   /** Polls all pending runs until every chunk reaches a terminal status. */
   private async collectPendingRuns(ctx: PipelineContext, state: AnalysisState): Promise<void> {
     while (state.pendingRuns.size > 0) {
+      if (ctx.shouldCancelAnalysis?.()) {
+        state.pendingRuns.clear();
+        state.activeRunReferences.clear();
+        this.syncRunReferences(ctx, state);
+        return;
+      }
+
       await this.pollPendingRuns(ctx, state);
 
       if (state.pendingRuns.size > 0) {
@@ -122,6 +144,10 @@ export class AnalyzeChunksHandler implements PipelineHandler {
   /** Executes one round-robin polling pass over the pending chunk runs. */
   private async pollPendingRuns(ctx: PipelineContext, state: AnalysisState): Promise<void> {
     for (const chunk of state.chunks) {
+      if (ctx.shouldCancelAnalysis?.()) {
+        return;
+      }
+
       const runId = state.pendingRuns.get(chunk.index);
       if (!runId) {
         continue;
@@ -148,10 +174,34 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     console.log(this.getPollLogMessage(chunk.index, pollResult.status, pollResult.error));
 
     if (this.isPendingStatus(pollResult.status)) {
+      state.activeRunReferences.set(chunk.index, {
+        chunkIndex: chunk.index,
+        runId,
+      });
+      this.syncRunReferences(ctx, state);
       return;
     }
 
     state.pendingRuns.delete(chunk.index);
+    state.activeRunReferences.delete(chunk.index);
+
+    if (pollResult.status === "retryable-failure") {
+      state.retryableRunReferences.set(chunk.index, {
+        chunkIndex: chunk.index,
+        runId,
+      });
+      this.syncRunReferences(ctx, state);
+      state.chunkErrors.push(pollResult.error ?? `Chunk ${chunk.index + 1}: consulta reintentable`);
+      state.completedCount += 1;
+      ctx.emitter.emitProgress(
+        state.submittedCount + state.completedCount,
+        state.totalSteps,
+        `Fragmento ${chunk.index + 1} quedó pendiente para reintentar consulta.`
+      );
+      return;
+    }
+
+    this.syncRunReferences(ctx, state);
     state.completedCount += 1;
     state.allSuggestions.push(...pollResult.suggestions);
 
@@ -170,6 +220,16 @@ export class AnalyzeChunksHandler implements PipelineHandler {
   private assignResults(ctx: PipelineContext, state: AnalysisState): void {
     ctx.rawSuggestions = state.allSuggestions;
     ctx.chunkErrors = state.chunkErrors;
+    this.syncRunReferences(ctx, state);
+  }
+
+  /**
+   * Mirrors live run references into the shared pipeline context so taskpane
+   * observers can render cancel/retry actions while submit/poll is still in flight.
+   */
+  private syncRunReferences(ctx: PipelineContext, state: AnalysisState): void {
+    ctx.activeRunReferences = Array.from(state.activeRunReferences.values());
+    ctx.retryableRunReferences = Array.from(state.retryableRunReferences.values());
   }
 
   /** Returns whether the pipeline must abort because no suggestions survived analysis. */
@@ -182,6 +242,19 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     console.warn(`⚠️ [AnalyzeChunksHandler] Sin sugerencias. Errores de chunks: ${errorCount}`);
 
     ctx.aborted = true;
+    if ((ctx.retryableRunReferences?.length ?? 0) > 0) {
+      ctx.abortReason =
+        "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run.";
+      ctx.emitter.emitAbort(ctx.abortReason);
+      return;
+    }
+
+    if (ctx.shouldCancelAnalysis?.()) {
+      ctx.abortReason = "Análisis cancelado por el usuario.";
+      ctx.emitter.emitAbort(ctx.abortReason);
+      return;
+    }
+
     ctx.abortReason =
       errorCount > 0
         ? `El análisis falló en ${errorCount} fragmento(s). Intenta de nuevo.`

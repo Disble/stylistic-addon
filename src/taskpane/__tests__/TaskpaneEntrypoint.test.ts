@@ -143,6 +143,9 @@ describe("taskpane entrypoint", () => {
       RETRY_BASE_DELAY_MS
     );
     expect(appProps.onAnalyze).toEqual(expect.any(Function));
+    expect(appProps.onRetryAnalysis).toEqual(expect.any(Function));
+    expect(appProps.onCancelAnalysis).toEqual(expect.any(Function));
+    expect(appProps.onRetryAnalysisQuery).toEqual(expect.any(Function));
     expect(appProps.onCleanup).toEqual(expect.any(Function));
     expect(appProps.onDisableTrackChanges).toEqual(expect.any(Function));
     expect(getTaskpaneShellState().cleanupVisible).toBe(true);
@@ -235,6 +238,217 @@ describe("taskpane entrypoint", () => {
 
     runDeferred.resolve();
     await firstRun;
+  });
+
+  it("cancels backend runs when the progress session exposes active polling", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    const runDeferred = deferred<void>();
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.activeRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
+      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      await runDeferred.promise;
+    });
+
+    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    const analyzePromise = appProps.onAnalyze();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().progress.asyncSession.activeRuns).toEqual([
+      { chunkIndex: 0, runId: "run-0" },
+    ]);
+
+    await appProps.onCancelAnalysis();
+    runDeferred.resolve();
+    await analyzePromise;
+
+    expect(taskpaneMocks.cancelChunkAnalysis).toHaveBeenCalledWith(0, "run-0");
+    expect(getTaskpaneShellState().status.message).toBe("Análisis cancelado en backend.");
+  });
+
+  it("publishes active polling runs to the progress session before the pipeline finishes", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    const progressDeferred = deferred<void>();
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.activeRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
+      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      expect(ctx.activeRunReferences).toEqual([{ chunkIndex: 0, runId: "run-0" }]);
+      expect(ctx.retryableRunReferences).toEqual([]);
+      await progressDeferred.promise;
+    });
+
+    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    const analyzePromise = appProps.onAnalyze();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().progress.asyncSession.phase).toBe("polling");
+    expect(getTaskpaneShellState().progress.asyncSession.activeRuns).toEqual([
+      { chunkIndex: 0, runId: "run-0" },
+    ]);
+
+    progressDeferred.resolve();
+    await analyzePromise;
+  });
+
+  it("retries polling with the same runId without re-submitting chunks", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.retryableRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
+      ctx.chunkErrors = ["Chunk 1: poll timeout"];
+      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.emitter.emitAbort(
+        "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run."
+      );
+    });
+    taskpaneMocks.retryPollChunkAnalysis.mockResolvedValueOnce({
+      chunkIndex: 0,
+      runId: "run-0",
+      status: "success",
+      origin: "backend",
+      suggestions: [makeSuggestion()],
+    });
+
+    const { getTaskpaneShellState, getResultsPanelState, setTaskpaneAuthenticated } =
+      await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    await appProps.onAnalyze();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().progress.asyncSession.retryableRuns).toEqual([
+      { chunkIndex: 0, runId: "run-0" },
+    ]);
+
+    await appProps.onRetryAnalysisQuery();
+    await flushTaskpaneWork();
+
+    expect(taskpaneMocks.retryPollChunkAnalysis).toHaveBeenCalledWith({
+      chunkIndex: 0,
+      runId: "run-0",
+    });
+    expect(taskpaneMocks.run).toHaveBeenCalledOnce();
+    expect(getResultsPanelState().visible).toBe(true);
+  });
+
+  it("publishes a retry-query error surface instead of returning to the idle hero", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.retryableRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
+      ctx.chunkErrors = ["Chunk 1: poll timeout"];
+      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.emitter.emitAbort(
+        "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run."
+      );
+    });
+
+    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    await appProps.onAnalyze();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().analysisError).toEqual({
+      message: "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run.",
+      retryKind: "retry-query",
+      visible: true,
+    });
+    expect(getTaskpaneShellState().progress.visible).toBe(false);
+  });
+
+  it("publishes a full-retry error surface for terminal backend failures", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.chunkErrors = ["Chunk 1: backend exploded"];
+      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.emitter.emitAbort("El análisis falló en 1 fragmento(s). Intenta de nuevo.");
+    });
+
+    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    await appProps.onAnalyze();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().analysisError).toEqual({
+      message: "El análisis falló en 1 fragmento(s). Intenta de nuevo.",
+      retryKind: "full-retry",
+      visible: true,
+    });
+    expect(getTaskpaneShellState().progress.visible).toBe(false);
+  });
+
+  it("clears the persisted analysis error once a retry-query succeeds", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.retryableRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
+      ctx.chunkErrors = ["Chunk 1: poll timeout"];
+      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.emitter.emitAbort(
+        "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run."
+      );
+    });
+    taskpaneMocks.retryPollChunkAnalysis.mockResolvedValueOnce({
+      chunkIndex: 0,
+      runId: "run-0",
+      status: "success",
+      origin: "backend",
+      suggestions: [makeSuggestion()],
+    });
+
+    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    await appProps.onAnalyze();
+    await flushTaskpaneWork();
+    await appProps.onRetryAnalysisQuery();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().analysisError.visible).toBe(false);
   });
 
   it("delegates cleanup and hides the cleanup CTA when no comments remain", async () => {

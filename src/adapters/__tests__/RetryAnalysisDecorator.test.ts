@@ -19,6 +19,8 @@ function createMockPort(): {
     checkConnection: vi.fn(),
     submitChunkAnalysis: vi.fn(),
     pollChunkAnalysis: vi.fn(),
+    cancelChunkAnalysis: vi.fn(),
+    retryPollChunkAnalysis: vi.fn(),
   };
 }
 
@@ -42,11 +44,11 @@ function submitFailure(chunkIndex = 0, error = "Backend timeout"): ChunkSubmitRe
 }
 
 function pollRunning(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResult {
-  return { chunkIndex, runId, status: "running", suggestions: [] };
+  return { chunkIndex, runId, status: "running", origin: "backend", suggestions: [] };
 }
 
 function pollSuccess(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResult {
-  return { chunkIndex, runId, status: "success", suggestions: [] };
+  return { chunkIndex, runId, status: "success", origin: "backend", suggestions: [] };
 }
 
 function makeSubmitContext(overrides: Partial<WorkflowSubmitContext> = {}): WorkflowSubmitContext {
@@ -187,6 +189,7 @@ describe("RetryAnalysisDecorator", () => {
         chunkIndex: 0,
         runId: "run-123",
         status: "running",
+        origin: "backend",
         suggestions: [],
       });
       expect(mockPort.pollChunkAnalysis).toHaveBeenCalledOnce();
@@ -204,6 +207,7 @@ describe("RetryAnalysisDecorator", () => {
         chunkIndex: 0,
         runId: "run-123",
         status: "success",
+        origin: "backend",
         suggestions: [],
       });
       expect(mockPort.pollChunkAnalysis).toHaveBeenCalledTimes(2);
@@ -220,7 +224,8 @@ describe("RetryAnalysisDecorator", () => {
       await expect(promise).resolves.toEqual({
         chunkIndex: 4,
         runId: "run-789",
-        status: "failed",
+        status: "retryable-failure",
+        origin: "frontend-retryable",
         suggestions: [],
         error: "Chunk 5: poll timeout",
       });
@@ -236,7 +241,8 @@ describe("RetryAnalysisDecorator", () => {
       await expect(decorator.pollChunkAnalysis(4, "run-789")).resolves.toEqual({
         chunkIndex: 4,
         runId: "run-789",
-        status: "failed",
+        status: "retryable-failure",
+        origin: "frontend-retryable",
         suggestions: [],
         error: "Chunk 5: HTTP error! status: 400",
       });
@@ -258,12 +264,29 @@ describe("RetryAnalysisDecorator", () => {
       await expect(promise).resolves.toEqual({
         chunkIndex: 4,
         runId: "run-789",
-        status: "failed",
+        status: "retryable-failure",
+        origin: "frontend-retryable",
         suggestions: [],
         error: "Chunk 5: HTTP error! status: 429",
       });
 
       expect(mockPort.pollChunkAnalysis).toHaveBeenCalledTimes(MAX_RETRIES + 1);
+    });
+
+    it("delegates cancelChunkAnalysis without adding retry behavior", async () => {
+      mockPort.cancelChunkAnalysis.mockResolvedValue({
+        chunkIndex: 2,
+        runId: "run-2",
+        canceled: true,
+      });
+
+      await expect(decorator.cancelChunkAnalysis(2, "run-2")).resolves.toEqual({
+        chunkIndex: 2,
+        runId: "run-2",
+        canceled: true,
+      });
+
+      expect(mockPort.cancelChunkAnalysis).toHaveBeenCalledWith(2, "run-2");
     });
   });
 });

@@ -1,11 +1,10 @@
 import * as React from "react";
-import { Caption1, Skeleton, SkeletonItem } from "@fluentui/react-components";
+import { Caption1 } from "@fluentui/react-components";
 import { ResultSuggestionCard } from "../ResultSuggestionCard";
 import { ResultsSummaryChips } from "../ResultsSummaryChips";
-import { SKELETON_PLACEHOLDER_COUNT } from "./ResultsPanel.constants";
 import { useResultsPanel } from "./ResultsPanel.hooks";
 
-/** Renders the chips toolbar, filtered suggestion list, and skeleton loading state. */
+/** Renders the chips toolbar and the filtered suggestion list. */
 export function ResultsPanel(): React.JSX.Element | null {
   const {
     acceptSuggestion,
@@ -17,28 +16,11 @@ export function ResultsPanel(): React.JSX.Element | null {
     rejectSuggestion,
     setFeedbackComment,
     setFilter,
-    showSkeleton,
     summaryText,
     toggleFeedback,
     visible,
     visibleCards,
   } = useResultsPanel();
-
-  if (showSkeleton) {
-    return (
-      <div className={classes.root} data-testid="results-panel-skeleton">
-        <div className={classes.skeletonList}>
-          {Array.from({ length: SKELETON_PLACEHOLDER_COUNT }, (_, index) => (
-            <Skeleton key={index} className={classes.skeletonItem}>
-              <SkeletonItem shape="rectangle" size={16} />
-              <SkeletonItem shape="rectangle" size={16} />
-              <SkeletonItem shape="rectangle" size={12} />
-            </Skeleton>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   if (!visible) {
     return null;

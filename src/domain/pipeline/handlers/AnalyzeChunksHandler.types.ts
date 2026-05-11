@@ -1,3 +1,4 @@
+import type { ChunkRunReference } from "../../mastra/MastraWorkflow.types";
 import type { Suggestion } from "../../suggestion/Suggestion.types";
 import type { PipelineContext } from "../PipelineContext";
 
@@ -11,6 +12,8 @@ export type AnalysisState = {
   allSuggestions: Suggestion[];
   chunkErrors: string[];
   pendingRuns: Map<number, string>;
+  activeRunReferences: Map<number, ChunkRunReference>;
+  retryableRunReferences: Map<number, ChunkRunReference>;
   totalSteps: number;
   submittedCount: number;
   completedCount: number;

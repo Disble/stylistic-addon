@@ -18,16 +18,33 @@ export function useAppClasses(): AppClasses {
 /**
  * Aggregates the reactive state and callbacks consumed by the App shell:
  * auth status, shell flags, active top-level view, and view-toggle handlers.
- * `handleOpenSettings` / `handleCloseSettings` flip `TaskpaneViewStore` so the
- * shell can re-render the appropriate surface (`main` vs `settings`).
+ * Computes mutually-exclusive surface flags (`isIdle`, `isHeroError`,
+ * `isHeroProgress`) so the App template chooses one fullscreen surface at a
+ * time and avoids stacking the compact analyze CTA on top of a hero state.
  */
 export function useApp() {
   const authState = useTaskpaneAuthStore();
   const shellState = useTaskpaneShellStore();
   const viewState = useTaskpaneViewStore();
   const resultsVisible = useResultsPanelStore((state) => state.visible);
+  const hasResultCards = useResultsPanelStore((state) => state.cards.length > 0);
 
-  const isIdle = !shellState.isAnalyzeLoading && !shellState.progress.visible && !resultsVisible;
+  const isHeroError =
+    shellState.analysisError.visible &&
+    !shellState.isAnalyzeLoading &&
+    !shellState.progress.visible &&
+    !resultsVisible;
+
+  const isHeroProgress =
+    !shellState.analysisError.visible &&
+    (shellState.progress.visible || shellState.isAnalyzeLoading) &&
+    !hasResultCards;
+
+  const isIdle =
+    !shellState.isAnalyzeLoading &&
+    !shellState.progress.visible &&
+    !shellState.analysisError.visible &&
+    !resultsVisible;
 
   const handleOpenSettings = React.useCallback(() => {
     setTaskpaneView("settings");
@@ -42,6 +59,8 @@ export function useApp() {
     shellState,
     viewState,
     isIdle,
+    isHeroError,
+    isHeroProgress,
     handleOpenSettings,
     handleCloseSettings,
   };

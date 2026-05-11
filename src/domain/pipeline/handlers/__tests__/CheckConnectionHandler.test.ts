@@ -31,6 +31,8 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
     checkConnection: vi.fn(),
     submitChunkAnalysis: vi.fn(),
     pollChunkAnalysis: vi.fn(),
+    cancelChunkAnalysis: vi.fn(),
+    retryPollChunkAnalysis: vi.fn(),
   };
 
   return {

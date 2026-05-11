@@ -7,6 +7,7 @@ export const useAppStyles = makeStyles({
     flexDirection: "column",
     flex: 1,
     minHeight: 0,
+    overflowX: "hidden",
     overflowY: "auto",
   },
   toolbar: {

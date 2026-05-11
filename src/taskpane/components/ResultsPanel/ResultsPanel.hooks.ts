@@ -11,7 +11,6 @@ import {
   computeResultsPanelChipCounts,
   selectResultsPanelVisibleCards,
 } from "../../ResultsPanelFilters";
-import { useTaskpaneShellStore } from "../../TaskpaneShellStore";
 import { useResultsPanelStyles } from "./ResultsPanel.styles";
 import type { ResultsPanelClasses } from "./ResultsPanel.types";
 
@@ -22,20 +21,16 @@ function useResultsPanelClasses(): ResultsPanelClasses {
     root: styles.root,
     list: styles.list,
     empty: styles.empty,
-    skeletonList: styles.skeletonList,
-    skeletonItem: styles.skeletonItem,
   };
 }
 
 /** React hook for the results-panel store, derived selectors, and interaction commands. */
 export function useResultsPanel() {
   const state = useResultsPanelStore();
-  const isAnalyzeLoading = useTaskpaneShellStore((shell) => shell.isAnalyzeLoading);
   const classes = useResultsPanelClasses();
 
   const counts = computeResultsPanelChipCounts(state.cards);
   const visibleCards = selectResultsPanelVisibleCards(state.cards, state.activeFilter);
-  const showSkeleton = isAnalyzeLoading && state.cards.length === 0;
 
   return {
     activeFilter: state.activeFilter,
@@ -47,7 +42,6 @@ export function useResultsPanel() {
     rejectSuggestion: rejectResultsPanelSuggestion,
     setFeedbackComment: setResultsPanelFeedbackComment,
     setFilter: setResultsPanelFilter,
-    showSkeleton,
     summaryText: state.summaryText,
     toggleFeedback: toggleResultsPanelFeedback,
     visible: state.visible,

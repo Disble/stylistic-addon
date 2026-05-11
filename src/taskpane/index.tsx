@@ -4,9 +4,11 @@ import { createRoot } from "react-dom/client";
 import {
   bootstrapTaskpane,
   handleAnalyze,
+  handleCancelAnalysis,
   handleCleanup,
   handleDisableTrackChanges,
   handleLoadPreferences,
+  handleRetryAnalysisQuery,
   handleSavePreferences,
   handleSignIn,
   handleSignOut,
@@ -40,6 +42,9 @@ function renderTaskpaneShell(): void {
         { theme: webLightTheme },
         React.createElement(App, {
           onAnalyze: handleAnalyze,
+          onRetryAnalysis: handleAnalyze,
+          onCancelAnalysis: handleCancelAnalysis,
+          onRetryAnalysisQuery: handleRetryAnalysisQuery,
           onCleanup: handleCleanup,
           onDisableTrackChanges: handleDisableTrackChanges,
           onSignIn: handleSignIn,

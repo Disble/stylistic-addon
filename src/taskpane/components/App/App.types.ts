@@ -6,6 +6,9 @@ import type {
 /** Root taskpane application callbacks provided by the composition layer. */
 export type AppProps = Readonly<{
   onAnalyze: () => Promise<void> | void;
+  onRetryAnalysis: () => Promise<void> | void;
+  onCancelAnalysis: () => Promise<void> | void;
+  onRetryAnalysisQuery: () => Promise<void> | void;
   onCleanup: () => Promise<void> | void;
   onDisableTrackChanges: () => Promise<void> | void;
   onSignIn: () => Promise<void> | void;

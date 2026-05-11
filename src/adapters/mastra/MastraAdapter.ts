@@ -15,8 +15,10 @@
 
 import type { TextChunk } from "../../domain/chunking/TextChunk.types";
 import type {
+  ChunkCancelResult,
   ChunkAnalysisStatus,
   ChunkPollResult,
+  ChunkRunReference,
   ChunkSubmitResult,
   WorkflowInput,
   WorkflowOutput,
@@ -137,6 +139,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "failed",
+        origin: "frontend-terminal",
         suggestions: [],
         error: "Invalid workflow poll payload: missing status",
       };
@@ -154,6 +157,7 @@ export class MastraAdapter implements IAnalysisPort {
           chunkIndex,
           runId,
           status: "failed",
+          origin: "frontend-terminal",
           suggestions: [],
           error: "Invalid workflow success payload: expected suggestions[]",
         };
@@ -165,6 +169,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "success",
+        origin: "backend",
         suggestions,
       };
     }
@@ -174,6 +179,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "failed",
+        origin: "backend",
         suggestions: [],
         error: `Workflow entered "${normalizedState.status}" state and requires resume(), which this frontend does not support`,
       };
@@ -184,6 +190,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: normalizedState.status,
+        origin: "backend",
         suggestions: [],
       };
     }
@@ -193,6 +200,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "failed",
+        origin: "frontend-terminal",
         suggestions: [],
         error: `Unknown workflow status: ${normalizedState.status}`,
       };
@@ -202,9 +210,36 @@ export class MastraAdapter implements IAnalysisPort {
       chunkIndex,
       runId,
       status: normalizedState.status,
+      origin: "backend",
       suggestions: [],
       error: this.extractWorkflowError(normalizedState.error, normalizedState.status),
     };
+  }
+
+  /** Cancels one existing Mastra run by rehydrating it from the known `runId`. */
+  async cancelChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkCancelResult> {
+    if (MASTRA_POLL_BYPASS_ENABLED) {
+      return { chunkIndex, runId, canceled: true };
+    }
+
+    try {
+      const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
+      const run = await workflow.createRun({ runId });
+      await run.cancel();
+      return { chunkIndex, runId, canceled: true };
+    } catch (error: unknown) {
+      return {
+        chunkIndex,
+        runId,
+        canceled: false,
+        error: this.normalizeErrorMessage(error),
+      };
+    }
+  }
+
+  /** Re-polls the same backend run without creating a new submission. */
+  retryPollChunkAnalysis(reference: ChunkRunReference): Promise<ChunkPollResult> {
+    return this.pollChunkAnalysis(reference.chunkIndex, reference.runId);
   }
 
   /** Maps raw workflow suggestions to `Suggestion` objects with assigned IDs. */
@@ -270,6 +305,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "success",
+        origin: "backend",
         suggestions: [],
       };
     }
@@ -283,6 +319,7 @@ export class MastraAdapter implements IAnalysisPort {
       chunkIndex,
       runId,
       status: "success",
+      origin: "backend",
       suggestions,
     };
   }

@@ -20,7 +20,9 @@ import type { TextChunk } from "./chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "./DocumentApplication.types";
 import type { AuthSession, SocialSignInRequest } from "./auth/AuthSession.types";
 import type {
+  ChunkCancelResult,
   ChunkPollResult,
+  ChunkRunReference,
   ChunkSubmitResult,
   WorkflowSubmitContext,
 } from "./mastra/MastraWorkflow.types";
@@ -262,6 +264,19 @@ export interface IAnalysisPort {
    * Returns intermediate or terminal workflow state for the chunk.
    */
   pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult>;
+
+  /**
+   * Requests backend cancellation for one active workflow run.
+   * Used exclusively by the taskpane cancel action while polling is active.
+   */
+  cancelChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkCancelResult>;
+
+  /**
+   * Polls a previously known workflow run again without resubmitting the chunk.
+   * This supports frontend-only recovery when an earlier poll attempt failed
+   * locally but the backend run might still be alive.
+   */
+  retryPollChunkAnalysis(reference: ChunkRunReference): Promise<ChunkPollResult>;
 }
 
 // ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@ function makePollResult(overrides: Partial<ChunkPollResult> = {}): ChunkPollResu
     chunkIndex: 0,
     runId: "run-0",
     status: "success",
+    origin: "backend",
     suggestions: [makeSuggestion()],
     ...overrides,
   };
@@ -51,6 +52,8 @@ function makeMockAnalysisPort(): IAnalysisPort {
     checkConnection: vi.fn().mockResolvedValue(true),
     submitChunkAnalysis: vi.fn().mockResolvedValue({ chunkIndex: 0, runId: "run-0" }),
     pollChunkAnalysis: vi.fn().mockResolvedValue(makePollResult()),
+    cancelChunkAnalysis: vi.fn(),
+    retryPollChunkAnalysis: vi.fn(),
   };
 }
 
@@ -242,5 +245,51 @@ describe("AnalyzeChunksHandler", () => {
       2,
       "Consultando resultado del fragmento 1 de 1..."
     );
+  });
+
+  it("preserves retryable runs when polling fails locally without backend terminal status", async () => {
+    const analysisPort = makeMockAnalysisPort();
+    (analysisPort.submitChunkAnalysis as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      chunkIndex: 0,
+      runId: "run-0",
+    });
+    (analysisPort.pollChunkAnalysis as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      makePollResult({
+        status: "retryable-failure",
+        origin: "frontend-retryable",
+        suggestions: [],
+        error: "Chunk 1: poll timeout",
+      })
+    );
+
+    const ctx = makePipelineContext({ analysisPort });
+    await handler.handle(ctx, next);
+
+    expect(ctx.retryableRunReferences).toEqual([{ chunkIndex: 0, runId: "run-0" }]);
+    expect(ctx.activeRunReferences).toEqual([]);
+    expect(ctx.chunkErrors).toEqual(["Chunk 1: poll timeout"]);
+    expect(next).not.toHaveBeenCalled();
+    expect(ctx.aborted).toBe(true);
+  });
+
+  it("publishes active run references before polling progress snapshots are observed", async () => {
+    const analysisPort = makeMockAnalysisPort();
+    const emitter = new PipelineEventEmitter();
+    const pollingSnapshots: Array<PipelineContext["activeRunReferences"]> = [];
+    emitter.subscribe({
+      onPhaseStart: vi.fn(),
+      onAbort: vi.fn(),
+      onComplete: vi.fn(),
+      onProgress: (_current, _total, message) => {
+        if (message.includes("Consultando resultado")) {
+          pollingSnapshots.push(ctx.activeRunReferences);
+        }
+      },
+    });
+    const ctx = makePipelineContext({ analysisPort, emitter });
+
+    await handler.handle(ctx, next);
+
+    expect(pollingSnapshots).toEqual([[{ chunkIndex: 0, runId: "run-0" }]]);
   });
 });

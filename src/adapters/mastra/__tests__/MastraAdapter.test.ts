@@ -162,12 +162,14 @@ describe("MastraAdapter", () => {
     const laterChunk = await adapter.pollChunkAnalysis(1, "bypass-run-1");
 
     expect(firstChunk.status).toBe("success");
+    expect(firstChunk.origin).toBe("backend");
     expect(firstChunk.suggestions).toHaveLength(createMockMastraPollOutput().suggestions.length);
     expect(firstChunk.suggestions[0].id).toBe("chunk0-0");
     expect(laterChunk).toEqual({
       chunkIndex: 1,
       runId: "bypass-run-1",
       status: "success",
+      origin: "backend",
       suggestions: [],
     });
     expect(mastraMocks.getWorkflow).not.toHaveBeenCalled();
@@ -249,6 +251,7 @@ describe("MastraAdapter", () => {
       chunkIndex: 3,
       runId: "run-3",
       status: "success",
+      origin: "backend",
       suggestions: [
         {
           id: "chunk3-0",
@@ -299,6 +302,7 @@ describe("MastraAdapter", () => {
       chunkIndex: 5,
       runId: "run-5",
       status: "success",
+      origin: "backend",
       suggestions: [
         {
           id: "chunk5-0",
@@ -340,6 +344,7 @@ describe("MastraAdapter", () => {
       chunkIndex: 6,
       runId: "run-6",
       status: "success",
+      origin: "backend",
       suggestions: [
         {
           id: "chunk6-0",
@@ -366,6 +371,7 @@ describe("MastraAdapter", () => {
       chunkIndex: 2,
       runId: "run-2",
       status: "failed",
+      origin: "backend",
       suggestions: [],
       error:
         'Workflow entered "suspended" state and requires resume(), which this frontend does not support',
@@ -396,8 +402,27 @@ describe("MastraAdapter", () => {
       chunkIndex: 4,
       runId: "run-4",
       status: "failed",
+      origin: "frontend-terminal",
       suggestions: [],
       error: "Invalid workflow success payload: expected suggestions[]",
     });
+  });
+
+  it("cancels an existing backend run by rehydrating the run from runId", async () => {
+    const cancel = vi.fn().mockResolvedValue({ message: "Workflow run canceled" });
+    mastraMocks.createRun.mockResolvedValueOnce({
+      runId: "run-cancel",
+      cancel,
+      start: mastraMocks.start,
+    });
+
+    const { MastraAdapter } = await importAdapterModule();
+    const adapter = new MastraAdapter();
+
+    const result = await adapter.cancelChunkAnalysis(7, "run-cancel");
+
+    expect(mastraMocks.createRun).toHaveBeenCalledWith({ runId: "run-cancel" });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(result).toEqual({ chunkIndex: 7, runId: "run-cancel", canceled: true });
   });
 });

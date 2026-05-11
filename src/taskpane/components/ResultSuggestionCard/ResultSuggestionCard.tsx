@@ -42,23 +42,16 @@ export function ResultSuggestionCard({
     failed: <ErrorCircleFilled />,
     "not-found": <SearchInfoFilled />,
   };
-
-  const renderStatusIcon = (): React.JSX.Element | null => {
-    if (!statusIconLabel) {
-      return null;
-    }
-
-    return (
-      <span
-        aria-label={statusIconLabel}
-        className={classes.statusIcon}
-        data-testid={`card-status-icon-${view.cardVisualState}`}
-        role="img"
-      >
-        {statusIconByState[view.cardVisualState] ?? null}
-      </span>
-    );
-  };
+  const statusIcon = statusIconLabel ? (
+    <span
+      aria-label={statusIconLabel}
+      className={classes.statusIcon}
+      data-testid={`card-status-icon-${view.cardVisualState}`}
+      role="img"
+    >
+      {statusIconByState[view.cardVisualState] ?? null}
+    </span>
+  ) : null;
 
   const renderFailureContent = (): React.JSX.Element => {
     const failure = card.failure;
@@ -102,88 +95,72 @@ export function ResultSuggestionCard({
     </button>
   );
 
-  const renderNotes = (): React.JSX.Element | null => {
-    if (!card.navigationNote && !card.resolutionNote) {
-      return null;
-    }
+  const notes = !card.navigationNote && !card.resolutionNote ? null : (
+    <>
+      {card.navigationNote ? <Caption1 className={classes.note}>{card.navigationNote}</Caption1> : null}
+      {card.resolutionNote ? <Caption1 className={classes.note}>{card.resolutionNote}</Caption1> : null}
+    </>
+  );
 
-    return (
-      <>
-        {card.navigationNote ? (
-          <Caption1 className={classes.note}>{card.navigationNote}</Caption1>
-        ) : null}
-        {card.resolutionNote ? (
-          <Caption1 className={classes.note}>{card.resolutionNote}</Caption1>
-        ) : null}
-      </>
-    );
-  };
-
-  const renderActions = (): React.JSX.Element | null => {
-    if (card.hideActions) {
-      return null;
-    }
-
-    return (
-      <div className={classes.footer}>
-        <div className={classes.actions}>
-          <Button
-            appearance="primary"
-            aria-label={view.acceptAriaLabel}
-            data-action="accept"
-            data-suggestion-id={card.suggestion.id}
-            disabled={card.isResolving}
-            icon={<CheckmarkRegular aria-hidden="true" />}
-            onClick={() => {
-              void onAccept(card.suggestion.id);
-            }}
-            type="button"
-          >
-            {view.acceptLabel}
-          </Button>
-          <Button
-            appearance="secondary"
-            aria-label={view.rejectAriaLabel}
-            data-action="reject"
-            data-suggestion-id={card.suggestion.id}
-            disabled={card.isResolving}
-            icon={<DismissRegular aria-hidden="true" />}
-            onClick={() => {
-              void onReject(card.suggestion.id);
-            }}
-            type="button"
-          >
-            {view.rejectLabel}
-          </Button>
-          <Button
-            appearance="subtle"
-            aria-expanded={card.feedbackOpen}
-            aria-label={view.feedbackToggleAriaLabel}
-            data-testid="card-feedback-toggle"
-            icon={<CommentRegular aria-hidden="true" />}
-            onClick={() => {
-              onToggleFeedback(card.suggestion.id);
-            }}
-            type="button"
-          />
-        </div>
-
-        {card.feedbackOpen ? (
-          <Textarea
-            aria-label="Comentario de feedback"
-            className={classes.feedbackTextarea}
-            data-testid="card-feedback-textarea"
-            onChange={(_event, data) => {
-              onFeedbackCommentChange(card.suggestion.id, data.value);
-            }}
-            placeholder="Comentario opcional..."
-            resize="vertical"
-            value={card.feedbackComment}
-          />
-        ) : null}
+  const actions = card.hideActions ? null : (
+    <div className={classes.footer}>
+      <div className={classes.actions}>
+        <Button
+          appearance="primary"
+          aria-label={view.acceptAriaLabel}
+          data-action="accept"
+          data-suggestion-id={card.suggestion.id}
+          disabled={card.isResolving}
+          icon={<CheckmarkRegular aria-hidden="true" />}
+          onClick={() => {
+            void onAccept(card.suggestion.id);
+          }}
+          type="button"
+        >
+          {view.acceptLabel}
+        </Button>
+        <Button
+          appearance="secondary"
+          aria-label={view.rejectAriaLabel}
+          data-action="reject"
+          data-suggestion-id={card.suggestion.id}
+          disabled={card.isResolving}
+          icon={<DismissRegular aria-hidden="true" />}
+          onClick={() => {
+            void onReject(card.suggestion.id);
+          }}
+          type="button"
+        >
+          {view.rejectLabel}
+        </Button>
+        <Button
+          appearance="subtle"
+          aria-expanded={card.feedbackOpen}
+          aria-label={view.feedbackToggleAriaLabel}
+          data-testid="card-feedback-toggle"
+          icon={<CommentRegular aria-hidden="true" />}
+          onClick={() => {
+            onToggleFeedback(card.suggestion.id);
+          }}
+          type="button"
+        />
       </div>
-    );
-  };
+
+      {card.feedbackOpen ? (
+        <Textarea
+          aria-label="Comentario de feedback"
+          className={classes.feedbackTextarea}
+          data-testid="card-feedback-textarea"
+          onChange={(_event, data) => {
+            onFeedbackCommentChange(card.suggestion.id, data.value);
+          }}
+          placeholder="Comentario opcional..."
+          resize="vertical"
+          value={card.feedbackComment}
+        />
+      ) : null}
+    </div>
+  );
 
   return (
     <li
@@ -220,14 +197,14 @@ export function ResultSuggestionCard({
               comentario
             </Badge>
           ) : null}
-          {renderStatusIcon()}
+          {statusIcon}
         </div>
 
         {card.failure ? renderFailureContent() : renderSuggestionContent()}
 
-        {renderNotes()}
+        {notes}
 
-        {renderActions()}
+        {actions}
       </Card>
     </li>
   );

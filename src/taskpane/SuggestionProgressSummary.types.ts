@@ -31,3 +31,9 @@ export type SuggestionProgressSummaryInput = Readonly<{
   result: ApplySuggestionsResult;
   chunkErrors: string[];
 }>;
+
+/** Aggregated shell-facing summary for retryable async analysis errors. */
+export type RetryableAnalysisSummary = Readonly<{
+  retryableRuns: number;
+  terminalRuns: number;
+}>;

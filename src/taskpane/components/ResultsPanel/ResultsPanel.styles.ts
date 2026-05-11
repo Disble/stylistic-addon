@@ -1,6 +1,6 @@
 import { makeStyles, tokens } from "@fluentui/react-components";
 
-/** Creates Griffel classes for the results panel list and empty/loading states. */
+/** Creates Griffel classes for the results panel list and empty state. */
 export const useResultsPanelStyles = makeStyles({
   root: {
     flex: "1 1 auto",
@@ -21,36 +21,5 @@ export const useResultsPanelStyles = makeStyles({
     paddingBottom: tokens.spacingVerticalL,
     textAlign: "center",
     color: tokens.colorNeutralForeground3,
-  },
-  skeletonList: {
-    display: "flex",
-    flexDirection: "column",
-    rowGap: tokens.spacingVerticalS,
-    paddingTop: tokens.spacingVerticalS,
-  },
-  skeletonItem: {
-    display: "flex",
-    flexDirection: "column",
-    rowGap: tokens.spacingVerticalXS,
-    paddingTop: tokens.spacingVerticalS,
-    paddingBottom: tokens.spacingVerticalS,
-    paddingLeft: tokens.spacingHorizontalM,
-    paddingRight: tokens.spacingHorizontalM,
-    borderTopWidth: "1px",
-    borderRightWidth: "1px",
-    borderBottomWidth: "1px",
-    borderLeftWidth: "1px",
-    borderTopStyle: "solid",
-    borderRightStyle: "solid",
-    borderBottomStyle: "solid",
-    borderLeftStyle: "solid",
-    borderTopColor: tokens.colorNeutralStroke2,
-    borderRightColor: tokens.colorNeutralStroke2,
-    borderBottomColor: tokens.colorNeutralStroke2,
-    borderLeftColor: tokens.colorNeutralStroke2,
-    borderTopLeftRadius: tokens.borderRadiusMedium,
-    borderTopRightRadius: tokens.borderRadiusMedium,
-    borderBottomLeftRadius: tokens.borderRadiusMedium,
-    borderBottomRightRadius: tokens.borderRadiusMedium,
   },
 });

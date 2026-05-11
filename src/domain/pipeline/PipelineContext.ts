@@ -13,6 +13,7 @@
 
 import type { TextChunk } from "../chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "../DocumentApplication.types";
+import type { ChunkRunReference } from "../mastra/MastraWorkflow.types";
 import type { AnalysisProfileId } from "../Profile.types";
 import type { IAnalysisPort, IDocumentPort } from "../ports";
 import type { Suggestion } from "../suggestion/Suggestion.types";
@@ -54,6 +55,9 @@ export interface PipelineContext {
   /** Maximum characters per chunk sent to the backend. */
   readonly maxChunkSize: number;
 
+  /** Optional composition-root signal used to stop submit/poll loops early. */
+  readonly shouldCancelAnalysis?: () => boolean;
+
   // --- Set by ReadTextHandler ---
   text?: string;
   isSelection?: boolean;
@@ -65,6 +69,8 @@ export interface PipelineContext {
   // --- Set by AnalyzeChunksHandler ---
   rawSuggestions?: Suggestion[];
   chunkErrors?: string[];
+  activeRunReferences?: ChunkRunReference[];
+  retryableRunReferences?: ChunkRunReference[];
 
   // --- Set by DeduplicateHandler ---
   uniqueSuggestions?: Suggestion[];

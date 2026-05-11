@@ -1,11 +1,16 @@
 import { create } from "zustand";
+import { getTaskpaneAsyncAnalysisSessionState } from "./TaskpaneAsyncAnalysisSession";
 import type { AnalysisProfileId } from "../domain/Profile.types";
 import {
   HIDE_PROGRESS_DELAY_MS,
   INITIAL_TASKPANE_SHELL_STATE,
   STATUS_DISPLAY_MS,
 } from "./TaskpaneShellStore.constants";
-import type { TaskpaneShellState, TaskpaneStatusType } from "./TaskpaneShellStore.types";
+import type {
+  TaskpaneAnalysisRetryKind,
+  TaskpaneShellState,
+  TaskpaneStatusType,
+} from "./TaskpaneShellStore.types";
 
 let hideProgressTimeoutId: ReturnType<typeof setTimeout> | undefined;
 let hideStatusTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -23,6 +28,30 @@ export function getTaskpaneShellState(): TaskpaneShellState {
 /** Sets the loading state for the analyze CTA and related shell controls. */
 export function setTaskpaneAnalyzeLoading(isAnalyzeLoading: boolean): void {
   useTaskpaneShellStore.setState({ isAnalyzeLoading });
+}
+
+/** Clears any visible analysis error surface from the active taskpane session. */
+export function clearTaskpaneAnalysisError(): void {
+  useTaskpaneShellStore.setState((state) => ({
+    analysisError: {
+      ...state.analysisError,
+      visible: false,
+    },
+  }));
+}
+
+/** Publishes an explicit analysis error surface that survives until the next action. */
+export function showTaskpaneAnalysisError(
+  message: string,
+  retryKind: TaskpaneAnalysisRetryKind
+): void {
+  useTaskpaneShellStore.setState({
+    analysisError: {
+      message,
+      retryKind,
+      visible: true,
+    },
+  });
 }
 
 /** Sets the selected analysis profile used by the composition root. */
@@ -61,6 +90,7 @@ export function updateTaskpaneProgress(current: number, total: number, message: 
       total,
       message,
       visible: true,
+      asyncSession: getTaskpaneAsyncAnalysisSessionState(),
     },
   });
 }
@@ -73,9 +103,33 @@ export function hideTaskpaneProgress(): void {
       progress: {
         ...state.progress,
         visible: false,
+        asyncSession: getTaskpaneAsyncAnalysisSessionState(),
       },
     }));
   }, HIDE_PROGRESS_DELAY_MS);
+}
+
+/** Hides the progress area immediately when the UX must switch surfaces right away. */
+export function clearTaskpaneProgress(): void {
+  clearTimeout(hideProgressTimeoutId);
+  hideProgressTimeoutId = undefined;
+  useTaskpaneShellStore.setState((state) => ({
+    progress: {
+      ...state.progress,
+      visible: false,
+      asyncSession: getTaskpaneAsyncAnalysisSessionState(),
+    },
+  }));
+}
+
+/** Rehydrates the progress sub-state with the latest async session snapshot. */
+export function syncTaskpaneAsyncAnalysisProgressSession(): void {
+  useTaskpaneShellStore.setState((state) => ({
+    progress: {
+      ...state.progress,
+      asyncSession: getTaskpaneAsyncAnalysisSessionState(),
+    },
+  }));
 }
 
 /** Shows a transient status-bar message and auto-hides it. */

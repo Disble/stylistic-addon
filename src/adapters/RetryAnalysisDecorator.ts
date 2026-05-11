@@ -30,7 +30,9 @@
 
 import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import type {
+  ChunkCancelResult,
   ChunkPollResult,
+  ChunkRunReference,
   ChunkSubmitResult,
   WorkflowSubmitContext,
 } from "../domain/mastra/MastraWorkflow.types";
@@ -137,10 +139,21 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
     return {
       chunkIndex,
       runId,
-      status: "failed",
+      status: "retryable-failure",
+      origin: "frontend-retryable",
       suggestions: [],
       error: `Chunk ${chunkIndex + 1}: ${lastError}`,
     };
+  }
+
+  /** Delegates backend cancellation directly — retry semantics stay user-driven. */
+  cancelChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkCancelResult> {
+    return this.wrapped.cancelChunkAnalysis(chunkIndex, runId);
+  }
+
+  /** Re-polls a known runId without resubmission, preserving the same retry policy. */
+  retryPollChunkAnalysis(reference: ChunkRunReference): Promise<ChunkPollResult> {
+    return this.pollChunkAnalysis(reference.chunkIndex, reference.runId);
   }
 
   private delay(ms: number): Promise<void> {

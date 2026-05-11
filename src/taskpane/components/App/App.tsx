@@ -1,4 +1,6 @@
 import * as React from "react";
+import { AnalysisErrorState } from "../AnalysisErrorState";
+import { AnalysisProgressHero } from "../AnalysisProgressHero";
 import { AnalyzeSection } from "../AnalyzeSection";
 import { AuthSection } from "../AuthSection";
 import { CleanupSection } from "../CleanupSection";
@@ -16,16 +18,20 @@ import { useApp, useAppClasses } from "./App.hooks";
 /**
  * React shell for the taskpane.
  *
- * Renders one of three top-level surfaces based on auth + view state:
- * - unauthenticated → `AuthSection` (login screen, no toolbar, no settings access)
- * - authenticated + `view === "settings"` → `SettingsView` (account + analysis-profile + future setting groups)
- * - authenticated + `view === "main"` → analysis workflow + persistent `SettingsToolbar`
+ * Picks one of four workflow surfaces based on shell state:
+ * - `isIdle` → `HeroEmptyState` with the analyze CTA
+ * - `isHeroProgress` → `AnalysisProgressHero` while analyzing and no cards exist
+ * - `isHeroError` → `AnalysisErrorState` when an analysis attempt failed
+ * - otherwise → analyze CTA + compact progress strip + results list
  *
  * Preserves the legacy `#app-body` DOM anchor so `taskpane.css` can keep owning the
  * outer flex layout (height chain + padding) without a port through Griffel.
  */
 export function App({
   onAnalyze,
+  onRetryAnalysis,
+  onCancelAnalysis,
+  onRetryAnalysisQuery,
   onCleanup,
   onDisableTrackChanges,
   onSignIn,
@@ -39,6 +45,8 @@ export function App({
     shellState,
     viewState,
     isIdle,
+    isHeroError,
+    isHeroProgress,
     handleOpenSettings,
     handleCloseSettings,
   } = useApp();
@@ -85,16 +93,37 @@ export function App({
   return (
     <main id="app-body">
       <div className={classes.workflow}>
-        {isIdle ? (
+        {isIdle && (
           <HeroEmptyState>
             {analyzeSection}
             {selectionPreviewSection}
           </HeroEmptyState>
-        ) : (
+        )}
+        {isHeroError && (
+          <AnalysisErrorState
+            error={shellState.analysisError}
+            onRetryAnalysis={onRetryAnalysis}
+            onRetryAnalysisQuery={onRetryAnalysisQuery}
+          >
+            {selectionPreviewSection}
+          </AnalysisErrorState>
+        )}
+        {isHeroProgress && (
+          <AnalysisProgressHero
+            onCancelAnalysis={onCancelAnalysis}
+            onRetryAnalysisQuery={onRetryAnalysisQuery}
+            progress={shellState.progress}
+          />
+        )}
+        {!isIdle && !isHeroError && !isHeroProgress && (
           <>
             {analyzeSection}
             {selectionPreviewSection}
-            <ProgressPanel progress={shellState.progress} />
+            <ProgressPanel
+              onCancelAnalysis={onCancelAnalysis}
+              onRetryAnalysisQuery={onRetryAnalysisQuery}
+              progress={shellState.progress}
+            />
             <ResultsPanel />
           </>
         )}

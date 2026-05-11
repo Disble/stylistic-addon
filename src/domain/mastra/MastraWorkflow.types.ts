@@ -82,7 +82,32 @@ export type ChunkAnalysisStatus =
   | "pending"
   | "canceled"
   | "bailed"
-  | "paused";
+  | "paused"
+  | "retryable-failure";
+
+/** Describes which layer produced the current chunk poll outcome. */
+export type ChunkPollOrigin = "backend" | "frontend-retryable" | "frontend-terminal";
+
+/** Stable run reference reused across polling, cancellation, and retry-query flows. */
+export interface ChunkRunReference {
+  /** Zero-based index of the chunk associated with the run. */
+  chunkIndex: number;
+
+  /** Workflow run identifier issued by Mastra. */
+  runId: string;
+}
+
+/** Snapshot of the submit/poll session exposed to the taskpane shell. */
+export interface AnalysisRunSessionSnapshot {
+  /** Whether the originating analysis targeted the current selection. */
+  isSelection: boolean;
+
+  /** Active backend runs still being polled by the frontend. */
+  activeRuns: ChunkRunReference[];
+
+  /** Runs whose latest failure is retryable from the frontend only. */
+  retryableRuns: ChunkRunReference[];
+}
 
 /** Result of submitting a chunk for asynchronous workflow execution. */
 export interface ChunkSubmitResult {
@@ -107,10 +132,22 @@ export interface ChunkPollResult {
   /** Current lifecycle status of the workflow run. */
   status: ChunkAnalysisStatus;
 
+  /** Indicates whether the state came from Mastra or from a frontend retry decision. */
+  origin: ChunkPollOrigin;
+
   /** Suggestions returned when the run completed successfully. */
   suggestions: Suggestion[];
 
   /** Error message for terminal failed states. */
+  error?: string;
+}
+
+/** Result of requesting cancellation for one active chunk run. */
+export interface ChunkCancelResult extends ChunkRunReference {
+  /** Whether the backend acknowledged the cancellation request. */
+  canceled: boolean;
+
+  /** Error message when the frontend could not confirm cancellation. */
   error?: string;
 }
 

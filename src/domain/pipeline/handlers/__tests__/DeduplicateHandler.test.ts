@@ -60,6 +60,8 @@ function makeMockPorts(): {
       checkConnection: vi.fn(),
       submitChunkAnalysis: vi.fn(),
       pollChunkAnalysis: vi.fn(),
+      cancelChunkAnalysis: vi.fn(),
+      retryPollChunkAnalysis: vi.fn(),
     },
   };
 }

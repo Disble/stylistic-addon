@@ -1,3 +1,4 @@
+import { INITIAL_TASKPANE_ASYNC_ANALYSIS_SESSION_STATE } from "./TaskpaneAsyncAnalysisSession.constants";
 import type { TaskpaneShellState } from "./TaskpaneShellStore.types";
 
 /** Milliseconds a status message remains visible before auto-hide. */
@@ -8,6 +9,11 @@ export const HIDE_PROGRESS_DELAY_MS = 1000;
 
 /** Initial shell presentation state for taskpane boot and test resets. */
 export const INITIAL_TASKPANE_SHELL_STATE: TaskpaneShellState = {
+  analysisError: {
+    message: "",
+    retryKind: "full-retry",
+    visible: false,
+  },
   cleanupVisible: false,
   disableTrackChangesCtaVisible: false,
   isCleanupLoading: false,
@@ -19,6 +25,7 @@ export const INITIAL_TASKPANE_SHELL_STATE: TaskpaneShellState = {
     total: 1,
     message: "",
     visible: false,
+    asyncSession: INITIAL_TASKPANE_ASYNC_ANALYSIS_SESSION_STATE,
   },
   status: {
     message: "",
