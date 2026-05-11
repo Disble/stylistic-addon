@@ -22,13 +22,11 @@ export class ResolveSuggestionCommentOnlyOrchestrator {
     private readonly resolver: CommentOnlySuggestionResolver,
     private readonly resultFactory: ResolveSuggestionResultFactory,
     private readonly stateInspector: DocumentReviewStateInspector,
-    private readonly observabilityReporter: ResolutionObservabilityReporter,
+    private readonly observabilityReporter: ResolutionObservabilityReporter
   ) {}
 
   /** Runs the full comment-only workflow inside the active Word batch. */
-  async execute(
-    context: Word.RequestContext,
-  ): Promise<ResolveSuggestionOutcome> {
+  async execute(context: Word.RequestContext): Promise<ResolveSuggestionOutcome> {
     await this.observabilityReporter.emitPhase("locate", "started", {
       suggestionType: "comment-only",
     });
@@ -37,21 +35,17 @@ export class ResolveSuggestionCommentOnlyOrchestrator {
       await this.locator.locateCommentOnlyArtifacts(context);
     const pendingBefore = await this.stateInspector.inspect(context);
 
-    await this.observabilityReporter.emitPhase(
-      "locate",
-      selectedCc ? "succeeded" : "failed",
-      {
-        candidateCount: candidates.length,
-        selectedCcFound: Boolean(selectedCc),
-        locateStatus,
-      },
-    );
+    await this.observabilityReporter.emitPhase("locate", selectedCc ? "succeeded" : "failed", {
+      candidateCount: candidates.length,
+      selectedCcFound: Boolean(selectedCc),
+      locateStatus,
+    });
 
     if (locateStatus === "ambiguous-location") {
       const result = await this.resultFactory.buildObservationFailureResult(
         context,
         locateStatus,
-        pendingBefore,
+        pendingBefore
       );
       return this.toOutcome(result, pendingBefore);
     }
@@ -66,13 +60,10 @@ export class ResolveSuggestionCommentOnlyOrchestrator {
       };
     }
 
-    const colocatedComment = await this.locator.findColocatedStylisticComment(
-      context,
-      selectedCc,
-    );
+    const colocatedComment = await this.locator.findColocatedStylisticComment(context, selectedCc);
     const commentDeleted = await this.cleanup.deleteLocatedStylisticComment(
       context,
-      colocatedComment,
+      colocatedComment
     );
     const result = await this.resolver.resolve({
       context,
@@ -87,7 +78,7 @@ export class ResolveSuggestionCommentOnlyOrchestrator {
   /** Keeps the command-facing internal outcome shape stable. */
   private toOutcome(
     result: SuggestionActionResult,
-    pendingBefore: DocumentReviewState,
+    pendingBefore: DocumentReviewState
   ): ResolveSuggestionOutcome {
     return {
       status: result.status,

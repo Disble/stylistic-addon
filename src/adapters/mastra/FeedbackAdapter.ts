@@ -12,18 +12,15 @@
  * @module FeedbackAdapter
  */
 
-import { MastraClient } from "@mastra/client-js";
 import type { IFeedbackPort } from "../../domain/ports";
 import type { FeedbackPayload } from "../../domain/suggestion/SuggestionResolutionWorkflow.types";
-import {
-  FEEDBACK_WORKFLOW_ID,
-  MASTRA_BASE_URL,
-} from "../../infrastructure/config";
+import { FEEDBACK_WORKFLOW_ID } from "../../infrastructure/config";
+import { MastraClientFactory } from "./MastraClientFactory";
 
-/** Singleton Mastra client instance, reused across all feedback calls. */
-const mastraClient = new MastraClient({ baseUrl: MASTRA_BASE_URL });
-
+/** Sends non-blocking feedback events to the Mastra feedback workflow. */
 export class FeedbackAdapter implements IFeedbackPort {
+  constructor(private readonly clientFactory = new MastraClientFactory()) {}
+
   /**
    * Sends a feedback payload to the Mastra feedback workflow.
    * Fire-and-forget: never throws, errors swallowed silently.
@@ -35,7 +32,7 @@ export class FeedbackAdapter implements IFeedbackPort {
         payload,
       });
 
-      const workflow = mastraClient.getWorkflow(FEEDBACK_WORKFLOW_ID);
+      const workflow = this.clientFactory.create().getWorkflow(FEEDBACK_WORKFLOW_ID);
       console.log("[FeedbackAdapter] Workflow reference obtained");
 
       const run = await workflow.createRun();

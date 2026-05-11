@@ -23,37 +23,18 @@ import type {
   DocumentReviewTransition,
   DocumentReviewUiState,
 } from "./DocumentReviewStateMachine.types";
+import { DOCUMENT_REVIEW_TRANSITIONS } from "./DocumentReviewStateMachine.constants";
 
-export type {
-  DocumentReviewState,
-  DocumentReviewTransition,
-  DocumentReviewUiState,
-  ReviewTaskpaneState,
-} from "./DocumentReviewStateMachine.types";
-
-const TRANSITIONS: Record<DocumentReviewUiState, DocumentReviewUiState[]> = {
-  idle: ["idle", "pending-review", "ready-to-disable-track-changes"],
-  "pending-review": [
-    "pending-review",
-    "ready-to-disable-track-changes",
-    "idle",
-  ],
-  "ready-to-disable-track-changes": [
-    "ready-to-disable-track-changes",
-    "pending-review",
-    "idle",
-  ],
-};
-
+/** Raised when the review UI machine receives an impossible transition. */
 export class InvalidDocumentReviewTransitionError extends Error {
   constructor(
     from: DocumentReviewUiState,
     to: DocumentReviewUiState,
-    allowed: DocumentReviewUiState[],
+    allowed: DocumentReviewUiState[]
   ) {
     super(
       `[DocumentReviewStateMachine] Invalid transition: "${from}" → "${to}". ` +
-        `Allowed: [${allowed.join(", ")}]`,
+        `Allowed: [${allowed.join(", ")}]`
     );
     this.name = "InvalidDocumentReviewTransitionError";
   }
@@ -101,7 +82,7 @@ export class DocumentReviewStateMachine {
    */
   static evaluateTransition(
     before: DocumentReviewState,
-    after: DocumentReviewState,
+    after: DocumentReviewState
   ): DocumentReviewTransition {
     const machine = new DocumentReviewStateMachine(before);
     const from = machine.state;
@@ -150,9 +131,7 @@ export class DocumentReviewStateMachine {
    * Resets the machine to `idle`.
    */
   reset(): void {
-    console.log(
-      `🔄 [DocumentReviewStateMachine] reset → idle (was: ${this.current})`,
-    );
+    console.log(`🔄 [DocumentReviewStateMachine] reset → idle (was: ${this.current})`);
     this.current = "idle";
   }
 
@@ -160,11 +139,11 @@ export class DocumentReviewStateMachine {
    * Applies one validated state transition.
    */
   private transitionTo(next: DocumentReviewUiState): void {
-    if (!TRANSITIONS[this.current].includes(next)) {
+    if (!DOCUMENT_REVIEW_TRANSITIONS[this.current].includes(next)) {
       throw new InvalidDocumentReviewTransitionError(
         this.current,
         next,
-        TRANSITIONS[this.current],
+        DOCUMENT_REVIEW_TRANSITIONS[this.current]
       );
     }
 

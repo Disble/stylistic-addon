@@ -1,5 +1,11 @@
 # Word Search Refactor Task List
 
+> Historical planning artifact. This document captures the execution plan and
+> evidence vocabulary from the refactor cycle when it was written. For current
+> day commands, test locations, and canonical architecture rules, prefer
+> `README.md`, `docs/architecture.md`, `docs/linting-and-file-anatomy.md`, and
+> `docs/testing.md`.
+
 This document defines the approved execution order for the next architecture
 cycle. It is intentionally prescriptive. The project already knows what happens
 when a cross-cutting capability grows without a clear boundary: the code drifts,
@@ -106,10 +112,10 @@ This phase is now implemented and verified.
 - `no-concrete-text-search-import.grit` compiles and is wired through
   `biome.json`.
 - `no-search-primitive-redefinition.grit` compiles and now catches the current
-  duplicated primitives inside `src/adapters/word/ResolveSuggestionCommand.ts`.
+  duplicated primitives inside `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`.
 - `no-search-internals-in-taskpane.grit` compiles and is wired through
   `biome.json`.
-- `npm run lint` currently fails for the expected reason: the canonical
+- `bun run lint` currently fails for the expected reason: the canonical
   primitives guard flags `removeWhitespaceWithIndices` and
   `findWhitespaceInsensitiveSlice` inside `ResolveSuggestionCommand.ts`.
 - `scripts/checkComplexity.mjs` was ratcheted down so
@@ -301,15 +307,15 @@ responsibilities into collaborators.
 
 Validation evidence for the completed phase:
 
-- `npx vitest run "src/adapters/word/WordAdapterAcceptSuggestion.test.ts" "src/adapters/word/WordAdapterRejectSuggestion.test.ts"` → green (`40 tests`).
+- `bun run test -- src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` → green (`40 tests`).
 - Focused collaborator suites are green:
   - `ReplaceIdentityParser.test.ts`
-  - `SuggestionLocator.test.ts`
+  - `src/adapters/word/resolve-suggestion/__tests__/SuggestionLocator.test.ts`
   - `DocumentReviewStateInspector.test.ts`
   - `ResolveSuggestionResultFactory.test.ts`
 - Focused lint for the new resolution collaborators is green after converting
   collaborator-only imports to `import type`.
-- `npm run check:filenames` is green with the expanded collaborator suffix
+- `bun run check:filenames` is green with the expanded collaborator suffix
   vocabulary.
 
 Important architectural result:

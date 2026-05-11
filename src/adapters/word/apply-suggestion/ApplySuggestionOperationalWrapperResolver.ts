@@ -10,34 +10,12 @@ import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "../ReplaceIdentityParser";
-import type {
-  TextLocator,
-  WordSearchContainer,
-} from "../WordTextLocatorContext";
+import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext.types";
 import type { ApplySuggestionIdentityBuilder } from "./ApplySuggestionIdentityBuilder";
-
-type ParentOperationalContentControl = Word.ContentControl & {
-  tag?: string;
-  title?: string;
-  getRange?: () => Word.Range;
-};
-
-/** Result of resolving or creating an operational wrapper. */
-type ApplySuggestionOperationalWrapperResolution =
-  | {
-      /** Reusable or newly created wrapper. */
-      wrapper: Word.ContentControl;
-
-      /** No error when wrapper resolution succeeded. */
-      error?: undefined;
-    }
-  | {
-      /** No wrapper is available when resolution fails closed. */
-      wrapper?: undefined;
-
-      /** Stable fail-closed error message. */
-      error: string;
-    };
+import type {
+  ApplySuggestionOperationalWrapperResolution,
+  ParentOperationalContentControl,
+} from "./ApplySuggestionOperationalWrapperResolver.types";
 
 /**
  * Owns replace-suggestion operational-wrapper creation, reuse, and in-wrapper
@@ -52,7 +30,7 @@ export class ApplySuggestionOperationalWrapperResolver {
   constructor(
     private readonly suggestion: Suggestion,
     private readonly textLocator: TextLocator,
-    private readonly identityBuilder: ApplySuggestionIdentityBuilder,
+    private readonly identityBuilder: ApplySuggestionIdentityBuilder
   ) {}
 
   /**
@@ -65,19 +43,16 @@ export class ApplySuggestionOperationalWrapperResolver {
    */
   async createOperationalWrapper(
     context: Word.RequestContext,
-    anchorRange: Word.Range,
+    anchorRange: Word.Range
   ): Promise<Word.ContentControl> {
-    applySuggestionObservability.logCreatingOperationalWrapper(
-      this.suggestion.id,
-      { trackChangesOwnership: "batch-apply-workflow" },
-    );
+    applySuggestionObservability.logCreatingOperationalWrapper(this.suggestion.id, {
+      trackChangesOwnership: "batch-apply-workflow",
+    });
 
     const wrapper = anchorRange.insertContentControl();
-    wrapper.tag = this.identityBuilder.buildOperationalWrapperTag(
-      this.suggestion,
-    );
+    wrapper.tag = this.identityBuilder.buildOperationalWrapperTag(this.suggestion);
     wrapper.title = this.identityBuilder.serializeReplaceIdentity(
-      this.identityBuilder.buildReplaceIdentity(this.suggestion),
+      this.identityBuilder.buildReplaceIdentity(this.suggestion)
     );
     wrapper.appearance = "Hidden";
     wrapper.cannotDelete = false;
@@ -89,7 +64,7 @@ export class ApplySuggestionOperationalWrapperResolver {
   /** Reuses a valid parent operational wrapper or returns a fail-closed error. */
   async resolveOperationalWrapper(
     context: Word.RequestContext,
-    anchorRange: Word.Range,
+    anchorRange: Word.Range
   ): Promise<ApplySuggestionOperationalWrapperResolution> {
     const parentCC =
       anchorRange.parentContentControlOrNullObject as ParentOperationalContentControl;
@@ -104,25 +79,25 @@ export class ApplySuggestionOperationalWrapperResolver {
 
     if (parentCC.isNullObject) {
       return {
+        kind: "success",
         wrapper: await this.createOperationalWrapper(context, anchorRange),
       };
     }
 
     const existingTag = parentCC.tag ?? "";
     const isStylisticArtifact =
-      existingTag.startsWith(STYLISTIC_TAG_PREFIX) ||
-      /^chunk\d+-\d+$/.test(existingTag);
+      existingTag.startsWith(STYLISTIC_TAG_PREFIX) || /^chunk\d+-\d+$/.test(existingTag);
 
     if (!existingTag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX)) {
       if (isStylisticArtifact) {
-        applySuggestionObservability.warnNonOperationalStylisticContentControl(
-          this.suggestion.id,
-          { existingTag },
-        );
-        return { error: "Anchor cubierto por un Content Control existente" };
+        applySuggestionObservability.warnNonOperationalStylisticContentControl(this.suggestion.id, {
+          existingTag,
+        });
+        return { kind: "error", error: "Anchor cubierto por un Content Control existente" };
       }
 
       return {
+        kind: "success",
         wrapper: await this.createOperationalWrapper(context, anchorRange),
       };
     }
@@ -133,25 +108,25 @@ export class ApplySuggestionOperationalWrapperResolver {
       typeof parentCC.getRange === "function";
 
     if (!canReuseWrapper) {
-      applySuggestionObservability.warnOperationalWrapperIdentityMismatch(
-        this.suggestion.id,
-        { existingTag, title: parentCC.title ?? "" },
-      );
-      return { error: "Anchor cubierto por un Content Control existente" };
+      applySuggestionObservability.warnOperationalWrapperIdentityMismatch(this.suggestion.id, {
+        existingTag,
+        title: parentCC.title ?? "",
+      });
+      return { kind: "error", error: "Anchor cubierto por un Content Control existente" };
     }
 
-    applySuggestionObservability.logReusingOperationalWrapper(
-      this.suggestion.id,
-      { existingTag, title: parentCC.title ?? "" },
-    );
+    applySuggestionObservability.logReusingOperationalWrapper(this.suggestion.id, {
+      existingTag,
+      title: parentCC.title ?? "",
+    });
 
-    return { wrapper: parentCC };
+    return { kind: "success", wrapper: parentCC };
   }
 
   /** Re-finds the anchor inside the operational wrapper so mutation scope matches the wrapper. */
   async resolveAnchorInsideWrapper(
     context: Word.RequestContext,
-    wrapper: Word.ContentControl,
+    wrapper: Word.ContentControl
   ): Promise<Word.Range | null> {
     return this.textLocator.locate({
       context,

@@ -4,10 +4,8 @@ import type { IResolutionObservabilityPort } from "../../../domain/ports";
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import type { SuggestionActionResult } from "../../../domain/suggestion/SuggestionResolutionWorkflow.types";
 import { NoopResolutionObservabilityAdapter } from "../../observability/NoopResolutionObservabilityAdapter";
-import {
-  getDefaultTextLocator,
-  type TextLocator,
-} from "../WordTextLocatorContext";
+import { getDefaultTextLocator } from "../WordTextLocatorContext";
+import type { TextLocator } from "../WordTextLocatorContext.types";
 import { CommentOnlySuggestionResolver } from "./CommentOnlySuggestionResolver";
 import { DocumentReviewStateInspector } from "./DocumentReviewStateInspector";
 import type { ResolveSuggestionOutcome } from "./ResolutionContext";
@@ -42,29 +40,22 @@ export class ResolveSuggestionCommand {
     private readonly suggestion: Suggestion,
     private readonly action: "accept" | "reject",
     textLocator: TextLocator = getDefaultTextLocator(),
-    observabilityPort: IResolutionObservabilityPort = new NoopResolutionObservabilityAdapter(),
+    observabilityPort: IResolutionObservabilityPort = new NoopResolutionObservabilityAdapter()
   ) {
     this.stateInspector = new DocumentReviewStateInspector();
     const locator = new SuggestionLocator(suggestion);
     const cleanup = new SuggestionResolutionCleanup(suggestion.id, action);
-    this.resultFactory = new ResolveSuggestionResultFactory(
-      action,
-      this.stateInspector,
-    );
+    this.resultFactory = new ResolveSuggestionResultFactory(action, this.stateInspector);
     const commentOnlyResolver = new CommentOnlySuggestionResolver(
       suggestion.id,
       this.resultFactory,
-      this.stateInspector,
+      this.stateInspector
     );
-    const observer = new SuggestionResolutionObserver(
-      suggestion,
-      locator,
-      textLocator,
-    );
+    const observer = new SuggestionResolutionObserver(suggestion, locator, textLocator);
     this.observabilityReporter = new ResolutionObservabilityReporter(
       suggestion.id,
       action,
-      observabilityPort,
+      observabilityPort
     );
     this.commentOnlyOrchestrator = new ResolveSuggestionCommentOnlyOrchestrator(
       locator,
@@ -72,7 +63,7 @@ export class ResolveSuggestionCommand {
       commentOnlyResolver,
       this.resultFactory,
       this.stateInspector,
-      this.observabilityReporter,
+      this.observabilityReporter
     );
     this.trackChangeOrchestrator = new ResolveSuggestionTrackChangeOrchestrator(
       suggestion,
@@ -83,7 +74,7 @@ export class ResolveSuggestionCommand {
       this.resultFactory,
       this.stateInspector,
       this.observabilityReporter,
-      this.errorSerializer,
+      this.errorSerializer
     );
   }
 
@@ -99,25 +90,22 @@ export class ResolveSuggestionCommand {
           outcome.pendingBefore,
           outcome.pendingAfter,
           outcome.error,
-          outcome.executionReport,
+          outcome.executionReport
         );
       });
     } catch (error) {
       const serialized = this.errorSerializer.serialize(error);
-      const pendingAfter = await Word.run((context) =>
-        this.stateInspector.inspect(context),
-      ).catch(() => this.stateInspector.buildEmptyState());
-
-      return this.resultFactory.buildErrorResult(
-        serialized.message,
-        pendingAfter,
+      const pendingAfter = await Word.run((context) => this.stateInspector.inspect(context)).catch(
+        () => this.stateInspector.buildEmptyState()
       );
+
+      return this.resultFactory.buildErrorResult(serialized.message, pendingAfter);
     }
   }
 
   /** Runs the resolution sequence inside one `Word.run` context. */
   private async executeWithinContext(
-    context: Word.RequestContext,
+    context: Word.RequestContext
   ): Promise<ResolveSuggestionOutcome> {
     this.workflowAttemptId = `${this.suggestion.id}:${this.action}:${Date.now()}`;
     this.observabilityReporter.setWorkflowAttemptId(this.workflowAttemptId);

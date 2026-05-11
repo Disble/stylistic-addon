@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stylistic — Login</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+      }
+
+      body {
+        align-items: center;
+        background: #faf9f8;
+        color: #242424;
+        display: flex;
+        justify-content: center;
+        margin: 0;
+        min-height: 100vh;
+      }
+
+      main {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 32px;
+        text-align: center;
+      }
+
+      .spinner {
+        animation: spin 900ms linear infinite;
+        border: 3px solid #d1d1d1;
+        border-top-color: #0f6cbd;
+        border-radius: 999px;
+        height: 28px;
+        width: 28px;
+      }
+
+      h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0;
+      }
+
+      p {
+        color: #616161;
+        font-size: 14px;
+        margin: 0;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>Conectando con Google</h1>
+      <p>Te vamos a redirigir para completar el inicio de sesión.</p>
+    </main>
+  </body>
+</html>

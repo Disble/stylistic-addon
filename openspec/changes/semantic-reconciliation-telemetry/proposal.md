@@ -25,7 +25,7 @@ Introduce a `ResolutionExecutionReport`, a `SuggestionResolutionReconciler`, and
 
 | Area | Impact | Description |
 |------|--------|-------------|
-| `src/adapters/word/resolution/` | Modified/New | Add execution report, reconciler, cleanup warnings, telemetry emission. |
+| `src/adapters/word/resolve-suggestion/` | Modified/New | Add execution report, reconciliation orchestration, cleanup warnings, telemetry emission. |
 | `src/domain/types.ts`, `src/domain/ports.ts` | Modified | Add warning/telemetry contracts and telemetry port. |
 | `src/domain/suggestion/`, `src/taskpane/` | Modified | Preserve terminal UI state after reconciled success; surface warnings. |
 | `docs/TELEMETRY.md` | New | Establish observability principles and event conventions. |
@@ -45,7 +45,7 @@ Revert the reconciliation branch and telemetry contract additions, keeping the c
 ## Dependencies
 
 - Existing resolution workflow docs in `docs/review-domain-and-track-changes.md`.
-- Current resolution modules under `src/adapters/word/resolution/`.
+- Current resolution modules under `src/adapters/word/resolve-suggestion/`.
 
 ## Success Criteria
 

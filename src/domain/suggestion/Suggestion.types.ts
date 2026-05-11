@@ -108,22 +108,14 @@ export interface WordArtifactRef {
   kind: "content-control" | "tracked-change" | "comment" | "anchor";
 
   /** Semantic role this artifact plays inside the suggestion identity. */
-  role:
-    | "inserted-side"
-    | "deleted-side"
-    | "delete-side"
-    | "format-side"
-    | "operational-anchor";
+  role: "inserted-side" | "deleted-side" | "delete-side" | "format-side" | "operational-anchor";
 
   /** Opaque adapter-owned value used to relocate the artifact in Word. */
   value: string;
 }
 
 /** Supported native Track Changes operational subtypes. */
-export type TrackChangeSuggestionSubtype =
-  | "replace"
-  | "delete-only"
-  | "formatting";
+export type TrackChangeSuggestionSubtype = "replace" | "delete-only" | "formatting";
 
 /** Versioned operational-wrapper identity for native Track Changes suggestions. */
 export interface ReplaceSuggestionIdentity {

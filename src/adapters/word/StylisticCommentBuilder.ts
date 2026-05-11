@@ -7,10 +7,7 @@
  * their persisted content signature, not from `authorName`.
  */
 
-type CommentLike = {
-  authorName?: string;
-  content?: string;
-};
+import type { CommentLike } from "./StylisticCommentBuilder.types";
 
 /**
  * Normalizes Word comment text line endings so identification logic is stable
@@ -21,10 +18,7 @@ function normalizeCommentContent(content: string | undefined): string {
 }
 
 /** Visible content format currently used by Stylistic-generated comments. */
-export function buildStylisticCommentContent(
-  category: string,
-  justification: string,
-): string {
+export function buildStylisticCommentContent(category: string, justification: string): string {
   return `[${category}]\n${justification}`;
 }
 

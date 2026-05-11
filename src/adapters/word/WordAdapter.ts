@@ -9,16 +9,11 @@
  * @module WordAdapter
  */
 
-import type {
-  ApplySuggestionsResult,
-  CommandResult,
-} from "../../domain/DocumentApplication.types";
+import type { ApplySuggestionsResult, CommandResult } from "../../domain/DocumentApplication.types";
 import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.types";
-import type {
-  IDocumentPort,
-  IResolutionObservabilityPort,
-} from "../../domain/ports";
+import type { IDocumentPort, IResolutionObservabilityPort } from "../../domain/ports";
 import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
+import type { SelectionSnapshot } from "../../domain/selection/SelectionSnapshot.types";
 import type {
   Suggestion,
   SuggestionNavigationResult,
@@ -27,43 +22,46 @@ import type { SuggestionActionResult } from "../../domain/suggestion/SuggestionR
 import type { TextSource } from "../../domain/TextSource.types";
 import { NoopResolutionObservabilityAdapter } from "../observability/NoopResolutionObservabilityAdapter";
 import { BatchApplyOrchestrator } from "./BatchApplyOrchestrator";
-import {
-  cleanupResolvedComments,
-  getCleanupPreview,
-} from "./cleanup/CommentCleanup";
+import { cleanupResolvedComments, getCleanupPreview } from "./cleanup/CommentCleanup";
 import { ResolveSuggestionCommand } from "./resolve-suggestion/ResolveSuggestionCommand";
 import { WordAppliedSuggestionInspector } from "./WordAppliedSuggestionInspector";
+import { WordSelectionMonitorAdapter } from "./WordSelectionMonitorAdapter";
 import { WordSuggestionNavigationAdapter } from "./WordSuggestionNavigationAdapter";
-import {
-  getDefaultTextLocator,
-  type TextLocator,
-  type WordSearchContainer,
-} from "./WordTextLocatorContext";
+import { WordDocumentIdentityAdapter } from "./WordDocumentIdentityAdapter";
+import type { TextLocator, WordSearchContainer } from "./WordTextLocatorContext.types";
+import { getDefaultTextLocator } from "./WordTextLocatorContext";
 import { WordTextSourceAdapter } from "./WordTextSourceAdapter";
 import { WordTrackChangesAdapter } from "./WordTrackChangesAdapter";
 
+/** Facade that exposes document-review operations through Office.js. */
 export class WordAdapter implements IDocumentPort {
-  private readonly textSourceAdapter = new WordTextSourceAdapter();
+  private readonly documentIdentityAdapter = new WordDocumentIdentityAdapter();
 
-  private readonly appliedSuggestionInspector =
-    new WordAppliedSuggestionInspector();
+  private readonly textSourceAdapter = new WordTextSourceAdapter(this.documentIdentityAdapter);
+
+  private readonly appliedSuggestionInspector = new WordAppliedSuggestionInspector();
 
   private readonly trackChangesAdapter = new WordTrackChangesAdapter();
+
+  private readonly selectionMonitor = new WordSelectionMonitorAdapter();
 
   private readonly suggestionNavigationAdapter: WordSuggestionNavigationAdapter;
 
   constructor(
     private readonly textLocator: TextLocator = getDefaultTextLocator(),
-    private readonly observabilityPort: IResolutionObservabilityPort = new NoopResolutionObservabilityAdapter(),
+    private readonly observabilityPort: IResolutionObservabilityPort = new NoopResolutionObservabilityAdapter()
   ) {
-    this.suggestionNavigationAdapter = new WordSuggestionNavigationAdapter(
-      this.textLocator,
-    );
+    this.suggestionNavigationAdapter = new WordSuggestionNavigationAdapter(this.textLocator);
   }
 
   /** Resolves the text to analyze from selection or full document. */
   async getTextToAnalyze(): Promise<TextSource> {
     return this.textSourceAdapter.getTextToAnalyze();
+  }
+
+  /** Returns the stable persisted UUID associated with the active Word document. */
+  async getDocumentUuid(): Promise<string> {
+    return this.documentIdentityAdapter.getDocumentUuid();
   }
 
   /** Returns the set of original texts already applied as Stylistic suggestions. */
@@ -74,17 +72,13 @@ export class WordAdapter implements IDocumentPort {
   /** Applies suggestions as tracked changes via `BatchApplyOrchestrator`. */
   async applySuggestions(
     suggestions: Suggestion[],
-    onProgress?: ProgressCallback,
+    onProgress?: ProgressCallback
   ): Promise<ApplySuggestionsResult> {
     const orchestrator = new BatchApplyOrchestrator({
       ensureTrackChangesActive: () =>
-        Word.run((ctx) =>
-          this.trackChangesAdapter.ensureTrackChangesActive(ctx),
-        ),
-      getDocumentReviewState: () =>
-        this.trackChangesAdapter.getDocumentReviewState(),
-      deriveDocumentState: (state) =>
-        this.trackChangesAdapter.deriveDocumentState(state),
+        Word.run((ctx) => this.trackChangesAdapter.ensureTrackChangesActive(ctx)),
+      getDocumentReviewState: () => this.trackChangesAdapter.getDocumentReviewState(),
+      deriveDocumentState: (state) => this.trackChangesAdapter.deriveDocumentState(state),
       rereadSuggestionPositionHint: (suggestion, patch) =>
         this.rereadSuggestionPositionHint(suggestion, patch),
     });
@@ -94,24 +88,21 @@ export class WordAdapter implements IDocumentPort {
   /** Rebuilds one localized hint from real Word after local patch reseed stops being trustworthy. */
   private async rereadSuggestionPositionHint(
     suggestion: Suggestion,
-    patch: NonNullable<CommandResult["mutationPatch"]>,
+    patch: NonNullable<CommandResult["mutationPatch"]>
   ): Promise<Suggestion["positionHint"] | undefined> {
     return Word.run(async (context) => {
       const body = context.document.body as unknown as WordSearchContainer;
-      const localizedRange =
-        await this.suggestionNavigationAdapter.searchWithFallback(
-          context,
-          body,
-          patch.updatedText,
-        );
+      const localizedRange = await this.suggestionNavigationAdapter.searchWithFallback(
+        context,
+        body,
+        patch.updatedText
+      );
       if (!localizedRange) {
         return undefined;
       }
 
       localizedRange.load("text");
-      const containingParagraph = localizedRange.paragraphs
-        .getFirst()
-        .getRange("Whole");
+      const containingParagraph = localizedRange.paragraphs.getFirst().getRange("Whole");
       containingParagraph.load("text");
       await context.sync();
 
@@ -119,12 +110,12 @@ export class WordAdapter implements IDocumentPort {
         (await this.suggestionNavigationAdapter.searchWithFallback(
           context,
           localizedRange as unknown as WordSearchContainer,
-          suggestion.anchor,
+          suggestion.anchor
         )) ??
         (await this.suggestionNavigationAdapter.searchWithFallback(
           context,
           containingParagraph as unknown as WordSearchContainer,
-          suggestion.anchor,
+          suggestion.anchor
         ));
 
       if (!anchorRange) {
@@ -132,9 +123,7 @@ export class WordAdapter implements IDocumentPort {
       }
 
       const localizedStart = localizedRange.text.indexOf(suggestion.anchor);
-      const paragraphStart = containingParagraph.text.indexOf(
-        suggestion.anchor,
-      );
+      const paragraphStart = containingParagraph.text.indexOf(suggestion.anchor);
       const start = localizedStart >= 0 ? localizedStart : paragraphStart;
       if (start < 0) {
         return undefined;
@@ -166,26 +155,22 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /** Accepts all Stylistic tracked changes associated with a suggestion. */
-  async acceptSuggestion(
-    suggestion: Suggestion,
-  ): Promise<SuggestionActionResult> {
+  async acceptSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult> {
     return new ResolveSuggestionCommand(
       suggestion,
       "accept",
       this.textLocator,
-      this.observabilityPort,
+      this.observabilityPort
     ).execute();
   }
 
   /** Rejects all Stylistic tracked changes associated with a suggestion. */
-  async rejectSuggestion(
-    suggestion: Suggestion,
-  ): Promise<SuggestionActionResult> {
+  async rejectSuggestion(suggestion: Suggestion): Promise<SuggestionActionResult> {
     return new ResolveSuggestionCommand(
       suggestion,
       "reject",
       this.textLocator,
-      this.observabilityPort,
+      this.observabilityPort
     ).execute();
   }
 
@@ -195,9 +180,12 @@ export class WordAdapter implements IDocumentPort {
   }
 
   /** Navigates to the real suggestion artifact when available. */
-  async navigateToText(
-    target: Suggestion | string,
-  ): Promise<SuggestionNavigationResult> {
+  async navigateToText(target: Suggestion | string): Promise<SuggestionNavigationResult> {
     return this.suggestionNavigationAdapter.navigateToText(target);
+  }
+
+  /** Subscribes to host selection changes for live previews in the UI. */
+  subscribeSelectionChanges(listener: (snapshot: SelectionSnapshot) => void): () => void {
+    return this.selectionMonitor.subscribe(listener);
   }
 }

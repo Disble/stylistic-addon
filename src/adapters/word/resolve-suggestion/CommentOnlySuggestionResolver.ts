@@ -8,7 +8,7 @@ export class CommentOnlySuggestionResolver {
   constructor(
     private readonly suggestionId: string,
     private readonly resultFactory: ResolveSuggestionResultFactory,
-    private readonly stateInspector: DocumentReviewStateInspector,
+    private readonly stateInspector: DocumentReviewStateInspector
   ) {}
 
   /** Resolves a comment-only suggestion by deleting the anchor and returning status. */
@@ -23,7 +23,7 @@ export class CommentOnlySuggestionResolver {
     const pendingAfter = await this.stateInspector.inspect(context);
 
     console.log(
-      `🗨️ [CommentOnlySuggestionResolver] "${this.suggestionId}": comment-only resolved, comentario eliminado: ${commentDeleted}`,
+      `🗨️ [CommentOnlySuggestionResolver] "${this.suggestionId}": comment-only resolved, comentario eliminado: ${commentDeleted}`
     );
 
     return this.resultFactory.buildResolutionResult(
@@ -31,7 +31,7 @@ export class CommentOnlySuggestionResolver {
       0,
       commentDeleted,
       pendingBefore,
-      pendingAfter,
+      pendingAfter
     );
   }
 }

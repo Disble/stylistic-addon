@@ -17,17 +17,29 @@ import type { Profile } from "../domain/Profile.types";
 /** Base URL of the Mastra server. */
 export const MASTRA_BASE_URL = "http://localhost:4111";
 
+/** Better Auth base path mounted by the Mastra backend custom route. */
+export const BETTER_AUTH_BASE_PATH = "/auth";
+
+/** Backend page that completes OAuth on the same origin as Better Auth cookies. */
+export const AUTH_COMPLETE_URL = `${MASTRA_BASE_URL}/auth-complete`;
+
+/** Taskpane-hosted dialog page used as the first URL for Office OAuth. */
+export const AUTH_DIALOG_PATH = "/auth-dialog.html";
+
+/** Storage key for the Better Auth bearer session in OfficeRuntime.storage. */
+export const AUTH_SESSION_STORAGE_KEY = "stylistic.auth.session.v1";
+
+/** Storage key for the user-selected analysis profile in OfficeRuntime.storage. */
+export const ANALYSIS_PROFILE_STORAGE_KEY = "stylistic.preferences.analysis-profile.v1";
+
 /** Identifier of the editorial workflow registered in Mastra. */
 export const WORKFLOW_ID = "stylistic-workflow";
 
 /** Identifier of the feedback workflow registered in Mastra. */
 export const FEEDBACK_WORKFLOW_ID = "feedback-workflow";
 
-/**
- * Temporary author profile slug used until the add-in exposes explicit author
- * selection and propagates it through the frontend flow.
- */
-export const DEFAULT_AUTHOR_SLUG = "disble";
+/** Document settings key used to persist the stable Word document UUID. */
+export const DOCUMENT_UUID_SETTINGS_KEY = "stylistic.document.uuid.v1";
 
 // ---------------------------------------------------------------------------
 // Text Chunking
@@ -79,7 +91,7 @@ export const SUGGESTION_CARD_REORDER_ANIMATION_MS = 500;
  * keeps the rest of the pipeline and UI flow unchanged while letting the backend
  * rest completely during debugging sessions.
  */
-export const MASTRA_POLL_BYPASS_ENABLED = true;
+export const MASTRA_POLL_BYPASS_ENABLED = false;
 
 // ---------------------------------------------------------------------------
 // Word Artifact Identity
@@ -89,8 +101,7 @@ export const MASTRA_POLL_BYPASS_ENABLED = true;
 export const STYLISTIC_TAG_PREFIX = "stylistic:";
 
 /** Tag prefix for external operational wrappers that own replace resolution scope. */
-export const STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX =
-  "stylistic-operational-wrapper:";
+export const STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX = "stylistic-operational-wrapper:";
 
 /**
  * Storage marker for Content Control title metadata used by operational-wrapper

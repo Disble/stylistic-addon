@@ -16,7 +16,7 @@ export class ResolutionObservabilityReporter {
   constructor(
     private readonly suggestionId: string,
     private readonly action: "accept" | "reject",
-    private readonly observabilityPort: IResolutionObservabilityPort,
+    private readonly observabilityPort: IResolutionObservabilityPort
   ) {}
 
   /** Updates the correlation id used by subsequent records in the same workflow run. */
@@ -27,7 +27,7 @@ export class ResolutionObservabilityReporter {
   /** Merges two optional metadata objects without leaking observability assembly details into callers. */
   mergeMetadata(
     base?: ResolutionObservabilityMetadata,
-    extra?: ResolutionObservabilityMetadata,
+    extra?: ResolutionObservabilityMetadata
   ): ResolutionObservabilityMetadata {
     if (!base) {
       return extra ?? {};
@@ -47,7 +47,7 @@ export class ResolutionObservabilityReporter {
   async emitPhase(
     phase: ResolutionPhase,
     outcome: ResolutionObservabilityEvent["outcome"],
-    metadata?: ResolutionObservabilityEvent["metadata"],
+    metadata?: ResolutionObservabilityEvent["metadata"]
   ): Promise<void> {
     try {
       await this.observabilityPort.emitEvent({
@@ -61,7 +61,7 @@ export class ResolutionObservabilityReporter {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(
-        `⚠️ [ResolveSuggestionCommand] observability event failed for suggestionId="${this.suggestionId}" phase=${phase}: ${message}`,
+        `⚠️ [ResolveSuggestionCommand] observability event failed for suggestionId="${this.suggestionId}" phase=${phase}: ${message}`
       );
     }
   }
@@ -71,7 +71,7 @@ export class ResolutionObservabilityReporter {
     label: ResolutionObservabilitySnapshotLabel,
     workflowState: ResolutionObservabilitySnapshot["workflowState"],
     hostEvidence?: ResolutionObservabilitySnapshot["hostEvidence"],
-    heuristicDiagnostics?: ResolutionObservabilitySnapshot["heuristicDiagnostics"],
+    heuristicDiagnostics?: ResolutionObservabilitySnapshot["heuristicDiagnostics"]
   ): Promise<void> {
     try {
       await this.observabilityPort.captureSnapshot({
@@ -86,7 +86,7 @@ export class ResolutionObservabilityReporter {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(
-        `⚠️ [ResolveSuggestionCommand] observability snapshot failed for suggestionId="${this.suggestionId}" label=${label}: ${message}`,
+        `⚠️ [ResolveSuggestionCommand] observability snapshot failed for suggestionId="${this.suggestionId}" label=${label}: ${message}`
       );
     }
   }

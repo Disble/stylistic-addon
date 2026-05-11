@@ -15,7 +15,7 @@ Completed. `ResolveSuggestionCommand` now uses one semantic execution model plus
 ## Validation
 
 - Focused adapter tests: 11 passed, 0 failed.
-- Problems check: clean for `src/adapters/word/ResolveSuggestionCommand.ts`, `src/adapters/word/WordAdapterAcceptSuggestion.test.ts`, and `src/adapters/word/WordAdapterRejectSuggestion.test.ts`.
+- Problems check: clean for `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`, `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts`, and `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts`.
 
 ## Residual Risk
 

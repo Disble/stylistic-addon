@@ -8,14 +8,8 @@
  * @module TextSearchCore
  */
 
-/** Indexed representation of normalized text for slice reconstruction. */
-export type IndexedText = {
-  text: string;
-  indices: number[];
-};
-
-/** Default max candidate length tolerated by Word search. */
-const DEFAULT_WORD_SEARCH_MAX_LENGTH = 256;
+import type { IndexedText } from "./TextSearchCore.types";
+import { DEFAULT_WORD_SEARCH_MAX_LENGTH } from "./TextSearchCore.constants";
 
 /**
  * Normalizes a single character for cross-source comparison.
@@ -88,7 +82,7 @@ export function removeWhitespaceWithIndices(text: string): IndexedText {
  */
 export function findWhitespaceInsensitiveSlice(
   searchText: string,
-  documentText: string,
+  documentText: string
 ): string | null {
   const normalizedSearch = removeWhitespaceWithIndices(searchText).text;
   if (normalizedSearch.length === 0) {
@@ -102,8 +96,7 @@ export function findWhitespaceInsensitiveSlice(
   }
 
   const start = normalizedDocument.indices[matchIndex];
-  const end =
-    normalizedDocument.indices[matchIndex + normalizedSearch.length - 1] + 1;
+  const end = normalizedDocument.indices[matchIndex + normalizedSearch.length - 1] + 1;
 
   return documentText.slice(start, end);
 }
@@ -115,7 +108,7 @@ export function findWhitespaceInsensitiveSlice(
 export function findUniqueLocatorSubstring(
   slice: string,
   containerText: string,
-  maxLength = DEFAULT_WORD_SEARCH_MAX_LENGTH,
+  maxLength = DEFAULT_WORD_SEARCH_MAX_LENGTH
 ): string | null {
   if (slice.length <= maxLength) {
     return slice;

@@ -11,20 +11,18 @@
  */
 
 import type { PipelineContext } from "../PipelineContext";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
-export interface PipelineHandler {
-  handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void>;
-}
-
+/** Reads the text source that will enter the analysis pipeline. */
 export class ReadTextHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     console.log("📖 [ReadTextHandler] Fase 1: Resolviendo texto a analizar...");
     ctx.emitter.emitPhaseStart("reading", "Leyendo texto...");
 
-    const { text, isSelection } = await ctx.documentPort.getTextToAnalyze();
+    const { text, isSelection, documentUuid } = await ctx.documentPort.getTextToAnalyze();
     const scope = isSelection ? "selección" : "documento";
     console.log(
-      `📖 [ReadTextHandler] ${isSelection ? "Selección" : "Documento"} — ${text.length} chars`,
+      `📖 [ReadTextHandler] ${isSelection ? "Selección" : "Documento"} — ${text.length} chars`
     );
 
     if (!text || text.trim().length === 0) {
@@ -37,6 +35,7 @@ export class ReadTextHandler implements PipelineHandler {
 
     ctx.text = text;
     ctx.isSelection = isSelection;
+    ctx.documentUuid = documentUuid;
     ctx.emitter.emitPhaseComplete("reading");
     console.log(`📖 [ReadTextHandler] OK — ${text.length} chars (${scope})`);
 

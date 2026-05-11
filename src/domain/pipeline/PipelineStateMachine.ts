@@ -22,19 +22,7 @@
  */
 
 import type { PipelineState } from "./PipelineStateMachine.types";
-
-export type { PipelineState } from "./PipelineStateMachine.types";
-
-const TRANSITIONS: Record<PipelineState, PipelineState[]> = {
-  idle: ["reading"],
-  reading: ["connecting", "idle", "error"],
-  connecting: ["chunking", "idle", "error"],
-  chunking: ["analyzing", "idle", "error"],
-  analyzing: ["applying", "idle", "error"],
-  applying: ["done", "idle", "error"],
-  done: ["idle"],
-  error: ["idle"],
-};
+import { PIPELINE_STATE_TRANSITIONS } from "./PipelineStateMachine.constants";
 
 /**
  * Manages the lifecycle of a single pipeline run.
@@ -59,11 +47,7 @@ export class PipelineStateMachine {
 
   /** Returns `true` if the pipeline is currently executing (not idle/done/error). */
   get isRunning(): boolean {
-    return (
-      this.current !== "idle" &&
-      this.current !== "done" &&
-      this.current !== "error"
-    );
+    return this.current !== "idle" && this.current !== "done" && this.current !== "error";
   }
 
   /**
@@ -72,7 +56,7 @@ export class PipelineStateMachine {
    * @param to - Target state.
    */
   canTransition(to: PipelineState): boolean {
-    return TRANSITIONS[this.current].includes(to);
+    return PIPELINE_STATE_TRANSITIONS[this.current].includes(to);
   }
 
   /**
@@ -85,7 +69,7 @@ export class PipelineStateMachine {
     if (!this.canTransition(to)) {
       throw new Error(
         `[PipelineStateMachine] Invalid transition: "${this.current}" → "${to}". ` +
-          `Allowed: [${TRANSITIONS[this.current].join(", ")}]`,
+          `Allowed: [${PIPELINE_STATE_TRANSITIONS[this.current].join(", ")}]`
       );
     }
     console.log(`🔄 [StateMachine] ${this.current} → ${to}`);

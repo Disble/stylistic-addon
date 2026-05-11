@@ -15,6 +15,14 @@ Complementary documents:
   defines the frontend domain and the Track Changes lifecycle policy.
 - [`replace-suggestion-identity-proposal.md`](./replace-suggestion-identity-proposal.md)
   records the compound identity correction for replace suggestions.
+- [`linting-and-file-anatomy.md`](./linting-and-file-anatomy.md)
+  defines the ESLint-driven file anatomy rules for types, styles, constants,
+  hooks, helpers, tests, and component folders.
+- [`testing.md`](./testing.md)
+  defines the canonical testing strategy, confidence tiers, and regression
+  workflow.
+- [`debugging.md`](./debugging.md)
+  defines the evidence-first debugging workflow and investigation ladder.
 
 ---
 
@@ -61,6 +69,11 @@ document is. `DocumentReviewState` is derived from document artifacts, and
 `DocumentReviewStateMachine` interprets that snapshot into explicit UI semantics.
 This rule remains unchanged.
 
+That same boundary now owns Stylistic's stable `documentUuid`. The add-in
+persists document identity in `Office.context.document.settings` through the
+document adapter boundary so analysis and feedback stay tied to the actual Word
+file instead of user-scoped storage.
+
 ### 2.3 Search is a technical capability, not a business domain module
 
 The project needs a reusable text-location capability, but it should not be
@@ -82,6 +95,77 @@ testable.
 must stop owning location, observation, cleanup, and result mapping in one file.
 The command should orchestrate collaborators. The collaborators should own the
 real responsibilities.
+
+### 2.5 Authentication is a host/application boundary
+
+Authentication is part of the add-in application boundary, not editorial domain
+logic. The domain owns auth/session ports and session types; adapters own Better
+Auth, Office Dialog API, and OfficeRuntime storage details.
+
+The taskpane stores auth state in Zustand only for presentation. The persistent
+source of truth is `OfficeRuntime.storage` through
+`OfficeAuthSessionStorageAdapter`. Do not persist bearer tokens in Word document
+settings, custom XML parts, or Content Controls; those are document-scoped and
+can travel with files.
+
+The OAuth dialog follows the official Office fallback-auth pattern: the parent
+taskpane opens a same-origin dialog page and resolves only from
+`DialogMessageReceived`. `DialogEventReceived` is not treated as fatal because
+real Word hosts can emit transient 12006 events while the dialog is still
+navigating and later sends a valid success message.
+
+### 2.6 Taskpane shell — main vs settings views
+
+The taskpane shell is a state-driven view switcher, not a single page. Three
+surfaces are mutually exclusive at the App level:
+
+- **unauthenticated** → `AuthSection` only (login screen). No toolbar, no gear,
+  no settings entry point.
+- **authenticated + `view === "main"`** → analysis workflow (analyze CTA,
+  selection preview, progress, results, cleanup CTAs, status bar) plus a
+  persistent bottom `SettingsToolbar` exposing the gear icon. The workflow
+  itself has two presentational modes derived from runtime state: an **idle
+  hero** mode (`HeroEmptyState` wrapping the analyze CTA and selection chip
+  around a brand illustration) when no analysis is running, no progress is
+  visible, and no results have been rendered; and an **active** mode (flat
+  `AnalyzeSection` → `SelectionPreview` → `ProgressPanel` → `ResultsPanel`
+  layout) once the user has triggered analysis or there are results on
+  screen. The branch is owned by the `App` shell via an `isIdle` selector
+  composed from `TaskpaneShellStore` and `ResultsPanelStore`.
+- **authenticated + `view === "settings"`** → `SettingsView` page (back arrow,
+  "Settings" title, `AccountSettings` row with email + Log out, and the
+  analysis-profile preference selector). Designed to host additional setting
+  groups (display language, defaults, etc.) over time without touching the
+  shell.
+
+Active view is owned by `TaskpaneViewStore` (Zustand) with a single field
+`view: "main" | "settings"`. Toggling is mediated by `setTaskpaneView`. Auth
+status keeps living in `TaskpaneAuthStore`; the two stores are composed at the
+App level rather than merged so each presentational surface keeps a focused
+contract.
+
+Account/logout controls intentionally do **not** appear in the main workflow.
+The session is consolidated into the secondary settings page so the primary
+real estate stays dedicated to analysis. Components must follow the strict
+folder anatomy required by `checkReactComponentRails.mjs` (`index.ts`,
+`Component.tsx`, `Component.types.ts`, optional `Component.hooks.ts`, sibling
+`__tests__/`).
+
+The analysis profile is also a **settings-owned user preference**, not a
+per-run workflow input controlled from the main screen. The canonical profile
+list lives in `src/infrastructure/config.ts` as `DEFAULT_PROFILES`; UI options
+must be derived from that single source of truth instead of duplicating labels
+in taskpane-local constants. The persisted selection is restored from
+`OfficeRuntime.storage` through `OfficeUserPreferencesAdapter` during
+`bootstrapTaskpane()`, validated against the supported `AnalysisProfileId`
+whitelist, then mirrored into `TaskpaneShellStore.selectedGenero`.
+While an analysis run is active, the selector in `SettingsView` must stay
+disabled so the persisted preference cannot diverge from the pipeline snapshot
+already in flight.
+
+`AuthSection` is **narrowed** to the loading/unauthenticated branches only;
+once `status === "authenticated"`, the component is no longer rendered and the
+App takes over the surface decision.
 
 ---
 
@@ -108,15 +192,22 @@ system.
 
 ### 3.1 Current component diagram
 
+Presentation is React-owned under `src/taskpane/**`. `taskpane.ts` remains the
+Office/host composition root; `index.tsx` bootstraps React with Fluent UI v9
+providers; taskpane UI state is React-facing and should use Zustand stores rather
+than hand-rolled listener registries.
+
 ```mermaid
 flowchart LR
   subgraph PRESENTATION["Presentation"]
-    TP["taskpane.ts\nComposition Root + DOM rendering"]
-    SCR["SuggestionCardRenderer"]
+    TP["taskpane.ts\nOffice composition root"]
+    IDX["index.tsx\nReact + FluentProvider bootstrap"]
+    APP["React taskpane components"]
+    ZS["Zustand taskpane stores"]
   end
 
   subgraph DOMAIN["Domain / Application"]
-    PORTS["ports.ts\nIDocumentPort / IAnalysisPort / IFeedbackPort"]
+    PORTS["ports.ts\nIDocumentPort / IAnalysisPort / IFeedbackPort / IAuthPort"]
     PIPE["PipelineOrchestrator"]
     HANDLERS["Read / Check / Chunk / Analyze / Guard / Apply Handlers"]
     MED["ReviewSessionMediator"]
@@ -136,8 +227,16 @@ flowchart LR
 
   subgraph BACKEND["Adapters / Backend"]
     MA["MastraAdapter"]
+    MCF["MastraClientFactory\nBearer token headers"]
     RETRY["RetryAnalysisDecorator"]
     FB["FeedbackAdapter / MockFeedbackAdapter"]
+  end
+
+  subgraph AUTH["Adapters / Auth"]
+    BA["BetterAuthAdapter"]
+    ODA["OfficeDialogAuthAdapter"]
+    STORE["OfficeAuthSessionStorageAdapter"]
+    DIALOG["auth-dialog.ts\nOffice Dialog bridge"]
   end
 
   subgraph HOST["Word Host Artifacts"]
@@ -147,15 +246,22 @@ flowchart LR
     COM["Comments"]
   end
 
+  TP --> IDX
+  IDX --> APP
+  APP --> ZS
   TP --> PIPE
+  TP --> ODA
+  TP --> STORE
   PIPE --> HANDLERS
   HANDLERS --> PORTS
   HANDLERS --> WA
   HANDLERS --> RETRY
   RETRY --> MA
+  MA --> MCF
+  FB --> MCF
 
   TP --> MED
-  SCR --> MED
+  APP --> MED
   MED --> WF
   MED --> SM
   WF --> WA
@@ -175,6 +281,9 @@ flowchart LR
   DOC --> CCC
   DOC --> TC
   DOC --> COM
+
+  ODA --> DIALOG
+  DIALOG --> BA
 ```
 
 ### 3.2 Current file map
@@ -182,6 +291,8 @@ flowchart LR
 ```text
 src/
 ├── domain/
+│   ├── auth/
+│   │   └── AuthSession.types.ts
 │   ├── types.ts
 │   ├── ports.ts
 │   ├── pipeline/
@@ -203,6 +314,10 @@ src/
 │   └── suggestion/
 │       └── SuggestionResolutionWorkflow.ts
 ├── adapters/
+│   ├── auth/
+│   │   ├── BetterAuthAdapter.ts
+│   │   ├── OfficeAuthSessionStorageAdapter.ts
+│   │   └── OfficeDialogAuthAdapter.ts
 │   ├── word/
 │   │   ├── WordAdapter.ts
 │   │   ├── ApplySuggestionCommand.ts
@@ -224,6 +339,7 @@ src/
 │   ├── mastra/
 │   │   ├── MastraAdapter.ts
 │   │   ├── FeedbackAdapter.ts
+│   │   ├── MastraClientFactory.ts
 │   │   └── MockFeedbackAdapter.ts
 │   └── RetryAnalysisDecorator.ts
 ├── infrastructure/
@@ -231,7 +347,15 @@ src/
 │   └── chunker.ts
 └── taskpane/
     ├── taskpane.ts
-    ├── SuggestionCardRenderer.ts
+    ├── index.tsx
+    ├── auth-dialog.html
+    ├── auth-dialog.ts
+    ├── TaskpaneAuthStore.ts
+    ├── TaskpaneShellStore.ts
+    ├── TaskpaneViewStore.ts
+    ├── ResultsPanelStore.ts
+    ├── SelectionPreviewStore.ts
+    ├── components/
     ├── taskpane.html
     └── taskpane.css
 ```
@@ -639,6 +763,8 @@ Owns persisted Stylistic artifact lookup:
   `stylistic-operational-wrapper:{id}` plus valid operational-wrapper metadata
   for the expected subtype,
 - comment-only suggestions: exact canonical tag `stylistic:comment-only:{id}`,
+- load every proxy-backed identity field that downstream resolution steps will
+  read later (`tag`, `title`, and similar properties),
 - duplicate valid wrappers become `ambiguous-location`,
 - malformed Stylistic metadata becomes `identity-lost`,
 - no selected artifact is returned unless the lookup is unique and safe.
@@ -646,6 +772,12 @@ Owns persisted Stylistic artifact lookup:
 This locator is shared by navigation and accept/reject resolution. Navigation
 selects the safe artifact range. Resolution continues with tracked-change
 observation and mutation after the artifact is located.
+
+Office.js reminder: locating a Content Control does not materialize all of its
+properties automatically. If later workflow phases read `selectedCc.tag` or
+`selectedCc.title`, the locator contract must ensure those fields were loaded
+before returning. Real Word will throw on unloaded proxy reads even if tests use
+permissive plain-object mocks.
 
 #### `SuggestionLocator`
 

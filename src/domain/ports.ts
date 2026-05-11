@@ -18,16 +18,19 @@
 
 import type { TextChunk } from "./chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "./DocumentApplication.types";
+import type { AuthSession, SocialSignInRequest } from "./auth/AuthSession.types";
 import type {
+  ChunkCancelResult,
   ChunkPollResult,
+  ChunkRunReference,
   ChunkSubmitResult,
+  WorkflowSubmitContext,
 } from "./mastra/MastraWorkflow.types";
 import type { ProgressCallback } from "./pipeline/PipelineEvents.types";
+import type { AnalysisProfileId } from "./Profile.types";
 import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
-import type {
-  Suggestion,
-  SuggestionNavigationResult,
-} from "./suggestion/Suggestion.types";
+import type { SelectionSnapshot } from "./selection/SelectionSnapshot.types";
+import type { Suggestion, SuggestionNavigationResult } from "./suggestion/Suggestion.types";
 import type {
   FeedbackPayload,
   ResolutionObservabilityEvent,
@@ -35,6 +38,88 @@ import type {
   SuggestionActionResult,
 } from "./suggestion/SuggestionResolutionWorkflow.types";
 import type { TextSource } from "./TextSource.types";
+import type { UserCorrectionPreferences } from "./user-preferences/UserCorrectionPreferences.types";
+
+// ---------------------------------------------------------------------------
+// Auth Ports
+// ---------------------------------------------------------------------------
+
+/**
+ * Contract for Better Auth session operations.
+ *
+ * Implementations own remote auth protocol details; callers only deal with the
+ * domain-level session and the provider sign-in URL used by the Office dialog.
+ */
+export interface IAuthPort {
+  /** Starts the configured OAuth sign-in request and returns the provider URL. */
+  createSocialSignInRequest(callbackUrl: string): Promise<SocialSignInRequest>;
+
+  /** Resolves the current Better Auth session, optionally using a bearer token. */
+  getSession(token?: string): Promise<AuthSession | undefined>;
+
+  /** Revokes/signs out the current session. Implementations swallow transport details. */
+  signOut(token?: string): Promise<void>;
+}
+
+/** Persistent storage boundary for auth sessions in the Office host. */
+export interface IAuthSessionStoragePort {
+  /** Restores the last persisted session, if any. */
+  restore(): Promise<AuthSession | undefined>;
+
+  /** Persists the latest valid session for future taskpane launches. */
+  persist(session: AuthSession): Promise<void>;
+
+  /** Removes any persisted session from host storage. */
+  clear(): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// User Preferences Port
+// ---------------------------------------------------------------------------
+
+/**
+ * Persistent storage boundary for user-level preferences that survive across
+ * documents and sessions (e.g., chosen analysis profile, future UI prefs).
+ *
+ * Adapters MUST be cross-document, per-user — preferences are configuration
+ * about the user, not about the document. When a backend-backed implementation
+ * arrives, the contract stays the same and only the adapter is swapped.
+ */
+export interface IUserPreferencesPort {
+  /**
+   * Returns the user's stored analysis-profile id, or `undefined` when no
+   * preference is persisted or the persisted value is not a non-empty string.
+   * Implementations MUST NOT validate the id against the domain whitelist —
+   * the composition root performs that semantic check before hydrating state.
+   */
+  getAnalysisProfile(): Promise<string | undefined>;
+
+  /** Persists the user's selected, already-validated analysis-profile id. */
+  setAnalysisProfile(value: AnalysisProfileId): Promise<void>;
+}
+
+/**
+ * Backend-backed boundary for the user's global correction-instruction
+ * preferences. Distinct from {@link IUserPreferencesPort} because:
+ *
+ * - It is server-owned and authenticated, not OfficeRuntime-local.
+ * - It carries a backend-echoed max-length contract used for UX validation.
+ * - It exposes `null` semantics for the "no instructions" state, so passing
+ *   `null` to {@link save} means "clear the persisted value".
+ *
+ * Adapters MUST translate transport-level failures into a
+ * {@link UserCorrectionPreferencesError} with a domain-meaningful reason.
+ */
+export interface IUserCorrectionPreferencesPort {
+  /** Loads the user's current correction-instruction preferences. */
+  load(): Promise<UserCorrectionPreferences>;
+
+  /**
+   * Persists the user's correction instructions. Sending `null` clears the
+   * stored value. The backend trims whitespace and may collapse to `null`.
+   */
+  save(correctionInstructions: string | null): Promise<UserCorrectionPreferences>;
+}
 
 // ---------------------------------------------------------------------------
 // Document Port
@@ -48,6 +133,13 @@ import type { TextSource } from "./TextSource.types";
  * any pipeline or UI code.
  */
 export interface IDocumentPort {
+  /**
+   * Returns the stable document UUID persisted inside the active Word document.
+   * Implementations must create and persist one when the document has not been
+   * initialized yet.
+   */
+  getDocumentUuid(): Promise<string>;
+
   /**
    * Resolves the text to analyze: returns the current selection if non-empty,
    * otherwise falls back to the full document body.
@@ -70,7 +162,7 @@ export interface IDocumentPort {
    */
   applySuggestions(
     suggestions: Suggestion[],
-    onProgress?: ProgressCallback,
+    onProgress?: ProgressCallback
   ): Promise<ApplySuggestionsResult>;
 
   /**
@@ -122,6 +214,16 @@ export interface IDocumentPort {
   disableTrackChanges(): Promise<void>;
 
   /**
+   * Subscribes to host selection changes and emits a `SelectionSnapshot` whenever
+   * the user updates the active selection. Implementations must emit one initial
+   * snapshot synchronously or asynchronously after subscription so the UI can
+   * reflect the current state.
+   *
+   * Returns a function that cancels the subscription.
+   */
+  subscribeSelectionChanges(listener: (snapshot: SelectionSnapshot) => void): () => void;
+
+  /**
    * Navigates the document view to the real Word artifact for one suggestion.
    * Prefers persisted Stylistic identity and falls back only to strict
    * `context -> anchor` text localization when the artifact no longer exists.
@@ -130,9 +232,7 @@ export interface IDocumentPort {
    * Never throws. Returns a semantic result so the UI can inform the user when
    * no safe navigation target exists.
    */
-  navigateToText(
-    target: Suggestion | string,
-  ): Promise<SuggestionNavigationResult>;
+  navigateToText(target: Suggestion | string): Promise<SuggestionNavigationResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,20 +257,26 @@ export interface IAnalysisPort {
    * Submits a text chunk for asynchronous workflow execution.
    * Returns the `runId` required for later polling.
    */
-  submitChunkAnalysis(
-    chunk: TextChunk,
-    genero: string,
-    autorSlug: string,
-  ): Promise<ChunkSubmitResult>;
+  submitChunkAnalysis(chunk: TextChunk, input: WorkflowSubmitContext): Promise<ChunkSubmitResult>;
 
   /**
    * Polls an existing workflow run created by `submitChunkAnalysis()`.
    * Returns intermediate or terminal workflow state for the chunk.
    */
-  pollChunkAnalysis(
-    chunkIndex: number,
-    runId: string,
-  ): Promise<ChunkPollResult>;
+  pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult>;
+
+  /**
+   * Requests backend cancellation for one active workflow run.
+   * Used exclusively by the taskpane cancel action while polling is active.
+   */
+  cancelChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkCancelResult>;
+
+  /**
+   * Polls a previously known workflow run again without resubmitting the chunk.
+   * This supports frontend-only recovery when an earlier poll attempt failed
+   * locally but the backend run might still be alive.
+   */
+  retryPollChunkAnalysis(reference: ChunkRunReference): Promise<ChunkPollResult>;
 }
 
 // ---------------------------------------------------------------------------

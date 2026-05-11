@@ -10,17 +10,15 @@
  * The document remains the source of truth for pending Stylistic artifacts.
  */
 
-import { DEFAULT_AUTHOR_SLUG } from "../../infrastructure/config";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
 import type { Suggestion } from "./Suggestion.types";
 import type {
   FeedbackDispatchStatus,
   FeedbackPayload,
+  ResolutionAction,
   SuggestionActionResult,
   SuggestionResolutionWorkflowResult,
 } from "./SuggestionResolutionWorkflow.types";
-
-type ResolutionAction = "accept" | "reject";
 
 /**
  * Workflow-oriented façade for suggestion resolution semantics.
@@ -28,13 +26,13 @@ type ResolutionAction = "accept" | "reject";
 export class SuggestionResolutionWorkflow {
   constructor(
     private readonly documentPort: IDocumentPort,
-    private readonly feedbackPort: IFeedbackPort,
+    private readonly feedbackPort: IFeedbackPort
   ) {}
 
   /** Resolves one suggestion as accepted. */
   async acceptSuggestion(
     suggestion: Suggestion,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionWorkflowResult> {
     return this.resolveSuggestion(suggestion, "accept", comment);
   }
@@ -42,7 +40,7 @@ export class SuggestionResolutionWorkflow {
   /** Resolves one suggestion as rejected. */
   async rejectSuggestion(
     suggestion: Suggestion,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionWorkflowResult> {
     return this.resolveSuggestion(suggestion, "reject", comment);
   }
@@ -53,19 +51,14 @@ export class SuggestionResolutionWorkflow {
   private async resolveSuggestion(
     suggestion: Suggestion,
     action: ResolutionAction,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionWorkflowResult> {
     const documentResult =
       action === "accept"
         ? await this.documentPort.acceptSuggestion(suggestion)
         : await this.documentPort.rejectSuggestion(suggestion);
 
-    const feedbackStatus = this.dispatchFeedback(
-      suggestion,
-      action,
-      documentResult,
-      comment,
-    );
+    const feedbackStatus = await this.dispatchFeedback(suggestion, action, documentResult, comment);
 
     return {
       ...documentResult,
@@ -76,18 +69,18 @@ export class SuggestionResolutionWorkflow {
   /**
    * Sends feedback best-effort without delaying the resolution outcome.
    */
-  private dispatchFeedback(
+  private async dispatchFeedback(
     suggestion: Suggestion,
     action: ResolutionAction,
     result: SuggestionActionResult,
-    comment?: string,
-  ): FeedbackDispatchStatus {
+    comment?: string
+  ): Promise<FeedbackDispatchStatus> {
     if (!this.shouldSendFeedback(result)) {
       return "skipped";
     }
 
     try {
-      const payload = this.buildFeedbackPayload(suggestion, action, comment);
+      const payload = await this.buildFeedbackPayload(suggestion, action, comment);
       const feedbackPromise = this.feedbackPort.sendFeedback(payload);
       void feedbackPromise.catch(() => undefined);
       return "sent";
@@ -108,15 +101,16 @@ export class SuggestionResolutionWorkflow {
   /**
    * Creates the feedback payload that mirrors the user's explicit action.
    */
-  private buildFeedbackPayload(
+  private async buildFeedbackPayload(
     suggestion: Suggestion,
     action: ResolutionAction,
-    comment?: string,
-  ): FeedbackPayload {
+    comment?: string
+  ): Promise<FeedbackPayload> {
     const trimmedComment = comment?.trim();
+    const documentUuid = await this.documentPort.getDocumentUuid();
 
     return {
-      autorSlug: DEFAULT_AUTHOR_SLUG,
+      documentUuid,
       category: suggestion.category,
       context: suggestion.context,
       anchor: suggestion.anchor,

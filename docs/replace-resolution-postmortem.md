@@ -6,6 +6,16 @@
 - El objetivo sigue siendo el mismo desde el primer reporte: si un replace no puede resolverse atómicamente, **no** debe dejar Word en estado intermedio ni marcar la tarjeta como `accepted` / `rejected`.
 - Este documento registra **todos los intentos de fix** hasta ahora, incluso los fallidos o parciales, para poder borrarlos después uno por uno hasta dejar solo el fix real.
 
+> **Actualización 2026-05 — no confundir bugs:** después de la migración React
+> apareció otra regresión donde accept/reject parecía no hacer nada. Ese bug NO
+> cambió la conclusión de atomicidad de este documento. El root cause fue más
+> acotado: `SuggestionArtifactLocator` dejó de cargar `items/tag`, y un paso
+> posterior del workflow leyó `selectedCc.tag` sobre un proxy no cargado. La
+> lección operativa queda documentada también en `docs/troubleshooting.md` y
+> `docs/architecture.md`: si un locator devuelve un Content Control que luego se
+> seguirá usando como identidad operativa, debe cargar explícitamente todos los
+> campos proxy-backed que el workflow vaya a leer.
+
 ---
 
 ## Resumen ejecutivo
@@ -559,13 +569,13 @@ En castellano brutal:
 
 ## Archivos más relevantes en esta investigación
 
-- `src/adapters/word/ResolveSuggestionCommand.ts`
-- `src/adapters/word/resolution/SuggestionResolutionObserver.ts`
-- `src/adapters/word/resolution/TrackedChangeResolutionExecutor.ts`
-- `src/adapters/word/resolution/SuggestionLocator.ts`
+- `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`
+- `src/adapters/word/resolve-suggestion/SuggestionResolutionObserver.ts`
+- `src/adapters/word/resolve-suggestion/ResolveSuggestionTrackChangeOrchestrator.ts`
+- `src/adapters/word/resolve-suggestion/SuggestionLocator.ts`
 - `src/adapters/word/WordAdapterActionTestHelper.ts`
-- `src/adapters/word/WordAdapterAcceptSuggestion.test.ts`
-- `src/adapters/word/WordAdapterRejectSuggestion.test.ts`
+- `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts`
+- `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts`
 - `src/adapters/word/ApplySuggestionCommand.ts`
 - `src/adapters/word/ReplaceIdentityParser.ts`
 

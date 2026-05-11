@@ -1,20 +1,9 @@
-/** Stable, non-throwing diagnostic shape for unknown Office.js-ish errors. */
-export type SerializedOfficeErrorDiagnostics = {
-  message: string;
-  name?: string;
-  code?: string | number;
-  debugInfo?: unknown;
-  traceMessages?: unknown;
-  stackPreview?: string[];
-};
+import type { SerializedOfficeErrorDiagnostics } from "./ResolutionErrorParser.types";
 
 /** Converts unknown runtime errors into safe diagnostic objects for logs and observability. */
 export class ResolutionErrorSerializer {
   /** Reads one unknown error property defensively so diagnostic logging never throws. */
-  private readUnknownErrorProperty(
-    error: unknown,
-    propertyName: string,
-  ): unknown {
+  private readUnknownErrorProperty(error: unknown, propertyName: string): unknown {
     if (typeof error !== "object" || error === null) {
       return undefined;
     }
@@ -36,11 +25,7 @@ export class ResolutionErrorSerializer {
       return error;
     }
 
-    if (
-      typeof error === "number" ||
-      typeof error === "boolean" ||
-      typeof error === "bigint"
-    ) {
+    if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
       return String(error);
     }
 

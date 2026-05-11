@@ -36,19 +36,17 @@ export class ResolveSuggestionTrackChangeOrchestrator {
     private readonly resultFactory: ResolveSuggestionResultFactory,
     private readonly stateInspector: DocumentReviewStateInspector,
     private readonly observabilityReporter: ResolutionObservabilityReporter,
-    errorSerializer: ResolutionErrorSerializer,
+    errorSerializer: ResolutionErrorSerializer
   ) {
     this.executor = new ResolveSuggestionOperationalExecutor(
       action,
       observabilityReporter,
-      errorSerializer,
+      errorSerializer
     );
   }
 
   /** Runs the tracked-change workflow inside the active Word batch. */
-  async execute(
-    context: Word.RequestContext,
-  ): Promise<ResolveSuggestionOutcome> {
+  async execute(context: Word.RequestContext): Promise<ResolveSuggestionOutcome> {
     await this.observabilityReporter.emitPhase("locate", "started", {
       suggestionType: this.suggestion.type,
     });
@@ -57,24 +55,17 @@ export class ResolveSuggestionTrackChangeOrchestrator {
       await this.locator.locateResolutionArtifacts(context);
     const pendingBefore = await this.stateInspector.inspect(context);
 
-    await this.observabilityReporter.emitPhase(
-      "locate",
-      selectedCc ? "succeeded" : "failed",
-      {
-        candidateCount: candidates.length,
-        selectedCcFound: Boolean(selectedCc),
-        locateStatus,
-      },
-    );
+    await this.observabilityReporter.emitPhase("locate", selectedCc ? "succeeded" : "failed", {
+      candidateCount: candidates.length,
+      selectedCcFound: Boolean(selectedCc),
+      locateStatus,
+    });
 
-    if (
-      locateStatus === "ambiguous-location" ||
-      locateStatus === "identity-lost"
-    ) {
+    if (locateStatus === "ambiguous-location" || locateStatus === "identity-lost") {
       const result = await this.resultFactory.buildObservationFailureResult(
         context,
         locateStatus,
-        pendingBefore,
+        pendingBefore
       );
       return this.toOutcome(result, pendingBefore);
     }
@@ -94,9 +85,9 @@ export class ResolveSuggestionTrackChangeOrchestrator {
         this.resultFactory.buildErrorResult(
           "Contrato invalido de track-change: anchor y suggestedText son obligatorios.",
           pendingBefore,
-          "observe-before",
+          "observe-before"
         ),
-        pendingBefore,
+        pendingBefore
       );
     }
 
@@ -104,7 +95,7 @@ export class ResolveSuggestionTrackChangeOrchestrator {
       context,
       candidates,
       selectedCc,
-      pendingBefore,
+      pendingBefore
     );
     if (this.isWorkflowOutcome(observationResult)) {
       return observationResult;
@@ -118,17 +109,16 @@ export class ResolveSuggestionTrackChangeOrchestrator {
           executionReport.error,
           await this.stateInspector.inspect(context),
           "execute",
-          executionReport,
+          executionReport
         ),
-        pendingBefore,
+        pendingBefore
       );
     }
 
-    const commentDeleted =
-      await this.cleanup.deleteLocatedStylisticCommentAfterResolution(
-        context,
-        observation.selectedComment,
-      );
+    const commentDeleted = await this.cleanup.deleteLocatedStylisticCommentAfterResolution(
+      context,
+      observation.selectedComment
+    );
     await this.observabilityReporter.emitPhase("cleanup-comment", "succeeded", {
       commentDeleted,
     });
@@ -136,14 +126,13 @@ export class ResolveSuggestionTrackChangeOrchestrator {
     const metadataCleanup = await this.cleanupMetadataAfterResolution(
       context,
       pendingBefore,
-      executionReport,
+      executionReport
     );
     if (metadataCleanup) {
       return metadataCleanup;
     }
 
-    const pendingAfter =
-      await this.stateInspector.inspectAfterResolution(context);
+    const pendingAfter = await this.stateInspector.inspectAfterResolution(context);
     await this.observabilityReporter.emitPhase("inspect-after", "succeeded", {
       pendingArtifacts: pendingAfter.pendingStylisticArtifacts,
     });
@@ -167,60 +156,44 @@ export class ResolveSuggestionTrackChangeOrchestrator {
   private async cleanupMetadataAfterResolution(
     context: Word.RequestContext,
     pendingBefore: ResolveSuggestionOutcome["pendingBefore"],
-    executionReport: Awaited<
-      ReturnType<ResolveSuggestionOperationalExecutor["execute"]>
-    >,
+    executionReport: Awaited<ReturnType<ResolveSuggestionOperationalExecutor["execute"]>>
   ): Promise<ResolveSuggestionOutcome | null> {
     await this.observabilityReporter.emitPhase("cleanup-metadata", "started", {
       suggestionType: this.suggestion.type,
     });
 
     try {
-      const metadataCleanup =
-        await this.cleanup.deleteResolvedTrackChangeMetadata(context);
+      const metadataCleanup = await this.cleanup.deleteResolvedTrackChangeMetadata(context);
 
       if (metadataCleanup.failedContentControls.length > 0) {
         const error = `No se pudieron limpiar metadatos de track-change resuelta: ${metadataCleanup.failedContentControls
           .map((failure) => `${failure.tag}: ${failure.error}`)
           .join("; ")}`;
 
-        await this.observabilityReporter.emitPhase(
-          "cleanup-metadata",
-          "failed",
-          {
-            deletedContentControlCount:
-              metadataCleanup.deletedContentControls.length,
-            deletedContentControls:
-              metadataCleanup.deletedContentControls.join(","),
-            failedContentControlCount:
-              metadataCleanup.failedContentControls.length,
-            failedContentControls: metadataCleanup.failedContentControls
-              .map((failure) => `${failure.tag}:${failure.error}`)
-              .join("|"),
-          },
-        );
+        await this.observabilityReporter.emitPhase("cleanup-metadata", "failed", {
+          deletedContentControlCount: metadataCleanup.deletedContentControls.length,
+          deletedContentControls: metadataCleanup.deletedContentControls.join(","),
+          failedContentControlCount: metadataCleanup.failedContentControls.length,
+          failedContentControls: metadataCleanup.failedContentControls
+            .map((failure) => `${failure.tag}:${failure.error}`)
+            .join("|"),
+        });
 
         return this.toOutcome(
           this.resultFactory.buildErrorResult(
             error,
             await this.stateInspector.inspect(context),
             "cleanup-metadata",
-            executionReport,
+            executionReport
           ),
-          pendingBefore,
+          pendingBefore
         );
       }
 
-      await this.observabilityReporter.emitPhase(
-        "cleanup-metadata",
-        "succeeded",
-        {
-          deletedContentControlCount:
-            metadataCleanup.deletedContentControls.length,
-          deletedContentControls:
-            metadataCleanup.deletedContentControls.join(","),
-        },
-      );
+      await this.observabilityReporter.emitPhase("cleanup-metadata", "succeeded", {
+        deletedContentControlCount: metadataCleanup.deletedContentControls.length,
+        deletedContentControls: metadataCleanup.deletedContentControls.join(","),
+      });
       return null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -232,9 +205,9 @@ export class ResolveSuggestionTrackChangeOrchestrator {
           message,
           await this.stateInspector.inspect(context),
           "cleanup-metadata",
-          executionReport,
+          executionReport
         ),
-        pendingBefore,
+        pendingBefore
       );
     }
   }
@@ -244,7 +217,7 @@ export class ResolveSuggestionTrackChangeOrchestrator {
     context: Word.RequestContext,
     candidates: Word.ContentControl[],
     selectedCc: Word.ContentControl,
-    pendingBefore: ResolveSuggestionOutcome["pendingBefore"],
+    pendingBefore: ResolveSuggestionOutcome["pendingBefore"]
   ): Promise<ResolutionObservation | ResolveSuggestionOutcome> {
     await this.observabilityReporter.emitPhase("observe-before", "started", {
       suggestionType: this.suggestion.type,
@@ -253,7 +226,7 @@ export class ResolveSuggestionTrackChangeOrchestrator {
     const observation = await this.observer.observeResolutionCandidates(
       context,
       candidates,
-      selectedCc,
+      selectedCc
     );
 
     if (observation.observationStatus === "confirmed-pending") {
@@ -262,8 +235,8 @@ export class ResolveSuggestionTrackChangeOrchestrator {
         "succeeded",
         this.observabilityReporter.mergeMetadata(
           { trackedChangesObserved: observation.trackedChanges.length },
-          observation.debugMetadata,
-        ),
+          observation.debugMetadata
+        )
       );
       return observation;
     }
@@ -272,23 +245,20 @@ export class ResolveSuggestionTrackChangeOrchestrator {
     await this.observabilityReporter.emitPhase(
       "observe-before",
       failureStatus === "unobservable" ? "warning" : "failed",
-      this.observabilityReporter.mergeMetadata(
-        { reason: failureStatus },
-        observation.debugMetadata,
-      ),
+      this.observabilityReporter.mergeMetadata({ reason: failureStatus }, observation.debugMetadata)
     );
 
     const result = await this.resultFactory.buildObservationFailureResult(
       context,
       failureStatus,
-      pendingBefore,
+      pendingBefore
     );
     return this.toOutcome(result, pendingBefore);
   }
 
   /** Normalizes non-terminal observation variants to the public fail-closed statuses. */
   private normalizeObservationFailure(
-    observation: ResolutionObservation,
+    observation: ResolutionObservation
   ): "identity-lost" | "ambiguous-location" | "mixed-group" | "unobservable" {
     if (
       observation.observationStatus === "identity-lost" ||
@@ -315,7 +285,7 @@ export class ResolveSuggestionTrackChangeOrchestrator {
   /** Keeps the command-facing internal outcome shape stable. */
   private toOutcome(
     result: SuggestionActionResult,
-    pendingBefore: ResolveSuggestionOutcome["pendingBefore"],
+    pendingBefore: ResolveSuggestionOutcome["pendingBefore"]
   ): ResolveSuggestionOutcome {
     return {
       status: result.status,
@@ -330,7 +300,7 @@ export class ResolveSuggestionTrackChangeOrchestrator {
 
   /** Distinguishes terminal workflow outcomes from pre-execution observations. */
   private isWorkflowOutcome(
-    value: ResolutionObservation | ResolveSuggestionOutcome,
+    value: ResolutionObservation | ResolveSuggestionOutcome
   ): value is ResolveSuggestionOutcome {
     return "pendingBefore" in value;
   }

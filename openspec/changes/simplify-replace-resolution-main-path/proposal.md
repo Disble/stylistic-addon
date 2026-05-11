@@ -37,8 +37,8 @@ The key change is deleting the earlier atomic escape hatches that run before the
 
 | Area | Impact | Description |
 |------|--------|-------------|
-| `src/adapters/word/ResolveSuggestionCommand.ts` | Modified | Remove early atomic fallback helpers and simplify replace execution orchestration. |
-| `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` | Modified | Keep only tests that protect the retained replace-resolution workflow. |
+| `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` | Modified | Remove early atomic fallback helpers and simplify replace execution orchestration. |
+| `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` | Modified | Keep only tests that protect the retained replace-resolution workflow. |
 | `openspec/changes/simplify-replace-resolution-main-path/*` | New | Proposal, spec, design, and tasks for the refactor. |
 
 ## Risks
@@ -55,7 +55,7 @@ Revert the `ResolveSuggestionCommand` refactor and restore the deleted fallback-
 ## Dependencies
 
 - Existing replace diagnostics in `docs/replace-resolution-postmortem.md`.
-- Current replace workflow implementation in `src/adapters/word/ResolveSuggestionCommand.ts`.
+- Current replace workflow implementation in `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts`.
 
 ## Success Criteria
 

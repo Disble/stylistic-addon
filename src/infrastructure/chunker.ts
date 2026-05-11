@@ -15,9 +15,7 @@
 
 import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import { DEFAULT_MAX_CHUNK_SIZE } from "./config";
-
-/** Regex that matches paragraph separators: one or more blank lines. */
-const PARAGRAPH_SEPARATOR = /\r?\n\s*\r?\n/;
+import { PARAGRAPH_SEPARATOR } from "./chunker.constants";
 
 /**
  * Splits a document's full text into chunks that respect paragraph boundaries.
@@ -33,11 +31,9 @@ const PARAGRAPH_SEPARATOR = /\r?\n\s*\r?\n/;
  */
 export function splitText(
   text: string,
-  maxChunkSize: number = DEFAULT_MAX_CHUNK_SIZE,
+  maxChunkSize: number = DEFAULT_MAX_CHUNK_SIZE
 ): TextChunk[] {
-  console.log(
-    `✂️ [Chunker] splitText: ${text.length} chars, maxChunkSize: ${maxChunkSize}`,
-  );
+  console.log(`✂️ [Chunker] splitText: ${text.length} chars, maxChunkSize: ${maxChunkSize}`);
   if (!text || text.trim().length === 0) {
     return [];
   }
@@ -51,8 +47,7 @@ export function splitText(
   for (const paragraph of paragraphs) {
     const separatorLength = currentLength > 0 ? 2 : 0;
     const wouldExceed =
-      currentLength > 0 &&
-      currentLength + separatorLength + paragraph.length > maxChunkSize;
+      currentLength > 0 && currentLength + separatorLength + paragraph.length > maxChunkSize;
 
     if (wouldExceed) {
       chunks.push({
@@ -101,12 +96,7 @@ function findSeparatorLength(text: string, offset: number): number {
   let length = 0;
   let i = offset;
   while (i < text.length) {
-    if (
-      text[i] === "\r" ||
-      text[i] === "\n" ||
-      text[i] === " " ||
-      text[i] === "\t"
-    ) {
+    if (text[i] === "\r" || text[i] === "\n" || text[i] === " " || text[i] === "\t") {
       length++;
       i++;
     } else {

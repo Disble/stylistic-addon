@@ -7,14 +7,14 @@
 
 ## Phase 2: Production refactor
 
-- [x] 2.1 Modify `src/adapters/word/ResolveSuggestionCommand.ts` to remove `tryAtomicAcceptReplaceFallback(...)`.
-- [x] 2.2 Modify `src/adapters/word/ResolveSuggestionCommand.ts` to remove `tryAtomicAcceptStepFallback(...)` and simplify callers.
+- [x] 2.1 Modify `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` to remove `tryAtomicAcceptReplaceFallback(...)`.
+- [x] 2.2 Modify `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` to remove `tryAtomicAcceptStepFallback(...)` and simplify callers.
 - [x] 2.3 Keep the semantic stepwise workflow plus the bounded post-execute atomic retry and fresh semantic recovery.
 
 ## Phase 3: Test pruning
 
-- [x] 3.1 Prune `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` to tests that directly protect the retained replace workflow contract.
-- [x] 3.2 Prune `src/adapters/word/WordAdapterRejectSuggestion.test.ts` to the symmetric retained replace workflow contract.
+- [x] 3.1 Prune `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` to tests that directly protect the retained replace workflow contract.
+- [x] 3.2 Prune `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` to the symmetric retained replace workflow contract.
 
 ## Phase 4: Validation
 

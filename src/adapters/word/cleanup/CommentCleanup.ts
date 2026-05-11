@@ -1,6 +1,8 @@
 /* global Word, console, OfficeExtension */
 
 import { isStylisticComment } from "../StylisticCommentBuilder";
+import { STYLISTIC_TAG_PREFIX } from "../../../infrastructure/config";
+import { OVERLAPPING_RELATIONS } from "./CommentCleanup.constants";
 
 /**
  * Comment cleanup — Range Colocation pattern for orphaned comment removal.
@@ -25,21 +27,10 @@ import { isStylisticComment } from "../StylisticCommentBuilder";
  * @module CommentCleanup
  */
 
-/** Tag prefix that identifies any active Stylistic suggestion Content Control. */
-export const STYLISTIC_TAG_PREFIX = "stylistic:";
-
-/** All `LocationRelation` values that indicate spatial overlap. */
-export const OVERLAPPING_RELATIONS: string[] = [
-  "Equal",
-  "Contains",
-  "ContainsStart",
-  "ContainsEnd",
-  "Inside",
-  "InsideStart",
-  "InsideEnd",
-  "OverlapsBefore",
-  "OverlapsAfter",
-];
+/** Returns whether a Word `LocationRelation` indicates spatial overlap. */
+export function isOverlappingRelation(relation: string): boolean {
+  return OVERLAPPING_RELATIONS.includes(relation);
+}
 
 /**
  * Deletes Stylistic comments that are no longer colocated with an active
@@ -63,13 +54,11 @@ export async function getCleanupPreview(): Promise<{
 
     // Pre-filter: find all active Stylistic Content Controls (JS-side prefix
     // filter — Office.js getByTag() is exact-match only, no prefix query).
-    const stylisticCCs = allCCs.items.filter((cc) =>
-      cc.tag.startsWith(STYLISTIC_TAG_PREFIX),
-    );
+    const stylisticCCs = allCCs.items.filter((cc) => cc.tag.startsWith(STYLISTIC_TAG_PREFIX));
 
     console.log(
       `🧽 [CommentCleanup] ${stylisticComments.length} comentarios Stylistic, ` +
-        `${stylisticCCs.length} CCs Stylistic activos`,
+        `${stylisticCCs.length} CCs Stylistic activos`
     );
 
     if (stylisticComments.length === 0) {
@@ -87,8 +76,7 @@ export async function getCleanupPreview(): Promise<{
     }
 
     // Sync 3: build spatial comparison matrix (comments × CCs)
-    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
-      [];
+    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] = [];
     for (let i = 0; i < commentRanges.length; i++) {
       comparisons[i] = [];
       for (let j = 0; j < ccRanges.length; j++) {
@@ -103,7 +91,7 @@ export async function getCleanupPreview(): Promise<{
 
     for (let i = 0; i < stylisticComments.length; i++) {
       const hasColocatedCC = ccRanges.some((_, j) =>
-        OVERLAPPING_RELATIONS.includes(comparisons[i][j].value as string),
+        isOverlappingRelation(comparisons[i][j].value as string)
       );
 
       if (hasColocatedCC) {
@@ -127,9 +115,7 @@ export async function cleanupResolvedComments(): Promise<{
   deleted: number;
   kept: number;
 }> {
-  console.log(
-    "🧽 [CommentCleanup] Iniciando limpieza de comentarios resueltos...",
-  );
+  console.log("🧽 [CommentCleanup] Iniciando limpieza de comentarios resueltos...");
 
   return Word.run(async (context) => {
     // Sync 1: load collections
@@ -141,13 +127,11 @@ export async function cleanupResolvedComments(): Promise<{
 
     const stylisticComments = comments.items.filter(isStylisticComment);
 
-    const stylisticCCs = allCCs.items.filter((cc) =>
-      cc.tag.startsWith(STYLISTIC_TAG_PREFIX),
-    );
+    const stylisticCCs = allCCs.items.filter((cc) => cc.tag.startsWith(STYLISTIC_TAG_PREFIX));
 
     console.log(
       `🧽 [CommentCleanup] ${stylisticComments.length} comentarios Stylistic, ` +
-        `${stylisticCCs.length} CCs Stylistic activos`,
+        `${stylisticCCs.length} CCs Stylistic activos`
     );
 
     if (stylisticComments.length === 0) {
@@ -165,15 +149,12 @@ export async function cleanupResolvedComments(): Promise<{
         comment.delete();
       }
       await context.sync();
-      console.log(
-        `🧽 [CommentCleanup] ${stylisticComments.length} eliminados (sin CCs activos)`,
-      );
+      console.log(`🧽 [CommentCleanup] ${stylisticComments.length} eliminados (sin CCs activos)`);
       return { deleted: stylisticComments.length, kept: 0 };
     }
 
     // Sync 3: build spatial comparison matrix (comments × CCs)
-    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] =
-      [];
+    const comparisons: OfficeExtension.ClientResult<Word.LocationRelation>[][] = [];
     for (let i = 0; i < commentRanges.length; i++) {
       comparisons[i] = [];
       for (let j = 0; j < ccRanges.length; j++) {
@@ -188,7 +169,7 @@ export async function cleanupResolvedComments(): Promise<{
 
     for (let i = 0; i < stylisticComments.length; i++) {
       const hasColocatedCC = ccRanges.some((_, j) =>
-        OVERLAPPING_RELATIONS.includes(comparisons[i][j].value as string),
+        isOverlappingRelation(comparisons[i][j].value as string)
       );
 
       if (hasColocatedCC) {
@@ -201,9 +182,7 @@ export async function cleanupResolvedComments(): Promise<{
 
     // Sync 4: execute deletes
     await context.sync();
-    console.log(
-      `🧽 [CommentCleanup] ${deleted} eliminados, ${kept} conservados`,
-    );
+    console.log(`🧽 [CommentCleanup] ${deleted} eliminados, ${kept} conservados`);
     return { deleted, kept };
   });
 }

@@ -3,12 +3,7 @@ import {
   STYLISTIC_TAG_PREFIX,
 } from "../../../infrastructure/config";
 import type { ColocatedCommentContext } from "./ResolutionContext";
-
-/** Result of deleting resolved suggestion-owned metadata artifacts. */
-export type ResolvedTrackChangeMetadataCleanupResult = {
-  deletedContentControls: string[];
-  failedContentControls: Array<{ tag: string; error: string }>;
-};
+import type { ResolvedTrackChangeMetadataCleanupResult } from "./SuggestionResolutionCleanup.types";
 
 /**
  * Owns cleanup policy after tracked changes were already resolved.
@@ -21,7 +16,7 @@ export type ResolvedTrackChangeMetadataCleanupResult = {
 export class SuggestionResolutionCleanup {
   constructor(
     private readonly suggestionId: string,
-    private readonly action: "accept" | "reject",
+    private readonly action: "accept" | "reject"
   ) {}
 
   /**
@@ -39,17 +34,17 @@ export class SuggestionResolutionCleanup {
    */
   async deleteLocatedStylisticComment(
     context: Word.RequestContext,
-    colocatedComment: ColocatedCommentContext | null,
+    colocatedComment: ColocatedCommentContext | null
   ): Promise<boolean> {
     if (!colocatedComment) {
       console.log(
-        `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=missing`,
+        `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=missing`
       );
       return false;
     }
 
     console.log(
-      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-start`,
+      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-start`
     );
     try {
       colocatedComment.comment.delete();
@@ -62,7 +57,7 @@ export class SuggestionResolutionCleanup {
 
       if (isGeneralException) {
         console.warn(
-          `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-soft-success (host invalidated comment proxy after prior mutation: ${message})`,
+          `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-soft-success (host invalidated comment proxy after prior mutation: ${message})`
         );
         return true;
       }
@@ -70,7 +65,7 @@ export class SuggestionResolutionCleanup {
       throw error;
     }
     console.log(
-      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-done`,
+      `🧹 [SuggestionResolutionCleanup] action=${this.action} suggestionId="${this.suggestionId}" comment=delete-done`
     );
     return true;
   }
@@ -78,7 +73,7 @@ export class SuggestionResolutionCleanup {
   /** Deletes a colocated comment after tracked changes have already been resolved. */
   async deleteLocatedStylisticCommentAfterResolution(
     context: Word.RequestContext,
-    colocatedComment: ColocatedCommentContext | null,
+    colocatedComment: ColocatedCommentContext | null
   ): Promise<boolean> {
     return this.deleteLocatedStylisticComment(context, colocatedComment);
   }
@@ -95,13 +90,10 @@ export class SuggestionResolutionCleanup {
    * user's previous tracking mode is restored immediately afterward.
    */
   async deleteResolvedTrackChangeMetadata(
-    context: Word.RequestContext,
+    context: Word.RequestContext
   ): Promise<ResolvedTrackChangeMetadataCleanupResult> {
     return this.runWithTrackChangesDisabled(context, async () => {
-      const targetTags = new Set([
-        this.buildOperationalWrapperTag(),
-        this.buildInsertedSideTag(),
-      ]);
+      const targetTags = new Set([this.buildOperationalWrapperTag(), this.buildInsertedSideTag()]);
       const deletedContentControls: string[] = [];
       const failedContentControls: Array<{ tag: string; error: string }> = [];
 
@@ -147,14 +139,13 @@ export class SuggestionResolutionCleanup {
    */
   private async runWithTrackChangesDisabled<T>(
     context: Word.RequestContext,
-    operation: () => Promise<T>,
+    operation: () => Promise<T>
   ): Promise<T> {
     context.document.load("changeTrackingMode");
     await context.sync();
 
     const previousTrackingMode = context.document.changeTrackingMode;
-    const mustDisableTracking =
-      previousTrackingMode !== Word.ChangeTrackingMode.off;
+    const mustDisableTracking = previousTrackingMode !== Word.ChangeTrackingMode.off;
 
     if (mustDisableTracking) {
       context.document.changeTrackingMode = Word.ChangeTrackingMode.off;
@@ -173,6 +164,34 @@ export class SuggestionResolutionCleanup {
 
   /** Converts unknown host exceptions to stable diagnostics. */
   private stringifyError(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === "string") {
+      return error;
+    }
+
+    if (error && typeof error === "object") {
+      if ("message" in error && typeof error.message === "string") {
+        return error.message;
+      }
+
+      if ("code" in error && typeof error.code === "string") {
+        return error.code;
+      }
+
+      return "Unknown object error";
+    }
+
+    if (typeof error === "number" || typeof error === "bigint" || typeof error === "boolean") {
+      return error.toString();
+    }
+
+    if (typeof error === "symbol") {
+      return error.description ?? error.toString();
+    }
+
+    return "Unknown error";
   }
 }

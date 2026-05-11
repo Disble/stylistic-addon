@@ -19,24 +19,19 @@ import { SuggestionResolutionWorkflow } from "../suggestion/SuggestionResolution
 import type { SuggestionResolutionMediatorResult } from "../suggestion/SuggestionResolutionWorkflow.types";
 import { DocumentReviewStateMachine } from "./DocumentReviewStateMachine";
 import type { ReviewTaskpaneState } from "./DocumentReviewStateMachine.types";
-
-type ResolutionAction = "accept" | "reject";
+import type { ResolutionAction } from "./ReviewSessionMediator.types";
 
 /**
  * Explicit mediator for taskpane review coordination.
  */
 export class ReviewSessionMediator {
-  private readonly documentReviewStateMachine =
-    new DocumentReviewStateMachine();
+  private readonly documentReviewStateMachine = new DocumentReviewStateMachine();
 
   constructor(
     private readonly documentPort: IDocumentPort,
-    feedbackPort: IFeedbackPort,
+    feedbackPort: IFeedbackPort
   ) {
-    this.resolutionWorkflow = new SuggestionResolutionWorkflow(
-      documentPort,
-      feedbackPort,
-    );
+    this.resolutionWorkflow = new SuggestionResolutionWorkflow(documentPort, feedbackPort);
   }
 
   private readonly resolutionWorkflow: SuggestionResolutionWorkflow;
@@ -56,7 +51,7 @@ export class ReviewSessionMediator {
    */
   async acceptSuggestion(
     suggestion: Suggestion,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionMediatorResult> {
     return this.resolveSuggestion(suggestion, "accept", comment);
   }
@@ -66,7 +61,7 @@ export class ReviewSessionMediator {
    */
   async rejectSuggestion(
     suggestion: Suggestion,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionMediatorResult> {
     return this.resolveSuggestion(suggestion, "reject", comment);
   }
@@ -88,16 +83,14 @@ export class ReviewSessionMediator {
   private async resolveSuggestion(
     suggestion: Suggestion,
     action: ResolutionAction,
-    comment?: string,
+    comment?: string
   ): Promise<SuggestionResolutionMediatorResult> {
     const workflowResult =
       action === "accept"
         ? await this.resolutionWorkflow.acceptSuggestion(suggestion, comment)
         : await this.resolutionWorkflow.rejectSuggestion(suggestion, comment);
 
-    this.documentReviewStateMachine.syncFromDocument(
-      workflowResult.pendingAfter,
-    );
+    this.documentReviewStateMachine.syncFromDocument(workflowResult.pendingAfter);
 
     const cleanup = await this.documentPort.getCleanupPreview();
 
@@ -113,8 +106,7 @@ export class ReviewSessionMediator {
   private buildTaskpaneState(showCleanupSection: boolean): ReviewTaskpaneState {
     return {
       documentState: this.documentReviewStateMachine.state,
-      showDisableTrackChangesCta:
-        this.documentReviewStateMachine.shouldShowDisableTrackChangesCta,
+      showDisableTrackChangesCta: this.documentReviewStateMachine.shouldShowDisableTrackChangesCta,
       showCleanupSection,
     };
   }

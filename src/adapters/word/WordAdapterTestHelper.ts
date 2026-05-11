@@ -1,5 +1,6 @@
 import type { CommandResult } from "../../domain/DocumentApplication.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type { WordRunCallback } from "./WordAdapterTestHelper.types";
 
 const hoistedCommandMocks = vi.hoisted(() => ({
   constructor: vi.fn<(suggestion: Suggestion) => void>(),
@@ -57,14 +58,10 @@ vi.mock("./cleanup/CommentCleanup", () => ({
   STYLISTIC_TAG_PREFIX: "stylistic:",
 }));
 
-type WordRunCallback<T> = (context: any) => Promise<T> | T;
-
 /**
  * Builds a canonical suggestion fixture for `WordAdapter` tests.
  */
-export function makeSuggestion(
-  overrides: Partial<Suggestion> = {},
-): Suggestion {
+export function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s-1",
@@ -83,9 +80,7 @@ export function makeSuggestion(
  * Installs a `Word.run` mock that resolves against the provided context.
  */
 export function installWordWithContext(context: any) {
-  const run = vi.fn(async <T>(callback: WordRunCallback<T>) =>
-    callback(context),
-  );
+  const run = vi.fn(async <T>(callback: WordRunCallback<T>) => callback(context));
   const wordGlobal = globalThis as unknown as {
     Word?: {
       run: typeof run;
@@ -116,6 +111,63 @@ export function installRejectingWord(error: Error) {
 }
 
 /**
+ * Installs an `Office.context.document.settings` mock for document identity tests.
+ */
+export function installOfficeDocumentSettings(
+  options: {
+    existingValue?: unknown;
+    saveErrorMessage?: string;
+  } = {}
+) {
+  const get = vi.fn((_key: string) => options.existingValue);
+  const set = vi.fn();
+  const saveAsync = vi.fn((callback: (result: Office.AsyncResult<void>) => void) => {
+    if (options.saveErrorMessage) {
+      callback({
+        status: "failed" as unknown as Office.AsyncResultStatus,
+        error: { message: options.saveErrorMessage } as Office.Error,
+      } as Office.AsyncResult<void>);
+      return;
+    }
+
+    callback({
+      status: "succeeded" as unknown as Office.AsyncResultStatus,
+      value: undefined,
+    } as Office.AsyncResult<void>);
+  });
+
+  const settings = { get, set, saveAsync } as unknown as Office.Settings;
+  const officeGlobal = globalThis as unknown as {
+    Office?: {
+      AsyncResultStatus?: Record<string, string>;
+      context?: {
+        document?: {
+          settings?: Office.Settings;
+        };
+      };
+    };
+  };
+
+  officeGlobal.Office = {
+    ...(officeGlobal.Office ?? {}),
+    AsyncResultStatus: {
+      Succeeded: "succeeded",
+      Failed: "failed",
+      ...(officeGlobal.Office?.AsyncResultStatus ?? {}),
+    },
+    context: {
+      ...(officeGlobal.Office?.context ?? {}),
+      document: {
+        ...(officeGlobal.Office?.context?.document ?? {}),
+        settings,
+      },
+    },
+  };
+
+  return { settings, get, set, saveAsync };
+}
+
+/**
  * Builds a paragraph snapshot compatible with `getTextToAnalyze()` tests.
  */
 export function makeParagraph(
@@ -124,7 +176,7 @@ export function makeParagraph(
     styleBuiltIn: string;
     firstLineIndent: number;
     leftIndent: number;
-  }> = {},
+  }> = {}
 ) {
   return {
     text,

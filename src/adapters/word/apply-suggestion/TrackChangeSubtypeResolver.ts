@@ -1,21 +1,8 @@
+import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import type {
-  Suggestion,
-  TrackChangeSuggestionSubtype,
-} from "../../../domain/suggestion/Suggestion.types";
-
-/** Formatting operation encoded by backend markdown in `suggestedText`. */
-export type TrackChangeFormattingInstruction = {
-  kind: "italic" | "bold";
-  text: string;
-};
-
-/** Full adapter-level classification for a track-change suggestion. */
-export type TrackChangeSubtypeResolution =
-  | {
-      subtype: TrackChangeSuggestionSubtype;
-      formatting?: TrackChangeFormattingInstruction;
-    }
-  | { subtype: "insert" };
+  TrackChangeFormattingInstruction,
+  TrackChangeSubtypeResolution,
+} from "./TrackChangeSubtypeResolver.types";
 
 /**
  * Resolves the native Word Track Changes subtype represented by a suggestion.
@@ -47,9 +34,7 @@ export class TrackChangeSubtypeResolver {
   }
 
   /** Extracts a supported markdown formatting instruction for the exact anchor. */
-  parseFormattingInstruction(
-    suggestion: Suggestion,
-  ): TrackChangeFormattingInstruction | null {
+  parseFormattingInstruction(suggestion: Suggestion): TrackChangeFormattingInstruction | null {
     const suggestedText = suggestion.suggestedText ?? "";
 
     if (

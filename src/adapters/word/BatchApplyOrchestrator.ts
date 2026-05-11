@@ -1,5 +1,3 @@
-/* global Word, console */
-
 /**
  * BatchApplyOrchestrator — coordinates the sequential application of multiple
  * suggestions as tracked changes in Word.
@@ -23,42 +21,12 @@ import type {
   SuggestionApplicationFailureReason,
 } from "../../domain/DocumentApplication.types";
 import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.types";
-import type { DocumentReviewUiState } from "../../domain/review/DocumentReviewStateMachine";
-import type { DocumentReviewState } from "../../domain/review/DocumentReviewStateMachine.types";
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import { applySuggestionObservability } from "../observability/ConsoleApplySuggestionObservabilityAdapter";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
+import { areComparableSnapshotHints } from "./BatchApplyOrchestrator.helpers";
+import type { BatchApplyDependencies } from "./BatchApplyOrchestrator.types";
 import { getDefaultTextLocator } from "./WordTextLocatorContext";
-
-const textLocator = getDefaultTextLocator();
-
-/** Injected capabilities required by the orchestrator. */
-type BatchApplyDependencies = {
-  /** Enables Track Changes lazily; returns `true` when newly activated. */
-  ensureTrackChangesActive: () => Promise<boolean>;
-  /** Returns the current document-derived review state. */
-  getDocumentReviewState: () => Promise<DocumentReviewState>;
-  /** Derives the explicit UI state from a review snapshot. */
-  deriveDocumentState: (state: DocumentReviewState) => DocumentReviewUiState;
-  /** Optionally refreshes one snapshot hint when local patch reseed is insufficient. */
-  rereadSuggestionPositionHint?: (
-    suggestion: Suggestion,
-    patch: NonNullable<CommandResult["mutationPatch"]>,
-  ) => Promise<Suggestion["positionHint"] | undefined>;
-};
-
-/** Returns true when two hints belong to the same comparable snapshot scope. */
-function areComparableSnapshotHints(
-  left: Suggestion["positionHint"],
-  right: Suggestion["positionHint"],
-): left is NonNullable<Suggestion["positionHint"]> {
-  return (
-    left?.source === "snapshot" &&
-    right?.source === "snapshot" &&
-    left.snapshotVersion === right.snapshotVersion &&
-    left.paragraphId === right.paragraphId
-  );
-}
 
 /**
  * Orchestrates batch suggestion application.
@@ -70,6 +38,8 @@ function areComparableSnapshotHints(
  * ```
  */
 export class BatchApplyOrchestrator {
+  private readonly textLocator = getDefaultTextLocator();
+
   constructor(private readonly deps: BatchApplyDependencies) {}
 
   /**
@@ -77,11 +47,9 @@ export class BatchApplyOrchestrator {
    */
   async run(
     suggestions: Suggestion[],
-    onProgress?: ProgressCallback,
+    onProgress?: ProgressCallback
   ): Promise<ApplySuggestionsResult> {
-    console.log(
-      `📝 [BatchApplyOrchestrator] applySuggestions: ${suggestions.length} sugerencias`,
-    );
+    console.log(`📝 [BatchApplyOrchestrator] applySuggestions: ${suggestions.length} sugerencias`);
 
     if (suggestions.length === 0) {
       const pendingAfter = await this.deps.getDocumentReviewState();
@@ -95,9 +63,7 @@ export class BatchApplyOrchestrator {
     }
 
     let pendingSuggestions = this.sortByDocumentPosition([...suggestions]);
-    applySuggestionObservability.logPreparedApplicationOrder(
-      pendingSuggestions,
-    );
+    applySuggestionObservability.logPreparedApplicationOrder(pendingSuggestions);
 
     const failedSuggestions: SuggestionApplicationFailure[] = [];
     let successCount = 0;
@@ -107,10 +73,7 @@ export class BatchApplyOrchestrator {
 
     while (pendingSuggestions.length > 0) {
       for (const suggestion of pendingSuggestions) {
-        await this.reseedSuggestionHintFromLatestPatch(
-          suggestion,
-          latestMutationPatch,
-        );
+        await this.reseedSuggestionHintFromLatestPatch(suggestion, latestMutationPatch);
       }
 
       if (
@@ -120,7 +83,7 @@ export class BatchApplyOrchestrator {
             pendingSuggestion.positionHint.snapshotVersion ===
               pendingSuggestions[0]?.positionHint?.snapshotVersion &&
             pendingSuggestion.positionHint.paragraphId ===
-              pendingSuggestions[0]?.positionHint?.paragraphId,
+              pendingSuggestions[0]?.positionHint?.paragraphId
         )
       ) {
         pendingSuggestions = this.sortByDocumentPosition(pendingSuggestions);
@@ -132,7 +95,7 @@ export class BatchApplyOrchestrator {
 
       const trackChangesState = await this.prepareTrackChangesForSuggestion(
         suggestion,
-        trackChangesPrepared,
+        trackChangesPrepared
       );
       trackChangesPrepared = trackChangesState.trackChangesPrepared;
       if (trackChangesState.activatedForBatch) {
@@ -144,14 +107,10 @@ export class BatchApplyOrchestrator {
         suggestion,
         commandResult,
         failedSuggestions,
-        successCount,
+        successCount
       );
 
-      this.rebasePendingSnapshotHints(
-        pendingSuggestions,
-        suggestion,
-        commandResult,
-      );
+      this.rebasePendingSnapshotHints(pendingSuggestions, suggestion, commandResult);
 
       if (commandResult.success && commandResult.mutationPatch) {
         latestMutationPatch = commandResult.mutationPatch;
@@ -160,12 +119,12 @@ export class BatchApplyOrchestrator {
       this.reportApplyProgress(
         onProgress,
         successCount + failedSuggestions.length,
-        suggestions.length,
+        suggestions.length
       );
     }
 
     console.log(
-      `📝 [BatchApplyOrchestrator] Completado: ${successCount} éxitos, ${failedSuggestions.length} fallos`,
+      `📝 [BatchApplyOrchestrator] Completado: ${successCount} éxitos, ${failedSuggestions.length} fallos`
     );
 
     const pendingAfter = await this.deps.getDocumentReviewState();
@@ -192,30 +151,25 @@ export class BatchApplyOrchestrator {
 
     const firstHint = suggestions[0]?.positionHint;
     const allHaveComparableSnapshotHints = suggestions.every((suggestion) =>
-      areComparableSnapshotHints(firstHint, suggestion.positionHint),
+      areComparableSnapshotHints(firstHint, suggestion.positionHint)
     );
 
     if (allHaveComparableSnapshotHints) {
       return [...suggestions].sort((left, right) => {
-        const leftRequiresReread =
-          left.positionHint?.requiresLocalReread === true;
-        const rightRequiresReread =
-          right.positionHint?.requiresLocalReread === true;
+        const leftRequiresReread = left.positionHint?.requiresLocalReread === true;
+        const rightRequiresReread = right.positionHint?.requiresLocalReread === true;
 
         if (leftRequiresReread !== rightRequiresReread) {
           return leftRequiresReread ? 1 : -1;
         }
 
-        const endDifference =
-          (right.positionHint?.end ?? 0) - (left.positionHint?.end ?? 0);
+        const endDifference = (right.positionHint?.end ?? 0) - (left.positionHint?.end ?? 0);
 
         if (endDifference !== 0) {
           return endDifference;
         }
 
-        return (
-          (right.positionHint?.start ?? 0) - (left.positionHint?.start ?? 0)
-        );
+        return (right.positionHint?.start ?? 0) - (left.positionHint?.start ?? 0);
       });
     }
 
@@ -227,7 +181,7 @@ export class BatchApplyOrchestrator {
    */
   private async prepareTrackChangesForSuggestion(
     suggestion: Suggestion,
-    trackChangesPrepared: boolean,
+    trackChangesPrepared: boolean
   ): Promise<{ trackChangesPrepared: boolean; activatedForBatch: boolean }> {
     if (trackChangesPrepared || suggestion.type !== "track-change") {
       return { trackChangesPrepared, activatedForBatch: false };
@@ -244,10 +198,8 @@ export class BatchApplyOrchestrator {
   /**
    * Executes one suggestion command and normalizes unexpected thrown errors.
    */
-  private async executeSuggestionCommand(
-    suggestion: Suggestion,
-  ): Promise<CommandResult> {
-    const command = new ApplySuggestionCommand(suggestion, textLocator);
+  private async executeSuggestionCommand(suggestion: Suggestion): Promise<CommandResult> {
+    const command = new ApplySuggestionCommand(suggestion, this.textLocator);
 
     try {
       return await command.execute();
@@ -265,7 +217,7 @@ export class BatchApplyOrchestrator {
    * Infers a stable failure reason from a command error message.
    */
   private inferApplicationFailureReason(
-    commandResult: CommandResult,
+    commandResult: CommandResult
   ): SuggestionApplicationFailureReason {
     const message = commandResult.error?.toLowerCase() ?? "";
 
@@ -276,10 +228,7 @@ export class BatchApplyOrchestrator {
       return "not-found";
     }
 
-    if (
-      message.includes("cc existente") ||
-      message.includes("content control")
-    ) {
+    if (message.includes("cc existente") || message.includes("content control")) {
       return "covered-by-existing-cc";
     }
 
@@ -293,7 +242,7 @@ export class BatchApplyOrchestrator {
     suggestion: Suggestion,
     commandResult: CommandResult,
     failedSuggestions: SuggestionApplicationFailure[],
-    successCount: number,
+    successCount: number
   ): number {
     if (commandResult.success) {
       console.log(`✅ [BatchApplyOrchestrator] "${suggestion.id}" aplicada`);
@@ -305,9 +254,7 @@ export class BatchApplyOrchestrator {
       reason: this.inferApplicationFailureReason(commandResult),
       message: commandResult.error ?? "Error desconocido al aplicar sugerencia",
     });
-    console.warn(
-      `⚠️ [BatchApplyOrchestrator] "${suggestion.id}" falló: ${commandResult.error}`,
-    );
+    console.warn(`⚠️ [BatchApplyOrchestrator] "${suggestion.id}" falló: ${commandResult.error}`);
     return successCount;
   }
 
@@ -317,7 +264,7 @@ export class BatchApplyOrchestrator {
   private reportApplyProgress(
     onProgress: ProgressCallback | undefined,
     completedCount: number,
-    total: number,
+    total: number
   ): void {
     if (!onProgress) {
       return;
@@ -327,7 +274,7 @@ export class BatchApplyOrchestrator {
       "applying",
       completedCount,
       total,
-      `Aplicando sugerencia ${completedCount} de ${total}...`,
+      `Aplicando sugerencia ${completedCount} de ${total}...`
     );
   }
 
@@ -335,7 +282,7 @@ export class BatchApplyOrchestrator {
   private rebasePendingSnapshotHints(
     suggestions: Suggestion[],
     appliedSuggestion: Suggestion,
-    commandResult: CommandResult,
+    commandResult: CommandResult
   ): void {
     const patch = commandResult.mutationPatch;
     if (!commandResult.success || !patch || patch.deltaLength === 0) {
@@ -343,7 +290,7 @@ export class BatchApplyOrchestrator {
     }
 
     const appliedHint = appliedSuggestion.positionHint;
-    if (!appliedHint || appliedHint.source !== "snapshot") {
+    if (appliedHint?.source !== "snapshot") {
       return;
     }
 
@@ -353,7 +300,7 @@ export class BatchApplyOrchestrator {
       }
 
       const hint = suggestion.positionHint;
-      if (!hint || hint.source !== "snapshot") {
+      if (hint?.source !== "snapshot") {
         continue;
       }
 
@@ -386,14 +333,10 @@ export class BatchApplyOrchestrator {
   /** Reseeds one reread-required snapshot hint from the latest localized patch when possible. */
   private async reseedSuggestionHintFromLatestPatch(
     suggestion: Suggestion,
-    patch: CommandResult["mutationPatch"],
+    patch: CommandResult["mutationPatch"]
   ): Promise<void> {
     const hint = suggestion.positionHint;
-    if (
-      !hint ||
-      hint.source !== "snapshot" ||
-      hint.requiresLocalReread !== true
-    ) {
+    if (hint?.source !== "snapshot" || hint.requiresLocalReread !== true) {
       return;
     }
 
@@ -407,10 +350,7 @@ export class BatchApplyOrchestrator {
         return;
       }
 
-      const refreshedHint = await this.deps.rereadSuggestionPositionHint(
-        suggestion,
-        patch,
-      );
+      const refreshedHint = await this.deps.rereadSuggestionPositionHint(suggestion, patch);
       if (!refreshedHint) {
         return;
       }

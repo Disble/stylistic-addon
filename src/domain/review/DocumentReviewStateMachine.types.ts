@@ -18,10 +18,7 @@ export interface DocumentReviewState {
 }
 
 /** Explicit document-review states consumed by the taskpane/workflows. */
-export type DocumentReviewUiState =
-  | "idle"
-  | "pending-review"
-  | "ready-to-disable-track-changes";
+export type DocumentReviewUiState = "idle" | "pending-review" | "ready-to-disable-track-changes";
 
 /** Transition metadata exposed to workflow/application callers. */
 export interface DocumentReviewTransition {

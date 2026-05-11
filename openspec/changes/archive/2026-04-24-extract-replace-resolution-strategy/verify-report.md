@@ -30,10 +30,10 @@ Incomplete task before archive:
 **Tests**: ✅ Passed
 - Focused run: 20 passed, 0 failed
 - Files:
-  - `src/adapters/word/resolution/ReplaceResolutionStrategy.test.ts`
-  - `src/adapters/word/resolution/TrackedChangeResolutionExecutor.test.ts`
-  - `src/adapters/word/WordAdapterAcceptSuggestion.test.ts`
-  - `src/adapters/word/WordAdapterRejectSuggestion.test.ts`
+- `src/adapters/word/resolve-suggestion/__tests__/ReplaceResolutionStrategy.test.ts`
+- `src/adapters/word/resolve-suggestion/__tests__/TrackedChangeResolutionExecutor.test.ts`
+- `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts`
+- `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts`
 
 ---
 

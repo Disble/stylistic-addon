@@ -1,13 +1,11 @@
-type ReplaceTrackedChangeSide = "Added" | "Deleted";
-
-/** Compact tracked-change payload used in observability snapshots. */
-export type TrackedChangeLogEntry = {
-  type: string;
-};
+import type {
+  ReplaceTrackedChangeSide,
+  TrackedChangeLogEntry,
+} from "./ResolutionObservationContext.types";
 
 /** Builds one stable tracked-change entry for cross-phase workflow logs. */
 export function describeTrackedChangeForLog(
-  trackedChange: Word.TrackedChange,
+  trackedChange: Word.TrackedChange
 ): TrackedChangeLogEntry {
   return {
     type: trackedChange.type ?? "unknown",
@@ -16,26 +14,20 @@ export function describeTrackedChangeForLog(
 
 /** Builds a compact tracked-change list so one workflow attempt can be reconstructed later. */
 export function describeTrackedChangesForLog(
-  trackedChanges: Word.TrackedChange[],
+  trackedChanges: Word.TrackedChange[]
 ): TrackedChangeLogEntry[] {
-  return trackedChanges.map((trackedChange) =>
-    describeTrackedChangeForLog(trackedChange),
-  );
+  return trackedChanges.map((trackedChange) => describeTrackedChangeForLog(trackedChange));
 }
 
 /** Builds a compact comma-separated type summary for one tracked-change collection. */
-export function formatTrackedChangeTypesForLog(
-  trackedChanges: Word.TrackedChange[],
-): string {
-  return trackedChanges
-    .map((trackedChange) => trackedChange.type ?? "unknown")
-    .join(",");
+export function formatTrackedChangeTypesForLog(trackedChanges: Word.TrackedChange[]): string {
+  return trackedChanges.map((trackedChange) => trackedChange.type ?? "unknown").join(",");
 }
 
 /** Resolves one stale preferred CC to its fresh logical equivalent from the current locate pass. */
 export function resolveFreshPreferredCandidate(
   candidates: Word.ContentControl[],
-  preferredCc?: Word.ContentControl,
+  preferredCc?: Word.ContentControl
 ): Word.ContentControl | null {
   if (!preferredCc) {
     return null;
@@ -46,9 +38,7 @@ export function resolveFreshPreferredCandidate(
 
   return (
     candidates.find(
-      (candidate) =>
-        candidate.tag === preferredTag &&
-        (candidate.title ?? "") === preferredTitle,
+      (candidate) => candidate.tag === preferredTag && (candidate.title ?? "") === preferredTitle
     ) ?? null
   );
 }
@@ -56,26 +46,19 @@ export function resolveFreshPreferredCandidate(
 /** Keeps the fresh logical successor first without ever reusing the old proxy object. */
 export function prioritizeFreshPreferredCandidate(
   candidates: Word.ContentControl[],
-  preferredCc: Word.ContentControl | null,
+  preferredCc: Word.ContentControl | null
 ): Word.ContentControl[] {
   if (!preferredCc) {
     return candidates;
   }
 
-  return [
-    preferredCc,
-    ...candidates.filter((candidate) => candidate !== preferredCc),
-  ];
+  return [preferredCc, ...candidates.filter((candidate) => candidate !== preferredCc)];
 }
 
 /** Returns the first tracked change for the requested semantic side. */
 export function findTrackedChangeByType(
   trackedChanges: Word.TrackedChange[],
-  trackedChangeType: ReplaceTrackedChangeSide,
+  trackedChangeType: ReplaceTrackedChangeSide
 ): Word.TrackedChange | null {
-  return (
-    trackedChanges.find(
-      (trackedChange) => trackedChange.type === trackedChangeType,
-    ) ?? null
-  );
+  return trackedChanges.find((trackedChange) => trackedChange.type === trackedChangeType) ?? null;
 }

@@ -1,8 +1,6 @@
-/* global console */
-
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import { SuggestionTextRangeLocator } from "../location/SuggestionTextRangeLocator";
-import type { TextLocator } from "../WordTextLocatorContext";
+import type { TextLocator } from "../WordTextLocatorContext.types";
 
 /**
  * Resolves the live Word range for the suggestion anchor.
@@ -13,7 +11,7 @@ export class ApplySuggestionAnchorResolver {
   constructor(
     private readonly suggestion: Suggestion,
     textLocator: TextLocator,
-    private readonly commandId: string,
+    private readonly commandId: string
   ) {
     this.textRangeLocator = new SuggestionTextRangeLocator(textLocator);
   }
@@ -24,16 +22,11 @@ export class ApplySuggestionAnchorResolver {
    */
   async resolveAnchorRange(
     context: Word.RequestContext,
-    body: Word.Body,
+    body: Word.Body
   ): Promise<Word.Range | null> {
-    return this.textRangeLocator.locateAnchorInContext(
-      context,
-      body,
-      this.suggestion,
-      {
-        commandId: this.commandId,
-        logPrefix: "🔬 [ApplySuggestionCommand]",
-      },
-    );
+    return this.textRangeLocator.locateAnchorInContext(context, body, this.suggestion, {
+      commandId: this.commandId,
+      logPrefix: "🔬 [ApplySuggestionCommand]",
+    });
   }
 }

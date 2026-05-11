@@ -3,15 +3,15 @@
 ## Phase 1: Contratos y guardrails RED
 
 - [ ] 1.1 Modificar `src/domain/types.ts` y `src/domain/ports.ts` para definir `ResolutionExecutionReport`, warnings de resolución y `ITelemetryPort` best-effort.
-- [ ] 1.2 [TEST][REGRESSION] Agregar en `src/adapters/word/WordAdapterAcceptSuggestion.test.ts` y `src/adapters/word/WordAdapterRejectSuggestion.test.ts` casos RED de reconciliación semántica tras `ItemNotFound` tardío.
-- [ ] 1.3 [TEST][REGRESSION] Agregar en `src/taskpane/TaskpaneSuggestionResolution.test.ts` el guardrail de “terminal con warning” sin reactivar botones.
+- [ ] 1.2 [TEST][REGRESSION] Agregar en `src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts` y `src/adapters/word/__tests__/WordAdapterRejectSuggestion.test.ts` casos RED de reconciliación semántica tras `ItemNotFound` tardío.
+- [ ] 1.3 [TEST][REGRESSION] Agregar en `src/taskpane/__tests__/TaskpaneSuggestionResolution.test.ts` el guardrail de “terminal con warning” sin reactivar botones.
 
 ## Phase 2: Reconciliación semántica
 
-- [ ] 2.1 Modificar `src/adapters/word/resolution/TrackedChangeResolutionExecutor.ts` para devolver un reporte explícito de ejecución por intento.
-- [ ] 2.2 Crear `src/adapters/word/resolution/SuggestionResolutionReconciler.ts` para re-observar la sugerencia y decidir `accepted|rejected|retryable` tras fallos.
-- [ ] 2.3 Modificar `src/adapters/word/ResolveSuggestionCommand.ts` para orquestar execute → reconcile → cleanup → inspect con prioridad a la verdad semántica.
-- [ ] 2.4 Modificar `src/adapters/word/resolution/SuggestionResolutionCleanup.ts` y `src/adapters/word/resolution/ResolveSuggestionResultFactory.ts` para devolver warnings en vez de degradar éxito terminal a `error`.
+- [ ] 2.1 Modificar `src/adapters/word/resolve-suggestion/ResolveSuggestionOperationalExecutor.ts` para devolver un reporte explícito de ejecución por intento.
+- [ ] 2.2 Modificar `src/adapters/word/resolve-suggestion/ResolveSuggestionTrackChangeOrchestrator.ts` para re-observar la sugerencia y decidir `accepted|rejected|retryable` tras fallos.
+- [ ] 2.3 Modificar `src/adapters/word/resolve-suggestion/ResolveSuggestionCommand.ts` para orquestar execute → reconcile → cleanup → inspect con prioridad a la verdad semántica.
+- [ ] 2.4 Modificar `src/adapters/word/resolve-suggestion/SuggestionResolutionCleanup.ts` y `src/adapters/word/resolve-suggestion/ResolveSuggestionResultFactory.ts` para devolver warnings en vez de degradar éxito terminal a `error`.
 
 ## Phase 3: Workflow, UI y telemetría
 

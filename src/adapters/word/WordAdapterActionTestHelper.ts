@@ -1,93 +1,22 @@
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type {
+  MockComment,
+  MockCommentRange,
+  MockRangeWithTrackedChanges,
+  MockTrackedChange,
+  MockTrackedChangeCollection,
+  MockWordGlobal,
+  ResolveSuggestionContext,
+} from "./WordAdapterActionTestHelper.types";
 
 const OPERATIONAL_WRAPPER_TITLE_PREFIX = "stylistic-meta-v2:";
 const OPERATIONAL_WRAPPER_TAG_PREFIX = "stylistic-operational-wrapper:";
 const COMMENT_ONLY_TAG_PREFIX = "stylistic:comment-only:";
 
-type MockTrackedChange = {
-  id?: string;
-  text?: string;
-  type?: string;
-  accept?: ReturnType<typeof vi.fn>;
-  reject?: ReturnType<typeof vi.fn>;
-  getRange?: ReturnType<typeof vi.fn>;
-};
-
-type MockRangeWithTrackedChanges = {
-  compareLocationWith: ReturnType<typeof vi.fn>;
-  getTrackedChanges: ReturnType<typeof vi.fn>;
-};
-
-type MockTrackedChangeCollection = {
-  items: MockTrackedChange[];
-  load: ReturnType<typeof vi.fn>;
-  acceptAll: ReturnType<typeof vi.fn>;
-  rejectAll: ReturnType<typeof vi.fn>;
-};
-
-type MockComment = {
-  authorName?: string;
-  content?: string;
-  getRange: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
-};
-
-type MockCommentRange = {
-  compareLocationWith: ReturnType<typeof vi.fn>;
-  getTrackedChanges: ReturnType<typeof vi.fn>;
-};
-
-type ResolveSuggestionContext = {
-  document: {
-    contentControls: {
-      getByTag: ReturnType<typeof vi.fn>;
-      load: ReturnType<typeof vi.fn>;
-      items: Array<{ tag: string }>;
-    };
-    load: ReturnType<typeof vi.fn>;
-    changeTrackingMode: string;
-    body: {
-      search: ReturnType<typeof vi.fn>;
-      load: ReturnType<typeof vi.fn>;
-      text: string;
-      getComments: ReturnType<typeof vi.fn>;
-      getTrackedChanges: ReturnType<typeof vi.fn>;
-    };
-  };
-  sync: ReturnType<typeof vi.fn>;
-  _ccsCollection: { items: unknown[]; load: ReturnType<typeof vi.fn> };
-  _commentsCollection: { items: MockComment[]; load: ReturnType<typeof vi.fn> };
-  _bodyTCCollection: { items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> };
-  _rangeTCCollection: { items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> };
-  _commentRangeTCCollections: Array<{ items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> }>;
-  _ccItems: Array<{
-    title: string;
-    tag: string;
-    load: ReturnType<typeof vi.fn>;
-    getTrackedChanges: ReturnType<typeof vi.fn>;
-    getRange: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  }>;
-  _cc: {
-    title: string;
-    tag: string;
-    load: ReturnType<typeof vi.fn>;
-    getTrackedChanges: ReturnType<typeof vi.fn>;
-    getRange: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  };
-};
-
-type MockWordGlobal = {
-  run: ReturnType<typeof vi.fn>;
-};
-
 /**
  * Builds a canonical suggestion fixture for WordAdapter action tests.
  */
-export function makeSuggestion(
-  overrides: Partial<Suggestion> = {},
-): Suggestion {
+export function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s-1",
@@ -103,25 +32,25 @@ export function makeSuggestion(
 }
 
 /** Serializes a default operational-wrapper title payload for replace-suggestion tests. */
-export function makeOperationalWrapperTitle(options: {
-  suggestionId?: string;
-  insertedTag?: string;
-  deletedValue?: string;
-  anchorValue?: string;
-  trackChangeSubtype?: "replace" | "delete-only" | "formatting";
-  deleteValue?: string;
-  formatTag?: string;
-  groupId?: string;
-  groupIndex?: number;
-  groupSize?: number;
-  overrides?: Record<string, unknown>;
-} = {}): string {
+export function makeOperationalWrapperTitle(
+  options: {
+    suggestionId?: string;
+    insertedTag?: string;
+    deletedValue?: string;
+    anchorValue?: string;
+    trackChangeSubtype?: "replace" | "delete-only" | "formatting";
+    deleteValue?: string;
+    formatTag?: string;
+    groupId?: string;
+    groupIndex?: number;
+    groupSize?: number;
+    overrides?: Record<string, unknown>;
+  } = {}
+): string {
   return `${OPERATIONAL_WRAPPER_TITLE_PREFIX}${JSON.stringify({
     suggestionId: options.suggestionId ?? "s-1",
     version: "operational-wrapper-v1",
-    ...(options.trackChangeSubtype
-      ? { trackChangeSubtype: options.trackChangeSubtype }
-      : {}),
+    ...(options.trackChangeSubtype ? { trackChangeSubtype: options.trackChangeSubtype } : {}),
     insertedSideRef: {
       kind: "content-control",
       role: "inserted-side",
@@ -176,9 +105,7 @@ export function makeCommentOnlyTag(suggestionId = "s-1"): string {
  * Installs a `Word.run` mock that executes the callback with the provided context.
  */
 export function installWordWithContext<TContext>(context: TContext) {
-  const run = vi.fn(async <T>(
-    callback: (ctx: TContext) => Promise<T> | T
-  ) => callback(context));
+  const run = vi.fn(async <T>(callback: (ctx: TContext) => Promise<T> | T) => callback(context));
   const wordGlobal = globalThis as unknown as {
     Word?: MockWordGlobal & { ChangeTrackingMode: Record<string, string> };
   };
@@ -258,10 +185,8 @@ export function makeResolveSuggestionContext({
   operationalAnchorText?: string;
   operationalAnchorRangeTCItems?: MockTrackedChange[];
 }): ResolveSuggestionContext {
-  const effectiveSpanTCItems =
-    spanTCItems.length > 0 ? spanTCItems : rangeTCItems;
-  const effectiveRangeTCItems =
-    rangeTCItems.length > 0 ? rangeTCItems : effectiveSpanTCItems;
+  const effectiveSpanTCItems = spanTCItems.length > 0 ? spanTCItems : rangeTCItems;
+  const effectiveRangeTCItems = rangeTCItems.length > 0 ? rangeTCItems : effectiveSpanTCItems;
   const mutableSpanTCItems = [...effectiveSpanTCItems];
   const mutableRangeTCItems = [...effectiveRangeTCItems];
   const mutableBodyTCItems = [...bodyTCItems];
@@ -331,32 +256,30 @@ export function makeResolveSuggestionContext({
   const ccTagParts = ccTag.split(":");
   const inferredSuggestionId = ccTagParts[ccTagParts.length - 1] ?? "s-1";
   const buildTrackedChangeCollection = (
-    items: MockTrackedChange[],
+    items: MockTrackedChange[]
   ): MockTrackedChangeCollection => ({
     items,
     load: vi.fn(),
     acceptAll: vi.fn(() => {
-      for (const trackedChange of [...items]) {
+      items.forEach((trackedChange) => {
         const accept = trackedChange.accept as (() => unknown) | undefined;
         accept?.();
-      }
+      });
     }),
     rejectAll: vi.fn(() => {
-      for (const trackedChange of [...items]) {
+      items.forEach((trackedChange) => {
         const reject = trackedChange.reject as (() => unknown) | undefined;
         reject?.();
-      }
+      });
     }),
   });
 
   const rangeTCCollection = buildTrackedChangeCollection(mutableRangeTCItems);
   const bodyTCCollection = buildTrackedChangeCollection(mutableBodyTCItems);
   const operationalAnchorRangeTCCollection = buildTrackedChangeCollection(
-    mutableOperationalAnchorRangeTCItems,
+    mutableOperationalAnchorRangeTCItems
   );
-  const deletedSideRangeTCCollection = buildTrackedChangeCollection(
-    mutableDeletedSideRangeTCItems,
-  );
+  const deletedSideRangeTCCollection = buildTrackedChangeCollection(mutableDeletedSideRangeTCItems);
 
   const buildCc = (options?: {
     title?: string;
@@ -427,7 +350,7 @@ export function makeResolveSuggestionContext({
   }
 
   const commentRangeTCCollections = comments.map((_, index) =>
-    buildTrackedChangeCollection(mutableCommentRangeTCItems[index] ?? []),
+    buildTrackedChangeCollection(mutableCommentRangeTCItems[index] ?? [])
   );
 
   comments.forEach((comment, index) => {

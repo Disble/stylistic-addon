@@ -12,33 +12,10 @@
 import type { ApplySuggestionsResult } from "../domain/DocumentApplication.types";
 import type { Suggestion } from "../domain/suggestion/Suggestion.types";
 import type { SuggestionActionResult } from "../domain/suggestion/SuggestionResolutionWorkflow.types";
-
-/** Terminal progress buckets for suggestions already applied to the document. */
-type AppliedSuggestionProgressState =
-  | "pending"
-  | "resolved"
-  | "needs-attention";
-
-/** Mutable progress snapshot owned by the results panel during one render cycle. */
-export interface SuggestionProgressSummaryModel {
-  /** Total suggestions emitted by the analysis pipeline. */
-  total: number;
-
-  /** Suggestions successfully materialized in Word during the initial batch. */
-  applied: number;
-
-  /** Suggestions never found in the document during the initial batch. */
-  notFound: number;
-
-  /** Suggestions that failed to apply for reasons other than not-found. */
-  failedOther: number;
-
-  /** Chunk-level analysis errors preserved from the pipeline. */
-  chunkErrors: number;
-
-  /** Per-suggestion live state for suggestions that were initially applied. */
-  appliedStates: Map<string, AppliedSuggestionProgressState>;
-}
+import type {
+  AppliedSuggestionProgressState,
+  SuggestionProgressSummaryModel,
+} from "./SuggestionProgressSummary.types";
 
 /**
  * Creates the initial live summary model from the pipeline completion payload.
@@ -46,29 +23,26 @@ export interface SuggestionProgressSummaryModel {
 export function createSuggestionProgressSummaryModel(
   suggestions: Suggestion[],
   result: ApplySuggestionsResult,
-  chunkErrors: string[],
+  chunkErrors: string[]
 ): SuggestionProgressSummaryModel {
-  const failedSuggestionIds = new Set(
-    result.failedSuggestions.map((failure) => failure.suggestion.id),
-  );
-  const appliedStates = new Map(
-    suggestions
-      .filter((suggestion) => !failedSuggestionIds.has(suggestion.id))
-      .map((suggestion) => [
-        suggestion.id,
-        "pending" as AppliedSuggestionProgressState,
-      ]),
-  );
+  const failedSuggestionIds = new Set<string>();
+  for (const failure of result.failedSuggestions) {
+    failedSuggestionIds.add(failure.suggestion.id);
+  }
+
+  const appliedStates = new Map<string, AppliedSuggestionProgressState>();
+  for (const suggestion of suggestions) {
+    if (!failedSuggestionIds.has(suggestion.id)) {
+      appliedStates.set(suggestion.id, "pending");
+    }
+  }
 
   return {
     total: suggestions.length,
     applied: result.successCount,
-    notFound: result.failedSuggestions.filter(
-      (failure) => failure.reason === "not-found",
-    ).length,
-    failedOther: result.failedSuggestions.filter(
-      (failure) => failure.reason !== "not-found",
-    ).length,
+    notFound: result.failedSuggestions.filter((failure) => failure.reason === "not-found").length,
+    failedOther: result.failedSuggestions.filter((failure) => failure.reason !== "not-found")
+      .length,
     chunkErrors: chunkErrors.length,
     appliedStates,
   };
@@ -84,7 +58,7 @@ export function createSuggestionProgressSummaryModel(
 export function applySuggestionProgressOutcome(
   model: SuggestionProgressSummaryModel,
   suggestionId: string,
-  status: SuggestionActionResult["status"],
+  status: SuggestionActionResult["status"]
 ): void {
   if (!model.appliedStates.has(suggestionId)) {
     return;
@@ -101,19 +75,14 @@ export function applySuggestionProgressOutcome(
 /** Builds the user-facing summary sentence from the current live model. */
 export function buildSuggestionProgressSummaryText(
   model: SuggestionProgressSummaryModel,
-  isSelection: boolean,
+  isSelection: boolean
 ): string {
   const scopePrefix = isSelection ? "Sobre selección — " : "";
   const resolved = countAppliedState(model, "resolved");
   const remaining = countAppliedState(model, "pending");
   const needsAttention = countAppliedState(model, "needs-attention");
 
-  let summaryText = buildHumanPlanningSummary(
-    scopePrefix,
-    model.applied,
-    resolved,
-    remaining,
-  );
+  let summaryText = buildHumanPlanningSummary(scopePrefix, model.applied, resolved, remaining);
 
   if (model.notFound > 0) {
     summaryText += ` ${model.notFound} no encontrada(s) en el texto.`;
@@ -136,7 +105,7 @@ function buildHumanPlanningSummary(
   scopePrefix: string,
   applied: number,
   resolved: number,
-  remaining: number,
+  remaining: number
 ): string {
   if (applied === 0) {
     return `${scopePrefix}No hay sugerencias aplicadas para revisar.`;
@@ -150,15 +119,11 @@ function buildHumanPlanningSummary(
     return `${scopePrefix}Ya no te quedan sugerencias aplicadas por revisar. ${resolved} ${pluralize(
       resolved,
       "ya resuelta.",
-      "ya resueltas.",
+      "ya resueltas."
     )}`;
   }
 
-  const suggestionLabel = pluralize(
-    applied,
-    "sugerencia aplicada",
-    "sugerencias aplicadas",
-  );
+  const suggestionLabel = pluralize(applied, "sugerencia aplicada", "sugerencias aplicadas");
   const resolvedText =
     resolved === 0
       ? "Todavía no resolviste ninguna."
@@ -170,11 +135,16 @@ function buildHumanPlanningSummary(
 /** Counts how many applied suggestions currently belong to one progress bucket. */
 function countAppliedState(
   model: SuggestionProgressSummaryModel,
-  state: AppliedSuggestionProgressState,
+  state: AppliedSuggestionProgressState
 ): number {
-  return Array.from(model.appliedStates.values()).filter(
-    (currentState) => currentState === state,
-  ).length;
+  let count = 0;
+  for (const currentState of model.appliedStates.values()) {
+    if (currentState === state) {
+      count += 1;
+    }
+  }
+
+  return count;
 }
 
 /** Returns the singular or plural copy for a count. */
@@ -184,7 +154,7 @@ function pluralize(count: number, singular: string, plural: string): string {
 
 /** Maps a document resolution outcome to a live summary bucket. */
 function mapActionStatusToProgressState(
-  status: SuggestionActionResult["status"],
+  status: SuggestionActionResult["status"]
 ): AppliedSuggestionProgressState | null {
   switch (status) {
     case "accepted":

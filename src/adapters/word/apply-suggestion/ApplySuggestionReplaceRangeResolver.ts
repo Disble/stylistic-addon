@@ -1,23 +1,10 @@
 /* global Word, console */
 
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
-import {
-  type ApplySuggestionRangeCandidateDiagnostics,
-  applySuggestionObservability,
-} from "../../observability/ConsoleApplySuggestionObservabilityAdapter";
-import type {
-  TextLocator,
-  WordSearchContainer,
-} from "../WordTextLocatorContext";
-
-/** Reviewed text pair read from one Word range. */
-interface ApplySuggestionReviewedText {
-  /** Current visible reviewed text. */
-  current: string;
-
-  /** Original reviewed text still associated with the range. */
-  original: string;
-}
+import { applySuggestionObservability } from "../../observability/ConsoleApplySuggestionObservabilityAdapter";
+import type { ApplySuggestionRangeCandidateDiagnostics } from "../../observability/ConsoleApplySuggestionObservabilityAdapter.types";
+import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext.types";
+import type { ApplySuggestionReviewedText } from "./ApplySuggestionReplaceRangeResolver.types";
 
 /**
  * Re-locates the inserted/current side for replace suggestion annotation.
@@ -26,13 +13,13 @@ export class ApplySuggestionReplaceRangeResolver {
   constructor(
     private readonly suggestion: Suggestion,
     private readonly textLocator: TextLocator,
-    private readonly commandId: string,
+    private readonly commandId: string
   ) {}
 
   /** Reads current/original reviewed text for one Word range. */
   async readReviewedText(
     context: Word.RequestContext,
-    range: Word.Range,
+    range: Word.Range
   ): Promise<ApplySuggestionReviewedText> {
     const current = range.getReviewedText("Current");
     const original = range.getReviewedText("Original");
@@ -50,14 +37,11 @@ export class ApplySuggestionReplaceRangeResolver {
   async isCurrentOnlyReviewedRange(
     context: Word.RequestContext,
     candidate: Word.Range,
-    expectedCurrentText: string,
+    expectedCurrentText: string
   ): Promise<boolean> {
     const reviewedText = await this.readReviewedText(context, candidate);
 
-    return (
-      reviewedText.current === expectedCurrentText &&
-      reviewedText.original.length === 0
-    );
+    return reviewedText.current === expectedCurrentText && reviewedText.original.length === 0;
   }
 
   /**
@@ -71,7 +55,7 @@ export class ApplySuggestionReplaceRangeResolver {
     context: Word.RequestContext,
     label: string,
     candidate: Word.Range,
-    expectedCurrentText: string,
+    expectedCurrentText: string
   ): Promise<ApplySuggestionRangeCandidateDiagnostics> {
     candidate.load("text");
     const reviewedText = await this.readReviewedText(context, candidate);
@@ -81,16 +65,10 @@ export class ApplySuggestionReplaceRangeResolver {
       text: candidate.text,
       current: reviewedText.current,
       original: reviewedText.original,
-      passes:
-        reviewedText.current === expectedCurrentText &&
-        reviewedText.original.length === 0,
+      passes: reviewedText.current === expectedCurrentText && reviewedText.original.length === 0,
     };
 
-    applySuggestionObservability.logResolverCandidate(
-      this.commandId,
-      label,
-      diagnostics,
-    );
+    applySuggestionObservability.logResolverCandidate(this.commandId, label, diagnostics);
 
     return diagnostics;
   }
@@ -105,21 +83,18 @@ export class ApplySuggestionReplaceRangeResolver {
   async resolveReplaceAnnotationRange(
     context: Word.RequestContext,
     mutationRange: Word.Range,
-    wrapperRange: Word.Range,
+    wrapperRange: Word.Range
   ): Promise<Word.Range | null> {
     const expectedCurrentText = this.suggestion.suggestedText ?? "";
     const mutationDiagnostics = await this.inspectCandidate(
       context,
       "mutationRange",
       mutationRange,
-      expectedCurrentText,
+      expectedCurrentText
     );
 
     if (mutationDiagnostics.passes) {
-      applySuggestionObservability.logResolverSelected(
-        this.commandId,
-        "mutationRange",
-      );
+      applySuggestionObservability.logResolverSelected(this.commandId, "mutationRange");
       return mutationRange;
     }
 
@@ -130,10 +105,7 @@ export class ApplySuggestionReplaceRangeResolver {
     });
 
     if (!directCandidate) {
-      applySuggestionObservability.logResolverCandidateNotFound(
-        this.commandId,
-        "wrapperRange",
-      );
+      applySuggestionObservability.logResolverCandidateNotFound(this.commandId, "wrapperRange");
     }
 
     if (directCandidate) {
@@ -141,21 +113,16 @@ export class ApplySuggestionReplaceRangeResolver {
         context,
         "wrapperRange candidate",
         directCandidate,
-        expectedCurrentText,
+        expectedCurrentText
       );
 
       if (directDiagnostics.passes) {
-        applySuggestionObservability.logResolverSelected(
-          this.commandId,
-          "wrapperRange candidate",
-        );
+        applySuggestionObservability.logResolverSelected(this.commandId, "wrapperRange candidate");
         return directCandidate;
       }
     }
 
-    const paragraphRange = mutationRange.paragraphs
-      .getFirst()
-      .getRange("Whole");
+    const paragraphRange = mutationRange.paragraphs.getFirst().getRange("Whole");
     const paragraphCandidate = await this.textLocator.locate({
       context,
       container: paragraphRange as unknown as WordSearchContainer,
@@ -163,10 +130,7 @@ export class ApplySuggestionReplaceRangeResolver {
     });
 
     if (!paragraphCandidate) {
-      applySuggestionObservability.logResolverCandidateNotFound(
-        this.commandId,
-        "paragraphRange",
-      );
+      applySuggestionObservability.logResolverCandidateNotFound(this.commandId, "paragraphRange");
     }
 
     if (paragraphCandidate) {
@@ -174,20 +138,20 @@ export class ApplySuggestionReplaceRangeResolver {
         context,
         "paragraphRange candidate",
         paragraphCandidate,
-        expectedCurrentText,
+        expectedCurrentText
       );
 
       if (paragraphDiagnostics.passes) {
         applySuggestionObservability.logResolverSelected(
           this.commandId,
-          "paragraphRange candidate",
+          "paragraphRange candidate"
         );
         return paragraphCandidate;
       }
     }
 
     console.warn(
-      `⚠️ [ApplySuggestionCommand] "${this.commandId}": no se pudo aislar el rango insertado actual (current="${mutationDiagnostics.current}", original="${mutationDiagnostics.original}")`,
+      `⚠️ [ApplySuggestionCommand] "${this.commandId}": no se pudo aislar el rango insertado actual (current="${mutationDiagnostics.current}", original="${mutationDiagnostics.original}")`
     );
 
     return null;

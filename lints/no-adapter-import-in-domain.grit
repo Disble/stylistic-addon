@@ -1,8 +1,0 @@
-`import $binding from $path` where {
-  or {
-    $path <: `"../adapters/$_"`,
-    $path <: `"../../adapters/$_"`,
-    $path <: `"../../../adapters/$_"`
-  },
-  register_diagnostic(span=$path, message="Domain layer must not import from adapters (Dependency Inversion Principle). Depend on ports instead.", severity="error")
-}

@@ -11,7 +11,7 @@ export class OperationalWrapperGroupResolver {
   async resolve(
     context: Word.RequestContext,
     seedCc: Word.ContentControl,
-    seedIdentity: ReplaceSuggestionIdentity,
+    seedIdentity: ReplaceSuggestionIdentity
   ): Promise<OperationalWrapperGroup> {
     if (seedIdentity.groupSize === 1) {
       return {
@@ -29,22 +29,20 @@ export class OperationalWrapperGroupResolver {
       .map((cc) => ({ cc, identity: parseReplaceIdentityTitle(cc.title) }))
       .filter(
         (
-          entry,
+          entry
         ): entry is {
           cc: Word.ContentControl;
           identity: ReplaceSuggestionIdentity;
         } =>
           isStructurallyValidOperationalWrapperIdentity(entry.identity) &&
-          entry.identity.groupId === seedIdentity.groupId,
+          entry.identity.groupId === seedIdentity.groupId
       )
-      .sort(
-        (left, right) => left.identity.groupIndex - right.identity.groupIndex,
-      );
+      .sort((left, right) => left.identity.groupIndex - right.identity.groupIndex);
 
     if (
       !this.hasCompleteGroup(
         seedIdentity,
-        members.map((member) => member.identity),
+        members.map((member) => member.identity)
       )
     ) {
       return {
@@ -72,7 +70,7 @@ export class OperationalWrapperGroupResolver {
   /** Confirms every explicit group slot exists exactly once. */
   private hasCompleteGroup(
     seedIdentity: ReplaceSuggestionIdentity,
-    identities: ReplaceSuggestionIdentity[],
+    identities: ReplaceSuggestionIdentity[]
   ): boolean {
     if (identities.length !== seedIdentity.groupSize) {
       return false;
@@ -102,15 +100,20 @@ export class OperationalWrapperGroupResolver {
     members: Array<{
       cc: Word.ContentControl;
       identity: ReplaceSuggestionIdentity;
-    }>,
+    }>
   ): Promise<boolean> {
+    const comparisons = [];
+
     for (let index = 0; index < members.length - 1; index += 1) {
       const currentRange = members[index].cc.getRange();
       const nextRange = members[index + 1].cc.getRange();
-      const relation = currentRange.compareLocationWith(nextRange);
-      await context.sync();
+      comparisons.push(currentRange.compareLocationWith(nextRange));
+    }
 
-      if (!this.isContiguousForwardRelation(String(relation.value ?? ""))) {
+    await context.sync();
+
+    for (const comparison of comparisons) {
+      if (!this.isContiguousForwardRelation(String(comparison.value ?? ""))) {
         return false;
       }
     }
@@ -120,12 +123,6 @@ export class OperationalWrapperGroupResolver {
 
   /** Returns true for adjacent or overlapping forward relations between ordered wrappers. */
   private isContiguousForwardRelation(relation: string): boolean {
-    return [
-      "AdjacentBefore",
-      "OverlapsBefore",
-      "Equal",
-      "Contains",
-      "Inside",
-    ].includes(relation);
+    return ["AdjacentBefore", "OverlapsBefore", "Equal", "Contains", "Inside"].includes(relation);
   }
 }

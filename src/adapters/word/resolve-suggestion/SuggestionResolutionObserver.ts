@@ -7,7 +7,7 @@ import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "../ReplaceIdentityParser";
-import type { TextLocator } from "../WordTextLocatorContext";
+import type { TextLocator } from "../WordTextLocatorContext.types";
 import { OperationalWrapperGroupResolver } from "./OperationalWrapperGroupResolver";
 import type {
   ColocatedCommentContext,
@@ -17,8 +17,7 @@ import type {
   ResolutionTrackedChangeCollection,
 } from "./ResolutionContext";
 import type { SuggestionLocator } from "./SuggestionLocator";
-
-type ReplaceTrackedChangeSide = "Added" | "Deleted";
+import type { ReplaceTrackedChangeSide } from "./SuggestionResolutionObserver.types";
 
 /**
  * Observes resolution state strictly from operational wrapper scopes.
@@ -32,42 +31,30 @@ export class SuggestionResolutionObserver {
   constructor(
     private readonly suggestion: Suggestion,
     private readonly locator: SuggestionLocator,
-    private readonly _textLocator: TextLocator,
+    private readonly _textLocator: TextLocator
   ) {}
 
   /** Observes whether the selected wrapper exposes one executable operational scope. */
   async observeResolutionCandidates(
     context: Word.RequestContext,
     _candidates: Word.ContentControl[],
-    selectedCc: Word.ContentControl,
+    selectedCc: Word.ContentControl
   ): Promise<ResolutionObservation> {
-    const selectedComment = await this.locator.findColocatedStylisticComment(
-      context,
-      selectedCc,
-    );
+    const selectedComment = await this.locator.findColocatedStylisticComment(context, selectedCc);
     const identity = parseReplaceIdentityTitle(selectedCc.title);
 
     if (!isValidOperationalReplaceIdentity(identity, this.suggestion)) {
-      return this.buildAbortObservation(
-        selectedCc,
-        selectedComment,
-        "identity-lost",
-        identity,
-      );
+      return this.buildAbortObservation(selectedCc, selectedComment, "identity-lost", identity);
     }
 
-    const group = await this.groupResolver.resolve(
-      context,
-      selectedCc,
-      identity,
-    );
+    const group = await this.groupResolver.resolve(context, selectedCc, identity);
     if (group.status === "ambiguous") {
       return this.buildAbortObservation(
         selectedCc,
         selectedComment,
         "ambiguous-location",
         identity,
-        group,
+        group
       );
     }
 
@@ -77,15 +64,14 @@ export class SuggestionResolutionObserver {
         selectedComment,
         "mixed-group",
         identity,
-        group,
+        group
       );
     }
 
     const trackedChangesCollection = this.loadWrapperTrackedChanges(selectedCc);
     await context.sync();
     const trackedChanges = [...trackedChangesCollection.items];
-    const observationStatus =
-      trackedChanges.length > 0 ? "confirmed-pending" : "unobservable";
+    const observationStatus = trackedChanges.length > 0 ? "confirmed-pending" : "unobservable";
 
     return {
       selectedCc,
@@ -99,7 +85,7 @@ export class SuggestionResolutionObserver {
         observationStatus,
         identity,
         group,
-        trackedChanges.length,
+        trackedChanges.length
       ),
       group,
     };
@@ -110,38 +96,32 @@ export class SuggestionResolutionObserver {
     context: Word.RequestContext,
     candidates: Word.ContentControl[],
     selectedCc: Word.ContentControl,
-    trackedChangeType: ReplaceTrackedChangeSide,
+    trackedChangeType: ReplaceTrackedChangeSide
   ): Promise<ResolutionObservation> {
-    const observation = await this.observeResolutionCandidates(
-      context,
-      candidates,
-      selectedCc,
-    );
+    const observation = await this.observeResolutionCandidates(context, candidates, selectedCc);
 
     if (observation.observationStatus !== "confirmed-pending") {
       return observation;
     }
 
     const trackedChanges = observation.trackedChanges.filter(
-      (trackedChange) => trackedChange.type === trackedChangeType,
+      (trackedChange) => trackedChange.type === trackedChangeType
     );
 
     return {
       ...observation,
       trackedChanges,
-      observationStatus:
-        trackedChanges.length > 0 ? "confirmed-pending" : "unobservable",
+      observationStatus: trackedChanges.length > 0 ? "confirmed-pending" : "unobservable",
       debugMetadata: {
         ...observation.debugMetadata,
-        observationStatus:
-          trackedChanges.length > 0 ? "confirmed-pending" : "unobservable",
+        observationStatus: trackedChanges.length > 0 ? "confirmed-pending" : "unobservable",
       },
     };
   }
 
   /** Loads the wrapper range tracked-change collection that owns the operation. */
   private loadWrapperTrackedChanges(
-    selectedCc: Word.ContentControl,
+    selectedCc: Word.ContentControl
   ): ResolutionTrackedChangeCollection {
     const trackedChanges = selectedCc
       .getRange()
@@ -159,7 +139,7 @@ export class SuggestionResolutionObserver {
       "confirmed-pending" | "confirmed-resolved" | "unobservable"
     >,
     identity: ReplaceSuggestionIdentity | null,
-    group?: ReplaceObservationContext["group"],
+    group?: ReplaceObservationContext["group"]
   ): ResolutionObservation {
     return {
       selectedCc,
@@ -172,7 +152,7 @@ export class SuggestionResolutionObserver {
         observationStatus,
         identity,
         group,
-        0,
+        0
       ),
       ...(group ? { group } : {}),
     };
@@ -185,7 +165,7 @@ export class SuggestionResolutionObserver {
     observationStatus: SuggestionObservationStatus,
     identity: ReplaceSuggestionIdentity | null,
     group: ReplaceObservationContext["group"] | undefined,
-    trackedChangesCount: number,
+    trackedChangesCount: number
   ): ResolutionObservationDebugMetadata {
     return {
       selectedCcTag: selectedCc.tag,

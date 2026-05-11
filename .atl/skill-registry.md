@@ -28,3 +28,4 @@ Generated for project: `stylistic-addon`
 - SDD skills were intentionally excluded from this registry per bootstrap rules.
 - Project-level skills override user-level skills with the same name.
 - KIN routing is configured in `.atl/docs-routing.yaml` and should be read before resolving external-library documentation.
+- Project-specific regression forensics belong in `docs/`; local skills should point to those canonical docs instead of duplicating long-form narratives.

@@ -21,41 +21,20 @@
 
 import type { SuggestionState } from "./Suggestion.types";
 import type { SuggestionActionResult } from "./SuggestionResolutionWorkflow.types";
+import { SUGGESTION_STATE_TRANSITIONS } from "./SuggestionStateMachine.constants";
 
-const TRANSITIONS: Record<SuggestionState, SuggestionState[]> = {
-  pending: ["resolving"],
-  resolving: [
-    "accepted",
-    "rejected",
-    "unobservable",
-    "identity-lost",
-    "ambiguous-location",
-    "mixed-group",
-    "error",
-  ],
-  accepted: [],
-  rejected: [],
-  unobservable: ["resolving"],
-  "identity-lost": [],
-  "ambiguous-location": [],
-  "mixed-group": [],
-  error: ["resolving"],
-};
-
+/** Raised when a suggestion card attempts an invalid state transition. */
 export class InvalidSuggestionTransitionError extends Error {
-  constructor(
-    from: SuggestionState,
-    to: SuggestionState,
-    allowed: SuggestionState[],
-  ) {
+  constructor(from: SuggestionState, to: SuggestionState, allowed: SuggestionState[]) {
     super(
       `[SuggestionStateMachine] Invalid transition: "${from}" → "${to}". ` +
-        `Allowed: [${allowed.join(", ")}]`,
+        `Allowed: [${allowed.join(", ")}]`
     );
     this.name = "InvalidSuggestionTransitionError";
   }
 }
 
+/** Enforces valid taskpane state transitions for one suggestion card. */
 export class SuggestionStateMachine {
   private current: SuggestionState = "pending";
 
@@ -66,7 +45,7 @@ export class SuggestionStateMachine {
 
   /** `true` when state is terminal (no further transitions possible). */
   get isTerminal(): boolean {
-    return TRANSITIONS[this.current].length === 0;
+    return SUGGESTION_STATE_TRANSITIONS[this.current].length === 0;
   }
 
   /** `true` when an async resolution is in-flight. */
@@ -76,7 +55,7 @@ export class SuggestionStateMachine {
 
   /** Returns `true` if the given transition is valid from the current state. */
   canTransition(to: SuggestionState): boolean {
-    return TRANSITIONS[this.current].includes(to);
+    return SUGGESTION_STATE_TRANSITIONS[this.current].includes(to);
   }
 
   /**
@@ -88,7 +67,7 @@ export class SuggestionStateMachine {
       throw new InvalidSuggestionTransitionError(
         this.current,
         to,
-        TRANSITIONS[this.current],
+        SUGGESTION_STATE_TRANSITIONS[this.current]
       );
     }
     console.log(`🔄 [SuggestionStateMachine] ${this.current} → ${to}`);
@@ -100,9 +79,7 @@ export class SuggestionStateMachine {
    * Idempotent — safe to call from any state.
    */
   reset(): void {
-    console.log(
-      `🔄 [SuggestionStateMachine] reset → pending (was: ${this.current})`,
-    );
+    console.log(`🔄 [SuggestionStateMachine] reset → pending (was: ${this.current})`);
     this.current = "pending";
   }
 }
@@ -113,9 +90,7 @@ export class SuggestionStateMachine {
  * - `"cc-not-found"` and `"not-found"` both map to `"error"` (retryable).
  *   The taskpane distinguishes `"cc-not-found"` visually before calling this function.
  */
-export function mapResultStatusToState(
-  status: SuggestionActionResult["status"],
-): SuggestionState {
+export function mapResultStatusToState(status: SuggestionActionResult["status"]): SuggestionState {
   switch (status) {
     case "accepted":
       return "accepted";

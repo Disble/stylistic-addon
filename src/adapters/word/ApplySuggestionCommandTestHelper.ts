@@ -1,71 +1,10 @@
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
-
-export type ParentCC = {
-  tag: string;
-  isNullObject: boolean;
-  load: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
-  title?: string;
-  getRange?: ReturnType<typeof vi.fn>;
-};
-
-export type MockRange = {
-  text: string;
-  font: { italic: boolean; bold: boolean };
-  load: ReturnType<typeof vi.fn>;
-  search: ReturnType<typeof vi.fn>;
-  insertText: ReturnType<typeof vi.fn>;
-  getReviewedText: ReturnType<typeof vi.fn>;
-  insertComment: ReturnType<typeof vi.fn>;
-  insertContentControl: ReturnType<typeof vi.fn>;
-  parentContentControlOrNullObject: ParentCC;
-  paragraphs: {
-    getFirst: ReturnType<typeof vi.fn>;
-  };
-};
-
-type RangeCollection = {
-  items: MockRange[];
-  load: ReturnType<typeof vi.fn>;
-};
-
-export type ApplyCommandTestContext = {
-  context: {
-    document: {
-      body: MockRange & { search: ReturnType<typeof vi.fn>; text: string };
-      load: ReturnType<typeof vi.fn>;
-      changeTrackingMode: string;
-    };
-    sync: ReturnType<typeof vi.fn>;
-  };
-  bodyRange: MockRange;
-  anchorRange: MockRange;
-  insertedRange: {
-    text: string;
-    font: { italic: boolean; bold: boolean };
-    getReviewedText: ReturnType<typeof vi.fn>;
-    paragraphs: {
-      getFirst: ReturnType<typeof vi.fn>;
-    };
-    search: ReturnType<typeof vi.fn>;
-    insertContentControl: ReturnType<typeof vi.fn>;
-    insertComment: ReturnType<typeof vi.fn>;
-  };
-  cc: {
-    tag: string;
-    title: string;
-    appearance: string;
-    cannotDelete: boolean;
-  };
-  operationalWrapper: {
-    tag: string;
-    title: string;
-    appearance: string;
-    cannotDelete: boolean;
-    getRange: ReturnType<typeof vi.fn>;
-  };
-  operationalWrapperRange: MockRange;
-};
+import type {
+  ApplyCommandTestContext,
+  MockRange,
+  ParentCC,
+  RangeCollection,
+} from "./ApplySuggestionCommandTestHelper.types";
 
 function createRangeCollection(items: MockRange[]): RangeCollection {
   return { items, load: vi.fn() };
@@ -75,13 +14,13 @@ function createClientResult<T>(value: T) {
   return { value };
 }
 
-export function createSearchMock(
-  sequence: MockRange[][],
-): ReturnType<typeof vi.fn> {
+/** Creates a deterministic Word search mock that returns one range batch per call. */
+export function createSearchMock(sequence: MockRange[][]): ReturnType<typeof vi.fn> {
   let index = 0;
   return vi.fn(() => createRangeCollection(sequence[index++] ?? []));
 }
 
+/** Creates a fake Word range with configurable reviewed text and search behavior. */
 export function createRange(options: {
   text: string;
   searchSequence?: MockRange[][];
@@ -110,7 +49,7 @@ export function createRange(options: {
     load: vi.fn(),
     search: createSearchMock([[]]),
     getReviewedText: vi.fn((version: "Current" | "Original") =>
-      createClientResult(version === "Original" ? "" : "texto sugerido"),
+      createClientResult(version === "Original" ? "" : "texto sugerido")
     ),
     paragraphs: {
       getFirst: vi.fn(() => ({
@@ -140,21 +79,19 @@ export function createRange(options: {
       options.insertTextImpl ??
         ((text: string) => {
           defaultInsertedRange.text = text;
-          defaultInsertedParagraphRange.text =
-            options.paragraphText ?? options.text;
-          defaultInsertedRange.getReviewedText = vi.fn(
-            (version: "Current" | "Original") =>
-              createClientResult(version === "Original" ? "" : text),
+          defaultInsertedParagraphRange.text = options.paragraphText ?? options.text;
+          defaultInsertedRange.getReviewedText = vi.fn((version: "Current" | "Original") =>
+            createClientResult(version === "Original" ? "" : text)
           );
           return defaultInsertedRange;
-        }),
+        })
     ),
     getReviewedText: vi.fn((version: "Current" | "Original") =>
       createClientResult(
         version === "Original"
           ? (options.reviewedOriginalText ?? "")
-          : (options.reviewedCurrentText ?? options.text),
-      ),
+          : (options.reviewedCurrentText ?? options.text)
+      )
     ),
     insertComment: vi.fn(),
     insertContentControl: vi.fn(() => defaultCC),
@@ -165,9 +102,8 @@ export function createRange(options: {
   };
 }
 
-export function makeSuggestion(
-  overrides: Partial<Suggestion> = {},
-): Suggestion {
+/** Builds a default suggestion fixture for apply-suggestion command tests. */
+export function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
     id: "s1",
@@ -182,34 +118,37 @@ export function makeSuggestion(
   };
 }
 
-export function installWordContext(options: {
-  documentText?: string;
-  contextText?: string;
-  anchorText?: string;
-  contextSearchSequence?: MockRange[][];
-  anchorSearchSequence?: MockRange[][];
-  paragraphSearchSequence?: MockRange[][];
-  initialTrackingMode?: string;
-  insertError?: Error;
-  insertedRange?: {
-    text?: string;
-    reviewedCurrentText?: string;
-    reviewedOriginalText?: string;
-    searchSequence?: MockRange[][];
-    paragraphText?: string;
-  };
-  contextRangeParentCC?: Partial<ParentCC>;
-  anchorRangeParentCC?: Partial<ParentCC>;
-  onSync?: (count: number) => void | Promise<void>;
-  setupParagraphSearch?: (
-    ctx: ApplyCommandTestContext,
-    contextRange: MockRange,
-    paragraphRangeRef: { current: MockRange | null },
-    anchorRangeRef: { current: MockRange | null },
-  ) => void;
-  anchorRangeRef?: { current: MockRange | null };
-  useOperationalWrapper?: boolean;
-} = {}): ApplyCommandTestContext {
+/** Installs a fake Word context tailored for apply-suggestion command scenarios. */
+export function installWordContext(
+  options: {
+    documentText?: string;
+    contextText?: string;
+    anchorText?: string;
+    contextSearchSequence?: MockRange[][];
+    anchorSearchSequence?: MockRange[][];
+    paragraphSearchSequence?: MockRange[][];
+    initialTrackingMode?: string;
+    insertError?: Error;
+    insertedRange?: {
+      text?: string;
+      reviewedCurrentText?: string;
+      reviewedOriginalText?: string;
+      searchSequence?: MockRange[][];
+      paragraphText?: string;
+    };
+    contextRangeParentCC?: Partial<ParentCC>;
+    anchorRangeParentCC?: Partial<ParentCC>;
+    onSync?: (count: number) => void | Promise<void>;
+    setupParagraphSearch?: (
+      ctx: ApplyCommandTestContext,
+      contextRange: MockRange,
+      paragraphRangeRef: { current: MockRange | null },
+      anchorRangeRef: { current: MockRange | null }
+    ) => void;
+    anchorRangeRef?: { current: MockRange | null };
+    useOperationalWrapper?: boolean;
+  } = {}
+): ApplyCommandTestContext {
   const anchorText = options.anchorText ?? "texto original";
   const contextText = options.contextText ?? `Contexto con ${anchorText}.`;
   const documentText = options.documentText ?? contextText;
@@ -228,14 +167,15 @@ export function installWordContext(options: {
   };
   let insertedCurrentText = options.insertedRange?.reviewedCurrentText;
   const insertedRange = createRange({
-    text: options.insertedRange?.text ?? (options.documentText ?? contextText),
+    text: options.insertedRange?.text ?? options.documentText ?? contextText,
     reviewedCurrentText: insertedCurrentText ?? "texto sugerido",
     reviewedOriginalText: options.insertedRange?.reviewedOriginalText ?? "",
     searchSequence: options.insertedRange?.searchSequence ?? [[]],
     paragraphText:
       options.insertedRange?.paragraphText ??
       options.insertedRange?.text ??
-      (options.documentText ?? contextText),
+      options.documentText ??
+      contextText,
   });
   insertedRange.insertContentControl = vi.fn(() => cc);
   insertedRange.insertComment = vi.fn();
@@ -250,9 +190,8 @@ export function installWordContext(options: {
       }
       if (!insertedCurrentText) {
         insertedRange.text = text;
-        insertedRange.getReviewedText = vi.fn(
-          (version: "Current" | "Original") =>
-            createClientResult(version === "Original" ? "" : text),
+        insertedRange.getReviewedText = vi.fn((version: "Current" | "Original") =>
+          createClientResult(version === "Original" ? "" : text)
         );
       }
       return insertedRange;
@@ -264,22 +203,17 @@ export function installWordContext(options: {
     [anchorRange],
     ...(options.insertedRange?.searchSequence ?? [[insertedRange]]),
   ];
-  operationalWrapperRange.search = createSearchMock(
-    wrapperSearchSequence,
-  ) as typeof operationalWrapperRange.search;
+  operationalWrapperRange.search = createSearchMock(wrapperSearchSequence);
   const bodyRange = createRange({
     text: contextText,
     searchSequence: anchorSearchSequence,
     parentCC: options.contextRangeParentCC,
   });
 
-  const paragraphSearchSeq =
-    options.paragraphSearchSequence ?? anchorSearchSequence;
+  const paragraphSearchSeq = options.paragraphSearchSequence ?? anchorSearchSequence;
   const paragraphSearchMock = createSearchMock(paragraphSearchSeq);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (bodyRange.paragraphs as any).getFirst().getRange("Whole").search =
-    paragraphSearchMock;
+  (bodyRange.paragraphs as any).getFirst().getRange("Whole").search = paragraphSearchMock;
 
   const body = {
     ...createRange({
@@ -319,13 +253,11 @@ export function installWordContext(options: {
     InsertLocation: {
       replace: "Replace",
     },
-    run: vi.fn(async (callback: (ctx: typeof context) => unknown) =>
-      callback(context),
-    ),
+    run: vi.fn(async (callback: (ctx: typeof context) => unknown) => callback(context)),
   };
 
   anchorRange.insertContentControl = vi.fn(() =>
-    options.useOperationalWrapper === false ? cc : operationalWrapper,
+    options.useOperationalWrapper === false ? cc : operationalWrapper
   );
   bodyRange.insertContentControl = vi.fn(() => operationalWrapper);
 
@@ -343,7 +275,7 @@ export function installWordContext(options: {
     testContext,
     bodyRange,
     { current: null },
-    options.anchorRangeRef ?? { current: null },
+    options.anchorRangeRef ?? { current: null }
   );
 
   return testContext;

@@ -1,23 +1,27 @@
-/* global document, Office, console */
-
 /**
  * Task-pane — Composition Root and top-level event handlers.
  *
  * Responsibilities:
  * - Instantiate all adapters, decorators, mediators, and the pipeline.
- * - Initialize when Office.js confirms the host is Word.
- * - Bind top-level DOM event handlers (analyze, cleanup, disable TC).
- * - Register a `PipelineObserver` to relay pipeline events to the DOM.
+ * - Initialize after the React shell is mounted and Office confirms the host is Word.
+ * - Expose top-level workflow handlers to the React shell.
+ * - Register a `PipelineObserver` to relay pipeline events into presentation stores.
  *
- * Card rendering, card interaction, and UI primitives are delegated to
- * `SuggestionCardRenderer` and `TaskpaneUi` respectively.
+ * React now owns shell/results rendering and UI event wiring. This module still owns
+ * orchestration and publication into presentation stores/facades.
  *
  * @module taskpane
  */
 
 import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
+import { BetterAuthAdapter } from "../adapters/auth/BetterAuthAdapter";
 import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
+import { MastraClientFactory } from "../adapters/mastra/MastraClientFactory";
 import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability/ConsoleResolutionObservabilityAdapter";
+import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
+import { OfficeDialogAuthAdapter } from "../adapters/auth/OfficeDialogAuthAdapter";
+import { OfficeUserPreferencesAdapter } from "../adapters/preferences/OfficeUserPreferencesAdapter";
+import { BackendUserCorrectionPreferencesAdapter } from "../adapters/preferences/BackendUserCorrectionPreferencesAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
@@ -27,46 +31,48 @@ import { ChunkTextHandler } from "../domain/pipeline/handlers/ChunkTextHandler";
 import { DeduplicateHandler } from "../domain/pipeline/handlers/DeduplicateHandler";
 import { GuardAppliedHandler } from "../domain/pipeline/handlers/GuardAppliedHandler";
 import { ReadTextHandler } from "../domain/pipeline/handlers/ReadTextHandler";
-import type { PipelineContext } from "../domain/pipeline/PipelineContext";
-import {
-  PipelineEventEmitter,
-  type PipelineObserver,
-} from "../domain/pipeline/PipelineEvents";
 import { PipelineOrchestrator } from "../domain/pipeline/PipelineOrchestrator";
 import { PipelineStateMachine } from "../domain/pipeline/PipelineStateMachine";
-import type { IFeedbackPort } from "../domain/ports";
+import type { AnalysisProfileId } from "../domain/Profile.types";
+import type {
+  IFeedbackPort,
+  IUserCorrectionPreferencesPort,
+  IUserPreferencesPort,
+} from "../domain/ports";
+import type { UserCorrectionPreferences } from "../domain/user-preferences/UserCorrectionPreferences.types";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
+import { HttpClient } from "../infrastructure/http/HttpClient";
 import {
-  DEFAULT_MAX_CHUNK_SIZE,
+  DEFAULT_PROFILES,
+  MASTRA_BASE_URL,
   MAX_RETRIES,
   RETRY_BASE_DELAY_MS,
 } from "../infrastructure/config";
+import { setSelectionPreviewSnapshot } from "./SelectionPreviewStore";
+import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
+import { getTaskpaneAuthToken } from "./TaskpaneAuthStore";
 import {
-  buildApplyStatusMessage,
-  type ResultsPanelDeps,
-  renderResultsPanel,
-} from "./SuggestionCardRenderer";
+  getTaskpaneShellState,
+  setTaskpaneSelectedGenero,
+  showTaskpaneStatus,
+} from "./TaskpaneShellStore";
 import {
-  getRequiredElement,
-  getSelectedGenero,
-  hideProgress,
-  setAnalyzeLoading,
-  setDisableTrackChangesCtaVisible,
-  showStatus,
-  toUserMessage,
-  updateProgress,
-} from "./TaskpaneUi";
-
-type OfficeLike = {
-  onReady(
-    callback: (info: { host: string }) => void,
-  ): Promise<unknown> | undefined;
-  HostType?: {
-    Word?: string;
-  };
-};
-
-type DocumentLike = Pick<Document, "getElementById">;
+  handleAnalyze as runTaskpaneAnalysis,
+  handleCancelAnalysis as cancelTaskpaneAnalysis,
+  handleRetryAnalysisQuery as retryTaskpaneAnalysisQuery,
+} from "./TaskpaneAnalysisHandlers";
+import type { TaskpaneAnalysisHandlersRuntime } from "./TaskpaneAnalysisHandlers.types";
+import {
+  bootstrapTaskpane as bootstrapTaskpaneRuntime,
+  handleCleanup as cleanupTaskpaneRuntime,
+  handleDisableTrackChanges as disableTrackChangesTaskpaneRuntime,
+  handleLoadPreferences as loadTaskpanePreferences,
+  handleSavePreferences as saveTaskpanePreferences,
+  handleSignIn as signInTaskpaneRuntime,
+  handleSignOut as signOutTaskpaneRuntime,
+  refreshCleanupVisibility,
+} from "./TaskpaneBootstrap";
+import type { TaskpaneBootstrapRuntime } from "./TaskpaneBootstrap.types";
 
 // ---------------------------------------------------------------------------
 // Infrastructure — built once, reused across pipeline runs
@@ -74,17 +80,25 @@ type DocumentLike = Pick<Document, "getElementById">;
 
 const observabilityPort = new ConsoleResolutionObservabilityAdapter();
 const documentPort = new WordAdapter(undefined, observabilityPort);
+const authPort = new BetterAuthAdapter();
+const authSessionStoragePort = new OfficeAuthSessionStorageAdapter();
+const officeDialogAuthAdapter = new OfficeDialogAuthAdapter();
+const userPreferencesPort: IUserPreferencesPort = new OfficeUserPreferencesAdapter();
+const httpClient = new HttpClient({
+  baseUrl: MASTRA_BASE_URL,
+  getAuthToken: getTaskpaneAuthToken,
+});
+const userCorrectionPreferencesPort: IUserCorrectionPreferencesPort =
+  new BackendUserCorrectionPreferencesAdapter(httpClient);
+const mastraClientFactory = new MastraClientFactory(getTaskpaneAuthToken);
 const analysisPort = new RetryAnalysisDecorator(
-  new MastraAdapter(),
+  new MastraAdapter(mastraClientFactory),
   MAX_RETRIES,
-  RETRY_BASE_DELAY_MS,
+  RETRY_BASE_DELAY_MS
 );
 
-const feedbackPort: IFeedbackPort = new FeedbackAdapter();
-const reviewSessionMediator = new ReviewSessionMediator(
-  documentPort,
-  feedbackPort,
-);
+const feedbackPort: IFeedbackPort = new FeedbackAdapter(mastraClientFactory);
+const reviewSessionMediator = new ReviewSessionMediator(documentPort, feedbackPort);
 
 const orchestrator = new PipelineOrchestrator([
   new ReadTextHandler(),
@@ -97,14 +111,39 @@ const orchestrator = new PipelineOrchestrator([
 ]);
 
 const stateMachine = new PipelineStateMachine();
+const cancelState = { value: false };
 
 /** Deps injected into the card renderer — closures over module-level ports. */
 const cardRendererDeps: ResultsPanelDeps = {
   navigateToText: (target) => documentPort.navigateToText(target),
-  acceptSuggestion: (s, comment) =>
-    reviewSessionMediator.acceptSuggestion(s, comment),
-  rejectSuggestion: (s, comment) =>
-    reviewSessionMediator.rejectSuggestion(s, comment),
+  acceptSuggestion: (s, comment) => reviewSessionMediator.acceptSuggestion(s, comment),
+  rejectSuggestion: (s, comment) => reviewSessionMediator.rejectSuggestion(s, comment),
+};
+
+/** Shared runtime injected into extracted taskpane analysis handlers. */
+const analysisHandlersRuntime: TaskpaneAnalysisHandlersRuntime = {
+  analysisPort,
+  cardRendererDeps,
+  cancelState,
+  documentPort,
+  getSelectedGenero: () => getTaskpaneShellState().selectedGenero,
+  orchestrator,
+  refreshCleanupVisibility: () => refreshCleanupVisibility(bootstrapRuntime),
+  stateMachine,
+};
+
+/** Shared runtime injected into bootstrap/auth/settings handlers. */
+const bootstrapRuntime: TaskpaneBootstrapRuntime = {
+  authPort,
+  authSessionStoragePort,
+  documentPort,
+  officeDialogAuthAdapter,
+  onSelectionSnapshot: setSelectionPreviewSnapshot,
+  reviewSessionMediator,
+  setSelectedGenero: setTaskpaneSelectedGenero,
+  supportedAnalysisProfiles: DEFAULT_PROFILES.map((profile) => profile.id),
+  userCorrectionPreferencesPort,
+  userPreferencesPort,
 };
 
 // ---------------------------------------------------------------------------
@@ -112,99 +151,44 @@ const cardRendererDeps: ResultsPanelDeps = {
 // ---------------------------------------------------------------------------
 
 /**
- * Entry point — called once Office.js confirms the host is Word.
- * Hides the sideload message, shows the app body, and binds event handlers.
+ * Initializes taskpane DOM bindings once the React shell already exists.
+ * Rehydrates shell visibility from document state after the React shell mounts.
  */
-export function bootstrapTaskpane(
-  office: OfficeLike | undefined = globalThis.Office as unknown as
-    | OfficeLike
-    | undefined,
-  doc: DocumentLike | undefined = globalThis.document,
-): void {
-  if (!office?.onReady || !doc?.getElementById) {
-    return;
-  }
-
-  office.onReady((info) => {
-    const wordHost = office.HostType?.Word ?? "Word";
-    if (info.host !== wordHost) {
-      return;
-    }
-
-    const sideloadMessage = doc.getElementById("sideload-msg");
-    const appBody = doc.getElementById("app-body");
-    const analyzeButton = doc.getElementById(
-      "btn-analyze",
-    ) as HTMLButtonElement | null;
-    const cleanupButton = doc.getElementById(
-      "btn-cleanup",
-    ) as HTMLButtonElement | null;
-    const disableTrackChangesButton = doc.getElementById(
-      "btn-disable-track-changes",
-    ) as HTMLButtonElement | null;
-
-    if (
-      !(
-        sideloadMessage &&
-        appBody &&
-        analyzeButton &&
-        cleanupButton &&
-        disableTrackChangesButton
-      )
-    ) {
-      return;
-    }
-
-    sideloadMessage.style.display = "none";
-    appBody.style.display = "flex";
-    analyzeButton.onclick = handleAnalyze;
-    cleanupButton.onclick = handleCleanup;
-    disableTrackChangesButton.onclick = handleDisableTrackChanges;
-    void refreshCleanupVisibility();
-    void refreshTrackChangesCtaVisibility();
-  });
-}
-
-bootstrapTaskpane();
-
-// ---------------------------------------------------------------------------
-// Refresh helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Syncs the cleanup CTA visibility with the current document state.
- * Shows the section only when there are deletable Stylistic comments.
- */
-async function refreshCleanupVisibility(): Promise<void> {
-  const cleanupSection = document.getElementById("cleanup-section");
-  if (!cleanupSection) {
-    return;
-  }
-
-  try {
-    const { deletable } = await documentPort.getCleanupPreview();
-    cleanupSection.style.display = deletable > 0 ? "block" : "none";
-  } catch (error) {
-    console.warn(
-      "⚠️ [Taskpane] No se pudo calcular la visibilidad de limpieza:",
-      error,
-    );
-  }
+export function bootstrapTaskpane(): void {
+  bootstrapTaskpaneRuntime(bootstrapRuntime);
 }
 
 /**
- * Rehydrates Track Changes CTA visibility from the authoritative document state.
+ * Loads the user's correction-instruction preferences from the backend.
+ * Used by the settings page to hydrate its draft state when it opens.
  */
-async function refreshTrackChangesCtaVisibility(): Promise<void> {
-  try {
-    const taskpaneState = await reviewSessionMediator.rehydrateTaskpaneState();
-    setDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
-  } catch (error) {
-    console.warn(
-      "⚠️ [Taskpane] No se pudo calcular la visibilidad del CTA de Track Changes:",
-      error,
-    );
-  }
+export async function handleLoadPreferences(): Promise<UserCorrectionPreferences> {
+  return loadTaskpanePreferences(bootstrapRuntime);
+}
+
+/**
+ * Persists the full settings form atomically:
+ * - PUT correction instructions to the backend (most likely to fail).
+ * - Persist the analysis profile in OfficeRuntime storage.
+ * - Commit the new profile into the shell store on success.
+ *
+ * Throws on any failure so the settings page can render an inline message.
+ */
+export async function handleSavePreferences(
+  correctionInstructions: string | null,
+  analysisProfile: AnalysisProfileId
+): Promise<UserCorrectionPreferences> {
+  return saveTaskpanePreferences(bootstrapRuntime)(correctionInstructions, analysisProfile);
+}
+
+/** Starts the OAuth flow through Office Dialog API and persists the session. */
+export async function handleSignIn(): Promise<void> {
+  return signInTaskpaneRuntime(bootstrapRuntime);
+}
+
+/** Revokes the Better Auth session and clears all local auth state. */
+export async function handleSignOut(): Promise<void> {
+  return signOutTaskpaneRuntime(bootstrapRuntime);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,131 +202,39 @@ async function refreshTrackChangesCtaVisibility(): Promise<void> {
  * then delegates entirely to `PipelineOrchestrator.run()`.
  * All UI updates come back via `PipelineEventEmitter` (Observer pattern).
  */
-async function handleAnalyze(): Promise<void> {
-  if (stateMachine.isRunning) {
-    console.warn("⚠️ [Taskpane] Pipeline ya en ejecución — ignorando click");
+export async function handleAnalyze(): Promise<void> {
+  if (!getTaskpaneAuthToken()) {
+    showTaskpaneStatus("Iniciá sesión con Google antes de analizar.", "error");
     return;
   }
 
-  setAnalyzeLoading(true);
-  getRequiredElement("results-panel").style.display = "none";
-
-  const emitter = new PipelineEventEmitter();
-  const ctx: PipelineContext = {
-    documentPort,
-    analysisPort,
-    emitter,
-    genero: getSelectedGenero(),
-    maxChunkSize: DEFAULT_MAX_CHUNK_SIZE,
-  };
-
-  const uiObserver: PipelineObserver = {
-    onPhaseStart(_phase, message) {
-      updateProgress(0, 1, message);
-    },
-    onProgress(current, total, message) {
-      updateProgress(current, total, message);
-    },
-    onAbort(reason) {
-      hideProgress();
-      showStatus(
-        reason,
-        (ctx.chunkErrors?.length ?? 0) > 0 ? "error" : "success",
-      );
-    },
-    onComplete(suggestions, result, chunkErrors, isSelection) {
-      hideProgress();
-      renderResultsPanel(
-        suggestions,
-        result,
-        chunkErrors,
-        isSelection,
-        cardRendererDeps,
-      );
-      void refreshCleanupVisibility();
-      showStatus(
-        buildApplyStatusMessage(result, isSelection),
-        result.successCount > 0 ? "success" : "error",
-      );
-    },
-  };
-
-  emitter.subscribe(uiObserver);
-  stateMachine.transition("reading");
-
-  try {
-    console.log("🚀 [Taskpane] Pipeline iniciado");
-    await orchestrator.run(ctx);
-    console.log(
-      `✅ [Taskpane] Pipeline completado. Abortado: ${ctx.aborted ?? false}`,
-    );
-  } catch (error) {
-    console.error("💥 [Taskpane] Error no capturado en pipeline:", error);
-    hideProgress();
-    showStatus(toUserMessage(error), "error");
-  } finally {
-    stateMachine.reset();
-    setAnalyzeLoading(false);
-    emitter.clear();
-  }
+  return runTaskpaneAnalysis(analysisHandlersRuntime);
 }
 
 // ---------------------------------------------------------------------------
 // Comment Cleanup Handler
 // ---------------------------------------------------------------------------
 
-async function handleCleanup(): Promise<void> {
-  console.log("🧽 [Taskpane] Iniciando limpieza de comentarios resueltos...");
-  const btn = document.getElementById("btn-cleanup") as HTMLButtonElement;
-  const label = getRequiredElement("btn-cleanup-label");
-
-  btn.disabled = true;
-  label.textContent = "Limpiando...";
-
-  try {
-    const { deleted, kept } = await documentPort.cleanupResolvedComments();
-    console.log(
-      `🧽 [Taskpane] Limpieza: ${deleted} eliminados, ${kept} conservados`,
-    );
-    showStatus(
-      `${deleted} comentario(s) eliminado(s), ${kept} conservado(s).`,
-      "success",
-    );
-    getRequiredElement("cleanup-section").style.display =
-      kept > 0 ? "block" : "none";
-  } catch (error) {
-    showStatus(toUserMessage(error), "error");
-  } finally {
-    btn.disabled = false;
-    label.textContent = "Limpiar comentarios resueltos";
-  }
+/** Cleans up resolved Stylistic comments from the active document. */
+export async function handleCleanup(): Promise<void> {
+  return cleanupTaskpaneRuntime(bootstrapRuntime);
 }
 
 // ---------------------------------------------------------------------------
 // Disable Track Changes Handler
 // ---------------------------------------------------------------------------
 
-async function handleDisableTrackChanges(): Promise<void> {
-  const btn = document.getElementById(
-    "btn-disable-track-changes",
-  ) as HTMLButtonElement | null;
-  const label = document.getElementById("btn-disable-track-changes-label");
+/** Disables Track Changes through the review-session workflow. */
+export async function handleDisableTrackChanges(): Promise<void> {
+  return disableTrackChangesTaskpaneRuntime(bootstrapRuntime);
+}
 
-  if (!(btn && label)) {
-    return;
-  }
+/** Cancels every currently active backend run in the in-memory taskpane session. */
+export async function handleCancelAnalysis(): Promise<void> {
+  return cancelTaskpaneAnalysis(analysisHandlersRuntime);
+}
 
-  btn.disabled = true;
-  label.textContent = "Desactivando...";
-
-  try {
-    const taskpaneState = await reviewSessionMediator.disableTrackChanges();
-    setDisableTrackChangesCtaVisible(taskpaneState.showDisableTrackChangesCta);
-    showStatus("Control de cambios desactivado.", "success");
-  } catch (error) {
-    showStatus(toUserMessage(error), "error");
-  } finally {
-    btn.disabled = false;
-    label.textContent = "Desactivar control de cambios";
-  }
+/** Re-runs backend polling only for already submitted run ids. */
+export async function handleRetryAnalysisQuery(): Promise<void> {
+  return retryTaskpaneAnalysisQuery(analysisHandlersRuntime);
 }

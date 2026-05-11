@@ -17,13 +17,12 @@
  */
 
 import type { PipelineContext } from "../PipelineContext";
-import type { PipelineHandler } from "./ReadTextHandler";
+import type { PipelineHandler } from "./ReadTextHandler.types";
 
+/** Filters out suggestions that are already present as pending Stylistic artifacts. */
 export class GuardAppliedHandler implements PipelineHandler {
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
-    console.log(
-      "🛡️ [GuardAppliedHandler] Fase 5b: Verificando sugerencias ya aplicadas...",
-    );
+    console.log("🛡️ [GuardAppliedHandler] Fase 5b: Verificando sugerencias ya aplicadas...");
 
     const unique = ctx.uniqueSuggestions!;
     const appliedTexts = await ctx.documentPort.getAppliedOriginalTexts();
@@ -31,9 +30,7 @@ export class GuardAppliedHandler implements PipelineHandler {
     const skipped = unique.length - pending.length;
 
     if (skipped > 0) {
-      console.log(
-        `🛡️ [GuardAppliedHandler] ${skipped} sugerencia(s) ya aplicada(s) — omitidas`,
-      );
+      console.log(`🛡️ [GuardAppliedHandler] ${skipped} sugerencia(s) ya aplicada(s) — omitidas`);
     }
 
     if (pending.length === 0) {

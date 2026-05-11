@@ -4,7 +4,7 @@ Common issues and their solutions when developing or using Stylistic.
 
 ## Development Issues
 
-### `npm start` fails with certificate errors
+### `bun run start` fails with certificate errors
 
 **Symptom:** The dev server starts but Word rejects the connection, or the browser shows `ERR_CERT_AUTHORITY_INVALID`.
 
@@ -16,7 +16,7 @@ Common issues and their solutions when developing or using Stylistic.
 npx office-addin-dev-certs install
 ```
 
-This generates and trusts a local CA certificate. Restart with `npm start` after installing.
+This generates and trusts a local CA certificate. Restart with `bun run start` after installing.
 
 ---
 
@@ -28,7 +28,7 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Fix:**
 
-1. Make sure you ran `npm start` (not just the dev server).
+1. Make sure you ran `bun run start` (not just the dev server).
 2. If using Word Online, manually sideload: **Insert** > **Add-ins** > **Upload My Add-in** > select `manifest.xml`.
 3. Check the browser console (F12) for errors — the Office.js CDN may be blocked.
 
@@ -42,13 +42,13 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 **Fix:**
 
-1. If using `npm run watch`, check that webpack recompiled (look for output in the terminal).
+1. If using `bun run watch`, check that webpack recompiled (look for output in the terminal).
 2. Close and reopen the task pane in Word.
 3. Hard-refresh: in Word Online, press `Ctrl+Shift+R`. In Word Desktop, close and reopen the document.
 
 ---
 
-### `npm run validate` reports manifest errors
+### `bun run validate` reports manifest errors
 
 **Symptom:** The validator flags issues in `manifest.xml`.
 
@@ -58,13 +58,13 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 - **URL mismatch:** In production builds, update the `urlProd` variable in `webpack.config.js` from `https://www.contoso.com/` to your actual deployment URL.
 - **Requirement set version:** The manifest requires WordApi 1.6. If testing on an older version of Word, this will fail at load time (not validation time).
 
-**Note:** For manifest-specific validation, run `npm run manifest:validate`. The `npm run validate` command runs lint + filename checks + complexity checks.
+**Note:** For manifest-specific validation, run `bun run manifest:validate`. The `bun run validate` command runs lint + architecture rails + filename checks + complexity checks + React rails + typecheck. It does **not** validate the manifest.
 
 ---
 
-### Build fails with TypeScript errors after adding new files
+### `bun run build` fails with TypeScript errors after adding new files
 
-**Symptom:** `npm run build` fails with type errors in new `.ts` files.
+**Symptom:** `bun run build` fails with type errors in new `.ts` files.
 
 **Cause:** The Babel-based build pipeline doesn't perform type checking — it strips types and transpiles. If you see TypeScript errors, they come from the editor (VS Code) or a separate `tsc` check.
 
@@ -72,11 +72,115 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 
 1. Make sure your new file is under `src/` (not excluded in `tsconfig.json`).
 2. Verify imports use relative paths (e.g., `"../lib/types"`, not absolute paths).
-3. Run `npx tsc --noEmit` to see all type errors.
+3. Run `bun run typecheck` to see all type errors.
+
+---
+
+## UI / Layout Issues
+
+### Taskpane content sticks to the top and the rest stays grey
+
+**Symptom:** The white card with the workflow only spans the height of its
+content. Below it, the body background color (grey `#fafafa`) is visible. The
+`SettingsToolbar` does not pin to the bottom.
+
+**Cause:** The full-height chain is broken. `#app-body` declares
+`height: 100%`, but its parents must each be `100%` too — including the `<div>`
+that `FluentProvider` injects between `#container` and the React subtree. If
+any link in the chain is auto-sized, `#app-body` collapses to its content
+height and the workflow's `flex: 1` has no remaining space to grow into.
+
+**Fix:** keep this rule in `taskpane.css` so the chain reaches `#app-body`:
+
+```css
+#container,
+#container > * {
+  height: 100%;
+}
+```
+
+`> *` covers the `FluentProvider` wrapper without coupling to the internal
+`.fui-FluentProvider` class.
+
+---
+
+### Vertical scrollbar appears on the taskpane even though content fits
+
+**Symptom:** A scrollbar shows up on the right edge of the taskpane while the
+visible content clearly fits in the viewport (e.g. only the profile selector
+and analyze button are rendered).
+
+**Cause:** `#app-body` declares `height: 100%` *and* a non-zero `padding`. The
+default `box-sizing` is `content-box`, so the rendered height is
+`100% + padding-top + padding-bottom`, overflowing the parent by the padding
+amount and forcing the scrollbar.
+
+**Fix:** add `box-sizing: border-box` to `#app-body` (already in
+`taskpane.css`). Whenever you introduce a new full-height container with
+padding, repeat this — `content-box` is the silent killer of Office task pane
+layouts.
 
 ---
 
 ## Backend Connection Issues
+
+### Login dialog closes with error 12006 but Google eventually succeeds
+
+**Symptom:** The taskpane reports that the authentication dialog closed before
+login completed, while the dialog or backend logs show the OAuth callback/session
+eventually succeeded.
+
+**Cause:** Do not treat every `DialogEventReceived` 12006 as a fatal login
+failure. In real Word hosts, 12006 can appear while the dialog is still
+navigating. The confirmed implementation resolves login only from
+`DialogMessageReceived`, following the official Office fallback-auth sample.
+
+**Fix:** Verify `OfficeDialogAuthAdapter` does not reject from
+`DialogEventReceived`. The dialog page must load Office.js, wait for
+`Office.onReady()`, and post `{ type: "stylistic-auth-success", session }` with
+`Office.context.ui.messageParent`.
+
+---
+
+### Login reaches Google but returns `state_security_mismatch`
+
+**Symptom:** Google redirects back to the backend, but backend logs show Better
+Auth errors similar to `state_security_mismatch` or `State not persisted
+correctly`.
+
+**Cause:** The Office Dialog flow crosses taskpane/backend/provider runtimes, and
+the temporary signed OAuth state cookie can be unavailable on callback.
+
+**Fix:** Backend auth must keep OAuth state in the database with:
+
+```ts
+account: {
+  storeStateStrategy: "database",
+  skipStateCookieCheck: true,
+}
+```
+
+The `verification` table must also exist. In the backend, run:
+
+```bash
+bun run db:auth:apply
+```
+
+---
+
+### Login succeeds but analysis says the backend is unauthorized
+
+**Symptom:** The taskpane shows an active session, but workflow calls fail with
+401/unauthorized.
+
+**Cause:** The Mastra client was created without the latest Better Auth bearer
+token, or a stale client instance kept old headers after login/logout.
+
+**Fix:** Mastra workflow adapters must use `MastraClientFactory`, which creates a
+client with the current token snapshot for each call. Do not reintroduce a module
+level `new MastraClient({ baseUrl })` singleton.
+
+---
 
 ### "Backend no disponible"
 
@@ -132,6 +236,26 @@ This generates and trusts a local CA certificate. Restart with `npm start` after
 ### Suggestions don't appear as tracked changes
 
 **Symptom:** The results panel shows suggestions as "applied", but no tracked changes are visible in the document.
+
+---
+
+### Analysis fails with a document-identity error
+
+**Symptom:** Analysis or feedback fails with an error saying Stylistic could not
+read or persist the document identity.
+
+**Cause:** The add-in now requires `Office.context.document.settings` to persist
+the stable `documentUuid` used by both workflows. If the host does not expose
+document settings, or if saving settings fails, the frontend fails closed.
+
+**Fix:**
+
+1. Verify the add-in is running in a Word host that supports document settings.
+2. Make sure the document is editable and not blocked by host restrictions that
+   prevent saving settings metadata.
+3. If the host is expected to support settings, inspect the Office runtime and
+   console for `Office.context.document.settings` availability and `saveAsync`
+   failures.
 
 **Possible causes:**
 
@@ -207,6 +331,38 @@ contents or a heading.
 Content Controls for the suggestion. If metadata is missing, verify that the
 backend suggestion still satisfies `context.includes(anchor)` and that the
 context text exists in the document after user edits.
+
+---
+
+### Accept/Reject appears to do nothing
+
+**Symptom:** Clicking **Accept** or **Reject** appears inert, or the card enters
+resolving state briefly and then returns without a visible document change.
+
+**Common real-host cause:** The resolution workflow successfully locates the
+Stylistic artifact, but a later step reads a proxy-backed Word property such as
+`ContentControl.tag` that was never loaded. Real Word then throws an error like:
+
+> `The property 'tag' is not available. Before reading the property's value, call the load method on the containing object and call "context.sync()" on the associated request context.`
+
+This can look like an inert button when the taskpane only surfaces a generic
+resolution failure.
+
+**Why tests can miss it:** permissive Office.js mocks often expose `tag` and
+`title` as plain fields, so a GREEN suite does not prove the real host loaded
+those properties correctly.
+
+**What to inspect in logs:**
+
+1. Confirm the workflow emitted `locate succeeded` for the attempt.
+2. Check the next failure event or caught error metadata for an unloaded proxy
+   property (`tag`, `title`, etc.).
+3. Inspect the artifact locator and verify it loads every identity field that
+   downstream resolution steps read.
+
+**Fix direction:** treat the locator as the contract boundary. If downstream code
+reads `selectedCc.tag` or `selectedCc.title`, the locator must load those
+properties before returning the selected artifact bundle.
 
 ---
 
@@ -295,9 +451,9 @@ contract.
 If your issue isn't listed here:
 
 1. Check the browser console (F12) for JavaScript errors.
-2. Run `npm run manifest:validate` to check the manifest.
-3. Run `npm run validate` to run lint + filename checks + complexity checks.
-3. Try `npm stop && npm start` for a clean restart.
+2. Run `bun run manifest:validate` to check the manifest.
+3. Run `bun run validate` to run lint + rails + typecheck without building.
+4. Try `bun run stop && bun run start` for a clean restart.
 4. Verify the Mastra server is running and responsive.
 5. Open an issue in the repository with:
    - The error message (screenshot or text)

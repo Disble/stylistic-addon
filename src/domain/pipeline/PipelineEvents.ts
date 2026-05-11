@@ -10,42 +10,10 @@
  * @module PipelineEvents
  */
 
+import type { PipelineObserver } from "./PipelineEvents.types";
 import type { ApplySuggestionsResult } from "../DocumentApplication.types";
 import type { Suggestion } from "../suggestion/Suggestion.types";
 import type { PipelineState } from "./PipelineStateMachine.types";
-
-// ---------------------------------------------------------------------------
-// Observer interface
-// ---------------------------------------------------------------------------
-
-/**
- * Observer for pipeline lifecycle events.
- * All methods are optional — implement only what you need.
- */
-export interface PipelineObserver {
-  /** Called when a pipeline phase begins. */
-  onPhaseStart?(phase: PipelineState, message: string): void;
-
-  /** Called periodically during a phase to report incremental progress. */
-  onProgress?(current: number, total: number, message: string): void;
-
-  /** Called when a pipeline phase completes successfully. */
-  onPhaseComplete?(phase: PipelineState): void;
-
-  /** Called when the pipeline encounters a recoverable or fatal error. */
-  onError?(phase: PipelineState, error: Error | string): void;
-
-  /** Called when the pipeline completes (success or partial success). */
-  onComplete?(
-    suggestions: Suggestion[],
-    result: ApplySuggestionsResult,
-    chunkErrors: string[],
-    isSelection: boolean,
-  ): void;
-
-  /** Called when the pipeline is aborted before reaching `done`. */
-  onAbort?(reason: string): void;
-}
 
 // ---------------------------------------------------------------------------
 // Event Emitter
@@ -99,9 +67,7 @@ export class PipelineEventEmitter {
   }
 
   emitProgress(current: number, total: number, message: string): void {
-    this.notifyObservers((observer) =>
-      observer.onProgress?.(current, total, message),
-    );
+    this.notifyObservers((observer) => observer.onProgress?.(current, total, message));
   }
 
   emitPhaseComplete(phase: PipelineState): void {
@@ -116,10 +82,10 @@ export class PipelineEventEmitter {
     suggestions: Suggestion[],
     result: ApplySuggestionsResult,
     chunkErrors: string[],
-    isSelection: boolean,
+    isSelection: boolean
   ): void {
     this.notifyObservers((observer) =>
-      observer.onComplete?.(suggestions, result, chunkErrors, isSelection),
+      observer.onComplete?.(suggestions, result, chunkErrors, isSelection)
     );
   }
 

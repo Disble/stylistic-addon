@@ -7,20 +7,22 @@
  * Focused exclusively on communication: no retry logic (handled by
  * `RetryAnalysisDecorator`), no DOM interaction, no Office.js.
  *
- * The singleton `MastraClient` instance is reused across all calls for
- * connection efficiency.
+ * Mastra clients are created through `MastraClientFactory` so every request can
+ * include the latest Better Auth bearer token.
  *
  * @module MastraAdapter
  */
 
-import { MastraClient } from "@mastra/client-js";
 import type { TextChunk } from "../../domain/chunking/TextChunk.types";
 import type {
+  ChunkCancelResult,
   ChunkAnalysisStatus,
   ChunkPollResult,
+  ChunkRunReference,
   ChunkSubmitResult,
   WorkflowInput,
   WorkflowOutput,
+  WorkflowSubmitContext,
   WorkflowSuggestion,
 } from "../../domain/mastra/MastraWorkflow.types";
 import type { IAnalysisPort } from "../../domain/ports";
@@ -30,12 +32,13 @@ import {
   MASTRA_POLL_BYPASS_ENABLED,
   WORKFLOW_ID,
 } from "../../infrastructure/config";
-import { MOCK_MASTRA_POLL_OUTPUT } from "./MockMastraPollOutputFactory";
+import { MastraClientFactory } from "./MastraClientFactory";
+import { createMockMastraPollOutput } from "./MockMastraPollOutputFactory";
 
-/** Singleton Mastra client instance, reused across all calls. */
-const client = new MastraClient({ baseUrl: MASTRA_BASE_URL });
-
+/** Bridges the analysis port to the Mastra workflow client. */
 export class MastraAdapter implements IAnalysisPort {
+  constructor(private readonly clientFactory = new MastraClientFactory()) {}
+
   /**
    * Checks whether the Mastra backend is reachable and the editorial
    * workflow is registered. Never throws — returns `false` on any error.
@@ -43,16 +46,16 @@ export class MastraAdapter implements IAnalysisPort {
   async checkConnection(): Promise<boolean> {
     if (MASTRA_POLL_BYPASS_ENABLED) {
       console.log(
-        "🧪 [MastraAdapter] Bypass activo: se omite checkConnection real y se asume conexión OK",
+        "🧪 [MastraAdapter] Bypass activo: se omite checkConnection real y se asume conexión OK"
       );
       return true;
     }
 
     try {
       console.log(
-        `🔌 [MastraAdapter] Verificando → ${MASTRA_BASE_URL}, workflow: "${WORKFLOW_ID}"`,
+        `🔌 [MastraAdapter] Verificando → ${MASTRA_BASE_URL}, workflow: "${WORKFLOW_ID}"`
       );
-      const workflow = client.getWorkflow(WORKFLOW_ID);
+      const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
       await workflow.details();
       console.log("🔌 [MastraAdapter] ✅ Conexión exitosa");
       return true;
@@ -69,8 +72,7 @@ export class MastraAdapter implements IAnalysisPort {
    */
   async submitChunkAnalysis(
     chunk: TextChunk,
-    genero: string,
-    autorSlug: string,
+    input: WorkflowSubmitContext
   ): Promise<ChunkSubmitResult> {
     if (MASTRA_POLL_BYPASS_ENABLED) {
       return this.buildBypassedSubmitResult(chunk.index);
@@ -78,15 +80,16 @@ export class MastraAdapter implements IAnalysisPort {
 
     const inputData: WorkflowInput = {
       text: chunk.text,
-      genero: genero as WorkflowInput["genero"],
-      autorSlug,
+      ...input,
     };
+
+    const generoLabel = input.genero ?? "sin-genero";
     console.log(
-      `🤖 [MastraAdapter] submitChunkAnalysis #${chunk.index} — ${chunk.text.length} chars, genero: "${genero}", autor: "${autorSlug}"`,
+      `🤖 [MastraAdapter] submitChunkAnalysis #${chunk.index} — ${chunk.text.length} chars, genero: "${generoLabel}", documentUuid: "${input.documentUuid}"`
     );
 
     try {
-      const workflow = client.getWorkflow(WORKFLOW_ID);
+      const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
       const run = await workflow.createRun();
       const runId = this.extractRunId(run);
 
@@ -99,17 +102,12 @@ export class MastraAdapter implements IAnalysisPort {
 
       await run.start({ inputData });
 
-      console.log(
-        `🚀 [MastraAdapter] Chunk #${chunk.index} enviado con runId "${runId}"`,
-      );
+      console.log(`🚀 [MastraAdapter] Chunk #${chunk.index} enviado con runId "${runId}"`);
       return { chunkIndex: chunk.index, runId };
     } catch (error: unknown) {
       const message = this.normalizeErrorMessage(error);
 
-      console.error(
-        `💥 [MastraAdapter] Submit chunk #${chunk.index} error:`,
-        message,
-      );
+      console.error(`💥 [MastraAdapter] Submit chunk #${chunk.index} error:`, message);
       return {
         chunkIndex: chunk.index,
         error: message,
@@ -121,19 +119,14 @@ export class MastraAdapter implements IAnalysisPort {
    * Polls a workflow run by `runId` and maps the workflow state into the
    * domain-level chunk polling contract.
    */
-  async pollChunkAnalysis(
-    chunkIndex: number,
-    runId: string,
-  ): Promise<ChunkPollResult> {
-    console.log(
-      `🔄 [MastraAdapter] Polling chunk #${chunkIndex} runId "${runId}"`,
-    );
+  async pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult> {
+    console.log(`🔄 [MastraAdapter] Polling chunk #${chunkIndex} runId "${runId}"`);
 
     if (MASTRA_POLL_BYPASS_ENABLED) {
       return this.buildBypassedPollResult(chunkIndex, runId);
     }
 
-    const workflow = client.getWorkflow(WORKFLOW_ID);
+    const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
     const state = await workflow.runById(runId, {
       fields: ["result", "error"],
       withNestedWorkflows: false,
@@ -146,13 +139,14 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "failed",
+        origin: "frontend-terminal",
         suggestions: [],
         error: "Invalid workflow poll payload: missing status",
       };
     }
 
     console.log(
-      `🔄 [MastraAdapter] Chunk #${chunkIndex} polled status: "${normalizedState.status}"`,
+      `🔄 [MastraAdapter] Chunk #${chunkIndex} polled status: "${normalizedState.status}"`
     );
 
     if (normalizedState.status === "success") {
@@ -163,19 +157,19 @@ export class MastraAdapter implements IAnalysisPort {
           chunkIndex,
           runId,
           status: "failed",
+          origin: "frontend-terminal",
           suggestions: [],
           error: "Invalid workflow success payload: expected suggestions[]",
         };
       }
 
       const suggestions = this.mapSuggestions(output.suggestions, chunkIndex);
-      console.log(
-        `✅ [MastraAdapter] Chunk #${chunkIndex} → ${suggestions.length} sugerencias`,
-      );
+      console.log(`✅ [MastraAdapter] Chunk #${chunkIndex} → ${suggestions.length} sugerencias`);
       return {
         chunkIndex,
         runId,
         status: "success",
+        origin: "backend",
         suggestions,
       };
     }
@@ -185,6 +179,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "failed",
+        origin: "backend",
         suggestions: [],
         error: `Workflow entered "${normalizedState.status}" state and requires resume(), which this frontend does not support`,
       };
@@ -195,6 +190,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: normalizedState.status,
+        origin: "backend",
         suggestions: [],
       };
     }
@@ -204,6 +200,7 @@ export class MastraAdapter implements IAnalysisPort {
         chunkIndex,
         runId,
         status: "failed",
+        origin: "frontend-terminal",
         suggestions: [],
         error: `Unknown workflow status: ${normalizedState.status}`,
       };
@@ -213,19 +210,40 @@ export class MastraAdapter implements IAnalysisPort {
       chunkIndex,
       runId,
       status: normalizedState.status,
+      origin: "backend",
       suggestions: [],
-      error: this.extractWorkflowError(
-        normalizedState.error,
-        normalizedState.status,
-      ),
+      error: this.extractWorkflowError(normalizedState.error, normalizedState.status),
     };
   }
 
+  /** Cancels one existing Mastra run by rehydrating it from the known `runId`. */
+  async cancelChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkCancelResult> {
+    if (MASTRA_POLL_BYPASS_ENABLED) {
+      return { chunkIndex, runId, canceled: true };
+    }
+
+    try {
+      const workflow = this.clientFactory.create().getWorkflow(WORKFLOW_ID);
+      const run = await workflow.createRun({ runId });
+      await run.cancel();
+      return { chunkIndex, runId, canceled: true };
+    } catch (error: unknown) {
+      return {
+        chunkIndex,
+        runId,
+        canceled: false,
+        error: this.normalizeErrorMessage(error),
+      };
+    }
+  }
+
+  /** Re-polls the same backend run without creating a new submission. */
+  retryPollChunkAnalysis(reference: ChunkRunReference): Promise<ChunkPollResult> {
+    return this.pollChunkAnalysis(reference.chunkIndex, reference.runId);
+  }
+
   /** Maps raw workflow suggestions to `Suggestion` objects with assigned IDs. */
-  private mapSuggestions(
-    raw: WorkflowSuggestion[] | undefined,
-    chunkIndex: number,
-  ): Suggestion[] {
+  private mapSuggestions(raw: WorkflowSuggestion[] | undefined, chunkIndex: number): Suggestion[] {
     if (!raw || !Array.isArray(raw)) return [];
     return raw.map((s, i) => {
       const type = s.type ?? "track-change";
@@ -254,11 +272,7 @@ export class MastraAdapter implements IAnalysisPort {
       return undefined;
     }
 
-    if (
-      !result.suggestions.every((suggestion) =>
-        this.isWorkflowSuggestion(suggestion),
-      )
-    ) {
+    if (!result.suggestions.every((suggestion) => this.isWorkflowSuggestion(suggestion))) {
       return undefined;
     }
 
@@ -278,38 +292,34 @@ export class MastraAdapter implements IAnalysisPort {
   }
 
   /** Builds a deterministic success result for development poll bypass mode. */
-  private buildBypassedPollResult(
-    chunkIndex: number,
-    runId: string,
-  ): ChunkPollResult {
+  private buildBypassedPollResult(chunkIndex: number, runId: string): ChunkPollResult {
     // The bypass fixture represents one backend response, not one response per
     // chunk. Returning it only for chunk 0 keeps multi-chunk document tests from
     // multiplying the same mock suggestions into hundreds of Word mutations.
     if (chunkIndex !== 0) {
       console.log(
-        `🧪 [MastraAdapter] Poll bypass activo para chunk #${chunkIndex} → 0 sugerencias mockeadas`,
+        `🧪 [MastraAdapter] Poll bypass activo para chunk #${chunkIndex} → 0 sugerencias mockeadas`
       );
 
       return {
         chunkIndex,
         runId,
         status: "success",
+        origin: "backend",
         suggestions: [],
       };
     }
 
-    const suggestions = this.mapSuggestions(
-      MOCK_MASTRA_POLL_OUTPUT.suggestions,
-      chunkIndex,
-    );
+    const suggestions = this.mapSuggestions(createMockMastraPollOutput().suggestions, chunkIndex);
     console.log(
-      `🧪 [MastraAdapter] Poll bypass activo para chunk #${chunkIndex} → ${suggestions.length} sugerencias mockeadas`,
+      `🧪 [MastraAdapter] Poll bypass activo para chunk #${chunkIndex} → ${suggestions.length} sugerencias mockeadas`
     );
 
     return {
       chunkIndex,
       runId,
       status: "success",
+      origin: "backend",
       suggestions,
     };
   }
@@ -318,7 +328,7 @@ export class MastraAdapter implements IAnalysisPort {
   private buildBypassedSubmitResult(chunkIndex: number): ChunkSubmitResult {
     const runId = `bypass-run-${chunkIndex}`;
     console.log(
-      `🧪 [MastraAdapter] Submit bypass activo para chunk #${chunkIndex} → runId "${runId}"`,
+      `🧪 [MastraAdapter] Submit bypass activo para chunk #${chunkIndex} → runId "${runId}"`
     );
 
     return {
@@ -336,11 +346,9 @@ export class MastraAdapter implements IAnalysisPort {
   }
 
   private isTerminalStatus(
-    status: string,
+    status: string
   ): status is Exclude<ChunkAnalysisStatus, "running" | "pending" | "waiting"> {
-    return ["success", "failed", "tripwire", "canceled", "bailed"].includes(
-      status,
-    );
+    return ["success", "failed", "tripwire", "canceled", "bailed"].includes(status);
   }
 
   private extractWorkflowError(error: unknown, status: string): string {
@@ -368,7 +376,7 @@ export class MastraAdapter implements IAnalysisPort {
   }
 
   private validatePollState(
-    state: unknown,
+    state: unknown
   ): { status: string; result?: unknown; error?: unknown } | undefined {
     if (!this.isRecord(state)) {
       return undefined;
@@ -434,15 +442,11 @@ export class MastraAdapter implements IAnalysisPort {
     return true;
   }
 
-  private isSuggestionType(
-    value: unknown,
-  ): value is WorkflowSuggestion["type"] {
+  private isSuggestionType(value: unknown): value is WorkflowSuggestion["type"] {
     return value === "track-change" || value === "comment-only";
   }
 
-  private isSuggestionSeverity(
-    value: unknown,
-  ): value is WorkflowSuggestion["severity"] {
+  private isSuggestionSeverity(value: unknown): value is WorkflowSuggestion["severity"] {
     return value === "high" || value === "medium" || value === "low";
   }
 
