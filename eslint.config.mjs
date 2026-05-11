@@ -3,6 +3,7 @@ import checkFile from "eslint-plugin-check-file";
 import importX from "eslint-plugin-import-x";
 import jsdoc from "eslint-plugin-jsdoc";
 import officeAddins from "eslint-plugin-office-addins";
+import reactDoctor from "react-doctor/eslint-plugin";
 import reactPlugin from "eslint-plugin-react";
 import sonarjs from "eslint-plugin-sonarjs";
 import tseslint from "typescript-eslint";
@@ -21,11 +22,18 @@ const vitestGlobals = {
 };
 
 export default [
+  {
+    ignores: ["coverage/**", "dist/**"],
+  },
   ...officeAddins.configs.recommended,
   importX.configs["flat/recommended"],
   importX.configs["flat/typescript"],
   reactPlugin.configs.flat.recommended,
   reactPlugin.configs.flat["jsx-runtime"],
+  {
+    ...reactDoctor.configs.recommended,
+    files: ["src/taskpane/**/*.{ts,tsx,js,jsx}"],
+  },
   {
     files: ["**/*.{ts,tsx,js,jsx,mjs,cjs}"],
     plugins: {
