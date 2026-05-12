@@ -12,18 +12,22 @@ import { RetryAnalysisDecorator } from "../RetryAnalysisDecorator";
 // ---------------------------------------------------------------------------
 
 /** Creates a mock IAnalysisPort with vi.fn() stubs. */
-type MockAnalysisPort = {
-  [K in keyof IAnalysisPort]: ReturnType<typeof vi.fn>;
+type MockAnalysisPort = IAnalysisPort & {
+  checkConnection: ReturnType<typeof vi.fn<IAnalysisPort["checkConnection"]>>;
+  submitChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["submitChunkAnalysis"]>>;
+  pollChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["pollChunkAnalysis"]>>;
+  cancelChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["cancelChunkAnalysis"]>>;
+  retryPollChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["retryPollChunkAnalysis"]>>;
 };
 
 /** Creates a mock IAnalysisPort with vi.fn() stubs. */
 function createMockPort(): MockAnalysisPort {
   return {
-    checkConnection: vi.fn(),
-    submitChunkAnalysis: vi.fn(),
-    pollChunkAnalysis: vi.fn(),
-    cancelChunkAnalysis: vi.fn(),
-    retryPollChunkAnalysis: vi.fn(),
+    checkConnection: vi.fn<IAnalysisPort["checkConnection"]>(),
+    submitChunkAnalysis: vi.fn<IAnalysisPort["submitChunkAnalysis"]>(),
+    pollChunkAnalysis: vi.fn<IAnalysisPort["pollChunkAnalysis"]>(),
+    cancelChunkAnalysis: vi.fn<IAnalysisPort["cancelChunkAnalysis"]>(),
+    retryPollChunkAnalysis: vi.fn<IAnalysisPort["retryPollChunkAnalysis"]>(),
   };
 }
 
@@ -79,7 +83,7 @@ describe("RetryAnalysisDecorator", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockPort = createMockPort();
-    decorator = new RetryAnalysisDecorator(mockPort as IAnalysisPort, MAX_RETRIES, BASE_DELAY_MS);
+    decorator = new RetryAnalysisDecorator(mockPort, MAX_RETRIES, BASE_DELAY_MS);
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });

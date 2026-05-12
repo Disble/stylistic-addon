@@ -26,7 +26,7 @@ export class ResolutionErrorSerializer {
     }
 
     if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
-      return String(error);
+      return error.toString();
     }
 
     const messageValue = this.readUnknownErrorProperty(error, "message");

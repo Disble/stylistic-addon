@@ -12,10 +12,7 @@ import {
 } from "../ReplaceIdentityParser";
 import type { TextLocator } from "../WordTextLocatorContext.types";
 import type { ApplySuggestionIdentityBuilder } from "./ApplySuggestionIdentityBuilder";
-import type {
-  ApplySuggestionOperationalWrapperResolution,
-  ParentOperationalContentControl,
-} from "./ApplySuggestionOperationalWrapperResolver.types";
+import type { ApplySuggestionOperationalWrapperResolution } from "./ApplySuggestionOperationalWrapperResolver.types";
 
 /**
  * Owns replace-suggestion operational-wrapper creation, reuse, and in-wrapper
@@ -66,8 +63,7 @@ export class ApplySuggestionOperationalWrapperResolver {
     context: Word.RequestContext,
     anchorRange: Word.Range
   ): Promise<ApplySuggestionOperationalWrapperResolution> {
-    const parentCC =
-      anchorRange.parentContentControlOrNullObject as ParentOperationalContentControl;
+    const parentCC = anchorRange.parentContentControlOrNullObject;
     parentCC.load("tag,title");
     await context.sync();
 

@@ -26,9 +26,20 @@ export class HttpClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(deps: HttpClientDeps) {
-    this.baseUrl = deps.baseUrl.replace(/\/+$/u, "");
+    this.baseUrl = this.normalizeBaseUrl(deps.baseUrl);
     this.getAuthToken = deps.getAuthToken ?? (() => undefined);
     this.fetchImpl = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  }
+
+  /** Removes trailing slashes without regex backtracking so base URL joins stay deterministic. */
+  private normalizeBaseUrl(baseUrl: string): string {
+    let endIndex = baseUrl.length;
+
+    while (endIndex > 0 && baseUrl.charCodeAt(endIndex - 1) === 47) {
+      endIndex -= 1;
+    }
+
+    return baseUrl.slice(0, endIndex);
   }
 
   /** Formats unknown thrown values so logs never stringify opaque objects accidentally. */
@@ -42,7 +53,7 @@ export class HttpClient {
     }
 
     if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
-      return String(error);
+      return error.toString();
     }
 
     if (error && typeof error === "object") {

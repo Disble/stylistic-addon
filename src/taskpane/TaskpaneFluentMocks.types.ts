@@ -7,8 +7,8 @@ export type MockProps = Record<string, unknown> & {
   icon?: React.ReactNode;
   label?: React.ReactNode;
   max?: unknown;
-  onChange?: ((event: unknown, data?: Record<string, unknown>) => void) | undefined;
-  onOptionSelect?: ((event: unknown, data: Record<string, unknown>) => void) | undefined;
+  onChange?: (event: unknown, data?: Record<string, unknown>) => void;
+  onOptionSelect?: (event: unknown, data: Record<string, unknown>) => void;
   placeholder?: unknown;
   selectedOptions?: unknown;
   size?: unknown;

@@ -50,7 +50,7 @@ export class SuggestionResolutionCleanup {
       colocatedComment.comment.delete();
       await context.sync();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = this.stringifyError(error);
       const code = (error as { code?: string } | null)?.code ?? "";
       const isGeneralException =
         code === "GeneralException" || message.includes("GeneralException");
@@ -185,7 +185,7 @@ export class SuggestionResolutionCleanup {
     }
 
     if (typeof error === "number" || typeof error === "bigint" || typeof error === "boolean") {
-      return String(error);
+      return error.toString();
     }
 
     if (typeof error === "symbol") {

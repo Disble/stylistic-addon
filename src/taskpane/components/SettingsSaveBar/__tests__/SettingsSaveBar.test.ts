@@ -19,21 +19,39 @@ import { SettingsSaveBar } from "../SettingsSaveBar";
 
 function findSaveButton(element: React.ReactElement): React.ReactElement {
   const children = React.Children.toArray(element.props.children);
-  const actionsRow = children.find(
-    (child): child is React.ReactElement<{ children?: React.ReactNode }> =>
-      React.isValidElement<{ className?: string }>(child) && child.props.className === "actions"
-  ) as React.ReactElement<{ children?: React.ReactNode }>;
-  const buttonChildren = React.Children.toArray(actionsRow.props.children);
-  return buttonChildren[0] as React.ReactElement;
+
+  for (const child of children) {
+    if (!React.isValidElement<{ children?: React.ReactNode; className?: string }>(child)) {
+      continue;
+    }
+
+    if (child.props.className !== "actions") {
+      continue;
+    }
+
+    const buttonChildren = React.Children.toArray(child.props.children);
+    const firstButton = buttonChildren[0];
+    if (firstButton && React.isValidElement(firstButton)) {
+      return firstButton;
+    }
+  }
+
+  throw new Error("SettingsSaveBar action row did not render a save button.");
 }
 
 function findError(element: React.ReactElement): React.ReactElement | undefined {
   const children = React.Children.toArray(element.props.children);
-  return children.find(
-    (child): child is React.ReactElement =>
+
+  for (const child of children) {
+    if (
       React.isValidElement<{ "data-testid"?: string }>(child) &&
       child.props["data-testid"] === "settings-save-error"
-  ) as React.ReactElement | undefined;
+    ) {
+      return child;
+    }
+  }
+
+  return undefined;
 }
 
 describe("SettingsSaveBar", () => {

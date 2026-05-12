@@ -148,12 +148,19 @@ export function installOfficeDocumentSettings(
     };
   };
 
+  const existingAsyncResultStatus = officeGlobal.Office?.AsyncResultStatus;
+
   officeGlobal.Office = {
-    AsyncResultStatus: {
-      Succeeded: "succeeded",
-      Failed: "failed",
-      ...(officeGlobal.Office?.AsyncResultStatus ?? {}),
-    },
+    AsyncResultStatus: existingAsyncResultStatus
+      ? {
+          Succeeded: "succeeded",
+          Failed: "failed",
+          ...existingAsyncResultStatus,
+        }
+      : {
+          Succeeded: "succeeded",
+          Failed: "failed",
+        },
     context: {
       document: {
         settings,

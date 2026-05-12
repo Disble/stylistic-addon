@@ -38,6 +38,16 @@ export type MockCommentRange = {
   getTrackedChanges: ReturnType<typeof vi.fn>;
 };
 
+/** Mock Word content control used by resolve-suggestion tests. */
+export type MockContentControl = {
+  title: string;
+  tag: string;
+  load: ReturnType<typeof vi.fn>;
+  getTrackedChanges: ReturnType<typeof vi.fn>;
+  getRange: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+};
+
 /** Fake Word context installed for resolve-suggestion action tests. */
 export type ResolveSuggestionContext = {
   document: {
@@ -62,22 +72,8 @@ export type ResolveSuggestionContext = {
   _bodyTCCollection: { items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> };
   _rangeTCCollection: { items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> };
   _commentRangeTCCollections: Array<{ items: MockTrackedChange[]; load: ReturnType<typeof vi.fn> }>;
-  _ccItems: Array<{
-    title: string;
-    tag: string;
-    load: ReturnType<typeof vi.fn>;
-    getTrackedChanges: ReturnType<typeof vi.fn>;
-    getRange: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  }>;
-  _cc: {
-    title: string;
-    tag: string;
-    load: ReturnType<typeof vi.fn>;
-    getTrackedChanges: ReturnType<typeof vi.fn>;
-    getRange: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  };
+  _ccItems: MockContentControl[];
+  _cc: MockContentControl;
 };
 
 /** Minimal fake Word global installed by action tests. */

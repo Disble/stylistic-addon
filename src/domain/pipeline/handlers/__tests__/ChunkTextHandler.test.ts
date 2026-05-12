@@ -134,8 +134,10 @@ describe("ChunkTextHandler", () => {
 
       await handler.handle(ctx, next);
 
-      const total = ctx.chunks?.length;
-      for (const chunk of ctx.chunks!) {
+      expect(ctx.chunks).toBeDefined();
+      const chunks = ctx.chunks ?? [];
+      const total = chunks.length;
+      for (const chunk of chunks) {
         expect(chunk.total).toBe(total);
       }
     });

@@ -67,7 +67,7 @@ function stringifyUnknownError(error: unknown): string {
   }
 
   if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
-    return String(error);
+    return error.toString();
   }
 
   return "Unknown error";

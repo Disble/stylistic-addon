@@ -27,6 +27,18 @@ function makeTrackChangeSuggestion(): Suggestion {
 }
 
 describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
+  function castToObservationArgs(context: ReturnType<typeof makeResolveSuggestionContext>): {
+    requestContext: Word.RequestContext;
+    candidates: Word.ContentControl[];
+    selectedCc: Word.ContentControl;
+  } {
+    return {
+      requestContext: context as unknown as Word.RequestContext,
+      candidates: context._ccItems as unknown as Word.ContentControl[],
+      selectedCc: context._cc as unknown as Word.ContentControl,
+    };
+  }
+
   it("observes the wrapper range collection as the executable operational scope", async () => {
     const suggestion = makeTrackChangeSuggestion();
     const context = makeResolveSuggestionContext({
@@ -47,10 +59,11 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
     const locator = new SuggestionLocator(suggestion);
     const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
+    const args = castToObservationArgs(context);
     const result = await observer.observeResolutionCandidates(
-      context as never,
-      context._ccItems as never,
-      context._cc as never
+      args.requestContext,
+      args.candidates,
+      args.selectedCc
     );
 
     expect(result.observationStatus).toBe("confirmed-pending");
@@ -95,10 +108,16 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
     const locator = new SuggestionLocator(suggestion);
     const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
+    const selectedCc = context._ccItems[0];
+    expect(selectedCc).toBeDefined();
+    if (!selectedCc) {
+      throw new Error("Expected first operational wrapper candidate.");
+    }
+
     const result = await observer.observeResolutionCandidates(
-      context as never,
-      context._ccItems as never,
-      context._ccItems[0] as never
+      context as unknown as Word.RequestContext,
+      context._ccItems as unknown as Word.ContentControl[],
+      selectedCc as unknown as Word.ContentControl
     );
 
     expect(result.observationStatus).toBe("mixed-group");
@@ -131,10 +150,11 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
     const locator = new SuggestionLocator(suggestion);
     const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
+    const args = castToObservationArgs(context);
     const result = await observer.observeResolutionCandidates(
-      context as never,
-      context._ccItems as never,
-      context._cc as never
+      args.requestContext,
+      args.candidates,
+      args.selectedCc
     );
 
     expect(result.observationStatus).toBe("confirmed-pending");
@@ -164,10 +184,11 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
     const locator = new SuggestionLocator(suggestion);
     const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
+    const args = castToObservationArgs(context);
     const result = await observer.observeResolutionCandidates(
-      context as never,
-      context._ccItems as never,
-      context._cc as never
+      args.requestContext,
+      args.candidates,
+      args.selectedCc
     );
 
     expect(result.observationStatus).toBe("confirmed-pending");

@@ -65,28 +65,114 @@ async function collectSourceFiles(directory) {
 
 /** Removes comments and string bodies enough for rails checks to avoid documentation false positives. */
 function stripCommentsAndStrings(content) {
-  return content
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/.*$/gm, "")
-    .replace(/`(?:\\.|[^`])*`/g, "``")
-    .replace(/"(?:\\.|[^"])*"/g, '""')
-    .replace(/'(?:\\.|[^'])*'/g, "''");
+  let sanitized = "";
+  let index = 0;
+
+  while (index < content.length) {
+    const current = content[index];
+    const next = content[index + 1];
+
+    if (current === "/" && next === "*") {
+      index += 2;
+      while (index < content.length && !(content[index] === "*" && content[index + 1] === "/")) {
+        index += 1;
+      }
+      index += 2;
+      continue;
+    }
+
+    if (current === "/" && next === "/") {
+      index += 2;
+      while (index < content.length && content[index] !== "\n") {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (current === '"' || current === "'" || current === "`") {
+      const quote = current;
+      sanitized += quote.repeat(2);
+      index += 1;
+
+      while (index < content.length) {
+        const char = content[index];
+        if (char === "\\") {
+          index += 2;
+          continue;
+        }
+
+        index += 1;
+        if (char === quote) {
+          break;
+        }
+      }
+      continue;
+    }
+
+    sanitized += current;
+    index += 1;
+  }
+
+  return sanitized;
 }
 
 /** Extracts static import module specifiers from source content. */
 function extractImportSpecifiers(content) {
   const specifiers = [];
-  const importPattern = /import\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+["']([^"']+)["']/g;
-  const sideEffectPattern = /import\s+["']([^"']+)["']/g;
 
-  for (const match of content.matchAll(importPattern)) {
-    specifiers.push(match[1]);
-  }
-  for (const match of content.matchAll(sideEffectPattern)) {
-    specifiers.push(match[1]);
+  for (const rawLine of content.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line.startsWith("import ")) {
+      continue;
+    }
+
+    const fromIndex = line.lastIndexOf(" from ");
+    if (fromIndex >= 0) {
+      const specifier = readQuotedSpecifier(line.slice(fromIndex + 6));
+      if (specifier) {
+        specifiers.push(specifier);
+      }
+      continue;
+    }
+
+    const sideEffectSpecifier = readQuotedSpecifier(line.slice("import ".length));
+    if (sideEffectSpecifier) {
+      specifiers.push(sideEffectSpecifier);
+    }
   }
 
   return specifiers;
+}
+
+/** Reads one quoted module specifier from the start of an import tail. */
+function readQuotedSpecifier(fragment) {
+  const trimmed = fragment.trim();
+  const quote = trimmed[0];
+  if (quote !== '"' && quote !== "'") {
+    return null;
+  }
+
+  let specifier = "";
+  for (let index = 1; index < trimmed.length; index += 1) {
+    const current = trimmed[index];
+    if (current === "\\") {
+      const escaped = trimmed[index + 1];
+      if (escaped === undefined) {
+        break;
+      }
+      specifier += escaped;
+      index += 1;
+      continue;
+    }
+
+    if (current === quote) {
+      return specifier;
+    }
+
+    specifier += current;
+  }
+
+  return null;
 }
 
 /** Returns true when an import path targets adapters from inside domain. */

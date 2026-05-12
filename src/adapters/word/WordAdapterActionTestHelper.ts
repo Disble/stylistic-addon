@@ -2,6 +2,7 @@ import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import type {
   MockComment,
   MockCommentRange,
+  MockContentControl,
   MockRangeWithTrackedChanges,
   MockTrackedChange,
   MockTrackedChangeCollection,
@@ -255,24 +256,23 @@ export function makeResolveSuggestionContext({
 
   const ccTagParts = ccTag.split(":");
   const inferredSuggestionId = ccTagParts[ccTagParts.length - 1] ?? "s-1";
-  const buildTrackedChangeCollection = (
-    items: MockTrackedChange[]
-  ): MockTrackedChangeCollection => ({
-    items,
-    load: vi.fn(),
-    acceptAll: vi.fn(() => {
-      [...items].forEach((trackedChange) => {
-        const accept = trackedChange.accept as (() => unknown) | undefined;
-        accept?.();
-      });
-    }),
-    rejectAll: vi.fn(() => {
-      [...items].forEach((trackedChange) => {
-        const reject = trackedChange.reject as (() => unknown) | undefined;
-        reject?.();
-      });
-    }),
-  });
+  const buildTrackedChangeCollection = (items: MockTrackedChange[]): MockTrackedChangeCollection =>
+    ({
+      items,
+      load: vi.fn(),
+      acceptAll: vi.fn(() => {
+        [...items].forEach((trackedChange) => {
+          const accept = trackedChange.accept as (() => unknown) | undefined;
+          accept?.();
+        });
+      }),
+      rejectAll: vi.fn(() => {
+        [...items].forEach((trackedChange) => {
+          const reject = trackedChange.reject as (() => unknown) | undefined;
+          reject?.();
+        });
+      }),
+    }) as MockTrackedChangeCollection;
 
   const rangeTCCollection = buildTrackedChangeCollection(mutableRangeTCItems);
   const bodyTCCollection = buildTrackedChangeCollection(mutableBodyTCItems);
@@ -332,7 +332,7 @@ export function makeResolveSuggestionContext({
       getTrackedChanges: vi.fn(() => thisSpanTCCollection),
       getRange: vi.fn(() => thisCcRange),
       delete: vi.fn(),
-    };
+    } as MockContentControl;
   };
 
   const cc = buildCc();
@@ -427,5 +427,5 @@ export function makeResolveSuggestionContext({
     _commentRangeTCCollections: commentRangeTCCollections,
     _ccItems: allCcItems,
     _cc: cc,
-  };
+  } as ResolveSuggestionContext;
 }

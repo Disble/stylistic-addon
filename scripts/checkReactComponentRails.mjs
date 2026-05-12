@@ -111,39 +111,12 @@ async function validateTsxContent(componentName, componentDirectory, errors) {
   }
 
   const content = await readFile(componentFile, "utf8");
-  const diagnostics = [
-    {
-      pattern: /^\s*(export\s+)?(interface|type|enum)\s+/m,
-      message: "types/interfaces/enums belong in ComponentName.types.ts, not in the TSX file.",
-    },
-    {
-      pattern: /^\s*(export\s+)?const\s+[A-Z0-9_]+\s*=/m,
-      message: "presentation constants belong in ComponentName.constants.ts, not in the TSX file.",
-    },
-    {
-      pattern: /^\s*(export\s+)?function\s+use[A-Z]/m,
-      message: "component hooks belong in ComponentName.hooks.ts, not in the TSX file.",
-    },
-    {
-      pattern: /^\s*(export\s+)?const\s+use[A-Z][A-Za-z0-9]*\s*=/m,
-      message: "component hooks belong in ComponentName.hooks.ts, not in the TSX file.",
-    },
-    {
-      pattern: /\bmakeStyles\s*\(/m,
-      message: "Fluent UI style factories belong in ComponentName.styles.ts, not in the TSX file.",
-    },
-  ];
-
-  for (const { pattern, message } of diagnostics) {
-    if (pattern.test(content)) {
-      errors.push(`${relativePath(componentFile)}: ${message}`);
-    }
+  const diagnostics = collectTsxDiagnostics(content);
+  for (const diagnostic of diagnostics.messages) {
+    errors.push(`${relativePath(componentFile)}: ${diagnostic}`);
   }
 
-  const declaredComponents = [
-    ...content.matchAll(/^\s*(?:export\s+)?function\s+([A-Z][A-Za-z0-9]*)\s*\(/gm),
-    ...content.matchAll(/^\s*(?:export\s+)?const\s+([A-Z][A-Za-z0-9]*)\s*=/gm),
-  ].map((match) => match[1]);
+  const declaredComponents = diagnostics.declaredComponents;
 
   const foreignComponents = declaredComponents.filter((name) => name !== componentName);
   if (foreignComponents.length > 0) {
@@ -151,6 +124,113 @@ async function validateTsxContent(componentName, componentDirectory, errors) {
       `${relativePath(componentFile)}: only ${componentName} may be declared here. Move ${foreignComponents.join(", ")} into their own component folders.`,
     );
   }
+}
+
+/** Collects deterministic TSX diagnostics without relying on complex regex backtracking. */
+function collectTsxDiagnostics(content) {
+  const messages = new Set();
+  const declaredComponents = [];
+
+  for (const rawLine of content.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    const normalizedLine = line.startsWith("export ") ? line.slice("export ".length).trim() : line;
+
+    if (
+      normalizedLine.startsWith("interface ") ||
+      normalizedLine.startsWith("type ") ||
+      normalizedLine.startsWith("enum ")
+    ) {
+      messages.add("types/interfaces/enums belong in ComponentName.types.ts, not in the TSX file.");
+    }
+
+    const declaredConstName = readDeclaredIdentifier(normalizedLine, "const");
+    if (declaredConstName) {
+      if (isAllCapsIdentifier(declaredConstName)) {
+        messages.add(
+          "presentation constants belong in ComponentName.constants.ts, not in the TSX file."
+        );
+      }
+
+      if (declaredConstName.startsWith("use") && startsWithUppercase(declaredConstName[3])) {
+        messages.add("component hooks belong in ComponentName.hooks.ts, not in the TSX file.");
+      }
+
+      if (startsWithUppercase(declaredConstName[0])) {
+        declaredComponents.push(declaredConstName);
+      }
+    }
+
+    const declaredFunctionName = readDeclaredIdentifier(normalizedLine, "function");
+    if (declaredFunctionName) {
+      if (declaredFunctionName.startsWith("use") && startsWithUppercase(declaredFunctionName[3])) {
+        messages.add("component hooks belong in ComponentName.hooks.ts, not in the TSX file.");
+      }
+
+      if (startsWithUppercase(declaredFunctionName[0])) {
+        declaredComponents.push(declaredFunctionName);
+      }
+    }
+
+    if (line.includes("makeStyles(")) {
+      messages.add(
+        "Fluent UI style factories belong in ComponentName.styles.ts, not in the TSX file."
+      );
+    }
+  }
+
+  return { messages: [...messages], declaredComponents };
+}
+
+/** Reads one declared identifier after a keyword when the line starts with that declaration. */
+function readDeclaredIdentifier(line, keyword) {
+  if (!line.startsWith(`${keyword} `)) {
+    return null;
+  }
+
+  let identifier = "";
+  for (let index = keyword.length + 1; index < line.length; index += 1) {
+    const current = line[index];
+    const isIdentifierChar =
+      (current >= "A" && current <= "Z") ||
+      (current >= "a" && current <= "z") ||
+      (current >= "0" && current <= "9") ||
+      current === "_";
+
+    if (!isIdentifierChar) {
+      break;
+    }
+
+    identifier += current;
+  }
+
+  return identifier.length > 0 ? identifier : null;
+}
+
+/** Returns true when an identifier uses the SCREAMING_CASE constant style. */
+function isAllCapsIdentifier(identifier) {
+  let hasLetter = false;
+
+  for (const character of identifier) {
+    const isLetter = character >= "A" && character <= "Z";
+    const isDigit = character >= "0" && character <= "9";
+    if (isLetter) {
+      hasLetter = true;
+      continue;
+    }
+
+    if (isDigit || character === "_") {
+      continue;
+    }
+
+    return false;
+  }
+
+  return hasLetter;
+}
+
+/** Returns true when the given character is an uppercase ASCII letter. */
+function startsWithUppercase(character) {
+  return typeof character === "string" && character >= "A" && character <= "Z";
 }
 
 /** Validates one PascalCase component folder and its strict anatomy. */
