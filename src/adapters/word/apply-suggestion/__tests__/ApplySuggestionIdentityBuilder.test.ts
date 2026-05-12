@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeSuggestion } from "../../ApplySuggestionCommandTestHelper";
+import { makeSuggestion } from "../../__tests__/ApplySuggestionCommandTestHelper";
 import { ApplySuggestionIdentityBuilder } from "../ApplySuggestionIdentityBuilder";
 
 describe("ApplySuggestionIdentityBuilder", () => {

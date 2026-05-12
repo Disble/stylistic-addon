@@ -21,7 +21,7 @@ its dedicated anatomy file.
 | pure exported helpers | exported non-hook helper functions | `*.helpers.ts` |
 | schemas | schema declarations/exports | `*.schema.ts` |
 | tests | `*.test.ts`, `*.test.tsx` | sibling `__tests__/` directory anywhere under `src/` |
-| test helpers and mocks | `*TestHelper.ts`, `*Mocks.ts` | test-support files or explicit test helper modules |
+| test helpers and mocks | `*TestHelper.ts`, `*Mocks.ts` | sibling `__tests__/` test-support modules |
 
 The enforcement model is content-first: if a new module role appears tomorrow,
 the rules still hold because they target the mixed concern itself, not a brittle
@@ -142,6 +142,11 @@ src/adapters/word/__tests__/WordAdapterAcceptSuggestion.test.ts
 This is enforced mechanically through `eslint-plugin-check-file` using
 `folder-match-with-fex`, so `src/foo/Bar.test.ts` is invalid while
 `src/foo/__tests__/Bar.test.ts` is valid.
+
+Test-only support files follow the same locality rule. If a helper, mock, or
+helper-only type exists exclusively for tests, place it inside the nearest
+sibling `__tests__/` directory instead of leaving it beside runtime modules.
+That keeps runtime anatomy clean and makes test ownership explicit.
 
 ### Types
 

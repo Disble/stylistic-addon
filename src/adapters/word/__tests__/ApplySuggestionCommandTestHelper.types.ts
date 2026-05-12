@@ -1,6 +1,6 @@
 /* global vi */
 
-import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 
 /** Mocked parent content-control shape used by ApplySuggestionCommand tests. */
 export type ParentCC = {

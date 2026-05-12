@@ -1,7 +1,10 @@
 import { vi } from "vitest";
 import * as React from "react";
 
-import type { Suggestion, SuggestionNavigationResult } from "../domain/suggestion/Suggestion.types";
+import type {
+  Suggestion,
+  SuggestionNavigationResult,
+} from "../../domain/suggestion/Suggestion.types";
 import "./TaskpaneFluentMocks";
 export {
   createOffice,
@@ -93,7 +96,7 @@ function isReactElementLike(
   return typeof value === "object" && value !== null && "props" in value;
 }
 
-vi.mock("../adapters/word/WordAdapter", () => ({
+vi.mock("../../adapters/word/WordAdapter", () => ({
   WordAdapter: class {
     constructor() {
       hoistedTaskpaneMocks.wordAdapterConstructor();
@@ -137,7 +140,7 @@ vi.mock("../adapters/word/WordAdapter", () => ({
   },
 }));
 
-vi.mock("../adapters/mastra/MastraAdapter", () => ({
+vi.mock("../../adapters/mastra/MastraAdapter", () => ({
   MastraAdapter: class {
     constructor() {
       hoistedTaskpaneMocks.mastraAdapterConstructor();
@@ -150,7 +153,7 @@ vi.mock("../adapters/mastra/MastraAdapter", () => ({
   },
 }));
 
-vi.mock("../adapters/RetryAnalysisDecorator", () => ({
+vi.mock("../../adapters/RetryAnalysisDecorator", () => ({
   RetryAnalysisDecorator: class {
     constructor(...args: unknown[]) {
       hoistedTaskpaneMocks.retryDecoratorConstructor(...args);
@@ -171,7 +174,7 @@ vi.mock("../adapters/RetryAnalysisDecorator", () => ({
   },
 }));
 
-vi.mock("../domain/pipeline/PipelineOrchestrator", () => ({
+vi.mock("../../domain/pipeline/PipelineOrchestrator", () => ({
   PipelineOrchestrator: class {
     constructor(handlers: unknown[]) {
       hoistedTaskpaneMocks.orchestratorHandlers = handlers;
@@ -183,7 +186,7 @@ vi.mock("../domain/pipeline/PipelineOrchestrator", () => ({
   },
 }));
 
-vi.mock("../adapters/mastra/FeedbackAdapter", () => ({
+vi.mock("../../adapters/mastra/FeedbackAdapter", () => ({
   FeedbackAdapter: class {
     sendFeedback(payload: any) {
       return hoistedTaskpaneMocks.feedbackSendFeedback(payload);
@@ -229,7 +232,7 @@ export function deferred<T>() {
  */
 export async function importTaskpane() {
   vi.resetModules();
-  return import("./index");
+  return import("../index");
 }
 
 /**

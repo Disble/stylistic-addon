@@ -5,8 +5,8 @@ import {
   createRange,
   installWordContext,
   makeSuggestion,
-} from "../ApplySuggestionCommandTestHelper";
-import type { ParentCC } from "../ApplySuggestionCommandTestHelper.types";
+} from "./ApplySuggestionCommandTestHelper";
+import type { ParentCC } from "./ApplySuggestionCommandTestHelper.types";
 
 const IDENTITY_TITLE_PREFIX = "stylistic-meta-v2:";
 const textLocator = new WordTextLocatorAdapter();

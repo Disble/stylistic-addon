@@ -7,7 +7,7 @@ import {
   makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
   makeSuggestion,
-} from "../WordAdapterActionTestHelper";
+} from "./WordAdapterActionTestHelper";
 
 describe("WordAdapter.acceptSuggestion", () => {
   let adapter: WordAdapter;

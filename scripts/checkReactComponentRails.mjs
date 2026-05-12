@@ -132,53 +132,81 @@ function collectTsxDiagnostics(content) {
   const declaredComponents = [];
 
   for (const rawLine of content.split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    const normalizedLine = line.startsWith("export ") ? line.slice("export ".length).trim() : line;
-
-    if (
-      normalizedLine.startsWith("interface ") ||
-      normalizedLine.startsWith("type ") ||
-      normalizedLine.startsWith("enum ")
-    ) {
-      messages.add("types/interfaces/enums belong in ComponentName.types.ts, not in the TSX file.");
-    }
-
-    const declaredConstName = readDeclaredIdentifier(normalizedLine, "const");
-    if (declaredConstName) {
-      if (isAllCapsIdentifier(declaredConstName)) {
-        messages.add(
-          "presentation constants belong in ComponentName.constants.ts, not in the TSX file."
-        );
-      }
-
-      if (declaredConstName.startsWith("use") && startsWithUppercase(declaredConstName[3])) {
-        messages.add("component hooks belong in ComponentName.hooks.ts, not in the TSX file.");
-      }
-
-      if (startsWithUppercase(declaredConstName[0])) {
-        declaredComponents.push(declaredConstName);
-      }
-    }
-
-    const declaredFunctionName = readDeclaredIdentifier(normalizedLine, "function");
-    if (declaredFunctionName) {
-      if (declaredFunctionName.startsWith("use") && startsWithUppercase(declaredFunctionName[3])) {
-        messages.add("component hooks belong in ComponentName.hooks.ts, not in the TSX file.");
-      }
-
-      if (startsWithUppercase(declaredFunctionName[0])) {
-        declaredComponents.push(declaredFunctionName);
-      }
-    }
-
-    if (line.includes("makeStyles(")) {
-      messages.add(
-        "Fluent UI style factories belong in ComponentName.styles.ts, not in the TSX file."
-      );
-    }
+    collectTsxLineDiagnostics(rawLine, messages, declaredComponents);
   }
 
   return { messages: [...messages], declaredComponents };
+}
+
+/** Collects diagnostics for one TSX line while keeping the main scanner linear. */
+function collectTsxLineDiagnostics(rawLine, messages, declaredComponents) {
+  const line = rawLine.trim();
+  const normalizedLine = normalizeExportedLine(line);
+
+  collectTypeDeclarationDiagnostic(normalizedLine, messages);
+  collectConstDeclarationDiagnostics(normalizedLine, messages, declaredComponents);
+  collectFunctionDeclarationDiagnostics(normalizedLine, messages, declaredComponents);
+  collectStyleFactoryDiagnostic(line, messages);
+}
+
+/** Removes a leading export keyword so declaration checks stay uniform. */
+function normalizeExportedLine(line) {
+  return line.startsWith("export ") ? line.slice("export ".length).trim() : line;
+}
+
+/** Flags inline type declarations inside TSX presentational files. */
+function collectTypeDeclarationDiagnostic(line, messages) {
+  if (line.startsWith("interface ") || line.startsWith("type ") || line.startsWith("enum ")) {
+    messages.add("types/interfaces/enums belong in ComponentName.types.ts, not in the TSX file.");
+  }
+}
+
+/** Flags inline const declarations that should live in dedicated anatomy files. */
+function collectConstDeclarationDiagnostics(line, messages, declaredComponents) {
+  const declaredConstName = readDeclaredIdentifier(line, "const");
+  if (!declaredConstName) {
+    return;
+  }
+
+  collectHookDeclarationDiagnostic(declaredConstName, messages);
+
+  if (isAllCapsIdentifier(declaredConstName)) {
+    messages.add("presentation constants belong in ComponentName.constants.ts, not in the TSX file.");
+  }
+
+  registerDeclaredComponent(declaredConstName, declaredComponents);
+}
+
+/** Flags inline function declarations that should move to hooks or sibling components. */
+function collectFunctionDeclarationDiagnostics(line, messages, declaredComponents) {
+  const declaredFunctionName = readDeclaredIdentifier(line, "function");
+  if (!declaredFunctionName) {
+    return;
+  }
+
+  collectHookDeclarationDiagnostic(declaredFunctionName, messages);
+  registerDeclaredComponent(declaredFunctionName, declaredComponents);
+}
+
+/** Flags hook declarations that do not belong inside presentational TSX files. */
+function collectHookDeclarationDiagnostic(identifier, messages) {
+  if (identifier.startsWith("use") && startsWithUppercase(identifier[3])) {
+    messages.add("component hooks belong in ComponentName.hooks.ts, not in the TSX file.");
+  }
+}
+
+/** Tracks secondary component declarations discovered inside a TSX file. */
+function registerDeclaredComponent(identifier, declaredComponents) {
+  if (startsWithUppercase(identifier[0])) {
+    declaredComponents.push(identifier);
+  }
+}
+
+/** Flags `makeStyles(...)` declarations that belong in the styles anatomy file. */
+function collectStyleFactoryDiagnostic(line, messages) {
+  if (line.includes("makeStyles(")) {
+    messages.add("Fluent UI style factories belong in ComponentName.styles.ts, not in the TSX file.");
+  }
 }
 
 /** Reads one declared identifier after a keyword when the line starts with that declaration. */

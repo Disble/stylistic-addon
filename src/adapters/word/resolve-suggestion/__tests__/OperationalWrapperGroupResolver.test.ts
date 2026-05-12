@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { makeOperationalWrapperTitle } from "../../WordAdapterActionTestHelper";
+import { makeOperationalWrapperTitle } from "../../__tests__/WordAdapterActionTestHelper";
 import { parseReplaceIdentityTitle } from "../../ReplaceIdentityParser";
 import { OperationalWrapperGroupResolver } from "../OperationalWrapperGroupResolver";
 

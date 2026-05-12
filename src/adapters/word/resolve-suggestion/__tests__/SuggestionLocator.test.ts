@@ -6,7 +6,7 @@ import {
   makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
   makeSuggestion,
-} from "../../WordAdapterActionTestHelper";
+} from "../../__tests__/WordAdapterActionTestHelper";
 import { SuggestionLocator } from "../SuggestionLocator";
 
 describe("SuggestionLocator", () => {

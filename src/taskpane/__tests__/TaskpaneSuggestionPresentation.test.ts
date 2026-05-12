@@ -10,7 +10,7 @@ import {
 } from "../ResultsPanelStore";
 import { resetTaskpaneShellState } from "../TaskpaneShellStore";
 import { ResultSuggestionCard } from "../components/ResultSuggestionCard";
-import { makeSuggestion } from "../TaskpaneTestHelper";
+import { makeSuggestion } from "./TaskpaneTestHelper";
 
 function createResultsPanelDeps(): ResultsPanelDeps {
   const deps: ResultsPanelDeps = {

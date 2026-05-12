@@ -1,5 +1,5 @@
-import type { CommandResult } from "../../domain/DocumentApplication.types";
-import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
+import type { CommandResult } from "../../../domain/DocumentApplication.types";
+import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import type { WordRunCallback } from "./WordAdapterTestHelper.types";
 
 const hoistedCommandMocks = vi.hoisted(() => ({
@@ -26,7 +26,7 @@ export function getCleanupMocks() {
   return hoistedCleanupMocks;
 }
 
-vi.mock("./ApplySuggestionCommand", () => ({
+vi.mock("../ApplySuggestionCommand", () => ({
   ApplySuggestionCommand: class {
     private readonly suggestion: Suggestion;
 
@@ -41,7 +41,7 @@ vi.mock("./ApplySuggestionCommand", () => ({
   },
 }));
 
-vi.mock("./cleanup/CommentCleanup", () => ({
+vi.mock("../cleanup/CommentCleanup", () => ({
   getCleanupPreview: hoistedCleanupMocks.getCleanupPreview,
   cleanupResolvedComments: hoistedCleanupMocks.cleanupResolvedComments,
   OVERLAPPING_RELATIONS: [

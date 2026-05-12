@@ -72,40 +72,19 @@ function stripCommentsAndStrings(content) {
     const current = content[index];
     const next = content[index + 1];
 
-    if (current === "/" && next === "*") {
-      index += 2;
-      while (index < content.length && !(content[index] === "*" && content[index + 1] === "/")) {
-        index += 1;
-      }
-      index += 2;
+    if (isBlockCommentStart(current, next)) {
+      index = skipBlockComment(content, index);
       continue;
     }
 
-    if (current === "/" && next === "/") {
-      index += 2;
-      while (index < content.length && content[index] !== "\n") {
-        index += 1;
-      }
+    if (isLineCommentStart(current, next)) {
+      index = skipLineComment(content, index);
       continue;
     }
 
-    if (current === '"' || current === "'" || current === "`") {
-      const quote = current;
-      sanitized += quote.repeat(2);
-      index += 1;
-
-      while (index < content.length) {
-        const char = content[index];
-        if (char === "\\") {
-          index += 2;
-          continue;
-        }
-
-        index += 1;
-        if (char === quote) {
-          break;
-        }
-      }
+    if (isQuoteCharacter(current)) {
+      sanitized += current.repeat(2);
+      index = skipQuotedString(content, index + 1, current);
       continue;
     }
 
@@ -114,6 +93,64 @@ function stripCommentsAndStrings(content) {
   }
 
   return sanitized;
+}
+
+/** Returns true when the current two characters start a block comment. */
+function isBlockCommentStart(current, next) {
+  return current === "/" && next === "*";
+}
+
+/** Returns true when the current two characters start a line comment. */
+function isLineCommentStart(current, next) {
+  return current === "/" && next === "/";
+}
+
+/** Returns true when the current character starts a quoted string/template literal. */
+function isQuoteCharacter(current) {
+  return current === '"' || current === "'" || current === "`";
+}
+
+/** Advances the cursor past a block comment and its closing marker when present. */
+function skipBlockComment(content, startIndex) {
+  let index = startIndex + 2;
+  while (index < content.length && !isBlockCommentEnd(content[index], content[index + 1])) {
+    index += 1;
+  }
+  return Math.min(index + 2, content.length);
+}
+
+/** Returns true when the current two characters close a block comment. */
+function isBlockCommentEnd(current, next) {
+  return current === "*" && next === "/";
+}
+
+/** Advances the cursor past a line comment while preserving the newline for later processing. */
+function skipLineComment(content, startIndex) {
+  let index = startIndex + 2;
+  while (index < content.length && content[index] !== "\n") {
+    index += 1;
+  }
+  return index;
+}
+
+/** Advances the cursor past a quoted string or template literal, respecting escapes. */
+function skipQuotedString(content, startIndex, quote) {
+  let index = startIndex;
+
+  while (index < content.length) {
+    const char = content[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+
+    index += 1;
+    if (char === quote) {
+      break;
+    }
+  }
+
+  return index;
 }
 
 /** Extracts static import module specifiers from source content. */

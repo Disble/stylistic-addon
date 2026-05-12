@@ -196,7 +196,7 @@ export class ResolveSuggestionTrackChangeOrchestrator {
       });
       return null;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = this.stringifyUnknownError(error);
       await this.observabilityReporter.emitPhase("cleanup-metadata", "failed", {
         error: message,
       });
@@ -210,6 +210,31 @@ export class ResolveSuggestionTrackChangeOrchestrator {
         pendingBefore
       );
     }
+  }
+
+  /** Converts unknown cleanup failures to stable diagnostics without object stringification noise. */
+  private stringifyUnknownError(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === "string") {
+      return error;
+    }
+
+    if (typeof error === "number") {
+      return `${error}`;
+    }
+
+    if (typeof error === "boolean") {
+      return error ? "true" : "false";
+    }
+
+    if (typeof error === "bigint") {
+      return error.toString();
+    }
+
+    return "Unknown error";
   }
 
   /** Observes the wrapper state and degrades non-terminal host evidence before mutation. */

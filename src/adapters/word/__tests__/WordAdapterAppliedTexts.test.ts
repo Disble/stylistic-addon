@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WordAdapter } from "../WordAdapter";
-import { installRejectingWord, installWordWithContext } from "../WordAdapterTestHelper";
+import { installRejectingWord, installWordWithContext } from "./WordAdapterTestHelper";
 
 describe("WordAdapter.getAppliedOriginalTexts", () => {
   let adapter: WordAdapter;

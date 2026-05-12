@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandResult } from "../../../domain/DocumentApplication.types";
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
-import { getCommandMocks, installWordWithContext, makeSuggestion } from "../WordAdapterTestHelper";
+import { getCommandMocks, installWordWithContext, makeSuggestion } from "./WordAdapterTestHelper";
 import { WordAdapter } from "../WordAdapter";
 
 describe("WordAdapter.applySuggestions", () => {

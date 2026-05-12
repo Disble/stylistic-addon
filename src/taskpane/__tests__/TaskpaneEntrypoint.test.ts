@@ -17,7 +17,7 @@ import {
   makeSuggestion,
   resetTaskpaneHarness,
   teardownTaskpaneHarness,
-} from "../TaskpaneTestHelper";
+} from "./TaskpaneTestHelper";
 
 function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: string) {
   const el = doc.getElementById(id);

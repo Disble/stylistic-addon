@@ -172,19 +172,29 @@ export class SuggestionResolutionCleanup {
       return error;
     }
 
-    if (error && typeof error === "object") {
-      if ("message" in error && typeof error.message === "string") {
-        return error.message;
-      }
-
-      if ("code" in error && typeof error.code === "string") {
-        return error.code;
-      }
-
-      return "Unknown object error";
+    const primitiveError = this.stringifyPrimitiveError(error);
+    if (primitiveError) {
+      return primitiveError;
     }
 
-    if (typeof error === "number" || typeof error === "bigint" || typeof error === "boolean") {
+    if (error && typeof error === "object") {
+      return this.stringifyObjectError(error);
+    }
+
+    return "Unknown error";
+  }
+
+  /** Converts primitive thrown values without relying on default object stringification. */
+  private stringifyPrimitiveError(error: unknown): string | null {
+    if (typeof error === "number") {
+      return `${error}`;
+    }
+
+    if (typeof error === "boolean") {
+      return error ? "true" : "false";
+    }
+
+    if (typeof error === "bigint") {
       return error.toString();
     }
 
@@ -192,6 +202,21 @@ export class SuggestionResolutionCleanup {
       return error.description ?? error.toString();
     }
 
-    return "Unknown error";
+    return null;
+  }
+
+  /** Converts Office-like error objects to a stable message or code preview. */
+  private stringifyObjectError(error: object): string {
+    const message = "message" in error && typeof error.message === "string" ? error.message : null;
+    if (message) {
+      return message;
+    }
+
+    const code = "code" in error && typeof error.code === "string" ? error.code : null;
+    if (code) {
+      return code;
+    }
+
+    return "Unknown object error";
   }
 }

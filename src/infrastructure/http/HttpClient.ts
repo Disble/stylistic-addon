@@ -35,7 +35,7 @@ export class HttpClient {
   private normalizeBaseUrl(baseUrl: string): string {
     let endIndex = baseUrl.length;
 
-    while (endIndex > 0 && baseUrl.charCodeAt(endIndex - 1) === 47) {
+    while (endIndex > 0 && baseUrl.codePointAt(endIndex - 1) === 47) {
       endIndex -= 1;
     }
 
@@ -52,7 +52,15 @@ export class HttpClient {
       return error;
     }
 
-    if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
+    if (typeof error === "number") {
+      return `${error}`;
+    }
+
+    if (typeof error === "boolean") {
+      return error ? "true" : "false";
+    }
+
+    if (typeof error === "bigint") {
       return error.toString();
     }
 

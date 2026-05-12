@@ -9,7 +9,7 @@ import {
   setResultsPanelData,
 } from "../ResultsPanelStore";
 import { getTaskpaneShellState, resetTaskpaneShellState } from "../TaskpaneShellStore";
-import { makeSuggestion } from "../TaskpaneTestHelper";
+import { makeSuggestion } from "./TaskpaneTestHelper";
 
 function makeMediatorResult(
   overrides: Partial<SuggestionResolutionMediatorResult> = {}

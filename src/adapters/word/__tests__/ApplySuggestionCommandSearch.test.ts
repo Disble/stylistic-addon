@@ -4,7 +4,7 @@ import {
   createRange,
   installWordContext,
   makeSuggestion,
-} from "../ApplySuggestionCommandTestHelper";
+} from "./ApplySuggestionCommandTestHelper";
 import { WordTextLocatorAdapter } from "../WordTextLocatorAdapter";
 
 const textLocator = new WordTextLocatorAdapter();

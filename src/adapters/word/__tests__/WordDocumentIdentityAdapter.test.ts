@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DOCUMENT_UUID_SETTINGS_KEY } from "../../../infrastructure/config";
-import { installOfficeDocumentSettings } from "../WordAdapterTestHelper";
+import { installOfficeDocumentSettings } from "./WordAdapterTestHelper";
 import { WordDocumentIdentityAdapter } from "../WordDocumentIdentityAdapter";
 
 describe("WordDocumentIdentityAdapter", () => {

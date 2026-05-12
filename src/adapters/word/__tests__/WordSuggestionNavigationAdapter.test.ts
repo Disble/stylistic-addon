@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TextLocator } from "../WordTextLocatorContext.types";
-import { installWordWithContext, makeSuggestion } from "../WordAdapterActionTestHelper";
+import { installWordWithContext, makeSuggestion } from "./WordAdapterActionTestHelper";
 import { WordSuggestionNavigationAdapter } from "../WordSuggestionNavigationAdapter";
 
 describe("WordSuggestionNavigationAdapter", () => {

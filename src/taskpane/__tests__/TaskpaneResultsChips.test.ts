@@ -16,7 +16,7 @@ import {
   selectResultsPanelVisibleCards,
 } from "../ResultsPanelFilters";
 import { resetTaskpaneShellState } from "../TaskpaneShellStore";
-import { makeSuggestion } from "../TaskpaneTestHelper";
+import { makeSuggestion } from "./TaskpaneTestHelper";
 import type { Suggestion, SuggestionSeverity } from "../../domain/suggestion/Suggestion.types";
 
 function createResultsPanelDeps(): ResultsPanelDeps {

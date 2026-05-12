@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { installWordWithContext } from "../WordAdapterTestHelper";
+import { installWordWithContext } from "./WordAdapterTestHelper";
 import { WordTrackChangesAdapter } from "../WordTrackChangesAdapter";
 
 /** Builds a minimal request context mock accepted by track-changes adapter tests. */

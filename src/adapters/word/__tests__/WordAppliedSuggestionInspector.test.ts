@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { installWordWithContext } from "../WordAdapterTestHelper";
+import { installWordWithContext } from "./WordAdapterTestHelper";
 import { WordAppliedSuggestionInspector } from "../WordAppliedSuggestionInspector";
 
 describe("WordAppliedSuggestionInspector", () => {

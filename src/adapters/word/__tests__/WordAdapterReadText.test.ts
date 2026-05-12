@@ -5,7 +5,7 @@ import {
   installRejectingWord,
   installWordWithContext,
   makeParagraph,
-} from "../WordAdapterTestHelper";
+} from "./WordAdapterTestHelper";
 
 describe("WordAdapter.getTextToAnalyze", () => {
   let adapter: WordAdapter;

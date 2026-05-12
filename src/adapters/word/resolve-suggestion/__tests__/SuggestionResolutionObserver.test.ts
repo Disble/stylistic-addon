@@ -4,7 +4,7 @@ import {
   makeOperationalWrapperTag,
   makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
-} from "../../WordAdapterActionTestHelper";
+} from "../../__tests__/WordAdapterActionTestHelper";
 import type { TextLocator } from "../../WordTextLocatorContext.types";
 import { SuggestionLocator } from "../SuggestionLocator";
 import { SuggestionResolutionObserver } from "../SuggestionResolutionObserver";
@@ -12,6 +12,14 @@ import { SuggestionResolutionObserver } from "../SuggestionResolutionObserver";
 const NOOP_TEXT_LOCATOR: TextLocator = {
   locate: vi.fn(async () => null),
 };
+
+function castToObservationArgs(context: ReturnType<typeof makeResolveSuggestionContext>) {
+  return {
+    requestContext: context as unknown as Word.RequestContext,
+    candidates: context._ccItems as unknown as Word.ContentControl[],
+    selectedCc: context._cc as unknown as Word.ContentControl,
+  };
+}
 
 function makeTrackChangeSuggestion(): Suggestion {
   return {
@@ -27,18 +35,6 @@ function makeTrackChangeSuggestion(): Suggestion {
 }
 
 describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
-  function castToObservationArgs(context: ReturnType<typeof makeResolveSuggestionContext>): {
-    requestContext: Word.RequestContext;
-    candidates: Word.ContentControl[];
-    selectedCc: Word.ContentControl;
-  } {
-    return {
-      requestContext: context as unknown as Word.RequestContext,
-      candidates: context._ccItems as unknown as Word.ContentControl[],
-      selectedCc: context._cc as unknown as Word.ContentControl,
-    };
-  }
-
   it("observes the wrapper range collection as the executable operational scope", async () => {
     const suggestion = makeTrackChangeSuggestion();
     const context = makeResolveSuggestionContext({

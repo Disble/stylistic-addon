@@ -7,7 +7,7 @@ import {
   makeOperationalWrapperTitle,
   makeOperationalWrapperTag,
   makeSuggestion,
-} from "../WordAdapterActionTestHelper";
+} from "./WordAdapterActionTestHelper";
 
 type LocatedRange = Awaited<ReturnType<NonNullable<TextLocator["locate"]>>>;
 

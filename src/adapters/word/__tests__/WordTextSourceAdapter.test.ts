@@ -3,7 +3,7 @@ import {
   installRejectingWord,
   installWordWithContext,
   makeParagraph,
-} from "../WordAdapterTestHelper";
+} from "./WordAdapterTestHelper";
 import { WordTextSourceAdapter } from "../WordTextSourceAdapter";
 
 describe("WordTextSourceAdapter", () => {

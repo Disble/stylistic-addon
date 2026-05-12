@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getCleanupMocks } from "../WordAdapterTestHelper";
+import { getCleanupMocks } from "./WordAdapterTestHelper";
 import { WordAdapter } from "../WordAdapter";
 
 describe("WordAdapter.cleanupResolvedComments", () => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplySuggestionCommand } from "../ApplySuggestionCommand";
 import { WordTextLocatorAdapter } from "../WordTextLocatorAdapter";
-import { installWordContext, makeSuggestion } from "../ApplySuggestionCommandTestHelper";
+import { installWordContext, makeSuggestion } from "./ApplySuggestionCommandTestHelper";
 
 const textLocator = new WordTextLocatorAdapter();
 

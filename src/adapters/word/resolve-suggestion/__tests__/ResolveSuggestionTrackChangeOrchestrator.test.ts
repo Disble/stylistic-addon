@@ -66,7 +66,15 @@ function stringifyUnknownError(error: unknown): string {
     return error;
   }
 
-  if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
+  if (typeof error === "number") {
+    return `${error}`;
+  }
+
+  if (typeof error === "boolean") {
+    return error ? "true" : "false";
+  }
+
+  if (typeof error === "bigint") {
     return error.toString();
   }
 

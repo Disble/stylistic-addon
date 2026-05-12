@@ -5,7 +5,7 @@ import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "../ReplaceIdentityParser";
-import { makeOperationalWrapperTitle, makeSuggestion } from "../WordAdapterActionTestHelper";
+import { makeOperationalWrapperTitle, makeSuggestion } from "./WordAdapterActionTestHelper";
 
 describe("ReplaceIdentityParser", () => {
   it("parses a persisted operational-wrapper title payload", () => {
