@@ -13,11 +13,14 @@ const NOOP_TEXT_LOCATOR: TextLocator = {
   locate: vi.fn(async () => null),
 };
 
-function castToObservationArgs(context: ReturnType<typeof makeResolveSuggestionContext>) {
+function castToObservationArgs(
+  context: ReturnType<typeof makeResolveSuggestionContext>,
+  selectedCcOverride?: ReturnType<typeof makeResolveSuggestionContext>["_ccItems"][number]
+) {
   return {
     requestContext: context as unknown as Word.RequestContext,
     candidates: context._ccItems as unknown as Word.ContentControl[],
-    selectedCc: context._cc as unknown as Word.ContentControl,
+    selectedCc: (selectedCcOverride ?? context._cc) as unknown as Word.ContentControl,
   };
 }
 
@@ -110,10 +113,12 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       throw new Error("Expected first operational wrapper candidate.");
     }
 
+    const args = castToObservationArgs(context, selectedCc);
+
     const result = await observer.observeResolutionCandidates(
-      context as unknown as Word.RequestContext,
-      context._ccItems as unknown as Word.ContentControl[],
-      selectedCc as unknown as Word.ContentControl
+      args.requestContext,
+      args.candidates,
+      args.selectedCc
     );
 
     expect(result.observationStatus).toBe("mixed-group");

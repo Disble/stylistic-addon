@@ -1,5 +1,6 @@
 /* global fetch, Headers, Response, RequestInit, console */
 
+import { stringifyUnknownError } from "../errors/UnknownError.helpers";
 import { HttpError } from "./HttpError";
 import type {
   HttpClientDeps,
@@ -40,39 +41,6 @@ export class HttpClient {
     }
 
     return baseUrl.slice(0, endIndex);
-  }
-
-  /** Formats unknown thrown values so logs never stringify opaque objects accidentally. */
-  private describeThrownError(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    if (typeof error === "string") {
-      return error;
-    }
-
-    if (typeof error === "number") {
-      return `${error}`;
-    }
-
-    if (typeof error === "boolean") {
-      return error ? "true" : "false";
-    }
-
-    if (typeof error === "bigint") {
-      return error.toString();
-    }
-
-    if (error && typeof error === "object") {
-      const message = (error as { message?: unknown }).message;
-      if (typeof message === "string" && message.length > 0) {
-        return message;
-      }
-      return "Unknown object error";
-    }
-
-    return "Unknown error";
   }
 
   async get<TResponse>(path: string, options?: HttpRequestOptions): Promise<TResponse> {
@@ -126,7 +94,7 @@ export class HttpClient {
         );
       } else {
         console.error(
-          `🔴 [HttpClient] ${method} ${url} threw before reaching server: ${this.describeThrownError(error)}`
+          `🔴 [HttpClient] ${method} ${url} threw before reaching server: ${stringifyUnknownError(error)}`
         );
       }
       throw error;

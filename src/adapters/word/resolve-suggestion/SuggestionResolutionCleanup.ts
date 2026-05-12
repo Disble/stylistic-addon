@@ -2,6 +2,7 @@ import {
   STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX,
   STYLISTIC_TAG_PREFIX,
 } from "../../../infrastructure/config";
+import { stringifyUnknownError } from "../../../infrastructure/errors/UnknownError.helpers";
 import type { ColocatedCommentContext } from "./ResolutionContext";
 import type { ResolvedTrackChangeMetadataCleanupResult } from "./SuggestionResolutionCleanup.types";
 
@@ -164,59 +165,6 @@ export class SuggestionResolutionCleanup {
 
   /** Converts unknown host exceptions to stable diagnostics. */
   private stringifyError(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    if (typeof error === "string") {
-      return error;
-    }
-
-    const primitiveError = this.stringifyPrimitiveError(error);
-    if (primitiveError) {
-      return primitiveError;
-    }
-
-    if (error && typeof error === "object") {
-      return this.stringifyObjectError(error);
-    }
-
-    return "Unknown error";
-  }
-
-  /** Converts primitive thrown values without relying on default object stringification. */
-  private stringifyPrimitiveError(error: unknown): string | null {
-    if (typeof error === "number") {
-      return `${error}`;
-    }
-
-    if (typeof error === "boolean") {
-      return error ? "true" : "false";
-    }
-
-    if (typeof error === "bigint") {
-      return error.toString();
-    }
-
-    if (typeof error === "symbol") {
-      return error.description ?? error.toString();
-    }
-
-    return null;
-  }
-
-  /** Converts Office-like error objects to a stable message or code preview. */
-  private stringifyObjectError(error: object): string {
-    const message = "message" in error && typeof error.message === "string" ? error.message : null;
-    if (message) {
-      return message;
-    }
-
-    const code = "code" in error && typeof error.code === "string" ? error.code : null;
-    if (code) {
-      return code;
-    }
-
-    return "Unknown object error";
+    return stringifyUnknownError(error);
   }
 }

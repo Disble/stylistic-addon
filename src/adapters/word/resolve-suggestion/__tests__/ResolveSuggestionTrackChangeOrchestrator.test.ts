@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Suggestion } from "../../../../domain/suggestion/Suggestion.types";
+import { stringifyUnknownError } from "../../../../infrastructure/errors/UnknownError.helpers";
 import type { DocumentReviewStateInspector } from "../DocumentReviewStateInspector";
 import type { ResolutionObservation } from "../ResolutionContext";
 import type { ResolutionErrorSerializer } from "../ResolutionErrorParser";
@@ -54,31 +55,6 @@ function makeFormattingSuggestion(): Suggestion {
     context: "Ese era el inicio del post mortem reportado por PRIME.",
     suggestedText: "*post mortem*",
   };
-}
-
-/** Converts unknown thrown values to stable test diagnostics. */
-function stringifyUnknownError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (typeof error === "number") {
-    return `${error}`;
-  }
-
-  if (typeof error === "boolean") {
-    return error ? "true" : "false";
-  }
-
-  if (typeof error === "bigint") {
-    return error.toString();
-  }
-
-  return "Unknown error";
 }
 
 describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {

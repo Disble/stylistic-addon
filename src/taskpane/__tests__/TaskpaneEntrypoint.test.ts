@@ -28,7 +28,7 @@ function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: 
 }
 
 function getRenderedAppProps(reactMocks: ReturnType<typeof getTaskpaneReactMocks>): AppProps {
-  const lastRenderCall = reactMocks.render.mock.calls[reactMocks.render.mock.calls.length - 1];
+  const lastRenderCall = [...reactMocks.render.mock.calls].pop();
   const renderedTree = lastRenderCall?.[0];
 
   if (!isValidElement<{ children?: React.ReactNode }>(renderedTree)) {

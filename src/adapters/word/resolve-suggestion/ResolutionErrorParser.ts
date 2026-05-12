@@ -1,59 +1,25 @@
+import {
+  readUnknownRecordProperty,
+  stringifyUnknownError,
+} from "../../../infrastructure/errors/UnknownError.helpers";
 import type { SerializedOfficeErrorDiagnostics } from "./ResolutionErrorParser.types";
 
 /** Converts unknown runtime errors into safe diagnostic objects for logs and observability. */
 export class ResolutionErrorSerializer {
-  /** Reads one unknown error property defensively so diagnostic logging never throws. */
-  private readUnknownErrorProperty(error: unknown, propertyName: string): unknown {
-    if (typeof error !== "object" || error === null) {
-      return undefined;
-    }
-
-    try {
-      return (error as Record<string, unknown>)[propertyName];
-    } catch {
-      return undefined;
-    }
-  }
-
   /** Converts one unknown Office.js-ish error into a stable message without stringifying opaque objects. */
   stringify(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
-
-    if (typeof error === "string") {
-      return error;
-    }
-
-    if (typeof error === "number") {
-      return `${error}`;
-    }
-
-    if (typeof error === "boolean") {
-      return error ? "true" : "false";
-    }
-
-    if (typeof error === "bigint") {
-      return error.toString();
-    }
-
-    const messageValue = this.readUnknownErrorProperty(error, "message");
-    if (typeof messageValue === "string" && messageValue.trim().length > 0) {
-      return messageValue;
-    }
-
-    return "Unknown error";
+    return stringifyUnknownError(error);
   }
 
   /** Builds one plain Office.js-ish error diagnostic object for console output. */
   serialize(error: unknown): SerializedOfficeErrorDiagnostics {
     const fallbackMessage = this.stringify(error);
-    const messageValue = this.readUnknownErrorProperty(error, "message");
-    const nameValue = this.readUnknownErrorProperty(error, "name");
-    const codeValue = this.readUnknownErrorProperty(error, "code");
-    const debugInfo = this.readUnknownErrorProperty(error, "debugInfo");
-    const traceMessages = this.readUnknownErrorProperty(error, "traceMessages");
-    const stackValue = this.readUnknownErrorProperty(error, "stack");
+    const messageValue = readUnknownRecordProperty(error, "message");
+    const nameValue = readUnknownRecordProperty(error, "name");
+    const codeValue = readUnknownRecordProperty(error, "code");
+    const debugInfo = readUnknownRecordProperty(error, "debugInfo");
+    const traceMessages = readUnknownRecordProperty(error, "traceMessages");
+    const stackValue = readUnknownRecordProperty(error, "stack");
     const stackPreview =
       typeof stackValue === "string"
         ? stackValue
