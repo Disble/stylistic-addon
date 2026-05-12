@@ -9,8 +9,6 @@ export type AnalysisProgressHeroProps = Readonly<{
 
 /** Griffel class slots consumed by the analysis-progress hero. */
 export type AnalysisProgressHeroClasses = Readonly<{
-  root: string;
-  illustrationWrapper: string;
   illustration: string;
   illustrationDoc: string;
   illustrationWand: string;
@@ -25,10 +23,6 @@ export type AnalysisProgressHeroClasses = Readonly<{
   illustrationLineDelay4: string;
   illustrationLineDelay5: string;
   illustrationLineDelay6: string;
-  copy: string;
-  title: string;
-  message: string;
   progressField: string;
-  actions: string;
   primaryButton: string;
 }>;

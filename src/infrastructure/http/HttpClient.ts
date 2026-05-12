@@ -31,6 +31,31 @@ export class HttpClient {
     this.fetchImpl = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
+  /** Formats unknown thrown values so logs never stringify opaque objects accidentally. */
+  private describeThrownError(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === "string") {
+      return error;
+    }
+
+    if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
+      return String(error);
+    }
+
+    if (error && typeof error === "object") {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string" && message.length > 0) {
+        return message;
+      }
+      return "Unknown object error";
+    }
+
+    return "Unknown error";
+  }
+
   async get<TResponse>(path: string, options?: HttpRequestOptions): Promise<TResponse> {
     return this.request<TResponse>("GET", path, options);
   }
@@ -81,7 +106,9 @@ export class HttpClient {
           error.body
         );
       } else {
-        console.error(`🔴 [HttpClient] ${method} ${url} threw before reaching server:`, error);
+        console.error(
+          `🔴 [HttpClient] ${method} ${url} threw before reaching server: ${this.describeThrownError(error)}`
+        );
       }
       throw error;
     }

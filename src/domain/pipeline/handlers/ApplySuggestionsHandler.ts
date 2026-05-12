@@ -20,8 +20,17 @@ import type { PipelineHandler } from "./ReadTextHandler.types";
 
 /** Applies pending suggestions through the document port. */
 export class ApplySuggestionsHandler implements PipelineHandler {
+  /** Reads pending suggestions after guard filtering completed. */
+  private requirePendingSuggestions(ctx: PipelineContext) {
+    if (!ctx.pendingSuggestions) {
+      throw new Error("ApplySuggestionsHandler requires ctx.pendingSuggestions before apply.");
+    }
+
+    return ctx.pendingSuggestions;
+  }
+
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
-    const pending = ctx.pendingSuggestions!;
+    const pending = this.requirePendingSuggestions(ctx);
     console.log(
       `📝 [ApplySuggestionsHandler] Fase 6: Aplicando ${pending.length} sugerencias como Track Changes...`
     );

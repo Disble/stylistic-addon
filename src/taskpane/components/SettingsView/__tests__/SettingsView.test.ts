@@ -40,7 +40,17 @@ function getBodyChildren(element: React.ReactElement): BodyChildren {
   const body = React.Children.toArray(element.props.children)[1] as React.ReactElement<{
     children?: React.ReactNode;
   }>;
-  return React.Children.toArray(body.props.children) as unknown as BodyChildren;
+  const children = React.Children.toArray(body.props.children);
+  if (children.length !== 4) {
+    throw new Error(`Expected 4 settings body children, received ${children.length}.`);
+  }
+
+  return [
+    children[0] as React.ReactElement,
+    children[1] as React.ReactElement<AnalysisProfileSectionProps>,
+    children[2] as React.ReactElement<CorrectionInstructionsSectionProps>,
+    children[3] as React.ReactElement<SettingsSaveBarProps>,
+  ];
 }
 
 function makeState(overrides: Partial<SettingsViewState> = {}): SettingsViewState {

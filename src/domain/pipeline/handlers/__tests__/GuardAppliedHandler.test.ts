@@ -69,7 +69,7 @@ function makePipelineContext(
   appliedTexts: Set<string> = new Set(),
   overrides: Partial<PipelineContext> = {}
 ): PipelineContext {
-  return {
+  const context: PipelineContext = {
     documentPort: makeMockDocumentPort(appliedTexts),
     analysisPort: makeMockAnalysisPort(),
     emitter: new PipelineEventEmitter(),
@@ -77,7 +77,9 @@ function makePipelineContext(
     maxChunkSize: 100_000,
     uniqueSuggestions,
     ...overrides,
-  } as PipelineContext;
+  };
+
+  return context;
 }
 
 // ---------------------------------------------------------------------------

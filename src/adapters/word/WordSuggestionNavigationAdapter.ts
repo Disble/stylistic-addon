@@ -86,11 +86,7 @@ export class WordSuggestionNavigationAdapter {
           return this.navigateToSuggestion(context, target);
         }
 
-        const range = await this.searchWithFallback(
-          context,
-          context.document.body as unknown as WordSearchContainer,
-          target
-        );
+        const range = await this.searchWithFallback(context, context.document.body, target);
 
         if (!range) {
           return { status: "not-found", reason: "plain-text-not-found" };

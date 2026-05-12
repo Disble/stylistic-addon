@@ -1,5 +1,8 @@
 import * as React from "react";
-import { Body1, Button, Field, ProgressBar, Title3, mergeClasses  } from "@fluentui/react-components";
+import { Button, Field, ProgressBar, mergeClasses } from "@fluentui/react-components";
+import { AnalysisHeroDocumentIllustration } from "../AnalysisHeroDocumentIllustration";
+import { AnalysisHeroShell } from "../AnalysisHeroShell";
+import { ANALYSIS_PROGRESS_TITLE_ID } from "./AnalysisProgressHero.constants";
 import type { AnalysisProgressHeroProps } from "./AnalysisProgressHero.types";
 import { useAnalysisProgressHero } from "./AnalysisProgressHero.hooks";
 
@@ -29,152 +32,141 @@ export function AnalysisProgressHero({
     progress.asyncSession.retryableRuns.length > 0;
 
   return (
-    <section
-      aria-labelledby="analysis-progress-hero-title"
-      className={classes.root}
-      data-testid="analysis-progress-hero"
-    >
-      <div className={classes.illustrationWrapper}>
-        <svg
-          aria-hidden="true"
-          className={classes.illustration}
-          fill="none"
-          role="img"
-          viewBox="0 0 240 200"
-          xmlns="http://www.w3.org/2000/svg"
+    <AnalysisHeroShell
+      actions={
+        <>
+          {canRetryQuery && (
+            <Button
+              appearance="primary"
+              className={classes.primaryButton}
+              data-testid="analysis-progress-hero-retry-query-button"
+              onClick={() => {
+                void onRetryAnalysisQuery();
+              }}
+              size="large"
+              type="button"
+            >
+              Reintentar consulta
+            </Button>
+          )}
+          {canCancel && (
+            <Button
+              appearance={canRetryQuery ? "subtle" : "secondary"}
+              className={classes.primaryButton}
+              data-testid="analysis-progress-hero-cancel-button"
+              onClick={() => {
+                void onCancelAnalysis();
+              }}
+              size="large"
+              type="button"
+            >
+              Cancelar
+            </Button>
+          )}
+        </>
+      }
+      illustration={
+        <AnalysisHeroDocumentIllustration
+          documentClassName={classes.illustrationDoc}
+          svgClassName={classes.illustration}
         >
-          <ellipse cx="120" cy="184" fill="currentColor" opacity="0.08" rx="78" ry="6" />
+          <rect
+            className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay1)}
+            fill="currentColor"
+            height="5"
+            opacity="0.30"
+            rx="2.5"
+            width="68"
+            x="68"
+            y="54"
+          />
+          <rect
+            className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay2)}
+            fill="currentColor"
+            height="5"
+            opacity="0.18"
+            rx="2.5"
+            width="92"
+            x="68"
+            y="68"
+          />
+          <rect
+            className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay3)}
+            fill="currentColor"
+            height="5"
+            opacity="0.18"
+            rx="2.5"
+            width="56"
+            x="68"
+            y="82"
+          />
 
-          <g className={classes.illustrationDoc}>
-            <rect
-              fill="currentColor"
-              height="130"
-              opacity="0.06"
-              rx="8"
-              width="118"
-              x="64"
-              y="38"
-            />
-            <rect
-              fill="white"
-              height="130"
-              rx="8"
+          <rect
+            className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay4)}
+            fill="currentColor"
+            height="5"
+            opacity="0.18"
+            rx="2.5"
+            width="92"
+            x="68"
+            y="106"
+          />
+          <rect
+            className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay5)}
+            fill="currentColor"
+            height="5"
+            opacity="0.18"
+            rx="2.5"
+            width="78"
+            x="68"
+            y="120"
+          />
+          <rect
+            className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay6)}
+            fill="currentColor"
+            height="5"
+            opacity="0.18"
+            rx="2.5"
+            width="44"
+            x="68"
+            y="134"
+          />
+
+          <g className={classes.illustrationWand}>
+            <line
               stroke="currentColor"
-              strokeWidth="1.5"
-              width="118"
-              x="56"
-              y="32"
+              strokeLinecap="round"
+              strokeWidth="4"
+              x1="190"
+              x2="148"
+              y1="22"
+              y2="64"
             />
-
-            <rect
-              className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay1)}
+            <path
+              d="M 191 12 L 194.5 19 L 201.5 22 L 194.5 25 L 191 32 L 187.5 25 L 180.5 22 L 187.5 19 Z"
               fill="currentColor"
-              height="5"
-              opacity="0.30"
-              rx="2.5"
-              width="68"
-              x="68"
-              y="54"
             />
-            <rect
-              className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay2)}
-              fill="currentColor"
-              height="5"
-              opacity="0.18"
-              rx="2.5"
-              width="92"
-              x="68"
-              y="68"
-            />
-            <rect
-              className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay3)}
-              fill="currentColor"
-              height="5"
-              opacity="0.18"
-              rx="2.5"
-              width="56"
-              x="68"
-              y="82"
-            />
-
-            <rect
-              className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay4)}
-              fill="currentColor"
-              height="5"
-              opacity="0.18"
-              rx="2.5"
-              width="92"
-              x="68"
-              y="106"
-            />
-            <rect
-              className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay5)}
-              fill="currentColor"
-              height="5"
-              opacity="0.18"
-              rx="2.5"
-              width="78"
-              x="68"
-              y="120"
-            />
-            <rect
-              className={mergeClasses(classes.illustrationLine, classes.illustrationLineDelay6)}
-              fill="currentColor"
-              height="5"
-              opacity="0.18"
-              rx="2.5"
-              width="44"
-              x="68"
-              y="134"
-            />
-
-            <g className={classes.illustrationWand}>
-              <line
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="4"
-                x1="190"
-                x2="148"
-                y1="22"
-                y2="64"
-              />
-              <path
-                d="M198 12 L201.5 19 L208.5 22 L201.5 25 L198 32 L194.5 25 L187.5 22 L194.5 19 Z"
-                fill="currentColor"
-              />
-            </g>
-
-            <g
-              className={mergeClasses(classes.illustrationSparkle, classes.illustrationSparkle1)}
-            >
-              <path
-                d="M218 56 L219.2 60.5 L223.5 61.7 L219.2 62.9 L218 67.4 L216.8 62.9 L212.5 61.7 L216.8 60.5 Z"
-                fill="currentColor"
-              />
-            </g>
-            <g
-              className={mergeClasses(classes.illustrationSparkle, classes.illustrationSparkle2)}
-            >
-              <path
-                d="M28 96 L29 99.5 L32.5 100.5 L29 101.5 L28 105 L27 101.5 L23.5 100.5 L27 99.5 Z"
-                fill="currentColor"
-              />
-            </g>
-            <g
-              className={mergeClasses(classes.illustrationSparkle, classes.illustrationSparkle3)}
-            >
-              <circle cx="206" cy="108" fill="currentColor" r="2.5" />
-            </g>
           </g>
-        </svg>
-        <div className={classes.copy}>
-          <Title3 as="h2" className={classes.title} id="analysis-progress-hero-title">
-            Analizando tu texto
-          </Title3>
-          <Body1 className={classes.message} data-testid="analysis-progress-hero-message">
-            {progress.message}
-          </Body1>
-        </div>
+
+          <g className={mergeClasses(classes.illustrationSparkle, classes.illustrationSparkle1)}>
+            <path
+              d="M218 56 L219.2 60.5 L223.5 61.7 L219.2 62.9 L218 67.4 L216.8 62.9 L212.5 61.7 L216.8 60.5 Z"
+              fill="currentColor"
+            />
+          </g>
+          <g className={mergeClasses(classes.illustrationSparkle, classes.illustrationSparkle2)}>
+            <path
+              d="M28 96 L29 99.5 L32.5 100.5 L29 101.5 L28 105 L27 101.5 L23.5 100.5 L27 99.5 Z"
+              fill="currentColor"
+            />
+          </g>
+          <g className={mergeClasses(classes.illustrationSparkle, classes.illustrationSparkle3)}>
+            <circle cx="206" cy="108" fill="currentColor" r="2.5" />
+          </g>
+        </AnalysisHeroDocumentIllustration>
+      }
+      message={progress.message}
+      messageSupplement={
         <Field className={classes.progressField} validationState="none">
           <ProgressBar
             aria-label="Progreso del análisis"
@@ -183,37 +175,10 @@ export function AnalysisProgressHero({
             value={value}
           />
         </Field>
-      </div>
-      <div className={classes.actions}>
-        {canRetryQuery && (
-          <Button
-            appearance="primary"
-            className={classes.primaryButton}
-            data-testid="analysis-progress-hero-retry-query-button"
-            onClick={() => {
-              void onRetryAnalysisQuery();
-            }}
-            size="large"
-            type="button"
-          >
-            Reintentar consulta
-          </Button>
-        )}
-        {canCancel && (
-          <Button
-            appearance={canRetryQuery ? "subtle" : "secondary"}
-            className={classes.primaryButton}
-            data-testid="analysis-progress-hero-cancel-button"
-            onClick={() => {
-              void onCancelAnalysis();
-            }}
-            size="large"
-            type="button"
-          >
-            Cancelar
-          </Button>
-        )}
-      </div>
-    </section>
+      }
+      sectionLabelledById={ANALYSIS_PROGRESS_TITLE_ID}
+      testId="analysis-progress-hero"
+      title="Analizando tu texto"
+    />
   );
 }

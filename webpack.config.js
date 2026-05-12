@@ -17,7 +17,7 @@ async function getHttpsOptions() {
   };
 }
 
-module.exports = async (env, options) => {
+module.exports = async function createWebpackConfig(env, options) {
   const dev = options.mode === "development";
   const config = {
     devtool: "source-map",

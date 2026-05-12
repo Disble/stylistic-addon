@@ -31,9 +31,8 @@ function findError(element: React.ReactElement): React.ReactElement | undefined 
   const children = React.Children.toArray(element.props.children);
   return children.find(
     (child): child is React.ReactElement =>
-      React.isValidElement(child) &&
-      (child as React.ReactElement<{ "data-testid"?: string }>).props["data-testid"] ===
-        "settings-save-error"
+      React.isValidElement<{ "data-testid"?: string }>(child) &&
+      child.props["data-testid"] === "settings-save-error"
   ) as React.ReactElement | undefined;
 }
 

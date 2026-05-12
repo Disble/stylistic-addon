@@ -299,7 +299,7 @@ async function resolveResultsPanelSuggestion(
 
 function getFeedbackComment(cardId: string): string | undefined {
   const feedbackComment = findResultsPanelCard(cardId)?.feedbackComment.trim();
-  return feedbackComment;
+  return feedbackComment && feedbackComment.length > 0 ? feedbackComment : undefined;
 }
 
 function updateResultsPanelCards(

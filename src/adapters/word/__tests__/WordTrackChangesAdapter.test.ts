@@ -2,6 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { installWordWithContext } from "../WordAdapterTestHelper";
 import { WordTrackChangesAdapter } from "../WordTrackChangesAdapter";
 
+/** Builds a minimal request context mock accepted by track-changes adapter tests. */
+function makeTrackChangesContext(changeTrackingMode: string): Word.RequestContext {
+  return {
+    document: {
+      contentControls: { items: [], load: vi.fn() },
+      load: vi.fn(),
+      changeTrackingMode,
+    },
+    sync: vi.fn().mockResolvedValue(undefined),
+  } as unknown as Word.RequestContext;
+}
+
 describe("WordTrackChangesAdapter", () => {
   const adapter = new WordTrackChangesAdapter();
 
@@ -32,16 +44,9 @@ describe("WordTrackChangesAdapter", () => {
   });
 
   it("enables track changes only when currently off", async () => {
-    const context = {
-      document: {
-        contentControls: { items: [], load: vi.fn() },
-        load: vi.fn(),
-        changeTrackingMode: "off",
-      },
-      sync: vi.fn().mockResolvedValue(undefined),
-    };
+    const context = makeTrackChangesContext("off");
 
-    await expect(adapter.ensureTrackChangesActive(context as never)).resolves.toBe(true);
+    await expect(adapter.ensureTrackChangesActive(context)).resolves.toBe(true);
     expect(context.document.changeTrackingMode).toBe("trackAll");
   });
 });

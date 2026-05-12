@@ -149,16 +149,13 @@ export function installOfficeDocumentSettings(
   };
 
   officeGlobal.Office = {
-    ...(officeGlobal.Office ?? {}),
     AsyncResultStatus: {
       Succeeded: "succeeded",
       Failed: "failed",
       ...(officeGlobal.Office?.AsyncResultStatus ?? {}),
     },
     context: {
-      ...(officeGlobal.Office?.context ?? {}),
       document: {
-        ...(officeGlobal.Office?.context?.document ?? {}),
         settings,
       },
     },

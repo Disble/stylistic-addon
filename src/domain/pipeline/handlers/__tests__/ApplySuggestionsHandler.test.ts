@@ -76,7 +76,7 @@ function makePipelineContext(
   documentPort?: IDocumentPort,
   overrides: Partial<PipelineContext> = {}
 ): PipelineContext {
-  return {
+  const context: PipelineContext = {
     documentPort: documentPort ?? makeMockDocumentPort(),
     analysisPort: makeMockAnalysisPort(),
     emitter: new PipelineEventEmitter(),
@@ -86,7 +86,9 @@ function makePipelineContext(
     chunkErrors: [],
     isSelection: false,
     ...overrides,
-  } as PipelineContext;
+  };
+
+  return context;
 }
 
 // ---------------------------------------------------------------------------

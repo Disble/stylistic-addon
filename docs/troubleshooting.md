@@ -142,6 +142,30 @@ navigating. The confirmed implementation resolves login only from
 
 ---
 
+### SonarQube warns about missing SRI on `office.js`
+
+**Symptom:** Sonar raises `Web:S5725` on `taskpane.html`, `auth-dialog.html`, or
+`commands.html` because the Office.js CDN script does not declare
+`integrity="..."`.
+
+**Cause:** Microsoft documents Office.js as a CDN-hosted script that must be
+loaded from `https://appsforoffice.microsoft.com/lib/1/hosted/office.js` inside
+`<head>`. The platform is versioned by the `/1/` channel and served by Microsoft,
+but Microsoft does **not** publish a stable SRI hash for this URL. Adding a hash
+we compute ourselves would be brittle because the CDN can legitimately update the
+payload while preserving the supported `/1/` contract.
+
+**Safe decision:** Keep the official Microsoft CDN reference without SRI unless
+Microsoft starts publishing supported integrity metadata for Office.js. Do **not**
+pin an ad-hoc hash or mirror the file locally for production just to silence the
+warning; either option risks breaking Office host compatibility or missing vendor
+updates.
+
+Reference: Microsoft Learn — *Referencing the Office JavaScript API library from
+its CDN*.
+
+---
+
 ### Login reaches Google but returns `state_security_mismatch`
 
 **Symptom:** Google redirects back to the backend, but backend logs show Better

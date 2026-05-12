@@ -185,7 +185,7 @@ export class SuggestionResolutionCleanup {
     }
 
     if (typeof error === "number" || typeof error === "bigint" || typeof error === "boolean") {
-      return error.toString();
+      return String(error);
     }
 
     if (typeof error === "symbol") {

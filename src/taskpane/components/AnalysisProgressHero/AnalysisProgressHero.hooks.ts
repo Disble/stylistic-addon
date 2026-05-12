@@ -5,8 +5,6 @@ import { useAnalysisProgressHeroStyles } from "./AnalysisProgressHero.styles";
 export function useAnalysisProgressHero(): AnalysisProgressHeroClasses {
   const styles = useAnalysisProgressHeroStyles();
   return {
-    root: styles.root,
-    illustrationWrapper: styles.illustrationWrapper,
     illustration: styles.illustration,
     illustrationDoc: styles.illustrationDoc,
     illustrationWand: styles.illustrationWand,
@@ -21,11 +19,7 @@ export function useAnalysisProgressHero(): AnalysisProgressHeroClasses {
     illustrationLineDelay4: styles.illustrationLineDelay4,
     illustrationLineDelay5: styles.illustrationLineDelay5,
     illustrationLineDelay6: styles.illustrationLineDelay6,
-    copy: styles.copy,
-    title: styles.title,
-    message: styles.message,
     progressField: styles.progressField,
-    actions: styles.actions,
     primaryButton: styles.primaryButton,
   };
 }

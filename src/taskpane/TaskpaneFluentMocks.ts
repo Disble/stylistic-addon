@@ -1,5 +1,126 @@
 import * as React from "react";
 import { vi } from "vitest";
+import type { MockProps } from "./TaskpaneFluentMocks.types";
+
+/** Returns only string class names so mocked mergeClasses never stringifies objects. */
+function isNonEmptyClassName(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+/** Minimal passthrough mock used for Fluent providers that only render children. */
+function Passthrough({ children }: MockProps): React.ReactNode {
+  return children;
+}
+
+/** Creates a simple DOM-backed mock for one Fluent component. */
+function renderAs(tag: string, displayName: string) {
+  const Component = function FluentMockComponent({ children, icon, ...rest }: MockProps) {
+    const props = { ...rest };
+    const childNodes = icon ? [icon, children] : [children];
+    return React.createElement(tag, props, ...childNodes);
+  };
+  Component.displayName = displayName;
+  return Component;
+}
+
+/** Mocks Fluent Textarea while preserving the two-argument onChange contract. */
+function TextareaMock({
+  value,
+  onChange,
+  children: _children,
+  ...rest
+}: MockProps): React.JSX.Element {
+  return React.createElement("textarea", {
+    ...rest,
+    value,
+    onChange: (event: { target?: { value?: string } }) => {
+      if (typeof onChange === "function") {
+        onChange(event, { value: event?.target?.value ?? "" });
+      }
+    },
+  });
+}
+
+/** Mocks Fluent Dropdown while preserving option-select payloads. */
+function DropdownMock({
+  children,
+  onOptionSelect,
+  selectedOptions,
+  value,
+  placeholder: _placeholder,
+  ...rest
+}: MockProps): React.JSX.Element {
+  return React.createElement(
+    "div",
+    {
+      ...rest,
+      role: "combobox",
+      "data-selected-value": Array.isArray(selectedOptions) ? selectedOptions[0] : "",
+      "data-display-value": value,
+      onChange: (event: { target?: { value?: string } }) => {
+        if (typeof onOptionSelect === "function") {
+          const optionValue = event?.target?.value ?? "";
+          onOptionSelect(event, {
+            optionValue,
+            optionText: optionValue,
+            selectedOptions: [optionValue],
+          });
+        }
+      },
+    },
+    children
+  );
+}
+
+/** Mocks Fluent Option as a plain span annotated with its option value. */
+function OptionMock({ children, value, ...rest }: MockProps): React.JSX.Element {
+  return React.createElement(
+    "span",
+    { ...rest, role: "option", "data-option-value": value },
+    children
+  );
+}
+
+/** Mocks Fluent Field while surfacing label and validation state metadata. */
+function FieldMock({ children, label, validationState, ...rest }: MockProps): React.JSX.Element {
+  const labelNode = label
+    ? React.createElement("span", { "data-field-label": "true" }, label)
+    : null;
+  return React.createElement(
+    "div",
+    { ...rest, "data-field": "true", "data-validation": validationState ?? "" },
+    labelNode,
+    children
+  );
+}
+
+/** Mocks Fluent ProgressBar with a DOM-only progress representation. */
+function ProgressBarMock({ value, max, ...rest }: MockProps): React.JSX.Element {
+  const numericMax = typeof max === "number" && max > 0 ? max : 1;
+  const numericValue = typeof value === "number" ? value : 0;
+  const percent = Math.round((numericValue / numericMax) * 100);
+  return React.createElement("div", {
+    ...rest,
+    role: "progressbar",
+    "aria-valuenow": numericValue,
+    "aria-valuemax": numericMax,
+    "data-progress-percent": percent,
+  });
+}
+
+/** Mocks Fluent Spinner as a status node with optional inline label. */
+function SpinnerMock({ size: _size, label, ...rest }: MockProps): React.JSX.Element {
+  return React.createElement(
+    "span",
+    { ...rest, role: "status", "data-spinner": "true" },
+    label ?? null
+  );
+}
+
+/** Returns a stable class string without Object stringification noise. */
+function mergeMockClasses(...classes: unknown[]): string {
+  return classes.filter(isNonEmptyClassName).join(" ");
+}
 
 /**
  * Centralized Fluent UI v9 mocks for taskpane tests.
@@ -14,99 +135,6 @@ import { vi } from "vitest";
  */
 
 vi.mock("@fluentui/react-components", () => {
-  const Passthrough = function Passthrough({ children }: { children?: unknown }) {
-    return children as unknown;
-  };
-  const renderAs = (tag: string, displayName: string) => {
-    const Component = function FluentMockComponent({ children, icon, ...rest }: any) {
-      const props = { ...rest } as Record<string, unknown>;
-      const childNodes = icon ? [icon, children] : [children];
-      return React.createElement(tag, props, ...childNodes);
-    };
-    Component.displayName = displayName;
-    return Component;
-  };
-  const TextareaMock = function TextareaMock({
-    value,
-    onChange,
-    children: _children,
-    ...rest
-  }: any) {
-    return React.createElement("textarea", {
-      ...rest,
-      value,
-      onChange: (event: any) => {
-        if (typeof onChange === "function") {
-          onChange(event, { value: event?.target?.value ?? "" });
-        }
-      },
-    });
-  };
-  const DropdownMock = function DropdownMock({
-    children,
-    onOptionSelect,
-    selectedOptions,
-    value,
-    placeholder: _placeholder,
-    ...rest
-  }: any) {
-    return React.createElement(
-      "div",
-      {
-        ...rest,
-        role: "combobox",
-        "data-selected-value": Array.isArray(selectedOptions) ? selectedOptions[0] : "",
-        "data-display-value": value,
-        onChange: (event: any) => {
-          if (typeof onOptionSelect === "function") {
-            onOptionSelect(event, {
-              optionValue: event?.target?.value ?? "",
-              optionText: event?.target?.value ?? "",
-              selectedOptions: [event?.target?.value ?? ""],
-            });
-          }
-        },
-      },
-      children
-    );
-  };
-  const OptionMock = function OptionMock({ children, value, ...rest }: any) {
-    return React.createElement(
-      "span",
-      { ...rest, role: "option", "data-option-value": value },
-      children
-    );
-  };
-  const FieldMock = function FieldMock({ children, label, validationState, ...rest }: any) {
-    const labelNode = label
-      ? React.createElement("span", { "data-field-label": "true" }, label)
-      : null;
-    return React.createElement(
-      "div",
-      { ...rest, "data-field": "true", "data-validation": validationState ?? "" },
-      labelNode,
-      children
-    );
-  };
-  const ProgressBarMock = function ProgressBarMock({ value, max, ...rest }: any) {
-    const numericMax = typeof max === "number" && max > 0 ? max : 1;
-    const numericValue = typeof value === "number" ? value : 0;
-    const percent = Math.round((numericValue / numericMax) * 100);
-    return React.createElement("div", {
-      ...rest,
-      role: "progressbar",
-      "aria-valuenow": numericValue,
-      "aria-valuemax": numericMax,
-      "data-progress-percent": percent,
-    });
-  };
-  const SpinnerMock = function SpinnerMock({ size: _size, label, ...rest }: any) {
-    return React.createElement(
-      "span",
-      { ...rest, role: "status", "data-spinner": "true" },
-      label ?? null
-    );
-  };
   return {
     FluentProvider: Passthrough,
     MessageBar: renderAs("div", "MessageBar"),
@@ -140,7 +168,7 @@ vi.mock("@fluentui/react-components", () => {
           get: (_target, key) => (typeof key === "string" ? key : ""),
         }
       ),
-    mergeClasses: (...classes: unknown[]) => classes.filter(Boolean).join(" "),
+    mergeClasses: mergeMockClasses,
     tokens: new Proxy(
       {},
       {

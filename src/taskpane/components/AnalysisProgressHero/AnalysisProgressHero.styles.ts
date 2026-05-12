@@ -1,10 +1,5 @@
 import { makeStyles, tokens } from "@fluentui/react-components";
 
-const heroIn = {
-  from: { opacity: 0, transform: "translateY(8px)" },
-  to: { opacity: 1, transform: "translateY(0)" },
-};
-
 const wandWiggle = {
   "0%, 100%": { transform: "rotate(-6deg)" },
   "50%": { transform: "rotate(6deg)" },
@@ -22,28 +17,6 @@ const linePulse = {
 
 /** Creates Griffel classes for the hero-style analysis-progress surface and illustration. */
 export const useAnalysisProgressHeroStyles = makeStyles({
-  root: {
-    flex: "1 1 auto",
-    display: "flex",
-    flexDirection: "column",
-    minHeight: 0,
-    paddingTop: tokens.spacingVerticalL,
-    paddingBottom: tokens.spacingVerticalL,
-    rowGap: tokens.spacingVerticalM,
-    animationName: heroIn,
-    animationDuration: tokens.durationGentle,
-    animationTimingFunction: tokens.curveDecelerateMid,
-    animationFillMode: "both",
-  },
-  illustrationWrapper: {
-    flex: "1 1 auto",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "column",
-    rowGap: tokens.spacingVerticalM,
-    minHeight: 0,
-  },
   illustration: {
     width: "200px",
     maxWidth: "100%",
@@ -91,36 +64,11 @@ export const useAnalysisProgressHeroStyles = makeStyles({
   illustrationLineDelay4: { animationDelay: "360ms" },
   illustrationLineDelay5: { animationDelay: "480ms" },
   illustrationLineDelay6: { animationDelay: "600ms" },
-  copy: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    rowGap: tokens.spacingVerticalXS,
-    paddingLeft: tokens.spacingHorizontalM,
-    paddingRight: tokens.spacingHorizontalM,
-  },
-  title: {
-    margin: 0,
-    textAlign: "center",
-    color: tokens.colorNeutralForeground1,
-  },
-  message: {
-    margin: 0,
-    textAlign: "center",
-    color: tokens.colorNeutralForeground3,
-  },
   progressField: {
     alignSelf: "stretch",
     boxSizing: "border-box",
     paddingLeft: tokens.spacingHorizontalM,
     paddingRight: tokens.spacingHorizontalM,
-  },
-  actions: {
-    flexShrink: 0,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    rowGap: tokens.spacingVerticalS,
   },
   primaryButton: {
     boxSizing: "border-box",

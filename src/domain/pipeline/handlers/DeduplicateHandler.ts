@@ -22,8 +22,17 @@ import type { PipelineHandler } from "./ReadTextHandler.types";
 
 /** Removes semantically duplicated suggestions before application. */
 export class DeduplicateHandler implements PipelineHandler {
+  /** Reads raw suggestions after the analysis phase has completed. */
+  private requireRawSuggestions(ctx: PipelineContext): Suggestion[] {
+    if (!ctx.rawSuggestions) {
+      throw new Error("DeduplicateHandler requires ctx.rawSuggestions before deduplication.");
+    }
+
+    return ctx.rawSuggestions;
+  }
+
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
-    const raw = ctx.rawSuggestions!;
+    const raw = this.requireRawSuggestions(ctx);
     console.log(`🧹 [DeduplicateHandler] Fase 5: Deduplicando ${raw.length} sugerencias...`);
 
     const unique = this.deduplicateByContextAnchor(raw);

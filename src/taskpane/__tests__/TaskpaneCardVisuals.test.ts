@@ -14,7 +14,7 @@ import { ResultSuggestionCard } from "../components/ResultSuggestionCard";
 import { makeSuggestion } from "../TaskpaneTestHelper";
 
 function createDeps(overrides?: Partial<ResultsPanelDeps>): ResultsPanelDeps {
-  return {
+  const deps: ResultsPanelDeps = {
     navigateToText: vi.fn().mockResolvedValue({ status: "navigated" }),
     acceptSuggestion: vi.fn().mockResolvedValue({
       status: "accepted",
@@ -25,7 +25,9 @@ function createDeps(overrides?: Partial<ResultsPanelDeps>): ResultsPanelDeps {
       taskpaneState: { showDisableTrackChangesCta: false, showCleanupSection: false },
     }),
     ...overrides,
-  } as unknown as ResultsPanelDeps;
+  };
+
+  return deps;
 }
 
 function renderCard(cardId: string): string {

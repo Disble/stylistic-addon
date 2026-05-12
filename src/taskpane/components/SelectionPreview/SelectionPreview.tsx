@@ -25,13 +25,7 @@ export function SelectionPreview({
       positioning="below-start"
       withArrow
     >
-      <div
-        id="selection-preview"
-        className={classes.root}
-        role="status"
-        aria-live="polite"
-        tabIndex={0}
-      >
+      <div id="selection-preview" className={classes.root} role="status" aria-live="polite">
         <TextEditStyleRegular className={classes.icon} aria-hidden="true" />
         <span className={classes.label}>
           Selección activa · {charCount} caracteres

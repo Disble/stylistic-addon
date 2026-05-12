@@ -12,9 +12,12 @@ import { RetryAnalysisDecorator } from "../RetryAnalysisDecorator";
 // ---------------------------------------------------------------------------
 
 /** Creates a mock IAnalysisPort with vi.fn() stubs. */
-function createMockPort(): {
+type MockAnalysisPort = {
   [K in keyof IAnalysisPort]: ReturnType<typeof vi.fn>;
-} {
+};
+
+/** Creates a mock IAnalysisPort with vi.fn() stubs. */
+function createMockPort(): MockAnalysisPort {
   return {
     checkConnection: vi.fn(),
     submitChunkAnalysis: vi.fn(),
@@ -76,11 +79,7 @@ describe("RetryAnalysisDecorator", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockPort = createMockPort();
-    decorator = new RetryAnalysisDecorator(
-      mockPort as unknown as IAnalysisPort,
-      MAX_RETRIES,
-      BASE_DELAY_MS
-    );
+    decorator = new RetryAnalysisDecorator(mockPort as IAnalysisPort, MAX_RETRIES, BASE_DELAY_MS);
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });

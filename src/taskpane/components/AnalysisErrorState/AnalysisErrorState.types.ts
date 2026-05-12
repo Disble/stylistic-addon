@@ -9,17 +9,18 @@ export type AnalysisErrorStateProps = Readonly<{
   children?: React.ReactNode;
 }>;
 
+/** Copy contract selected from the current analysis-error retry mode. */
+export type AnalysisErrorRetryPresentation = Readonly<{
+  title: string;
+  guidance: string;
+  actionLabel: string;
+}>;
+
 /** Griffel class slots consumed by the analysis-error surface. */
 export type AnalysisErrorStateClasses = Readonly<{
-  root: string;
-  illustrationWrapper: string;
   illustration: string;
   illustrationDoc: string;
   illustrationAlert: string;
-  copy: string;
-  title: string;
-  message: string;
   guidance: string;
-  actions: string;
   retryButton: string;
 }>;

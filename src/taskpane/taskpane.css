@@ -79,9 +79,9 @@ body {
 }
 
 .stylistic-btn--primary {
-  background: #0078d7;
+  background: #0f6cbd;
   color: #fff;
-  border-color: #0078d7;
+  border-color: #0f6cbd;
 }
 
 .stylistic-btn--primary:hover {
@@ -296,7 +296,7 @@ body {
   font-size: 10px;
   font-weight: 600;
   color: #fff;
-  background: #0078d7;
+  background: #0f6cbd;
   padding: 2px 7px;
   border-radius: 10px;
   text-transform: lowercase;
@@ -318,7 +318,7 @@ body {
 
 .result-severity--medium {
   background: #fff4e5;
-  color: #ca5010;
+  color: #8a3b00;
 }
 
 .result-severity--low {
@@ -449,8 +449,8 @@ body {
   height: 28px;
   border: 1px solid transparent;
   border-radius: 4px;
-  background: #e8f4fd;
-  color: #0078d7;
+  background: #dcecff;
+  color: #0b5cab;
   cursor: pointer;
   font-size: 13px;
   display: flex;
@@ -461,7 +461,7 @@ body {
 }
 
 .feedback-btn:hover {
-  background: #c7e0f4;
+  background: #bfdfff;
 }
 
 .feedback-accordion {

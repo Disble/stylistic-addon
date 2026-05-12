@@ -77,7 +77,7 @@ function makeMockDocumentPort(): IDocumentPort {
 
 /** Creates the pipeline context consumed by AnalyzeChunksHandler. */
 function makePipelineContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
-  return {
+  const context: PipelineContext = {
     documentPort: makeMockDocumentPort(),
     analysisPort: makeMockAnalysisPort(),
     emitter: new PipelineEventEmitter(),
@@ -87,7 +87,9 @@ function makePipelineContext(overrides: Partial<PipelineContext> = {}): Pipeline
     isSelection: false,
     documentUuid: "11111111-1111-4111-8111-111111111111",
     ...overrides,
-  } as PipelineContext;
+  };
+
+  return context;
 }
 
 describe("AnalyzeChunksHandler", () => {

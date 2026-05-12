@@ -3,7 +3,7 @@
 import type { Suggestion } from "../../../domain/suggestion/Suggestion.types";
 import { applySuggestionObservability } from "../../observability/ConsoleApplySuggestionObservabilityAdapter";
 import type { ApplySuggestionRangeCandidateDiagnostics } from "../../observability/ConsoleApplySuggestionObservabilityAdapter.types";
-import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext.types";
+import type { TextLocator } from "../WordTextLocatorContext.types";
 import type { ApplySuggestionReviewedText } from "./ApplySuggestionReplaceRangeResolver.types";
 
 /**
@@ -100,7 +100,7 @@ export class ApplySuggestionReplaceRangeResolver {
 
     const directCandidate = await this.textLocator.locate({
       context,
-      container: wrapperRange as unknown as WordSearchContainer,
+      container: wrapperRange,
       searchText: expectedCurrentText,
     });
 
@@ -125,7 +125,7 @@ export class ApplySuggestionReplaceRangeResolver {
     const paragraphRange = mutationRange.paragraphs.getFirst().getRange("Whole");
     const paragraphCandidate = await this.textLocator.locate({
       context,
-      container: paragraphRange as unknown as WordSearchContainer,
+      container: paragraphRange,
       searchText: expectedCurrentText,
     });
 

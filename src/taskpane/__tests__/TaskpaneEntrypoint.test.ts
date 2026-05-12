@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { isValidElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppProps } from "../components/App";
 import {
@@ -28,12 +29,14 @@ function getRequiredElement(doc: ReturnType<typeof createTaskpaneDocument>, id: 
 
 function getRenderedAppProps(reactMocks: ReturnType<typeof getTaskpaneReactMocks>): AppProps {
   const lastRenderCall = reactMocks.render.mock.calls[reactMocks.render.mock.calls.length - 1];
-  const renderedTree = lastRenderCall?.[0] as
-    | React.ReactElement<{ children?: React.ReactNode }>
-    | undefined;
-  const appElement = renderedTree?.props.children as React.ReactElement<AppProps> | undefined;
+  const renderedTree = lastRenderCall?.[0];
 
-  if (!appElement) {
+  if (!isValidElement<{ children?: React.ReactNode }>(renderedTree)) {
+    throw new Error("Missing rendered App element in React mock tree");
+  }
+
+  const appElement = renderedTree.props.children;
+  if (!isValidElement<AppProps>(appElement)) {
     throw new Error("Missing rendered App element in React mock tree");
   }
 
@@ -84,7 +87,7 @@ function installOfficeRuntime(storage?: OfficeRuntimeStorageMock): OfficeRuntime
 
   (
     globalThis as unknown as { OfficeRuntime?: { storage?: OfficeRuntimeStorageMock } }
-  ).OfficeRuntime = storage ? { storage: resolvedStorage } : undefined;
+  ).OfficeRuntime = { storage: resolvedStorage };
 
   return resolvedStorage;
 }

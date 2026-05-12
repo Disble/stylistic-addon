@@ -10,7 +10,7 @@ import {
   isValidOperationalReplaceIdentity,
   parseReplaceIdentityTitle,
 } from "../ReplaceIdentityParser";
-import type { TextLocator, WordSearchContainer } from "../WordTextLocatorContext.types";
+import type { TextLocator } from "../WordTextLocatorContext.types";
 import type { ApplySuggestionIdentityBuilder } from "./ApplySuggestionIdentityBuilder";
 import type {
   ApplySuggestionOperationalWrapperResolution,
@@ -130,7 +130,7 @@ export class ApplySuggestionOperationalWrapperResolver {
   ): Promise<Word.Range | null> {
     return this.textLocator.locate({
       context,
-      container: wrapper.getRange() as unknown as WordSearchContainer,
+      container: wrapper.getRange(),
       searchText: this.suggestion.anchor,
     });
   }

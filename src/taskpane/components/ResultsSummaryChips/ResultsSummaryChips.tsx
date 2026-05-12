@@ -1,6 +1,10 @@
 import * as React from "react";
 import type { ResultsSummaryChipsProps } from "./ResultsSummaryChips.types";
-import { buildResultsSummaryChips, resolveChipClassName } from "./ResultsSummaryChips.helpers";
+import {
+  buildResultsSummaryChips,
+  resolveActiveChipClassName,
+  resolveInactiveChipClassName,
+} from "./ResultsSummaryChips.helpers";
 import { useResultsSummaryChips } from "./ResultsSummaryChips.hooks";
 
 /** Renders the sticky chips toolbar that filters the results list. */
@@ -25,7 +29,11 @@ export function ResultsSummaryChips({
           <button
             aria-label={chip.ariaLabel}
             aria-pressed={isActive}
-            className={resolveChipClassName(classes, isActive)}
+            className={
+              isActive
+                ? resolveActiveChipClassName(classes)
+                : resolveInactiveChipClassName(classes)
+            }
             data-active={isActive ? "true" : "false"}
             data-filter={chip.filter}
             data-testid={`results-chip-${chip.filter}`}

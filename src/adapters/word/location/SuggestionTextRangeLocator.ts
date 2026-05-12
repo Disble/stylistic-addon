@@ -29,7 +29,7 @@ export class SuggestionTextRangeLocator {
   ): Promise<Word.Range | null> {
     const contextRange = await this.textLocator.locate({
       context,
-      container: body as WordSearchContainer,
+      container: body,
       searchText: suggestion.context,
     });
     if (!contextRange) {
@@ -56,9 +56,9 @@ export class SuggestionTextRangeLocator {
       matchText.length < suggestion.context.length - 20 &&
       containingParagraphText.length > matchText.length;
 
-    const searchContainer = shouldExpandToParagraph
-      ? (containingParagraph as unknown as WordSearchContainer)
-      : (contextRange as unknown as WordSearchContainer);
+    const searchContainer: WordSearchContainer = shouldExpandToParagraph
+      ? containingParagraph
+      : contextRange;
 
     if (shouldExpandToParagraph) {
       this.log(
@@ -84,7 +84,7 @@ export class SuggestionTextRangeLocator {
 
     return this.textLocator.locate({
       context,
-      container: containingParagraph as unknown as WordSearchContainer,
+      container: containingParagraph,
       searchText: suggestion.anchor,
     });
   }

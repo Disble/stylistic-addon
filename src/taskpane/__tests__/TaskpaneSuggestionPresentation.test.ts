@@ -13,11 +13,13 @@ import { ResultSuggestionCard } from "../components/ResultSuggestionCard";
 import { makeSuggestion } from "../TaskpaneTestHelper";
 
 function createResultsPanelDeps(): ResultsPanelDeps {
-  return {
+  const deps: ResultsPanelDeps = {
     navigateToText: vi.fn().mockResolvedValue({ status: "navigated" }),
     acceptSuggestion: vi.fn().mockResolvedValue({ status: "accepted" }),
     rejectSuggestion: vi.fn().mockResolvedValue({ status: "rejected" }),
-  } as unknown as ResultsPanelDeps;
+  };
+
+  return deps;
 }
 
 function renderCardMarkup(cardId: string): string {

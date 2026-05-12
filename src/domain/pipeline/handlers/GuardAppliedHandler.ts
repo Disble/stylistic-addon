@@ -21,10 +21,19 @@ import type { PipelineHandler } from "./ReadTextHandler.types";
 
 /** Filters out suggestions that are already present as pending Stylistic artifacts. */
 export class GuardAppliedHandler implements PipelineHandler {
+  /** Reads unique suggestions after deduplication completed. */
+  private requireUniqueSuggestions(ctx: PipelineContext) {
+    if (!ctx.uniqueSuggestions) {
+      throw new Error("GuardAppliedHandler requires ctx.uniqueSuggestions before guarding.");
+    }
+
+    return ctx.uniqueSuggestions;
+  }
+
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     console.log("🛡️ [GuardAppliedHandler] Fase 5b: Verificando sugerencias ya aplicadas...");
 
-    const unique = ctx.uniqueSuggestions!;
+    const unique = this.requireUniqueSuggestions(ctx);
     const appliedTexts = await ctx.documentPort.getAppliedOriginalTexts();
     const pending = unique.filter((s) => !appliedTexts.has(s.anchor));
     const skipped = unique.length - pending.length;

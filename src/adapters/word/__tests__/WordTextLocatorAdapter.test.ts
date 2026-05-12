@@ -1,20 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
+import type { WordSearchContainer } from "../WordTextLocatorContext.types";
 import { WordTextLocatorAdapter } from "../WordTextLocatorAdapter";
 
 type MockRange = { id: string };
 
 type SearchOutcome = { kind: "results"; items: MockRange[] } | { kind: "invalid" };
 
+type MockSearchContainer = WordSearchContainer & {
+  search: ReturnType<typeof vi.fn>;
+};
+
 /** Creates a minimal fake RangeCollection for locator tests. */
 function createRangeCollection(items: MockRange[]) {
   return {
     items,
     load: vi.fn(),
-  };
+  } as unknown as Word.RangeCollection;
 }
 
 /** Creates a minimal Word-like search container with sequenced outcomes. */
-function createSearchContainer(text: string, outcomes: SearchOutcome[]) {
+function createSearchContainer(text: string, outcomes: SearchOutcome[]): MockSearchContainer {
   return {
     text,
     load: vi.fn(),
@@ -50,7 +55,7 @@ describe("WordTextLocatorAdapter", () => {
 
     const result = await adapter.locate({
       context: createRequestContext(),
-      container: container as never,
+      container,
       searchText: "texto original",
     });
 
@@ -72,7 +77,7 @@ describe("WordTextLocatorAdapter", () => {
 
     const result = await adapter.locate({
       context: createRequestContext(),
-      container: container as never,
+      container,
       searchText: longSearchText,
     });
 
@@ -97,7 +102,7 @@ describe("WordTextLocatorAdapter", () => {
 
     const result = await adapter.locate({
       context: createRequestContext(),
-      container: container as never,
+      container,
       searchText: "texto original",
     });
 
@@ -122,7 +127,7 @@ describe("WordTextLocatorAdapter", () => {
 
     const result = await adapter.locate({
       context: createRequestContext(),
-      container: container as never,
+      container,
       searchText,
     });
 

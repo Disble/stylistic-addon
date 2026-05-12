@@ -10,6 +10,21 @@ export const useTaskpaneAsyncAnalysisSessionStore = create<TaskpaneAsyncAnalysis
   () => INITIAL_TASKPANE_ASYNC_ANALYSIS_SESSION_STATE
 );
 
+/** Resolves the store phase from the latest backend-run snapshot. */
+function resolveAsyncAnalysisPhase(
+  snapshot: TaskpaneAsyncAnalysisSessionSnapshot
+): TaskpaneAsyncAnalysisSessionState["phase"] {
+  if (snapshot.activeRuns.length > 0) {
+    return "polling";
+  }
+
+  if (snapshot.retryableRuns.length > 0) {
+    return "retryable-failure";
+  }
+
+  return "idle";
+}
+
 /** Returns the current async analysis session snapshot. */
 export function getTaskpaneAsyncAnalysisSessionState(): TaskpaneAsyncAnalysisSessionState {
   return useTaskpaneAsyncAnalysisSessionStore.getState();
@@ -29,11 +44,8 @@ export function startTaskpaneAsyncAnalysisSession(): void {
 export function setTaskpaneAsyncAnalysisSnapshot(
   snapshot: TaskpaneAsyncAnalysisSessionSnapshot
 ): void {
-  const hasActiveRuns = snapshot.activeRuns.length > 0;
-  const hasRetryableRuns = snapshot.retryableRuns.length > 0;
-
   useTaskpaneAsyncAnalysisSessionStore.setState({
-    phase: hasActiveRuns ? "polling" : hasRetryableRuns ? "retryable-failure" : "idle",
+    phase: resolveAsyncAnalysisPhase(snapshot),
     isSelection: snapshot.isSelection,
     activeRuns: snapshot.activeRuns,
     retryableRuns: snapshot.retryableRuns,

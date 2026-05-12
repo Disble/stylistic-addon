@@ -94,9 +94,11 @@ describe("MastraAdapter", () => {
   it("defers Mastra client creation until a backend operation needs it", async () => {
     const { MastraAdapter } = await importAdapterModule();
 
-    new MastraAdapter();
-    new MastraAdapter();
+    const firstAdapter = new MastraAdapter();
+    const secondAdapter = new MastraAdapter();
 
+    expect(firstAdapter).toBeInstanceOf(MastraAdapter);
+    expect(secondAdapter).toBeInstanceOf(MastraAdapter);
     expect(mastraMocks.constructor).not.toHaveBeenCalled();
   });
 

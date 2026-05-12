@@ -5,8 +5,13 @@ import {
   makeOperationalWrapperTitle,
   makeResolveSuggestionContext,
 } from "../../WordAdapterActionTestHelper";
+import type { TextLocator } from "../../WordTextLocatorContext.types";
 import { SuggestionLocator } from "../SuggestionLocator";
 import { SuggestionResolutionObserver } from "../SuggestionResolutionObserver";
+
+const NOOP_TEXT_LOCATOR: TextLocator = {
+  locate: vi.fn(async () => null),
+};
 
 function makeTrackChangeSuggestion(): Suggestion {
   return {
@@ -40,7 +45,7 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
+    const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
     const result = await observer.observeResolutionCandidates(
       context as never,
@@ -88,7 +93,7 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
+    const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
     const result = await observer.observeResolutionCandidates(
       context as never,
@@ -124,7 +129,7 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
+    const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
     const result = await observer.observeResolutionCandidates(
       context as never,
@@ -157,7 +162,7 @@ describe("SuggestionResolutionObserver.observeResolutionCandidates", () => {
       comments: [],
     });
     const locator = new SuggestionLocator(suggestion);
-    const observer = new SuggestionResolutionObserver(suggestion, locator, {} as never);
+    const observer = new SuggestionResolutionObserver(suggestion, locator, NOOP_TEXT_LOCATOR);
 
     const result = await observer.observeResolutionCandidates(
       context as never,

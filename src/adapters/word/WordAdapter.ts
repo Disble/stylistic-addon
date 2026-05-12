@@ -91,7 +91,7 @@ export class WordAdapter implements IDocumentPort {
     patch: NonNullable<CommandResult["mutationPatch"]>
   ): Promise<Suggestion["positionHint"] | undefined> {
     return Word.run(async (context) => {
-      const body = context.document.body as unknown as WordSearchContainer;
+      const body: WordSearchContainer = context.document.body;
       const localizedRange = await this.suggestionNavigationAdapter.searchWithFallback(
         context,
         body,
@@ -109,12 +109,12 @@ export class WordAdapter implements IDocumentPort {
       const anchorRange =
         (await this.suggestionNavigationAdapter.searchWithFallback(
           context,
-          localizedRange as unknown as WordSearchContainer,
+          localizedRange,
           suggestion.anchor
         )) ??
         (await this.suggestionNavigationAdapter.searchWithFallback(
           context,
-          containingParagraph as unknown as WordSearchContainer,
+          containingParagraph,
           suggestion.anchor
         ));
 

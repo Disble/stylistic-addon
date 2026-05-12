@@ -57,7 +57,7 @@ describe("OfficeUserPreferencesAdapter.getAnalysisProfile", () => {
   });
 
   it("returns undefined when the stored value is not a string", async () => {
-    storage.getItem.mockResolvedValueOnce(42 as unknown as string);
+    storage.getItem.mockResolvedValueOnce(42);
     const adapter = new OfficeUserPreferencesAdapter();
 
     await expect(adapter.getAnalysisProfile()).resolves.toBeUndefined();

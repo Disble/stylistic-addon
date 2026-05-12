@@ -22,6 +22,24 @@ import type { AnalysisState, AnalyzeChunk } from "./AnalyzeChunksHandler.types";
 export class AnalyzeChunksHandler implements PipelineHandler {
   constructor(private readonly pollIntervalMs: number = POLL_INTERVAL_MS) {}
 
+  /** Reads pipeline chunks after the previous handler populated them. */
+  private requireChunks(ctx: PipelineContext): AnalyzeChunk[] {
+    if (!ctx.chunks) {
+      throw new Error("AnalyzeChunksHandler requires ctx.chunks before analysis starts.");
+    }
+
+    return ctx.chunks;
+  }
+
+  /** Reads the stable document UUID required by backend submit calls. */
+  private requireDocumentUuid(ctx: PipelineContext): string {
+    if (!ctx.documentUuid) {
+      throw new Error("AnalyzeChunksHandler requires ctx.documentUuid before chunk submission.");
+    }
+
+    return ctx.documentUuid;
+  }
+
   /** Coordinates chunk submission, polling, and abort handling for analysis. */
   async handle(ctx: PipelineContext, next: () => Promise<void>): Promise<void> {
     const state = this.createAnalysisState(ctx);
@@ -45,7 +63,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
 
   /** Builds the mutable state shared by submission and polling phases. */
   private createAnalysisState(ctx: PipelineContext): AnalysisState {
-    const chunks = ctx.chunks!;
+    const chunks = this.requireChunks(ctx);
 
     return {
       scope: ctx.isSelection ? "selección" : "documento",
@@ -77,6 +95,8 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     state: AnalysisState,
     chunk: AnalyzeChunk
   ): Promise<void> {
+    const documentUuid = this.requireDocumentUuid(ctx);
+
     ctx.emitter.emitPhaseStart(
       "analyzing",
       `Encolando fragmento ${chunk.index + 1} de ${state.chunks.length} (${state.scope})...`
@@ -92,7 +112,7 @@ export class AnalyzeChunksHandler implements PipelineHandler {
     );
 
     const submitResult = await ctx.analysisPort.submitChunkAnalysis(chunk, {
-      documentUuid: ctx.documentUuid!,
+      documentUuid,
       genero: ctx.genero,
     });
     state.submittedCount += 1;

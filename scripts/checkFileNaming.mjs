@@ -53,9 +53,7 @@ async function collectFiles(directory) {
       continue;
     }
 
-    if (
-      supportedExtensions.some((extension) => entry.name.endsWith(extension))
-    ) {
+    if (supportedExtensions.some((extension) => entry.name.endsWith(extension))) {
       files.push(entryPath);
     }
   }
@@ -72,15 +70,11 @@ function isInHandlersDirectory(filePath) {
 }
 
 function isInAdaptersRoot(filePath) {
-  return filePath.startsWith(
-    `${path.join(sourceDirectory, "adapters")}${path.sep}`,
-  );
+  return filePath.startsWith(`${path.join(sourceDirectory, "adapters")}${path.sep}`);
 }
 
 function stripSourceExtension(fileName) {
-  const extension = supportedExtensions.find((candidate) =>
-    fileName.endsWith(candidate),
-  );
+  const extension = supportedExtensions.find((candidate) => fileName.endsWith(candidate));
 
   if (!extension) {
     return null;
@@ -109,6 +103,107 @@ async function pathExists(filePath) {
   }
 }
 
+function createRuleError(filePath, message) {
+  return `${path.relative(rootDirectory, filePath)}: ${message}`;
+}
+
+function isGenericUtilsFile(parts) {
+  return parts[0] === "utils" || parts[0] === "Utils";
+}
+
+function hasTooManySegments(parts) {
+  return parts.length > 2;
+}
+
+function resolveAdapterBaseName(parts) {
+  const baseName = parts[0];
+  return baseName.startsWith("Mock") ? baseName.slice(4) : baseName;
+}
+
+function hasKnownAdapterSuffix(baseName) {
+  return [...knownAdapterSuffixes].some((suffix) => baseName.endsWith(suffix));
+}
+
+function validateGenericUtilsRule(filePath, parts) {
+  if (!isGenericUtilsFile(parts)) {
+    return undefined;
+  }
+
+  return createRuleError(
+    filePath,
+    "avoid generic utils filenames in architecture modules; use a descriptive feature name instead."
+  );
+}
+
+function validateSegmentCountRule(filePath, parts) {
+  if (!hasTooManySegments(parts)) {
+    return undefined;
+  }
+
+  return createRuleError(
+    filePath,
+    "too many dot-separated segments; use at most one role suffix (.test, .spec) after the base class name."
+  );
+}
+
+function validateHandlerSuffixRule(filePath, parts) {
+  if (!isInHandlersDirectory(filePath) || parts[0].endsWith("Handler")) {
+    return undefined;
+  }
+
+  return createRuleError(
+    filePath,
+    "files inside a handlers/ directory must end with Handler (e.g. ReadTextHandler.ts)."
+  );
+}
+
+function validateAdapterSuffixRule(filePath, parts) {
+  if (!isInAdaptersRoot(filePath)) {
+    return undefined;
+  }
+
+  const baseName = parts[0];
+  const nameWithoutMock = resolveAdapterBaseName(parts);
+  if (hasKnownAdapterSuffix(nameWithoutMock)) {
+    return undefined;
+  }
+
+  return createRuleError(
+    filePath,
+    `adapter files must end with a known architectural suffix (Adapter, Decorator, Command, Builder, Cleanup, Factory, Inspector, Locator, Observer, Parser, Resolver, Executor, Machine, Events, Context, Orchestrator). Found: ${baseName}`
+  );
+}
+
+function validateManagedFile(filePath) {
+  const parsed = stripSourceExtension(path.basename(filePath));
+  if (!parsed) {
+    return undefined;
+  }
+
+  const { stem } = parsed;
+  const parts = stem.split(".");
+  const genericUtilsError = validateGenericUtilsRule(filePath, parts);
+  if (genericUtilsError) {
+    return genericUtilsError;
+  }
+
+  const segmentCountError = validateSegmentCountRule(filePath, parts);
+  if (segmentCountError) {
+    return segmentCountError;
+  }
+
+  if (isTestFile(stem) || isTestHelperFile(stem)) {
+    return undefined;
+  }
+
+  const handlerError = validateHandlerSuffixRule(filePath, parts);
+  if (handlerError) {
+    return handlerError;
+  }
+
+  return validateAdapterSuffixRule(filePath, parts);
+}
+
 async function main() {
   if (!(await pathExists(sourceDirectory))) {
     console.log("No src directory found; skipping file naming check.");
@@ -123,62 +218,9 @@ async function main() {
       continue;
     }
 
-    const parsed = stripSourceExtension(path.basename(filePath));
-
-    if (!parsed) {
-      continue;
-    }
-
-    const { stem } = parsed;
-    const parts = stem.split(".");
-
-    // Rule 1: forbid generic utils.ts / Utils.ts in managed architecture folders.
-    if (parts[0] === "utils" || parts[0] === "Utils") {
-      errors.push(
-        `${path.relative(rootDirectory, filePath)}: avoid generic utils filenames in architecture modules; use a descriptive feature name instead.`,
-      );
-      continue;
-    }
-
-    // Rule 2: forbid triple-compound filenames (e.g. foo.bar.baz.ts).
-    if (parts.length > 2) {
-      errors.push(
-        `${path.relative(rootDirectory, filePath)}: too many dot-separated segments; use at most one role suffix (.test, .spec) after the base class name.`,
-      );
-      continue;
-    }
-
-    // Test / spec files and dedicated test helpers pass all structural rules.
-    if (isTestFile(stem) || isTestHelperFile(stem)) {
-      continue;
-    }
-
-    // Rule 3: files inside any handlers/ directory must end with Handler.
-    if (isInHandlersDirectory(filePath)) {
-      if (!parts[0].endsWith("Handler")) {
-        errors.push(
-          `${path.relative(rootDirectory, filePath)}: files inside a handlers/ directory must end with Handler (e.g. ReadTextHandler.ts).`,
-        );
-      }
-      continue;
-    }
-
-    // Rule 4: files inside src/adapters/ must use a known OOP suffix.
-    // A leading Mock prefix is allowed (e.g. MockFeedbackAdapter.ts).
-    if (isInAdaptersRoot(filePath)) {
-      const baseName = parts[0];
-      const nameWithoutMock = baseName.startsWith("Mock")
-        ? baseName.slice(4)
-        : baseName;
-      const hasSuffix = [...knownAdapterSuffixes].some((suffix) =>
-        nameWithoutMock.endsWith(suffix),
-      );
-
-      if (!hasSuffix) {
-        errors.push(
-          `${path.relative(rootDirectory, filePath)}: adapter files must end with a known architectural suffix (Adapter, Decorator, Command, Builder, Cleanup, Factory, Inspector, Locator, Observer, Parser, Resolver, Executor, Machine, Events, Context, Orchestrator). Found: ${baseName}`,
-        );
-      }
+    const validationError = validateManagedFile(filePath);
+    if (validationError) {
+      errors.push(validationError);
     }
   }
 

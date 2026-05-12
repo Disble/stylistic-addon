@@ -76,9 +76,11 @@ export function buildResultsSummaryChips(
 }
 
 /** Returns the merged className for a chip given its active state. */
-export function resolveChipClassName(
-  classes: ResultsSummaryChipsClasses,
-  isActive: boolean
-): string {
-  return isActive ? mergeClasses(classes.chip, classes.chipActive) : classes.chip;
+export function resolveActiveChipClassName(classes: ResultsSummaryChipsClasses): string {
+  return mergeClasses(classes.chip, classes.chipActive);
+}
+
+/** Returns the base className for an inactive chip. */
+export function resolveInactiveChipClassName(classes: ResultsSummaryChipsClasses): string {
+  return classes.chip;
 }

@@ -71,7 +71,7 @@ export function HeroEmptyState({ children }: HeroEmptyStateProps): React.JSX.Ele
             y2="64"
           />
           <path
-            d="M198 12 L201.5 19 L208.5 22 L201.5 25 L198 32 L194.5 25 L187.5 22 L194.5 19 Z"
+            d="M 191 12 L 194.5 19 L 201.5 22 L 194.5 25 L 191 32 L 187.5 25 L 180.5 22 L 187.5 19 Z"
             fill="currentColor"
           />
 

@@ -71,6 +71,14 @@ When a regression escapes:
 4. Fix the implementation.
 5. Update the relevant docs if the lesson is repo-specific.
 
+### Mock mutation gotcha
+
+When a strict Word mock models `accept()` / `reject()` by removing tracked changes
+from the same backing collection, any batch helper that loops the live mutable
+array can silently skip the second revision in a replace pair. Iterate over a
+snapshot (`[...items]`) when the mutation callback shrinks the collection during
+resolution.
+
 ## Focused suites
 
 Current taskpane guardrail suites live under:

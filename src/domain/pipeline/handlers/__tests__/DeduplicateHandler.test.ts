@@ -71,7 +71,7 @@ function makePipelineContext(
   overrides: Partial<PipelineContext> = {}
 ): PipelineContext {
   const { documentPort, analysisPort } = makeMockPorts();
-  return {
+  const context: PipelineContext = {
     documentPort,
     analysisPort,
     emitter: new PipelineEventEmitter(),
@@ -79,7 +79,9 @@ function makePipelineContext(
     maxChunkSize: 100_000,
     rawSuggestions,
     ...overrides,
-  } as PipelineContext;
+  };
+
+  return context;
 }
 
 // ---------------------------------------------------------------------------

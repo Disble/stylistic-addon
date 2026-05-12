@@ -67,7 +67,7 @@ export class WordDocumentIdentityAdapter {
     }
 
     if (typeof globalThis.crypto?.getRandomValues !== "function") {
-      throw new Error("No hay una API criptográfica disponible para generar documentUuid.");
+      throw new TypeError("No hay una API criptográfica disponible para generar documentUuid.");
     }
 
     const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));

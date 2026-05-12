@@ -56,6 +56,23 @@ function makeFormattingSuggestion(): Suggestion {
   };
 }
 
+/** Converts unknown thrown values to stable test diagnostics. */
+function stringifyUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (typeof error === "number" || typeof error === "boolean" || typeof error === "bigint") {
+    return String(error);
+  }
+
+  return "Unknown error";
+}
+
 describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {
   it("cleans resolved metadata before final document state inspection", async () => {
     const order: string[] = [];
@@ -123,7 +140,7 @@ describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {
     } as unknown as ResolutionObservabilityReporter;
     const errorSerializer = {
       serialize: vi.fn((error: unknown) => ({
-        message: error instanceof Error ? error.message : String(error),
+        message: stringifyUnknownError(error),
       })),
     } as unknown as ResolutionErrorSerializer;
     const orchestrator = new ResolveSuggestionTrackChangeOrchestrator(
@@ -198,7 +215,7 @@ describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {
     } as unknown as ResolutionObservabilityReporter;
     const errorSerializer = {
       serialize: vi.fn((error: unknown) => ({
-        message: error instanceof Error ? error.message : String(error),
+        message: stringifyUnknownError(error),
       })),
     } as unknown as ResolutionErrorSerializer;
 
@@ -267,7 +284,7 @@ describe("ResolveSuggestionTrackChangeOrchestrator metadata cleanup", () => {
     } as unknown as ResolutionObservabilityReporter;
     const errorSerializer = {
       serialize: vi.fn((error: unknown) => ({
-        message: error instanceof Error ? error.message : String(error),
+        message: stringifyUnknownError(error),
       })),
     } as unknown as ResolutionErrorSerializer;
 

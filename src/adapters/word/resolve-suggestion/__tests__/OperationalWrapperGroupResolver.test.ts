@@ -40,14 +40,23 @@ function makeContext(items: Word.ContentControl[]) {
   } as unknown as Word.RequestContext;
 }
 
+/** Returns the parsed operational identity or fails the test immediately. */
+function requireIdentity(value: ReturnType<typeof parseReplaceIdentityTitle>) {
+  if (!value) {
+    throw new Error("Expected a valid operational wrapper identity in the test fixture.");
+  }
+
+  return value;
+}
+
 describe("OperationalWrapperGroupResolver", () => {
   it("resolves an explicit contiguous group for grouped rejectAll/acceptAll execution", async () => {
     const first = makeGroupCc("s-1", 0, 2);
     const second = makeGroupCc("s-2", 1, 2);
     const resolver = new OperationalWrapperGroupResolver();
-    const seedIdentity = parseReplaceIdentityTitle(first.title);
+    const seedIdentity = requireIdentity(parseReplaceIdentityTitle(first.title));
 
-    const group = await resolver.resolve(makeContext([second, first]), first, seedIdentity!);
+    const group = await resolver.resolve(makeContext([second, first]), first, seedIdentity);
 
     expect(group.status).toBe("contiguous");
     expect(group.members.map((member) => member.identity.suggestionId)).toEqual(["s-1", "s-2"]);
@@ -56,9 +65,9 @@ describe("OperationalWrapperGroupResolver", () => {
   it("degrades incomplete explicit groups before any mutation can run", async () => {
     const first = makeGroupCc("s-1", 0, 2);
     const resolver = new OperationalWrapperGroupResolver();
-    const seedIdentity = parseReplaceIdentityTitle(first.title);
+    const seedIdentity = requireIdentity(parseReplaceIdentityTitle(first.title));
 
-    const group = await resolver.resolve(makeContext([first]), first, seedIdentity!);
+    const group = await resolver.resolve(makeContext([first]), first, seedIdentity);
 
     expect(group.status).toBe("ambiguous");
   });
@@ -67,9 +76,9 @@ describe("OperationalWrapperGroupResolver", () => {
     const first = makeGroupCc("s-1", 0, 2, "Before");
     const second = makeGroupCc("s-2", 1, 2);
     const resolver = new OperationalWrapperGroupResolver();
-    const seedIdentity = parseReplaceIdentityTitle(first.title);
+    const seedIdentity = requireIdentity(parseReplaceIdentityTitle(first.title));
 
-    const group = await resolver.resolve(makeContext([first, second]), first, seedIdentity!);
+    const group = await resolver.resolve(makeContext([first, second]), first, seedIdentity);
 
     expect(group.status).toBe("ambiguous");
   });
