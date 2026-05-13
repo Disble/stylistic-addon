@@ -255,7 +255,7 @@ export function makeResolveSuggestionContext({
   }
 
   const ccTagParts = ccTag.split(":");
-  const inferredSuggestionId = [...ccTagParts].pop() ?? "s-1";
+  const inferredSuggestionId = ccTagParts[ccTagParts.length - 1] ?? "s-1";
   const buildTrackedChangeCollection = (
     items: MockTrackedChange[]
   ): MockTrackedChangeCollection => ({
