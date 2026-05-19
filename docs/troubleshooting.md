@@ -235,6 +235,27 @@ level `new MastraClient({ baseUrl })` singleton.
 
 ---
 
+### The backend run completed, but the taskpane still shows `Reintentar análisis`
+
+**Symptom:** Real host evidence shows the Mastra run already finished, but the
+analysis error surface renders the full resubmit CTA instead of
+`Reintentar consulta`.
+
+**Cause:** The retry-mode decision in the taskpane is driven by whether the
+frontend still has a retryable `runId`, not by the button copy itself. A real
+Mastra `runById(runId)` response can briefly report `status: "success"` before
+the success payload is readable/valid for the frontend. If the adapter collapses
+that shape into a terminal `failed`, the taskpane loses the preserved `runId`
+and falls back to the full resubmit path even though the backend workflow already
+completed.
+
+**Fix:** Treat `status: "success"` with an unreadable payload as a
+frontend-local retryable query failure. Keep the original `runId`, surface the
+retry-query hero, and let the user re-poll the same backend run without
+re-submitting chunks.
+
+---
+
 ### Some chunks fail but others succeed
 
 **Symptom:** The results show "N fragmento(s) con error" alongside successful suggestions.

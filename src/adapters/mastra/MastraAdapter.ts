@@ -16,7 +16,6 @@
 import type { TextChunk } from "../../domain/chunking/TextChunk.types";
 import type {
   ChunkCancelResult,
-  ChunkAnalysisStatus,
   ChunkPollResult,
   ChunkRunReference,
   ChunkSubmitResult,
@@ -33,6 +32,12 @@ import {
   WORKFLOW_ID,
 } from "../../infrastructure/config";
 import { MastraClientFactory } from "./MastraClientFactory";
+import {
+  buildRetryablePollResult,
+  isNonTerminalStatus,
+  isTerminalStatus,
+  requiresResume,
+} from "./MastraAdapter.helpers";
 import { createMockMastraPollOutput } from "./MockMastraPollOutputFactory";
 
 /** Bridges the analysis port to the Mastra workflow client. */
@@ -153,14 +158,11 @@ export class MastraAdapter implements IAnalysisPort {
       const output = this.validateSuccessOutput(normalizedState.result);
 
       if (!output) {
-        return {
+        return buildRetryablePollResult(
           chunkIndex,
           runId,
-          status: "failed",
-          origin: "frontend-terminal",
-          suggestions: [],
-          error: "Invalid workflow success payload: expected suggestions[]",
-        };
+          "Workflow completed but the success payload is not readable yet"
+        );
       }
 
       const suggestions = this.mapSuggestions(output.suggestions, chunkIndex);
@@ -174,7 +176,7 @@ export class MastraAdapter implements IAnalysisPort {
       };
     }
 
-    if (this.requiresResume(normalizedState.status)) {
+    if (requiresResume(normalizedState.status)) {
       return {
         chunkIndex,
         runId,
@@ -185,7 +187,7 @@ export class MastraAdapter implements IAnalysisPort {
       };
     }
 
-    if (this.isNonTerminalStatus(normalizedState.status)) {
+    if (isNonTerminalStatus(normalizedState.status)) {
       return {
         chunkIndex,
         runId,
@@ -195,7 +197,7 @@ export class MastraAdapter implements IAnalysisPort {
       };
     }
 
-    if (!this.isTerminalStatus(normalizedState.status)) {
+    if (!isTerminalStatus(normalizedState.status)) {
       return {
         chunkIndex,
         runId,
@@ -335,20 +337,6 @@ export class MastraAdapter implements IAnalysisPort {
       chunkIndex,
       runId,
     };
-  }
-
-  private isNonTerminalStatus(status: string): status is ChunkAnalysisStatus {
-    return ["running", "pending", "waiting"].includes(status);
-  }
-
-  private requiresResume(status: string): boolean {
-    return ["suspended", "paused"].includes(status);
-  }
-
-  private isTerminalStatus(
-    status: string
-  ): status is Exclude<ChunkAnalysisStatus, "running" | "pending" | "waiting"> {
-    return ["success", "failed", "tripwire", "canceled", "bailed"].includes(status);
   }
 
   private extractWorkflowError(error: unknown, status: string): string {

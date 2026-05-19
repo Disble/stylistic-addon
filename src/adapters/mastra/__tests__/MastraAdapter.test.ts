@@ -380,7 +380,7 @@ describe("MastraAdapter", () => {
     });
   });
 
-  it("fails closed when the workflow success payload is structurally invalid", async () => {
+  it("preserves the run for query-only retry when the workflow reports success without a readable payload", async () => {
     mastraMocks.runById.mockResolvedValueOnce({
       status: "success",
       result: {
@@ -403,10 +403,10 @@ describe("MastraAdapter", () => {
     expect(result).toEqual({
       chunkIndex: 4,
       runId: "run-4",
-      status: "failed",
-      origin: "frontend-terminal",
+      status: "retryable-failure",
+      origin: "frontend-retryable",
       suggestions: [],
-      error: "Invalid workflow success payload: expected suggestions[]",
+      error: "Workflow completed but the success payload is not readable yet",
     });
   });
 
