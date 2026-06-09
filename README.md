@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Microsoft%20Word-Add--in-2B579A?logo=microsoftword&logoColor=white" alt="Microsoft Word Add-in badge" />
   <img src="https://img.shields.io/badge/Track%20Changes-Native-0A66C2" alt="Native Track Changes badge" />
   <img src="https://img.shields.io/badge/Bun-Workflow-black?logo=bun" alt="Bun workflow badge" />
-  <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="MIT license badge" />
+  <img src="https://img.shields.io/badge/License-Apache%202.0-22C55E" alt="Apache 2.0 license badge" />
 </p>
 
 <p align="center">
@@ -279,4 +279,4 @@ If you want a more marketing-style README later, I would also add:
 
 ## License
 
-MIT
+Apache-2.0. See [LICENSE](LICENSE).

@@ -5,7 +5,7 @@
     "type": "git",
     "url": "https://github.com/OfficeDev/Office-Addin-TaskPane.git"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "config": {
     "app_to_debug": "word",
     "app_type_to_debug": "desktop",
