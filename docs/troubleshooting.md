@@ -124,28 +124,9 @@ layouts.
 
 ## Backend Connection Issues
 
-### Login dialog closes with error 12006 but Google eventually succeeds
-
-**Symptom:** The taskpane reports that the authentication dialog closed before
-login completed, while the dialog or backend logs show the OAuth callback/session
-eventually succeeded.
-
-**Cause:** Do not treat every `DialogEventReceived` 12006 as a fatal login
-failure. In real Word hosts, 12006 can appear while the dialog is still
-navigating. The confirmed implementation resolves login only from
-`DialogMessageReceived`, following the official Office fallback-auth sample.
-
-**Fix:** Verify `OfficeDialogAuthAdapter` does not reject from
-`DialogEventReceived`. The dialog page must load Office.js, wait for
-`Office.onReady()`, and post `{ type: "stylistic-auth-success", session }` with
-`Office.context.ui.messageParent`.
-
----
-
 ### SonarQube warns about missing SRI on `office.js`
 
-**Symptom:** Sonar raises `Web:S5725` on `taskpane.html`, `auth-dialog.html`, or
-`commands.html` because the Office.js CDN script does not declare
+**Symptom:** Sonar raises `Web:S5725` on `taskpane.html` or `commands.html` because the Office.js CDN script does not declare
 `integrity="..."`.
 
 **Cause:** Microsoft documents Office.js as a CDN-hosted script that must be
@@ -166,58 +147,30 @@ its CDN*.
 
 ---
 
-### Login reaches Google but returns `state_security_mismatch`
+### "Este panel no recibió el token de Stylistic Hub"
 
-**Symptom:** Google redirects back to the backend, but backend logs show Better
-Auth errors similar to `state_security_mismatch` or `State not persisted
-correctly`.
+**Symptom:** Clicking "Analizar y sugerir" shows this error immediately, and
+Settings reports that the hub rejected the panel's token.
 
-**Cause:** The Office Dialog flow crosses taskpane/backend/provider runtimes, and
-the temporary signed OAuth state cookie can be unavailable on callback.
+**Cause:** The task pane was not served by Stylistic Hub, so it has no
+`<meta name="stylistic-hub-token">` (for example, it was loaded straight from the
+webpack dev server), or the hub's token changed after the pane loaded.
 
-**Fix:** Backend auth must keep OAuth state in the database with:
-
-```ts
-account: {
-  storeStateStrategy: "database",
-  skipStateCookieCheck: true,
-}
-```
-
-The `verification` table must also exist. In the backend, run:
-
-```bash
-bun run db:auth:apply
-```
+**Fix:** Open the task pane from a running Stylistic Hub and reload it.
 
 ---
 
-### Login succeeds but analysis says the backend is unauthorized
+### The hub cannot analyze right now
 
-**Symptom:** The taskpane shows an active session, but workflow calls fail with
-401/unauthorized.
+**Symptom:** Analysis stops before reading the document and shows the hub's
+reason (for example, that no model is configured), or "No se pudo conectar con
+el hub: …".
 
-**Cause:** The Mastra client was created without the latest Better Auth bearer
-token, or a stale client instance kept old headers after login/logout.
+**Cause:** `GET /api/v1/status` reported `analysis.ready: false`, or the hub did
+not answer.
 
-**Fix:** Mastra workflow adapters must use `MastraClientFactory`, which creates a
-client with the current token snapshot for each call. Do not reintroduce a module
-level `new MastraClient({ baseUrl })` singleton.
-
----
-
-### "Backend no disponible"
-
-**Symptom:** Clicking "Analizar y sugerir" shows this error immediately.
-
-**Cause:** The Mastra server is not running or the `stylistic-workflow` is not registered.
-
-**Fix:**
-
-1. Verify the Mastra server is running at the URL configured in `src/infrastructure/config.ts` (default: `http://localhost:4111`).
-2. Check that the `stylistic-workflow` is registered in the Mastra configuration.
-3. Verify CORS is enabled for `https://localhost:3000` on the Mastra server.
-4. Check the browser console (F12) for CORS or network errors.
+**Fix:** Act on the reason shown: start the hub, or configure its model. Then
+use **Reintentar análisis**.
 
 ---
 
@@ -229,38 +182,19 @@ level `new MastraClient({ baseUrl })` singleton.
 
 **Fix:**
 
-1. Check the Mastra server logs for errors or slow responses.
+1. Check the Stylistic Hub logs for errors or slow responses.
 2. Reduce `DEFAULT_MAX_CHUNK_SIZE` in `src/infrastructure/config.ts` to send smaller chunks.
 3. Ensure the backend model has sufficient resources for processing.
 
 ---
 
-### The backend run completed, but the taskpane still shows `Reintentar análisis`
-
-**Symptom:** Real host evidence shows the Mastra run already finished, but the
-analysis error surface renders the full resubmit CTA instead of
-`Reintentar consulta`.
-
-**Cause:** The retry-mode decision in the taskpane is driven by whether the
-frontend still has a retryable `runId`, not by the button copy itself. A real
-Mastra `runById(runId)` response can briefly report `status: "success"` before
-the success payload is readable/valid for the frontend. If the adapter collapses
-that shape into a terminal `failed`, the taskpane loses the preserved `runId`
-and falls back to the full resubmit path even though the backend workflow already
-completed.
-
-**Fix:** Treat `status: "success"` with an unreadable payload as a
-frontend-local retryable query failure. Keep the original `runId`, surface the
-retry-query hero, and let the user re-poll the same backend run without
-re-submitting chunks.
-
----
-
 ### Some chunks fail but others succeed
 
-**Symptom:** The results show "N fragmento(s) con error" alongside successful suggestions.
+**Symptom:** Suggestions are applied, and the status also names the fragments
+that failed with their causes (a `partial` analysis).
 
-**Cause:** Individual chunks failed after retries (network issue, backend overload, or model error).
+**Cause:** Individual chunks failed on the hub (for example, a provider or model
+error); each failed chunk carries its own `error`.
 
 **Expected behavior.** The add-in applies suggestions from successful chunks and reports failures. No manual retry is needed for the successful portion — those Track Changes are already in the document.
 
@@ -499,9 +433,9 @@ If your issue isn't listed here:
 2. Run `bun run manifest:validate` to check the manifest.
 3. Run `bun run validate` to run lint + rails + typecheck without building.
 4. Try `bun run stop && bun run start` for a clean restart.
-4. Verify the Mastra server is running and responsive.
-5. Open an issue in the repository with:
+5. Verify Stylistic Hub is running and served the task pane.
+6. Open an issue in the repository with:
    - The error message (screenshot or text)
    - Your Word version (Desktop/Online, version number)
    - Your OS and Node.js version
-   - Whether the Mastra backend is running
+   - Whether Stylistic Hub is running

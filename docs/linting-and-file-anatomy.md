@@ -156,9 +156,9 @@ are still secondary concerns; leaving them in implementation files is a mixed
 responsibility false negative.
 
 ```txt
-TaskpaneAuthStore.types.ts
+TaskpaneShellStore.types.ts
 ResultsPanelFilters.types.ts
-BetterAuthAdapter.types.ts
+HubAnalysisAdapter.types.ts
 ```
 
 ### Constants
@@ -166,7 +166,7 @@ BetterAuthAdapter.types.ts
 Exported semantic constants live in `*.constants.ts`.
 
 ```txt
-TaskpaneAuthStore.constants.ts
+TaskpaneShellStore.constants.ts
 ApplicationConfig.constants.ts
 ```
 
@@ -178,7 +178,7 @@ documented exception exists.
 
 Exported pure helper functions live in `*.helpers.ts`.
 
-Helpers must not import React, Zustand, Fluent UI, Office.js, Mastra clients, or
+Helpers must not import React, Zustand, Fluent UI, Office.js, HTTP clients, or
 other framework/host APIs. If a function needs those dependencies, it is not a
 generic helper; it belongs in a more explicit module.
 
@@ -217,9 +217,9 @@ Store files such as `*Store.ts` should contain the store runtime and store actio
 only. Store state types and initial state constants should be extracted:
 
 ```txt
-TaskpaneAuthStore.ts
-TaskpaneAuthStore.types.ts
-TaskpaneAuthStore.constants.ts
+TaskpaneShellStore.ts
+TaskpaneShellStore.types.ts
+TaskpaneShellStore.constants.ts
 ```
 
 ## ESLint strategy

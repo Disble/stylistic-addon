@@ -56,7 +56,7 @@ Stylistic takes the opposite approach:
 
 ## What it does
 
-- **Analyzes Spanish-language text with AI** through a Mastra workflow.
+- **Analyzes Spanish-language text with AI** through Stylistic Hub.
 - **Creates native tracked changes** that appear directly in Word's Review tab.
 - **Attaches justification comments** with category and reasoning for each suggestion.
 - **Supports large documents** through paragraph-boundary chunking.
@@ -87,9 +87,9 @@ Stylistic takes the opposite approach:
 
 ## How it works
 
-1. The user signs in with Google through the Office Dialog flow.
+1. Stylistic Hub serves the task pane and hands it an API token.
 2. Stylistic reads the current document and splits it into safe processing chunks.
-3. A protected Mastra workflow returns editorial suggestions.
+3. The hub analyzes the chunks and returns editorial suggestions.
 4. The add-in applies those suggestions as real Word revisions.
 5. The user reviews everything from the **Review** tab with standard Word controls.
 
@@ -102,8 +102,7 @@ This means the add-in does not invent a parallel approval system. It plugs AI as
 - [Node.js](https://nodejs.org/) 18+
 - [Bun](https://bun.sh/)
 - Microsoft Word desktop or Word Online
-- A running [Mastra](https://mastra.ai/) backend with Better Auth configured
-- A registered and protected `stylistic-workflow`
+- A running Stylistic Hub with a model configured (hub branch `feat/hub-api-v1`)
 
 ### Install dependencies
 
@@ -111,16 +110,15 @@ This means the add-in does not invent a parallel approval system. It plugs AI as
 bun install
 ```
 
-### Configure the backend
+### Connect to Stylistic Hub
 
-The add-in expects a Mastra server at `http://localhost:4111` with:
+There are no accounts and no backend URL to configure. The hub serves the task
+pane and injects its API token as `<meta name="stylistic-hub-token">`; the add-in
+calls the hub at its own origin plus `/api/v1`. A task pane that the hub did not
+serve has no token, so analysis stays unavailable and the pane says so.
 
-- Better Auth mounted at `/auth/*`
-- Google OAuth configured
-- `https://localhost:3000` included in Better Auth trusted origins
-- `stylistic-workflow` registered and protected by bearer authentication
-
-See [docs/api-contract.md](docs/api-contract.md) for the expected workflow contract.
+See [docs/api-contract.md](docs/api-contract.md) for the parts of Stylistic Hub
+API v1 the add-in uses.
 
 ### Run the add-in
 
@@ -133,15 +131,14 @@ This starts the local dev server at `https://localhost:3000` and sideloads the a
 ### First-run flow
 
 1. Open Word and launch **Show Task Pane** from the ribbon.
-2. Click **Continuar con Google**.
-3. Adjust the analysis profile in **Settings** if needed.
-4. Click **Analizar y sugerir**.
-5. Review the generated tracked changes in Word.
-6. Optionally click **Limpiar comentarios resueltos** after accepting or rejecting changes.
+2. Adjust the analysis profile in **Settings** if needed.
+3. Click **Analizar y sugerir**.
+4. Review the generated tracked changes in Word.
+5. Optionally click **Limpiar comentarios resueltos** after accepting or rejecting changes.
 
 ## Architecture at a glance
 
-Stylistic follows a hexagonal frontend architecture. The add-in owns Word orchestration, taskpane state, authentication flow, and document mutation. The backend owns authentication services and AI analysis.
+Stylistic follows a hexagonal frontend architecture. The add-in owns Word orchestration, taskpane state, and document mutation. Stylistic Hub owns the API token and AI analysis.
 
 ```text
 ┌─────────────────────────────────────────────────┐
@@ -149,14 +146,13 @@ Stylistic follows a hexagonal frontend architecture. The add-in owns Word orches
 │                                                 │
 │  taskpane.ts — composition root                 │
 │  ├── adapters/word — Office.js boundary         │
-│  ├── adapters/auth — Better Auth + Dialog API   │
-│  ├── adapters/mastra — @mastra/client-js        │
+│  ├── adapters/hub — Stylistic Hub API v1        │
 │  ├── domain — pure ports, types, workflows      │
 │  └── taskpane/components — React + Fluent UI    │
 ├─────────────────────────────────────────────────┤
-│  Mastra Backend                                 │
-│  ├── Better Auth / Google OAuth                 │
-│  └── stylistic-workflow — AI text analysis      │
+│  Stylistic Hub                                  │
+│  ├── serves the task pane + API token           │
+│  └── /api/v1 — analyses, feedback, preferences  │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -164,9 +160,8 @@ Stylistic follows a hexagonal frontend architecture. The add-in owns Word orches
 | ---------------- | -------------------------- | ----------------------------------------------------------------- | ---------------------------------- |
 | Composition      | `src/taskpane/taskpane.ts` | Wires ports, adapters, stores, and UI handlers                    | No                                 |
 | Presentation     | `src/taskpane/**`          | React shell, Fluent UI components, Zustand state                  | No                                 |
-| Auth adapters    | `src/adapters/auth/**`     | Better Auth client, Office Dialog flow, OfficeRuntime persistence | Office Dialog + OfficeRuntime only |
 | Word adapters    | `src/adapters/word/**`     | Document reads, writes, comments, tracked changes, cleanup        | Yes                                |
-| Backend adapters | `src/adapters/mastra/**`   | Authenticated workflow execution and feedback                     | No                                 |
+| Hub adapters     | `src/adapters/hub/**`      | Analyses, feedback, and preferences on Stylistic Hub API v1       | No                                 |
 | Domain           | `src/domain/**`            | Ports, types, pipeline orchestration, review workflow             | No                                 |
 | Infrastructure   | `src/infrastructure/**`    | Configuration, shared helpers, chunking support                   | No                                 |
 
@@ -213,7 +208,7 @@ stylistic-addon/
 | Node.js       | 18+                                                         |
 | Word Desktop  | 2019+ / Microsoft 365                                       |
 | Word Online   | Supported                                                   |
-| Mastra Server | Better Auth enabled and compatible with `@mastra/client-js` |
+| Stylistic Hub | API v1                                                      |
 
 The add-in relies on **WordApi 1.6** for tracked-change range comparison and `changeTrackingMode` support.
 
@@ -226,8 +221,6 @@ The add-in relies on **WordApi 1.6** for tracked-change range comparison and `ch
 | `Fluent UI v9`      | Microsoft-aligned taskpane component system |
 | `Zustand`           | React-owned UI state                        |
 | `Office.js`         | Word integration boundary                   |
-| `@mastra/client-js` | Backend workflow client                     |
-| `better-auth`       | Authentication client flow                  |
 | `Vitest`            | Test runner                                 |
 | `Webpack`           | Build and dev server tooling                |
 
@@ -240,7 +233,7 @@ The add-in relies on **WordApi 1.6** for tracked-change range comparison and `ch
 | [Linting & File Anatomy](docs/linting-and-file-anatomy.md)               | Enforced structure for files and components   |
 | [Testing](docs/testing.md)                                               | Testing strategy and confidence model         |
 | [Debugging](docs/debugging.md)                                           | Evidence-first debugging workflow             |
-| [API Contract](docs/api-contract.md)                                     | Backend workflow input and output contract    |
+| [API Contract](docs/api-contract.md)                                     | Stylistic Hub API v1 as the add-in uses it    |
 | [Troubleshooting](docs/troubleshooting.md)                               | Operational issues and host-specific gotchas  |
 | [Adding Rules](docs/adding-rules.md)                                     | Extending editorial analysis rules            |
 | [Telemetry](docs/TELEMETRY.md)                                           | Telemetry notes and related conventions       |
@@ -250,9 +243,7 @@ The add-in relies on **WordApi 1.6** for tracked-change range comparison and `ch
 - **Author attribution:** tracked changes appear under the current user, not under the add-in identity.
 - **Co-authoring:** active multi-author editing is not a safe target scenario.
 - **Protected documents:** DRM/RMS-protected files cannot be modified by add-ins.
-- **Backend dependency:** Stylistic requires a running Mastra backend with Better Auth and the workflow deployed.
-- **Authentication dependency:** analysis and feedback require a valid bearer session.
-- **Language scope:** the add-in currently sends `"es"` as the language code.
+- **Hub dependency:** analysis, feedback, and preferences require the task pane to be served by a running Stylistic Hub.
 
 ## Contributing
 
