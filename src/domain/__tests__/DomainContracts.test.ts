@@ -1,6 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest";
 import type { ApplySuggestionsResult } from "../DocumentApplication.types";
-import type { WorkflowSuggestion } from "../mastra/MastraWorkflow.types";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
 import type {
   DocumentReviewState,
@@ -128,12 +127,8 @@ describe("domain types (compile-time checks)", () => {
 
   it("keeps suggestion contracts free of originalText", () => {
     type SuggestionHasOriginalText = "originalText" extends keyof Suggestion ? true : false;
-    type WorkflowSuggestionHasOriginalText = "originalText" extends keyof WorkflowSuggestion
-      ? true
-      : false;
 
     expectTypeOf<SuggestionHasOriginalText>().toEqualTypeOf<false>();
-    expectTypeOf<WorkflowSuggestionHasOriginalText>().toEqualTypeOf<false>();
   });
 
   it("preserves the suggestion payload shapes", () => {
@@ -147,17 +142,8 @@ describe("domain types (compile-time checks)", () => {
       severity: "medium",
       type: "track-change",
     };
-    const workflowSuggestion: WorkflowSuggestion = {
-      context: "El texto original aparece dentro de este contexto.",
-      anchor: "texto original",
-      suggestedText: "texto mejorado",
-      justification: "Mejora la claridad",
-      category: "Claridad",
-      severity: "medium",
-    };
 
     expectTypeOf(suggestion).toEqualTypeOf<Suggestion>();
-    expectTypeOf(workflowSuggestion).toEqualTypeOf<WorkflowSuggestion>();
   });
 
   it("exposes the expected review methods on IDocumentPort", () => {

@@ -73,25 +73,11 @@ export const MAX_RETRIES = 3;
 /** Base delay (ms) for exponential backoff between retries: base * 2^attempt. */
 export const RETRY_BASE_DELAY_MS = 1_000;
 
-/** Delay (ms) between round-robin polling passes while chunks are still running. */
+/** Delay (ms) between reads of an analysis that is still running. */
 export const POLL_INTERVAL_MS = 1_000;
 
 /** Duration (ms) of the taskpane card reorder animation. */
 export const SUGGESTION_CARD_REORDER_ANIMATION_MS = 500;
-
-// ---------------------------------------------------------------------------
-// Development Analysis Bypass
-// ---------------------------------------------------------------------------
-
-/**
- * Enables a development-only bypass for the full Mastra analysis path.
- *
- * When `true`, the frontend no longer depends on the backend for the analysis
- * flow: connection check, submit, and poll all use local mock behavior. This
- * keeps the rest of the pipeline and UI flow unchanged while letting the backend
- * rest completely during debugging sessions.
- */
-export const MASTRA_POLL_BYPASS_ENABLED = false;
 
 // ---------------------------------------------------------------------------
 // Word Artifact Identity

@@ -4,28 +4,25 @@
  *
  * These interfaces are the only cross-boundary contracts in the system:
  * - `IDocumentPort` — abstracts all Word document operations.
- * - `IAnalysisPort` — abstracts all Mastra backend operations.
+ * - `IAnalysisPort` — abstracts all analysis backend operations.
  *
  * Benefits:
  * - The pipeline (`domain/pipeline/`) depends only on these interfaces.
  * - Adapters (`adapters/`) implement these interfaces.
- * - Tests can inject mock implementations without touching Office.js or Mastra.
+ * - Tests can inject mock implementations without touching Office.js or HTTP.
  * - Swapping the backend (e.g., OpenAI direct) or document host (e.g., Google Docs)
  *   requires only a new adapter — zero changes to the pipeline or UI.
  *
  * @module ports
  */
 
-import type { TextChunk } from "./chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "./DocumentApplication.types";
 import type { AuthSession, SocialSignInRequest } from "./auth/AuthSession.types";
 import type {
-  ChunkCancelResult,
-  ChunkPollResult,
-  ChunkRunReference,
-  ChunkSubmitResult,
-  WorkflowSubmitContext,
-} from "./mastra/MastraWorkflow.types";
+  AnalysisReadiness,
+  AnalysisRequest,
+  AnalysisSnapshot,
+} from "./analysis/Analysis.types";
 import type { ProgressCallback } from "./pipeline/PipelineEvents.types";
 import type { AnalysisProfileId } from "./Profile.types";
 import type { DocumentReviewState } from "./review/DocumentReviewStateMachine.types";
@@ -242,41 +239,27 @@ export interface IDocumentPort {
 /**
  * Contract for all AI analysis backend operations.
  *
- * Implemented by `MastraAdapter` (wrapped with `RetryAnalysisDecorator`).
- * Could be implemented for any LLM backend or local analysis engine.
+ * Implemented by `HubAnalysisAdapter` (wrapped with `RetryAnalysisDecorator`).
+ * An analysis covers every chunk of one request and is polled as a whole.
+ * Methods that talk to the backend throw `AnalysisRequestError` carrying the
+ * backend's own explanation.
  */
 export interface IAnalysisPort {
   /**
-   * Checks whether the backend is reachable and the workflow exists.
+   * Reports whether the backend can analyze right now.
    * Used as a fail-fast gate before starting analysis.
-   * Never throws — returns `false` on any error.
+   * Never throws — an unreachable backend is reported as not ready.
    */
-  checkConnection(): Promise<boolean>;
+  getReadiness(): Promise<AnalysisReadiness>;
 
-  /**
-   * Submits a text chunk for asynchronous workflow execution.
-   * Returns the `runId` required for later polling.
-   */
-  submitChunkAnalysis(chunk: TextChunk, input: WorkflowSubmitContext): Promise<ChunkSubmitResult>;
+  /** Starts analyzing every chunk of the request and returns the new analysis. */
+  startAnalysis(request: AnalysisRequest): Promise<AnalysisSnapshot>;
 
-  /**
-   * Polls an existing workflow run created by `submitChunkAnalysis()`.
-   * Returns intermediate or terminal workflow state for the chunk.
-   */
-  pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult>;
+  /** Reads the current state of an analysis started by `startAnalysis()`. */
+  getAnalysis(analysisId: string): Promise<AnalysisSnapshot>;
 
-  /**
-   * Requests backend cancellation for one active workflow run.
-   * Used exclusively by the taskpane cancel action while polling is active.
-   */
-  cancelChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkCancelResult>;
-
-  /**
-   * Polls a previously known workflow run again without resubmitting the chunk.
-   * This supports frontend-only recovery when an earlier poll attempt failed
-   * locally but the backend run might still be alive.
-   */
-  retryPollChunkAnalysis(reference: ChunkRunReference): Promise<ChunkPollResult>;
+  /** Cancels an analysis and every chunk still running in it. */
+  cancelAnalysis(analysisId: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

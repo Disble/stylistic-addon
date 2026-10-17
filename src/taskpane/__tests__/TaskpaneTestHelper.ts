@@ -32,12 +32,11 @@ const hoistedTaskpaneMocks = vi.hoisted(() => ({
   rejectSuggestion: vi.fn(),
   disableTrackChanges: vi.fn<() => Promise<void>>(),
   navigateToText: vi.fn<(target: Suggestion | string) => Promise<SuggestionNavigationResult>>(),
-  mastraAdapterConstructor: vi.fn(),
+  hubAnalysisAdapterConstructor: vi.fn(),
   retryDecoratorConstructor: vi.fn(),
   feedbackSendFeedback: vi.fn<(payload: any) => Promise<void>>(),
-  cancelChunkAnalysis: vi.fn<(chunkIndex: number, runId: string) => Promise<any>>(),
-  retryPollChunkAnalysis:
-    vi.fn<(reference: { chunkIndex: number; runId: string }) => Promise<any>>(),
+  cancelAnalysis: vi.fn<(analysisId: string) => Promise<void>>(),
+  getAnalysis: vi.fn<(analysisId: string) => Promise<any>>(),
 }));
 
 const hoistedReactMocks = vi.hoisted(() => ({
@@ -140,10 +139,10 @@ vi.mock("../../adapters/word/WordAdapter", () => ({
   },
 }));
 
-vi.mock("../../adapters/mastra/MastraAdapter", () => ({
-  MastraAdapter: class {
+vi.mock("../../adapters/hub/HubAnalysisAdapter", () => ({
+  HubAnalysisAdapter: class {
     constructor() {
-      hoistedTaskpaneMocks.mastraAdapterConstructor();
+      hoistedTaskpaneMocks.hubAnalysisAdapterConstructor();
     }
 
     /** Keeps mock shape explicit and avoids constructor-only class lint issues. */
@@ -159,12 +158,12 @@ vi.mock("../../adapters/RetryAnalysisDecorator", () => ({
       hoistedTaskpaneMocks.retryDecoratorConstructor(...args);
     }
 
-    cancelChunkAnalysis(chunkIndex: number, runId: string) {
-      return hoistedTaskpaneMocks.cancelChunkAnalysis(chunkIndex, runId);
+    cancelAnalysis(analysisId: string) {
+      return hoistedTaskpaneMocks.cancelAnalysis(analysisId);
     }
 
-    retryPollChunkAnalysis(reference: { chunkIndex: number; runId: string }) {
-      return hoistedTaskpaneMocks.retryPollChunkAnalysis(reference);
+    getAnalysis(analysisId: string) {
+      return hoistedTaskpaneMocks.getAnalysis(analysisId);
     }
 
     /** Keeps mock shape explicit and avoids constructor-only class lint issues. */
@@ -267,17 +266,10 @@ export function resetTaskpaneHarness() {
     trackChangesActivatedForBatch: false,
   });
   taskpaneMocks.feedbackSendFeedback.mockResolvedValue(undefined);
-  taskpaneMocks.cancelChunkAnalysis.mockResolvedValue({ canceled: true });
-  taskpaneMocks.retryPollChunkAnalysis.mockResolvedValue({
-    chunkIndex: 0,
-    runId: "run-0",
-    status: "retryable-failure",
-    origin: "frontend-retryable",
-    suggestions: [],
-    error: "Chunk 1: poll timeout",
-  });
-  taskpaneMocks.cancelChunkAnalysis.mockClear();
-  taskpaneMocks.retryPollChunkAnalysis.mockClear();
+  taskpaneMocks.cancelAnalysis.mockResolvedValue(undefined);
+  taskpaneMocks.getAnalysis.mockRejectedValue(new Error("poll timeout"));
+  taskpaneMocks.cancelAnalysis.mockClear();
+  taskpaneMocks.getAnalysis.mockClear();
   taskpaneMocks.disableTrackChanges.mockResolvedValue(undefined);
   taskpaneMocks.navigateToText.mockResolvedValue({ status: "navigated" });
   taskpaneMocks.acceptSuggestion.mockResolvedValue({

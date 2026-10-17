@@ -246,7 +246,7 @@ describe("taskpane entrypoint", () => {
     await firstRun;
   });
 
-  it("cancels backend runs when the progress session exposes active polling", async () => {
+  it("cancels the active analysis when the progress session exposes active polling", async () => {
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
@@ -254,8 +254,8 @@ describe("taskpane entrypoint", () => {
 
     const runDeferred = deferred<void>();
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
-      ctx.activeRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
-      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.activeAnalysisId = "a1";
+      ctx.emitter.emitProgress(0, 1, "Analizando 1 fragmento(s)...");
       await runDeferred.promise;
     });
 
@@ -268,19 +268,17 @@ describe("taskpane entrypoint", () => {
     const analyzePromise = appProps.onAnalyze();
     await flushTaskpaneWork();
 
-    expect(getTaskpaneShellState().progress.asyncSession.activeRuns).toEqual([
-      { chunkIndex: 0, runId: "run-0" },
-    ]);
+    expect(getTaskpaneShellState().progress.asyncSession.activeAnalysisId).toBe("a1");
 
     await appProps.onCancelAnalysis();
     runDeferred.resolve();
     await analyzePromise;
 
-    expect(taskpaneMocks.cancelChunkAnalysis).toHaveBeenCalledWith(0, "run-0");
+    expect(taskpaneMocks.cancelAnalysis).toHaveBeenCalledWith("a1");
     expect(getTaskpaneShellState().status.message).toBe("Análisis cancelado en backend.");
   });
 
-  it("publishes active polling runs to the progress session before the pipeline finishes", async () => {
+  it("publishes the active analysis to the progress session before the pipeline finishes", async () => {
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
@@ -288,10 +286,8 @@ describe("taskpane entrypoint", () => {
 
     const progressDeferred = deferred<void>();
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
-      ctx.activeRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
-      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
-      expect(ctx.activeRunReferences).toEqual([{ chunkIndex: 0, runId: "run-0" }]);
-      expect(ctx.retryableRunReferences).toEqual([]);
+      ctx.activeAnalysisId = "a1";
+      ctx.emitter.emitProgress(0, 1, "Analizando 1 fragmento(s)...");
       await progressDeferred.promise;
     });
 
@@ -305,34 +301,29 @@ describe("taskpane entrypoint", () => {
     await flushTaskpaneWork();
 
     expect(getTaskpaneShellState().progress.asyncSession.phase).toBe("polling");
-    expect(getTaskpaneShellState().progress.asyncSession.activeRuns).toEqual([
-      { chunkIndex: 0, runId: "run-0" },
-    ]);
+    expect(getTaskpaneShellState().progress.asyncSession.activeAnalysisId).toBe("a1");
 
     progressDeferred.resolve();
     await analyzePromise;
   });
 
-  it("retries polling with the same runId without re-submitting chunks", async () => {
+  it("queries the same analysis again without starting a new one", async () => {
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
     (globalThis as any).document = doc;
     (globalThis as any).Office = officeHarness.office;
 
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
-      ctx.retryableRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
-      ctx.chunkErrors = ["Chunk 1: poll timeout"];
-      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.retryableAnalysisId = "a1";
+      ctx.emitter.emitProgress(0, 1, "Analizando 1 fragmento(s)...");
       ctx.emitter.emitAbort(
-        "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run."
+        "La consulta del análisis falló localmente: Failed to fetch. Reintentá la consulta."
       );
     });
-    taskpaneMocks.retryPollChunkAnalysis.mockResolvedValueOnce({
-      chunkIndex: 0,
-      runId: "run-0",
-      status: "success",
-      origin: "backend",
-      suggestions: [makeSuggestion()],
+    taskpaneMocks.getAnalysis.mockResolvedValueOnce({
+      analysisId: "a1",
+      status: "completed",
+      chunks: [{ chunkIndex: 0, status: "completed", suggestions: [makeSuggestion()], dropped: 0 }],
     });
 
     const { getTaskpaneShellState, getResultsPanelState, setTaskpaneAuthenticated } =
@@ -345,17 +336,12 @@ describe("taskpane entrypoint", () => {
     await appProps.onAnalyze();
     await flushTaskpaneWork();
 
-    expect(getTaskpaneShellState().progress.asyncSession.retryableRuns).toEqual([
-      { chunkIndex: 0, runId: "run-0" },
-    ]);
+    expect(getTaskpaneShellState().progress.asyncSession.retryableAnalysisId).toBe("a1");
 
     await appProps.onRetryAnalysisQuery();
     await flushTaskpaneWork();
 
-    expect(taskpaneMocks.retryPollChunkAnalysis).toHaveBeenCalledWith({
-      chunkIndex: 0,
-      runId: "run-0",
-    });
+    expect(taskpaneMocks.getAnalysis).toHaveBeenCalledWith("a1");
     expect(taskpaneMocks.run).toHaveBeenCalledOnce();
     expect(getResultsPanelState().visible).toBe(true);
   });
@@ -367,11 +353,10 @@ describe("taskpane entrypoint", () => {
     (globalThis as any).Office = officeHarness.office;
 
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
-      ctx.retryableRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
-      ctx.chunkErrors = ["Chunk 1: poll timeout"];
-      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.retryableAnalysisId = "a1";
+      ctx.emitter.emitProgress(0, 1, "Analizando 1 fragmento(s)...");
       ctx.emitter.emitAbort(
-        "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run."
+        "La consulta del análisis falló localmente: Failed to fetch. Reintentá la consulta."
       );
     });
 
@@ -385,7 +370,7 @@ describe("taskpane entrypoint", () => {
     await flushTaskpaneWork();
 
     expect(getTaskpaneShellState().analysisError).toEqual({
-      message: "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run.",
+      message: "La consulta del análisis falló localmente: Failed to fetch. Reintentá la consulta.",
       retryKind: "retry-query",
       visible: true,
     });
@@ -399,9 +384,9 @@ describe("taskpane entrypoint", () => {
     (globalThis as any).Office = officeHarness.office;
 
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
-      ctx.chunkErrors = ["Chunk 1: backend exploded"];
-      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
-      ctx.emitter.emitAbort("El análisis falló en 1 fragmento(s). Intenta de nuevo.");
+      ctx.chunkErrors = ["The model request failed: 400 MissingSessionID"];
+      ctx.emitter.emitProgress(1, 1, "Fragmentos terminados: 1 de 1.");
+      ctx.emitter.emitAbort("El análisis falló: The model request failed: 400 MissingSessionID");
     });
 
     const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
@@ -414,7 +399,7 @@ describe("taskpane entrypoint", () => {
     await flushTaskpaneWork();
 
     expect(getTaskpaneShellState().analysisError).toEqual({
-      message: "El análisis falló en 1 fragmento(s). Intenta de nuevo.",
+      message: "El análisis falló: The model request failed: 400 MissingSessionID",
       retryKind: "full-retry",
       visible: true,
     });
@@ -428,19 +413,16 @@ describe("taskpane entrypoint", () => {
     (globalThis as any).Office = officeHarness.office;
 
     taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
-      ctx.retryableRunReferences = [{ chunkIndex: 0, runId: "run-0" }];
-      ctx.chunkErrors = ["Chunk 1: poll timeout"];
-      ctx.emitter.emitProgress(1, 2, "Consultando resultado del fragmento 1 de 1...");
+      ctx.retryableAnalysisId = "a1";
+      ctx.emitter.emitProgress(0, 1, "Analizando 1 fragmento(s)...");
       ctx.emitter.emitAbort(
-        "La consulta del análisis falló localmente. Reintentá la consulta con el mismo run."
+        "La consulta del análisis falló localmente: Failed to fetch. Reintentá la consulta."
       );
     });
-    taskpaneMocks.retryPollChunkAnalysis.mockResolvedValueOnce({
-      chunkIndex: 0,
-      runId: "run-0",
-      status: "success",
-      origin: "backend",
-      suggestions: [makeSuggestion()],
+    taskpaneMocks.getAnalysis.mockResolvedValueOnce({
+      analysisId: "a1",
+      status: "completed",
+      chunks: [{ chunkIndex: 0, status: "completed", suggestions: [makeSuggestion()], dropped: 0 }],
     });
 
     const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
@@ -455,6 +437,67 @@ describe("taskpane entrypoint", () => {
     await flushTaskpaneWork();
 
     expect(getTaskpaneShellState().analysisError.visible).toBe(false);
+  });
+
+  it("keeps the retry-query affordance with the real cause when the query fails again", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.retryableAnalysisId = "a1";
+      ctx.emitter.emitAbort(
+        "La consulta del análisis falló localmente: Failed to fetch. Reintentá la consulta."
+      );
+    });
+    taskpaneMocks.getAnalysis.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    await appProps.onAnalyze();
+    await flushTaskpaneWork();
+    await appProps.onRetryAnalysisQuery();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().analysisError).toEqual({
+      message:
+        "La consulta volvió a fallar localmente: Failed to fetch. Puedes reintentar otra vez.",
+      retryKind: "retry-query",
+      visible: true,
+    });
+    expect(getTaskpaneShellState().progress.asyncSession.retryableAnalysisId).toBe("a1");
+  });
+
+  it("offers a full retry with the hub's reason when the hub is not ready", async () => {
+    const doc = createTaskpaneDocument();
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    taskpaneMocks.run.mockImplementationOnce(async (ctx) => {
+      ctx.backendUnavailable = true;
+      ctx.emitter.emitAbort("Choose a provider and a model in the hub.");
+    });
+
+    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
+
+    const appProps = getRenderedAppProps(reactMocks);
+    await appProps.onAnalyze();
+    await flushTaskpaneWork();
+
+    expect(getTaskpaneShellState().analysisError).toEqual({
+      message: "Choose a provider and a model in the hub.",
+      retryKind: "full-retry",
+      visible: true,
+    });
   });
 
   it("delegates cleanup and hides the cleanup CTA when no comments remain", async () => {

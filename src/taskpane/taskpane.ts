@@ -15,7 +15,7 @@
 
 import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
 import { BetterAuthAdapter } from "../adapters/auth/BetterAuthAdapter";
-import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
+import { HubAnalysisAdapter } from "../adapters/hub/HubAnalysisAdapter";
 import { MastraClientFactory } from "../adapters/mastra/MastraClientFactory";
 import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability/ConsoleResolutionObservabilityAdapter";
 import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
@@ -42,6 +42,7 @@ import type {
 import type { UserCorrectionPreferences } from "../domain/user-preferences/UserCorrectionPreferences.types";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import { HttpClient } from "../infrastructure/http/HttpClient";
+import { buildHubApiBaseUrl, readHubToken } from "../infrastructure/hub/HubConnection.helpers";
 import {
   DEFAULT_PROFILES,
   MASTRA_BASE_URL,
@@ -91,8 +92,13 @@ const httpClient = new HttpClient({
 const userCorrectionPreferencesPort: IUserCorrectionPreferencesPort =
   new BackendUserCorrectionPreferencesAdapter(httpClient);
 const mastraClientFactory = new MastraClientFactory(getTaskpaneAuthToken);
+const hubToken = readHubToken(globalThis.document);
+const hubHttpClient = new HttpClient({
+  baseUrl: buildHubApiBaseUrl(globalThis.location?.origin ?? ""),
+  getAuthToken: () => hubToken,
+});
 const analysisPort = new RetryAnalysisDecorator(
-  new MastraAdapter(mastraClientFactory),
+  new HubAnalysisAdapter(hubHttpClient),
   MAX_RETRIES,
   RETRY_BASE_DELAY_MS
 );

@@ -24,11 +24,10 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
   };
 
   const analysisPort: IAnalysisPort = {
-    checkConnection: vi.fn(),
-    submitChunkAnalysis: vi.fn(),
-    pollChunkAnalysis: vi.fn(),
-    cancelChunkAnalysis: vi.fn(),
-    retryPollChunkAnalysis: vi.fn(),
+    getReadiness: vi.fn(),
+    startAnalysis: vi.fn(),
+    getAnalysis: vi.fn(),
+    cancelAnalysis: vi.fn(),
   };
 
   return {
@@ -302,9 +301,9 @@ describe("ChunkTextHandler", () => {
       expect(ctx.documentPort.getAppliedOriginalTexts).not.toHaveBeenCalled();
       expect(ctx.documentPort.applySuggestions).not.toHaveBeenCalled();
       expect(ctx.documentPort.cleanupResolvedComments).not.toHaveBeenCalled();
-      expect(ctx.analysisPort.checkConnection).not.toHaveBeenCalled();
-      expect(ctx.analysisPort.submitChunkAnalysis).not.toHaveBeenCalled();
-      expect(ctx.analysisPort.pollChunkAnalysis).not.toHaveBeenCalled();
+      expect(ctx.analysisPort.getReadiness).not.toHaveBeenCalled();
+      expect(ctx.analysisPort.startAnalysis).not.toHaveBeenCalled();
+      expect(ctx.analysisPort.getAnalysis).not.toHaveBeenCalled();
     });
   });
 });

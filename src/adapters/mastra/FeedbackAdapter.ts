@@ -6,7 +6,7 @@
  * Sends user feedback to the Mastra feedback workflow via fire-and-forget.
  * All errors are swallowed silently — feedback failures must never surface to the user.
  *
- * Pattern: createRun() + run.start() (same as MastraAdapter — .execute() does not exist
+ * Pattern: createRun() + run.start() (.execute() does not exist
  * in @mastra/client-js v1.7.1).
  *
  * @module FeedbackAdapter

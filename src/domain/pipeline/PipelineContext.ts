@@ -13,7 +13,6 @@
 
 import type { TextChunk } from "../chunking/TextChunk.types";
 import type { ApplySuggestionsResult } from "../DocumentApplication.types";
-import type { ChunkRunReference } from "../mastra/MastraWorkflow.types";
 import type { AnalysisProfileId } from "../Profile.types";
 import type { IAnalysisPort, IDocumentPort } from "../ports";
 import type { Suggestion } from "../suggestion/Suggestion.types";
@@ -25,13 +24,14 @@ import type { PipelineEventEmitter } from "./PipelineEvents";
  * Immutable fields (set at pipeline start, never changed by handlers):
  * - `documentPort`, `analysisPort` — the injected adapters
  * - `emitter` — the event emitter for progress/lifecycle notifications
- * - `genero` — the selected genre for the stylistic workflow
+ * - `genero` — the selected genre for the analysis
  * - `maxChunkSize` — character limit per chunk
  *
  * Mutable fields (populated progressively by handlers):
  * - `text`, `isSelection`, `documentUuid` — set by ReadTextHandler
  * - `chunks` — set by ChunkTextHandler
- * - `rawSuggestions`, `chunkErrors` — set by AnalyzeChunksHandler
+ * - `backendUnavailable` — set by CheckConnectionHandler
+ * - `rawSuggestions`, `chunkErrors`, analysis ids — set by AnalyzeChunksHandler
  * - `uniqueSuggestions` — set by DeduplicateHandler
  * - `pendingSuggestions` — set by GuardAppliedHandler
  * - `result` — set by ApplySuggestionsHandler
@@ -49,13 +49,13 @@ export interface PipelineContext {
   /** Event emitter for progress notifications (Observer pattern). */
   readonly emitter: PipelineEventEmitter;
 
-  /** The genre selected by the user, sent to the stylistic workflow (e.g., "narrativa-literaria", "general"). */
+  /** The genre selected by the user, sent with the analysis (e.g., "narrativa-literaria", "general"). */
   readonly genero: AnalysisProfileId;
 
   /** Maximum characters per chunk sent to the backend. */
   readonly maxChunkSize: number;
 
-  /** Optional composition-root signal used to stop submit/poll loops early. */
+  /** Optional composition-root signal used to stop the start/poll loop early. */
   readonly shouldCancelAnalysis?: () => boolean;
 
   // --- Set by ReadTextHandler ---
@@ -63,14 +63,23 @@ export interface PipelineContext {
   isSelection?: boolean;
   documentUuid?: string;
 
+  // --- Set by CheckConnectionHandler ---
+
+  /** True when the backend reported it cannot analyze right now. */
+  backendUnavailable?: boolean;
+
   // --- Set by ChunkTextHandler ---
   chunks?: TextChunk[];
 
   // --- Set by AnalyzeChunksHandler ---
   rawSuggestions?: Suggestion[];
   chunkErrors?: string[];
-  activeRunReferences?: ChunkRunReference[];
-  retryableRunReferences?: ChunkRunReference[];
+
+  /** Analysis still being polled; the user can cancel it. */
+  activeAnalysisId?: string;
+
+  /** Analysis whose polling failed locally; the user can query it again. */
+  retryableAnalysisId?: string;
 
   // --- Set by DeduplicateHandler ---
   uniqueSuggestions?: Suggestion[];

@@ -1,4 +1,4 @@
-/** A chunk of document text prepared for sending to the Mastra workflow. */
+/** A chunk of document text prepared for analysis. */
 export interface TextChunk {
   /** The text content of this chunk. */
   text: string;

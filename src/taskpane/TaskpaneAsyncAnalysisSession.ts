@@ -5,20 +5,20 @@ import type {
   TaskpaneAsyncAnalysisSessionState,
 } from "./TaskpaneAsyncAnalysisSession.types";
 
-/** Zustand store for the active async submit/poll session shown in the taskpane. */
+/** Zustand store for the active async start/poll session shown in the taskpane. */
 export const useTaskpaneAsyncAnalysisSessionStore = create<TaskpaneAsyncAnalysisSessionState>()(
   () => INITIAL_TASKPANE_ASYNC_ANALYSIS_SESSION_STATE
 );
 
-/** Resolves the store phase from the latest backend-run snapshot. */
+/** Resolves the store phase from the latest analysis snapshot. */
 function resolveAsyncAnalysisPhase(
   snapshot: TaskpaneAsyncAnalysisSessionSnapshot
 ): TaskpaneAsyncAnalysisSessionState["phase"] {
-  if (snapshot.activeRuns.length > 0) {
+  if (snapshot.activeAnalysisId !== null) {
     return "polling";
   }
 
-  if (snapshot.retryableRuns.length > 0) {
+  if (snapshot.retryableAnalysisId !== null) {
     return "retryable-failure";
   }
 
@@ -30,29 +30,29 @@ export function getTaskpaneAsyncAnalysisSessionState(): TaskpaneAsyncAnalysisSes
   return useTaskpaneAsyncAnalysisSessionStore.getState();
 }
 
-/** Marks the beginning of a new submit/poll cycle for the active session. */
+/** Marks the beginning of a new start/poll cycle for the active session. */
 export function startTaskpaneAsyncAnalysisSession(): void {
   useTaskpaneAsyncAnalysisSessionStore.setState({
     phase: "submitting",
     isSelection: false,
-    activeRuns: [],
-    retryableRuns: [],
+    activeAnalysisId: null,
+    retryableAnalysisId: null,
   });
 }
 
-/** Publishes the current backend-run snapshot into the taskpane session store. */
+/** Publishes the current analysis snapshot into the taskpane session store. */
 export function setTaskpaneAsyncAnalysisSnapshot(
   snapshot: TaskpaneAsyncAnalysisSessionSnapshot
 ): void {
   useTaskpaneAsyncAnalysisSessionStore.setState({
     phase: resolveAsyncAnalysisPhase(snapshot),
     isSelection: snapshot.isSelection,
-    activeRuns: snapshot.activeRuns,
-    retryableRuns: snapshot.retryableRuns,
+    activeAnalysisId: snapshot.activeAnalysisId,
+    retryableAnalysisId: snapshot.retryableAnalysisId,
   });
 }
 
-/** Marks that the frontend is sending backend cancellation requests. */
+/** Marks that the frontend is sending the backend cancellation request. */
 export function setTaskpaneAsyncAnalysisCanceling(): void {
   useTaskpaneAsyncAnalysisSessionStore.setState((state) => ({
     ...state,

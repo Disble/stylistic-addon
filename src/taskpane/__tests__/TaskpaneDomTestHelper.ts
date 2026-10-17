@@ -275,6 +275,15 @@ export class FakeDocument {
   createElement(_tagName?: string): FakeElement {
     return new FakeElement();
   }
+
+  /** Answers the hub token meta tag lookup the composition root makes at load time. */
+  querySelector(selector: string): { getAttribute(name: string): string | null } | null {
+    if (selector !== 'meta[name="stylistic-hub-token"]') {
+      return null;
+    }
+
+    return { getAttribute: (name) => (name === "content" ? "hub-token-de-prueba" : null) };
+  }
 }
 
 /** Returns a required fake element by id or throws in tests. */
