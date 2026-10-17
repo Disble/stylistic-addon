@@ -1,6 +1,5 @@
 import * as React from "react";
 import { useResultsPanelStore } from "../../ResultsPanelStore";
-import { useTaskpaneAuthStore } from "../../TaskpaneAuthStore";
 import { useTaskpaneShellStore } from "../../TaskpaneShellStore";
 import { setTaskpaneView, useTaskpaneViewStore } from "../../TaskpaneViewStore";
 import { useAppStyles } from "./App.styles";
@@ -17,13 +16,12 @@ export function useAppClasses(): AppClasses {
 
 /**
  * Aggregates the reactive state and callbacks consumed by the App shell:
- * auth status, shell flags, active top-level view, and view-toggle handlers.
+ * shell flags, active top-level view, and view-toggle handlers.
  * Computes mutually-exclusive surface flags (`isIdle`, `isHeroError`,
  * `isHeroProgress`) so the App template chooses one fullscreen surface at a
  * time and avoids stacking the compact analyze CTA on top of a hero state.
  */
 export function useApp() {
-  const authState = useTaskpaneAuthStore();
   const shellState = useTaskpaneShellStore();
   const viewState = useTaskpaneViewStore();
   const resultsVisible = useResultsPanelStore((state) => state.visible);
@@ -55,7 +53,6 @@ export function useApp() {
   }, []);
 
   return {
-    authState,
     shellState,
     viewState,
     isIdle,

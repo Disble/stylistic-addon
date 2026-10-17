@@ -79,10 +79,7 @@ function makeState(overrides: Partial<SettingsViewState> = {}): SettingsViewStat
 }
 
 const NOOP_PROPS = {
-  isSigningOut: false,
   onBack: vi.fn(),
-  onSignOut: vi.fn(),
-  session: undefined,
   loadPreferences: vi.fn(),
   savePreferences: vi.fn(),
 };

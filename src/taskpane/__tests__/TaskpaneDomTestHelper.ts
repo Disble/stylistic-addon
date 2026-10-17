@@ -276,13 +276,17 @@ export class FakeDocument {
     return new FakeElement();
   }
 
+  /** Token the hub injected into the page; `null` simulates a task pane not served by the hub. */
+  hubToken: string | null = "hub-token-de-prueba";
+
   /** Answers the hub token meta tag lookup the composition root makes at load time. */
   querySelector(selector: string): { getAttribute(name: string): string | null } | null {
-    if (selector !== 'meta[name="stylistic-hub-token"]') {
+    const token = this.hubToken;
+    if (selector !== 'meta[name="stylistic-hub-token"]' || token === null) {
       return null;
     }
 
-    return { getAttribute: (name) => (name === "content" ? "hub-token-de-prueba" : null) };
+    return { getAttribute: (name) => (name === "content" ? token : null) };
   }
 }
 

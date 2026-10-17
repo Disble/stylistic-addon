@@ -1,6 +1,4 @@
 import type {
-  IAuthPort,
-  IAuthSessionStoragePort,
   IDocumentPort,
   IUserCorrectionPreferencesPort,
   IUserPreferencesPort,
@@ -8,14 +6,10 @@ import type {
 import type { AnalysisProfileId } from "../domain/Profile.types";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import type { UserCorrectionPreferences } from "../domain/user-preferences/UserCorrectionPreferences.types";
-import type { AuthSession } from "../domain/auth/AuthSession.types";
 
-/** Collaborators required by taskpane bootstrap, auth, and settings handlers. */
+/** Collaborators required by taskpane bootstrap and settings handlers. */
 export type TaskpaneBootstrapRuntime = {
-  authPort: IAuthPort;
-  authSessionStoragePort: IAuthSessionStoragePort;
   documentPort: IDocumentPort;
-  officeDialogAuthAdapter: { signIn: () => Promise<AuthSession> };
   reviewSessionMediator: ReviewSessionMediator;
   userCorrectionPreferencesPort: IUserCorrectionPreferencesPort;
   userPreferencesPort: IUserPreferencesPort;

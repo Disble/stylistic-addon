@@ -17,7 +17,6 @@
  */
 
 import type { ApplySuggestionsResult } from "./DocumentApplication.types";
-import type { AuthSession, SocialSignInRequest } from "./auth/AuthSession.types";
 import type {
   AnalysisReadiness,
   AnalysisRequest,
@@ -36,39 +35,6 @@ import type {
 } from "./suggestion/SuggestionResolutionWorkflow.types";
 import type { TextSource } from "./TextSource.types";
 import type { UserCorrectionPreferences } from "./user-preferences/UserCorrectionPreferences.types";
-
-// ---------------------------------------------------------------------------
-// Auth Ports
-// ---------------------------------------------------------------------------
-
-/**
- * Contract for Better Auth session operations.
- *
- * Implementations own remote auth protocol details; callers only deal with the
- * domain-level session and the provider sign-in URL used by the Office dialog.
- */
-export interface IAuthPort {
-  /** Starts the configured OAuth sign-in request and returns the provider URL. */
-  createSocialSignInRequest(callbackUrl: string): Promise<SocialSignInRequest>;
-
-  /** Resolves the current Better Auth session, optionally using a bearer token. */
-  getSession(token?: string): Promise<AuthSession | undefined>;
-
-  /** Revokes/signs out the current session. Implementations swallow transport details. */
-  signOut(token?: string): Promise<void>;
-}
-
-/** Persistent storage boundary for auth sessions in the Office host. */
-export interface IAuthSessionStoragePort {
-  /** Restores the last persisted session, if any. */
-  restore(): Promise<AuthSession | undefined>;
-
-  /** Persists the latest valid session for future taskpane launches. */
-  persist(session: AuthSession): Promise<void>;
-
-  /** Removes any persisted session from host storage. */
-  clear(): Promise<void>;
-}
 
 // ---------------------------------------------------------------------------
 // User Preferences Port

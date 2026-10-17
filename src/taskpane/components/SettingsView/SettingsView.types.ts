@@ -1,4 +1,3 @@
-import type { AuthSession } from "../../../domain/auth/AuthSession.types";
 import type { AnalysisProfileId } from "../../../domain/Profile.types";
 import type { UserCorrectionPreferences } from "../../../domain/user-preferences/UserCorrectionPreferences.types";
 import type { AnalysisProfileOption } from "../AnalysisProfileSection";
@@ -21,10 +20,7 @@ export type SettingsSavePreferences = (
 
 /** Props required to render the full settings view. */
 export type SettingsViewProps = Readonly<{
-  isSigningOut: boolean;
   onBack: () => void;
-  onSignOut: () => Promise<void> | void;
-  session?: AuthSession;
   loadPreferences: SettingsLoadPreferences;
   savePreferences: SettingsSavePreferences;
 }>;

@@ -28,7 +28,6 @@ module.exports = async function createWebpackConfig(env, options) {
         import: ["./src/taskpane/index.tsx", "./src/taskpane/taskpane.html"],
         dependOn: "react",
       },
-      authDialog: "./src/taskpane/auth-dialog.ts",
       commands: "./src/commands/commands.ts",
     },
     output: {
@@ -70,11 +69,6 @@ module.exports = async function createWebpackConfig(env, options) {
         filename: "taskpane.html",
         template: "./src/taskpane/taskpane.html",
         chunks: ["polyfill", "taskpane", "react"],
-      }),
-      new HtmlWebpackPlugin({
-        filename: "auth-dialog.html",
-        template: "./src/taskpane/auth-dialog.html",
-        chunks: ["polyfill", "authDialog"],
       }),
       new CopyWebpackPlugin({
         patterns: [

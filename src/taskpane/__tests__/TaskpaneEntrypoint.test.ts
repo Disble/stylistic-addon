@@ -46,29 +46,19 @@ function getRenderedAppProps(reactMocks: ReturnType<typeof getTaskpaneReactMocks
 async function importTaskpaneRuntime() {
   await importTaskpane();
 
-  const [resultsPanelStore, taskpaneAuthStore, taskpaneShellStore] = await Promise.all([
+  const [resultsPanelStore, taskpaneShellStore] = await Promise.all([
     import("../ResultsPanelStore"),
-    import("../TaskpaneAuthStore"),
     import("../TaskpaneShellStore"),
   ]);
 
   return {
     getResultsPanelState: resultsPanelStore.getResultsPanelState,
     resetResultsPanelState: resultsPanelStore.resetResultsPanelState,
-    setTaskpaneAuthenticated: taskpaneAuthStore.setTaskpaneAuthenticated,
     getTaskpaneShellState: taskpaneShellStore.getTaskpaneShellState,
     resetTaskpaneShellState: taskpaneShellStore.resetTaskpaneShellState,
     setTaskpaneSelectedGenero: taskpaneShellStore.setTaskpaneSelectedGenero,
   };
 }
-
-const AUTHENTICATED_SESSION = {
-  token: "token-de-prueba",
-  user: {
-    id: "u-1",
-    email: "test@example.com",
-  },
-} as const;
 
 type OfficeRuntimeStorageMock = {
   getItem: ReturnType<typeof vi.fn>;
@@ -187,11 +177,9 @@ describe("taskpane entrypoint", () => {
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({ deletable: 0, kept: 0 });
     taskpaneMocks.getCleanupPreview.mockResolvedValueOnce({ deletable: 1, kept: 0 });
 
-    const { getResultsPanelState, getTaskpaneShellState, setTaskpaneAuthenticated } =
-      await importTaskpaneRuntime();
+    const { getResultsPanelState, getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
 
@@ -217,6 +205,27 @@ describe("taskpane entrypoint", () => {
     expect(getTaskpaneShellState().cleanupVisible).toBe(true);
   });
 
+  it("refuses to analyze when the task pane was not served by the hub", async () => {
+    const doc = createTaskpaneDocument();
+    doc.hubToken = null;
+    const officeHarness = createOffice();
+    (globalThis as any).document = doc;
+    (globalThis as any).Office = officeHarness.office;
+
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
+    officeHarness.triggerReady({ host: "Word" });
+    await flushTaskpaneWork();
+
+    await getRenderedAppProps(reactMocks).onAnalyze();
+
+    expect(taskpaneMocks.run).not.toHaveBeenCalled();
+    expect(getTaskpaneShellState().status).toMatchObject({
+      message:
+        "Este panel no recibió el token de Stylistic Hub. Ábrelo desde el hub para analizar.",
+      type: "error",
+    });
+  });
+
   it("ignores analyze clicks while a run is already in progress", async () => {
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
@@ -226,10 +235,9 @@ describe("taskpane entrypoint", () => {
 
     taskpaneMocks.run.mockImplementationOnce(() => runDeferred.promise);
 
-    const { setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
 
@@ -259,10 +267,9 @@ describe("taskpane entrypoint", () => {
       await runDeferred.promise;
     });
 
-    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     const analyzePromise = appProps.onAnalyze();
@@ -291,10 +298,9 @@ describe("taskpane entrypoint", () => {
       await progressDeferred.promise;
     });
 
-    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     const analyzePromise = appProps.onAnalyze();
@@ -326,11 +332,9 @@ describe("taskpane entrypoint", () => {
       chunks: [{ chunkIndex: 0, status: "completed", suggestions: [makeSuggestion()], dropped: 0 }],
     });
 
-    const { getTaskpaneShellState, getResultsPanelState, setTaskpaneAuthenticated } =
-      await importTaskpaneRuntime();
+    const { getTaskpaneShellState, getResultsPanelState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     await appProps.onAnalyze();
@@ -360,10 +364,9 @@ describe("taskpane entrypoint", () => {
       );
     });
 
-    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     await appProps.onAnalyze();
@@ -389,10 +392,9 @@ describe("taskpane entrypoint", () => {
       ctx.emitter.emitAbort("El análisis falló: The model request failed: 400 MissingSessionID");
     });
 
-    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     await appProps.onAnalyze();
@@ -425,10 +427,9 @@ describe("taskpane entrypoint", () => {
       chunks: [{ chunkIndex: 0, status: "completed", suggestions: [makeSuggestion()], dropped: 0 }],
     });
 
-    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     await appProps.onAnalyze();
@@ -453,10 +454,9 @@ describe("taskpane entrypoint", () => {
     });
     taskpaneMocks.getAnalysis.mockRejectedValueOnce(new Error("Failed to fetch"));
 
-    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     await appProps.onAnalyze();
@@ -484,10 +484,9 @@ describe("taskpane entrypoint", () => {
       ctx.emitter.emitAbort("Choose a provider and a model in the hub.");
     });
 
-    const { getTaskpaneShellState, setTaskpaneAuthenticated } = await importTaskpaneRuntime();
+    const { getTaskpaneShellState } = await importTaskpaneRuntime();
     officeHarness.triggerReady({ host: "Word" });
     await flushTaskpaneWork();
-    setTaskpaneAuthenticated(AUTHENTICATED_SESSION);
 
     const appProps = getRenderedAppProps(reactMocks);
     await appProps.onAnalyze();
