@@ -185,8 +185,8 @@ vi.mock("../../domain/pipeline/PipelineOrchestrator", () => ({
   },
 }));
 
-vi.mock("../../adapters/mastra/FeedbackAdapter", () => ({
-  FeedbackAdapter: class {
+vi.mock("../../adapters/hub/HubFeedbackAdapter", () => ({
+  HubFeedbackAdapter: class {
     sendFeedback(payload: any) {
       return hoistedTaskpaneMocks.feedbackSendFeedback(payload);
     }

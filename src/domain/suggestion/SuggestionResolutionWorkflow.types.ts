@@ -2,36 +2,14 @@ import type {
   DocumentReviewState,
   ReviewTaskpaneState,
 } from "../review/DocumentReviewStateMachine.types";
-import type { SuggestionSeverity, SuggestionType } from "./Suggestion.types";
 
-/** Payload sent to the Mastra feedback workflow. */
+/** Feedback about one suggestion the user resolved explicitly. */
 export interface FeedbackPayload {
-  /** Stable UUID of the active Word document. */
-  documentUuid: string;
-
-  /** Editorial category label. */
-  category: string;
-
-  /** Paragraph-level context used to interpret the feedback safely. */
-  context: string;
-
-  /** Exact substring within `context` targeted by the original suggestion. */
-  anchor: string;
-
-  /** Replacement text that was suggested. */
-  suggestedText?: string;
-
-  /** Human-readable justification shown to the user. */
-  justification: string;
+  /** Backend-issued id of the suggestion the feedback is about. */
+  suggestionId: string;
 
   /** Explicit user action taken on the suggestion. */
   action: "accept" | "reject";
-
-  /** How critical the suggestion is. */
-  severity: SuggestionSeverity;
-
-  /** Suggestion materialization kind used by the backend for interpretation. */
-  suggestionType: SuggestionType;
 
   /** Optional free-text comment from the user. */
   comment?: string;
@@ -99,8 +77,7 @@ export interface ResolutionObservabilityEvent {
 
 /** Snapshot checkpoints captured around risky resolution transitions. */
 export type ResolutionObservabilitySnapshotLabel =
-  | "after-execute-before-cleanup"
-  | "after-cleanup-before-return";
+  "after-execute-before-cleanup" | "after-cleanup-before-return";
 
 /** Host evidence snapshot emitted for forensic debugging of resolution workflows. */
 export interface ResolutionObservabilitySnapshot {

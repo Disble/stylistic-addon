@@ -13,10 +13,9 @@
  * @module taskpane
  */
 
-import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
 import { BetterAuthAdapter } from "../adapters/auth/BetterAuthAdapter";
 import { HubAnalysisAdapter } from "../adapters/hub/HubAnalysisAdapter";
-import { MastraClientFactory } from "../adapters/mastra/MastraClientFactory";
+import { HubFeedbackAdapter } from "../adapters/hub/HubFeedbackAdapter";
 import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability/ConsoleResolutionObservabilityAdapter";
 import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
 import { OfficeDialogAuthAdapter } from "../adapters/auth/OfficeDialogAuthAdapter";
@@ -91,7 +90,6 @@ const httpClient = new HttpClient({
 });
 const userCorrectionPreferencesPort: IUserCorrectionPreferencesPort =
   new BackendUserCorrectionPreferencesAdapter(httpClient);
-const mastraClientFactory = new MastraClientFactory(getTaskpaneAuthToken);
 const hubToken = readHubToken(globalThis.document);
 const hubHttpClient = new HttpClient({
   baseUrl: buildHubApiBaseUrl(globalThis.location?.origin ?? ""),
@@ -103,7 +101,7 @@ const analysisPort = new RetryAnalysisDecorator(
   RETRY_BASE_DELAY_MS
 );
 
-const feedbackPort: IFeedbackPort = new FeedbackAdapter(mastraClientFactory);
+const feedbackPort: IFeedbackPort = new HubFeedbackAdapter(hubHttpClient);
 const reviewSessionMediator = new ReviewSessionMediator(documentPort, feedbackPort);
 
 const orchestrator = new PipelineOrchestrator([

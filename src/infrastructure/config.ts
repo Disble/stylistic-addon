@@ -32,12 +32,6 @@ export const AUTH_SESSION_STORAGE_KEY = "stylistic.auth.session.v1";
 /** Storage key for the user-selected analysis profile in OfficeRuntime.storage. */
 export const ANALYSIS_PROFILE_STORAGE_KEY = "stylistic.preferences.analysis-profile.v1";
 
-/** Identifier of the editorial workflow registered in Mastra. */
-export const WORKFLOW_ID = "stylistic-workflow";
-
-/** Identifier of the feedback workflow registered in Mastra. */
-export const FEEDBACK_WORKFLOW_ID = "feedback-workflow";
-
 /** Document settings key used to persist the stable Word document UUID. */
 export const DOCUMENT_UUID_SETTINGS_KEY = "stylistic.document.uuid.v1";
 
