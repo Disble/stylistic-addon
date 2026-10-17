@@ -4,7 +4,6 @@ import {
   SETTINGS_SAVE_GENERIC_ERROR_MESSAGE,
   SETTINGS_SAVE_INVALID_REQUEST_MESSAGE,
   SETTINGS_SAVE_NETWORK_ERROR_MESSAGE,
-  SETTINGS_SAVE_UNAUTHENTICATED_MESSAGE,
 } from "../SettingsView.constants";
 import {
   correctionInstructionsToDraft,
@@ -41,9 +40,11 @@ describe("correctionInstructionsToDraft", () => {
 });
 
 describe("describeSaveError", () => {
-  it("maps unauthenticated to the session-expired message", () => {
+  it("maps unauthenticated to the hub token message, not a sign-in prompt", () => {
     const error = new UserCorrectionPreferencesError("unauthenticated");
-    expect(describeSaveError(error)).toBe(SETTINGS_SAVE_UNAUTHENTICATED_MESSAGE);
+    expect(describeSaveError(error)).toBe(
+      "Stylistic Hub rechazó el token de este panel. Ábrelo de nuevo desde el hub."
+    );
   });
 
   it("maps invalid-request to the validation message", () => {
