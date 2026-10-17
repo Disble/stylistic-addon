@@ -5,22 +5,24 @@ import type { UserCorrectionPreferences } from "../../domain/user-preferences/Us
 import { UserCorrectionPreferencesError } from "../../domain/user-preferences/UserCorrectionPreferencesError";
 import type { HttpClient } from "../../infrastructure/http/HttpClient";
 import { HttpError } from "../../infrastructure/http/HttpError";
-import { USER_PREFERENCES_PATH } from "./BackendUserCorrectionPreferencesAdapter.constants";
+import { HUB_PREFERENCES_PATH } from "./HubUserCorrectionPreferencesAdapter.constants";
+import { readHubErrorDetail } from "./HubProblemParser.helpers";
 
 /**
- * Backend-backed implementation of {@link IUserCorrectionPreferencesPort}.
+ * Hub-backed implementation of {@link IUserCorrectionPreferencesPort}
+ * (`GET`/`PUT /preferences` on Stylistic Hub API v1).
  *
  * Owns the translation between transport-level signals (HTTP status, fetch
  * rejections) and domain-meaningful failure reasons. The presentation layer
  * never sees raw `HttpError` instances — only typed
  * {@link UserCorrectionPreferencesError} values.
  */
-export class BackendUserCorrectionPreferencesAdapter implements IUserCorrectionPreferencesPort {
+export class HubUserCorrectionPreferencesAdapter implements IUserCorrectionPreferencesPort {
   constructor(private readonly httpClient: HttpClient) {}
 
   async load(): Promise<UserCorrectionPreferences> {
     try {
-      return await this.httpClient.get<UserCorrectionPreferences>(USER_PREFERENCES_PATH);
+      return await this.httpClient.get<UserCorrectionPreferences>(HUB_PREFERENCES_PATH);
     } catch (error) {
       throw this.toDomainError(error);
     }
@@ -28,7 +30,7 @@ export class BackendUserCorrectionPreferencesAdapter implements IUserCorrectionP
 
   async save(correctionInstructions: string | null): Promise<UserCorrectionPreferences> {
     try {
-      return await this.httpClient.put<UserCorrectionPreferences>(USER_PREFERENCES_PATH, {
+      return await this.httpClient.put<UserCorrectionPreferences>(HUB_PREFERENCES_PATH, {
         correctionInstructions,
       });
     } catch (error) {
@@ -45,13 +47,14 @@ export class BackendUserCorrectionPreferencesAdapter implements IUserCorrectionP
         `🔴 [UserCorrectionPreferencesAdapter] HTTP ${error.status} ${error.statusText} — body:`,
         error.body
       );
+      const detail = readHubErrorDetail(error);
       if (error.status === 401) {
-        return new UserCorrectionPreferencesError("unauthenticated");
+        return new UserCorrectionPreferencesError("unauthenticated", detail);
       }
       if (error.status === 400) {
-        return new UserCorrectionPreferencesError("invalid-request");
+        return new UserCorrectionPreferencesError("invalid-request", detail);
       }
-      return new UserCorrectionPreferencesError("unknown", `HTTP ${error.status}`);
+      return new UserCorrectionPreferencesError("unknown", detail);
     }
     if (error instanceof TypeError) {
       console.error("🔴 [UserCorrectionPreferencesAdapter] Network error:", error);

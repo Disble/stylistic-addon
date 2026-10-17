@@ -16,11 +16,11 @@
 import { BetterAuthAdapter } from "../adapters/auth/BetterAuthAdapter";
 import { HubAnalysisAdapter } from "../adapters/hub/HubAnalysisAdapter";
 import { HubFeedbackAdapter } from "../adapters/hub/HubFeedbackAdapter";
+import { HubUserCorrectionPreferencesAdapter } from "../adapters/hub/HubUserCorrectionPreferencesAdapter";
 import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability/ConsoleResolutionObservabilityAdapter";
 import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
 import { OfficeDialogAuthAdapter } from "../adapters/auth/OfficeDialogAuthAdapter";
 import { OfficeUserPreferencesAdapter } from "../adapters/preferences/OfficeUserPreferencesAdapter";
-import { BackendUserCorrectionPreferencesAdapter } from "../adapters/preferences/BackendUserCorrectionPreferencesAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
@@ -42,12 +42,7 @@ import type { UserCorrectionPreferences } from "../domain/user-preferences/UserC
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import { HttpClient } from "../infrastructure/http/HttpClient";
 import { buildHubApiBaseUrl, readHubToken } from "../infrastructure/hub/HubConnection.helpers";
-import {
-  DEFAULT_PROFILES,
-  MASTRA_BASE_URL,
-  MAX_RETRIES,
-  RETRY_BASE_DELAY_MS,
-} from "../infrastructure/config";
+import { DEFAULT_PROFILES, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 import { setSelectionPreviewSnapshot } from "./SelectionPreviewStore";
 import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
 import { getTaskpaneAuthToken } from "./TaskpaneAuthStore";
@@ -84,17 +79,13 @@ const authPort = new BetterAuthAdapter();
 const authSessionStoragePort = new OfficeAuthSessionStorageAdapter();
 const officeDialogAuthAdapter = new OfficeDialogAuthAdapter();
 const userPreferencesPort: IUserPreferencesPort = new OfficeUserPreferencesAdapter();
-const httpClient = new HttpClient({
-  baseUrl: MASTRA_BASE_URL,
-  getAuthToken: getTaskpaneAuthToken,
-});
-const userCorrectionPreferencesPort: IUserCorrectionPreferencesPort =
-  new BackendUserCorrectionPreferencesAdapter(httpClient);
 const hubToken = readHubToken(globalThis.document);
 const hubHttpClient = new HttpClient({
   baseUrl: buildHubApiBaseUrl(globalThis.location?.origin ?? ""),
   getAuthToken: () => hubToken,
 });
+const userCorrectionPreferencesPort: IUserCorrectionPreferencesPort =
+  new HubUserCorrectionPreferencesAdapter(hubHttpClient);
 const analysisPort = new RetryAnalysisDecorator(
   new HubAnalysisAdapter(hubHttpClient),
   MAX_RETRIES,

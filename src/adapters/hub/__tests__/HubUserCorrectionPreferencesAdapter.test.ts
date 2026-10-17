@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpClient } from "../../../infrastructure/http/HttpClient";
 import { HttpError } from "../../../infrastructure/http/HttpError";
 import { UserCorrectionPreferencesError } from "../../../domain/user-preferences/UserCorrectionPreferencesError";
-import { BackendUserCorrectionPreferencesAdapter } from "../BackendUserCorrectionPreferencesAdapter";
-import { USER_PREFERENCES_PATH } from "../BackendUserCorrectionPreferencesAdapter.constants";
+import { HubUserCorrectionPreferencesAdapter } from "../HubUserCorrectionPreferencesAdapter";
 
 type FetchMock = ReturnType<typeof vi.fn> & typeof fetch;
 
@@ -18,19 +17,19 @@ function makeJsonResponse(status: number, body: unknown): Response {
   });
 }
 
-function makeAdapter(fetchImpl: FetchMock): BackendUserCorrectionPreferencesAdapter {
+function makeAdapter(fetchImpl: FetchMock): HubUserCorrectionPreferencesAdapter {
   const httpClient = new HttpClient({ baseUrl: "http://api.example", fetchImpl });
-  return new BackendUserCorrectionPreferencesAdapter(httpClient);
+  return new HubUserCorrectionPreferencesAdapter(httpClient);
 }
 
-describe("BackendUserCorrectionPreferencesAdapter.load", () => {
+describe("HubUserCorrectionPreferencesAdapter.load", () => {
   let fetchImpl: FetchMock;
 
   beforeEach(() => {
     fetchImpl = createFetchMock();
   });
 
-  it("issues a GET against the user preferences path", async () => {
+  it("issues a GET against the hub preferences path", async () => {
     fetchImpl.mockResolvedValueOnce(
       makeJsonResponse(200, {
         correctionInstructions: null,
@@ -42,7 +41,7 @@ describe("BackendUserCorrectionPreferencesAdapter.load", () => {
     await adapter.load();
 
     const [url, init] = fetchImpl.mock.calls[0] as [string, Parameters<typeof fetch>[1]];
-    expect(url).toBe(`http://api.example${USER_PREFERENCES_PATH}`);
+    expect(url).toBe("http://api.example/preferences");
     expect(init.method).toBe("GET");
   });
 
@@ -80,7 +79,7 @@ describe("BackendUserCorrectionPreferencesAdapter.load", () => {
   });
 });
 
-describe("BackendUserCorrectionPreferencesAdapter.save", () => {
+describe("HubUserCorrectionPreferencesAdapter.save", () => {
   let fetchImpl: FetchMock;
 
   beforeEach(() => {
@@ -99,7 +98,7 @@ describe("BackendUserCorrectionPreferencesAdapter.save", () => {
     await adapter.save("Vigilá subordinadas largas.");
 
     const [url, init] = fetchImpl.mock.calls[0] as [string, Parameters<typeof fetch>[1]];
-    expect(url).toBe(`http://api.example${USER_PREFERENCES_PATH}`);
+    expect(url).toBe("http://api.example/preferences");
     expect(init.method).toBe("PUT");
     expect(init.body).toBe(
       JSON.stringify({ correctionInstructions: "Vigilá subordinadas largas." })
@@ -162,6 +161,22 @@ describe("BackendUserCorrectionPreferencesAdapter.save", () => {
     });
   });
 
+  it("carries the hub's problem detail as the error message", async () => {
+    fetchImpl.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ status: 500, code: "internal_error", detail: "database is locked" }),
+        { status: 500, headers: { "content-type": "application/problem+json" } }
+      )
+    );
+
+    const adapter = makeAdapter(fetchImpl);
+
+    await expect(adapter.save("anything")).rejects.toMatchObject({
+      reason: "unknown",
+      message: "database is locked",
+    });
+  });
+
   it("translates other HTTP errors into unknown", async () => {
     fetchImpl.mockResolvedValueOnce(makeJsonResponse(500, { error: "boom" }));
 
@@ -181,7 +196,7 @@ describe("BackendUserCorrectionPreferencesAdapter.save", () => {
   });
 });
 
-describe("BackendUserCorrectionPreferencesAdapter — error normalization helper", () => {
+describe("HubUserCorrectionPreferencesAdapter — error normalization helper", () => {
   it("treats any non-HttpError as an unknown reason", async () => {
     const fetchImpl = vi.fn().mockRejectedValueOnce(new Error("some unexpected"));
     const adapter = makeAdapter(fetchImpl);
@@ -206,7 +221,7 @@ describe("BackendUserCorrectionPreferencesAdapter — error normalization helper
       put: vi.fn(),
     } as unknown as HttpClient;
 
-    const adapter = new BackendUserCorrectionPreferencesAdapter(httpClient);
+    const adapter = new HubUserCorrectionPreferencesAdapter(httpClient);
 
     const promise = adapter.load();
     await expect(promise).rejects.toMatchObject({
@@ -226,7 +241,7 @@ describe("BackendUserCorrectionPreferencesAdapter — error normalization helper
       put: vi.fn(),
     } as unknown as HttpClient;
 
-    const adapter = new BackendUserCorrectionPreferencesAdapter(httpClient);
+    const adapter = new HubUserCorrectionPreferencesAdapter(httpClient);
 
     await expect(adapter.load()).rejects.toMatchObject({
       reason: "unauthenticated",

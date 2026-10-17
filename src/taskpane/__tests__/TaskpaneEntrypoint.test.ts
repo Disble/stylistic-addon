@@ -584,7 +584,7 @@ describe("taskpane entrypoint", () => {
     expect(storage.setItem).not.toHaveBeenCalled();
   });
 
-  it("exposes loadPreferences as an App prop wired to the backend endpoint", async () => {
+  it("exposes loadPreferences as an App prop wired to the hub preferences endpoint", async () => {
     const doc = createTaskpaneDocument();
     const officeHarness = createOffice();
     installOfficeRuntime();
@@ -613,7 +613,7 @@ describe("taskpane entrypoint", () => {
       correctionInstructionsMaxLength: 4000,
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:4111/user/preferences",
+      expect.stringMatching(/\/api\/v1\/preferences$/),
       expect.objectContaining({ method: "GET" })
     );
   });
@@ -652,7 +652,7 @@ describe("taskpane entrypoint", () => {
 
     expect(result).toEqual(putResponseBody);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:4111/user/preferences",
+      expect.stringMatching(/\/api\/v1\/preferences$/),
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({ correctionInstructions: "Vigilá Y." }),
