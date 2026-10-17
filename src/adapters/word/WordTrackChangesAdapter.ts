@@ -41,7 +41,7 @@ export class WordTrackChangesAdapter {
     await context.sync();
 
     const pendingStylisticArtifacts = allCCs.items.filter((cc) =>
-      cc.tag.startsWith(STYLISTIC_TAG_PREFIX)
+      (cc.tag ?? "").startsWith(STYLISTIC_TAG_PREFIX)
     ).length;
     const trackChangesActive = context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
 

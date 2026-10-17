@@ -43,6 +43,28 @@ describe("WordTrackChangesAdapter", () => {
     });
   });
 
+  it("ignores template content controls whose tag is null", async () => {
+    const context = {
+      document: {
+        contentControls: {
+          items: [{ tag: null }, { tag: "stylistic:comment-only:s1" }],
+          load: vi.fn(),
+        },
+        load: vi.fn(),
+        changeTrackingMode: "off",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    await expect(adapter.getDocumentReviewState()).resolves.toEqual({
+      pendingStylisticArtifacts: 1,
+      hasPendingStylisticArtifacts: true,
+      trackChangesActive: false,
+    });
+  });
+
   it("enables track changes only when currently off", async () => {
     const context = makeTrackChangesContext("off");
 

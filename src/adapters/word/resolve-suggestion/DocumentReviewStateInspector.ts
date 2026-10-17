@@ -41,8 +41,8 @@ export class DocumentReviewStateInspector {
 
     const pendingStylisticArtifacts = allCCs.items.filter(
       (cc) =>
-        cc.tag.startsWith(STYLISTIC_TAG_PREFIX) &&
-        !cc.tag.startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX)
+        (cc.tag ?? "").startsWith(STYLISTIC_TAG_PREFIX) &&
+        !(cc.tag ?? "").startsWith(STYLISTIC_OPERATIONAL_WRAPPER_TAG_PREFIX)
     ).length;
     const trackChangesActive = context.document.changeTrackingMode !== Word.ChangeTrackingMode.off;
 

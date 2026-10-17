@@ -31,4 +31,23 @@ describe("WordAppliedSuggestionInspector", () => {
 
     await expect(inspector.getAppliedOriginalTexts()).resolves.toEqual(new Set());
   });
+
+  it("ignores template content controls whose tag is null", async () => {
+    const context = {
+      document: {
+        contentControls: {
+          items: [
+            { tag: null, title: null, getRange: vi.fn() },
+            { tag: "stylistic:comment-only:s1", title: "texto original", getRange: vi.fn() },
+          ],
+          load: vi.fn(),
+        },
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+
+    installWordWithContext(context);
+
+    await expect(inspector.getAppliedOriginalTexts()).resolves.toEqual(new Set(["texto original"]));
+  });
 });

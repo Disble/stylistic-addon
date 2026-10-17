@@ -54,7 +54,9 @@ export async function getCleanupPreview(): Promise<{
 
     // Pre-filter: find all active Stylistic Content Controls (JS-side prefix
     // filter — Office.js getByTag() is exact-match only, no prefix query).
-    const stylisticCCs = allCCs.items.filter((cc) => cc.tag.startsWith(STYLISTIC_TAG_PREFIX));
+    const stylisticCCs = allCCs.items.filter((cc) =>
+      (cc.tag ?? "").startsWith(STYLISTIC_TAG_PREFIX)
+    );
 
     console.log(
       `🧽 [CommentCleanup] ${stylisticComments.length} comentarios Stylistic, ` +
@@ -127,7 +129,9 @@ export async function cleanupResolvedComments(): Promise<{
 
     const stylisticComments = comments.items.filter(isStylisticComment);
 
-    const stylisticCCs = allCCs.items.filter((cc) => cc.tag.startsWith(STYLISTIC_TAG_PREFIX));
+    const stylisticCCs = allCCs.items.filter((cc) =>
+      (cc.tag ?? "").startsWith(STYLISTIC_TAG_PREFIX)
+    );
 
     console.log(
       `🧽 [CommentCleanup] ${stylisticComments.length} comentarios Stylistic, ` +
