@@ -7,10 +7,6 @@ import { SettingsView } from "../SettingsView";
 import { useSettingsView } from "../SettingsView.hooks";
 import type { SettingsViewState } from "../SettingsView.types";
 
-vi.mock("../../AccountSettings", () => ({
-  AccountSettings: (props: unknown) => React.createElement("account-settings", props),
-}));
-
 vi.mock("../../AnalysisProfileSection", () => ({
   AnalysisProfileSection: (props: AnalysisProfileSectionProps) =>
     React.createElement("analysis-profile-section", props),
@@ -30,7 +26,6 @@ vi.mock("../SettingsView.hooks", () => ({
 }));
 
 type BodyChildren = readonly [
-  React.ReactElement,
   React.ReactElement<AnalysisProfileSectionProps>,
   React.ReactElement<CorrectionInstructionsSectionProps>,
   React.ReactElement<SettingsSaveBarProps>,
@@ -41,15 +36,14 @@ function getBodyChildren(element: React.ReactElement): BodyChildren {
     children?: React.ReactNode;
   }>;
   const children = React.Children.toArray(body.props.children);
-  if (children.length !== 4) {
-    throw new Error(`Expected 4 settings body children, received ${children.length}.`);
+  if (children.length !== 3) {
+    throw new Error(`Expected 3 settings body children, received ${children.length}.`);
   }
 
   return [
-    children[0] as React.ReactElement,
-    children[1] as React.ReactElement<AnalysisProfileSectionProps>,
-    children[2] as React.ReactElement<CorrectionInstructionsSectionProps>,
-    children[3] as React.ReactElement<SettingsSaveBarProps>,
+    children[0] as React.ReactElement<AnalysisProfileSectionProps>,
+    children[1] as React.ReactElement<CorrectionInstructionsSectionProps>,
+    children[2] as React.ReactElement<SettingsSaveBarProps>,
   ];
 }
 
@@ -91,7 +85,7 @@ describe("SettingsView", () => {
     );
 
     const view = SettingsView(NOOP_PROPS);
-    const [, profile] = getBodyChildren(view);
+    const [profile] = getBodyChildren(view);
 
     expect(profile.props.selectedGenero).toBe("general");
     expect(profile.props.isDisabled).toBe(true);
@@ -107,7 +101,7 @@ describe("SettingsView", () => {
     );
 
     const view = SettingsView(NOOP_PROPS);
-    const [, , instructions] = getBodyChildren(view);
+    const [, instructions] = getBodyChildren(view);
 
     expect(instructions.props.value).toBe("Vigilá X.");
     expect(instructions.props.maxLength).toBe(4000);
@@ -119,7 +113,7 @@ describe("SettingsView", () => {
     vi.mocked(useSettingsView).mockReturnValue(makeState({ isDirty: false }));
 
     const view = SettingsView(NOOP_PROPS);
-    const [, , , saveBar] = getBodyChildren(view);
+    const [, , saveBar] = getBodyChildren(view);
 
     expect(saveBar.props.isDirty).toBe(false);
   });
@@ -128,7 +122,7 @@ describe("SettingsView", () => {
     vi.mocked(useSettingsView).mockReturnValue(makeState({ isDirty: true, isFormDisabled: true }));
 
     const view = SettingsView(NOOP_PROPS);
-    const [, , , saveBar] = getBodyChildren(view);
+    const [, , saveBar] = getBodyChildren(view);
 
     expect(saveBar.props.isDirty).toBe(false);
   });
@@ -139,7 +133,7 @@ describe("SettingsView", () => {
     );
 
     const view = SettingsView(NOOP_PROPS);
-    const [, , , saveBar] = getBodyChildren(view);
+    const [, , saveBar] = getBodyChildren(view);
 
     expect(saveBar.props.saveError).toBe("No se pudo guardar.");
   });
