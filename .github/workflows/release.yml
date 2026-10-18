@@ -1,0 +1,86 @@
+name: Release
+
+# Publishes the add-in as a signed Stylistic Hub module when a version tag is pushed.
+# The tag must be "v" + the package.json version (stylistic-hub docs/signed-releases.md).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.1
+
+      - name: Check the tag matches package.json
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $version (expected v$version)"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Tag $GITHUB_REF_NAME points at a commit that is not on main"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Validate
+        run: bun run validate
+
+      - name: Test
+        run: bun run test
+
+      - name: Build the module
+        run: bun run build:module
+
+      # Stylistic Hub add-in contract: stylistic-hub docs/addin-contract.md (Modules)
+      - name: Check the hub module contract
+        run: |
+          test -f dist/manifest.xml || { echo "dist/manifest.xml is missing"; exit 1; }
+          grep -q '</head>' dist/taskpane.html || { echo "dist/taskpane.html has no </head>"; exit 1; }
+          grep -q 'SourceLocation DefaultValue="https://localhost:3000/m/stylistic-word-addin/taskpane.html"' dist/manifest.xml \
+            || { echo "dist/manifest.xml does not point under /m/stylistic-word-addin/"; exit 1; }
+          grep -q '<Id>5d0c6b1e-7f2a-4c3e-9b8d-1a2f3e4c5d6e</Id>' dist/manifest.xml \
+            || { echo "dist/manifest.xml does not carry the hub's production add-in id"; exit 1; }
+
+      - name: Pack and sign
+        env:
+          STYLISTIC_COMPONENT_KEY: ${{ secrets.STYLISTIC_COMPONENT_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          bun scripts/release/packComponent.mjs \
+            --dir dist \
+            --out release \
+            --id stylistic-word-addin \
+            --kind office-addin \
+            --version "$VERSION" \
+            --channel stable \
+            --release-notes "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" \
+            --requires '{"api":["v1"],"scopes":["status","analyses","feedback","preferences"]}'
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "release/stylistic-word-addin-${VERSION}.zip" \
+            release/component.json \
+            release/component.json.sig \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
