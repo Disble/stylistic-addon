@@ -262,7 +262,9 @@ The add-in relies on **WordApi 1.6** for tracked-change range comparison and `ch
 
 1. Bump `version` in `package.json` (`major.minor.patch`) and merge it into `main`.
 2. Tag that commit `v<version>` and push the tag.
-3. `.github/workflows/release.yml` checks the tag matches `package.json`, runs `validate` and the tests, builds with `build:module`, signs the build with the `STYLISTIC_COMPONENT_KEY` secret (`scripts/release/packComponent.mjs`), and publishes a GitHub release with `stylistic-word-addin-<version>.zip`, `component.json` and `component.json.sig`.
+3. `.github/workflows/release.yml` checks the tag matches `package.json`, runs `validate` and the tests, builds with `build:module`, signs the build with the `STYLISTIC_COMPONENT_KEY` secret (`scripts/release/packComponent.mjs`), and publishes a GitHub release with `stylistic-word-addin-<version>.zip`, `component.json` and `component.json.sig`. A tag on a commit that is not on `main` fails.
+
+The `STYLISTIC_COMPONENT_KEY` repository secret holds the signing key's PKCS#8 PEM; Stylistic Hub's `keys.json` must list its public key with role `component` and scope `stylistic-addon`.
 
 The format is Stylistic Hub's signed component (`docs/signed-releases.md` and `docs/addin-contract.md` in stylistic-hub). Stylistic Hub picks a release up once its catalog lists it.
 
