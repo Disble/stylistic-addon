@@ -9,6 +9,7 @@ When working in this project, IMMEDIATELY read the corresponding skill file befo
 | Any code in this project (adapters, domain, infrastructure)      | `.claude/skills/stylistic-addon-architecture/SKILL.md`   |
 | Any test file (`.test.ts`), Office.js mocks, Word API assertions | `.claude/skills/stylistic-addon-testing/SKILL.md`        |
 | Debugging a regression, bug investigation, Word behavior mismatch  | `.claude/skills/stylistic-addon-debugging/SKILL.md`      |
+| Publishing a version, release, tag `vX.Y.Z`, signed hub module     | `.claude/skills/stylistic-addon-release/SKILL.md`        |
 
 ## Coding Standards
 
