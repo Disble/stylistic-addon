@@ -94,7 +94,8 @@
     "vitest": "^4.0.18",
     "webpack": "^5.106.2",
     "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "5.2.3"
+    "webpack-dev-server": "5.2.3",
+    "yazl": "3.3.1"
   },
   "browserslist": [
     "last 2 versions",
