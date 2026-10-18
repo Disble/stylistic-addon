@@ -79,12 +79,16 @@ export function splitText(
     });
   }
 
-  for (const chunk of chunks) {
-    chunk.total = chunks.length;
-  }
+  // A trailing empty paragraph that lands on the size boundary would become an
+  // empty chunk, which the backend rejects; drop it and renumber.
+  const nonEmptyChunks = chunks.filter((chunk) => chunk.text.length > 0);
+  nonEmptyChunks.forEach((chunk, index) => {
+    chunk.index = index;
+    chunk.total = nonEmptyChunks.length;
+  });
 
-  console.log(`✂️ [Chunker] ${chunks.length} chunk(s) generados`);
-  return chunks;
+  console.log(`✂️ [Chunker] ${nonEmptyChunks.length} chunk(s) generados`);
+  return nonEmptyChunks;
 }
 
 /**

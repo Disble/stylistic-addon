@@ -6,6 +6,13 @@ describe("splitText", () => {
     expect(splitText("   \n\n  ")).toEqual([]);
   });
 
+  it("never emits an empty chunk when a trailing empty paragraph lands on the size boundary", () => {
+    const chunks = splitText("a".repeat(9) + "\n\n", 10);
+
+    expect(chunks.map((chunk) => chunk.text)).toEqual(["a".repeat(9)]);
+    expect(chunks.map((chunk) => [chunk.index, chunk.total])).toEqual([[0, 1]]);
+  });
+
   it("returns a single chunk when text is under maxChunkSize", () => {
     const chunks = splitText("Hello world.\n\nSecond paragraph.", 1000);
 
