@@ -77,7 +77,10 @@ export type SuggestionNavigationResult =
   | {
       status: "not-found";
       reason:
-        "artifact-not-found" | "context-not-found" | "anchor-not-found" | "plain-text-not-found";
+        | "artifact-not-found"
+        | "context-not-found"
+        | "anchor-not-found"
+        | "plain-text-not-found";
     }
   | {
       status: "ambiguous";

@@ -77,7 +77,8 @@ export interface ResolutionObservabilityEvent {
 
 /** Snapshot checkpoints captured around risky resolution transitions. */
 export type ResolutionObservabilitySnapshotLabel =
-  "after-execute-before-cleanup" | "after-cleanup-before-return";
+  | "after-execute-before-cleanup"
+  | "after-cleanup-before-return";
 
 /** Host evidence snapshot emitted for forensic debugging of resolution workflows. */
 export interface ResolutionObservabilitySnapshot {
