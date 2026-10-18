@@ -35,6 +35,21 @@ describe("ApplySuggestionCommand content-control recovery", () => {
     expect(env.anchorRange.insertContentControl).toHaveBeenCalledOnce();
   });
 
+  it("comments an anchor inside a template content control whose tag is null", async () => {
+    const env = installWordContext({
+      anchorRangeParentCC: { tag: null as unknown as string, isNullObject: false },
+    });
+
+    const result = await new ApplySuggestionCommand(
+      makeSuggestion({ type: "comment-only", suggestedText: undefined }),
+      textLocator
+    ).execute();
+
+    expect(result).toMatchObject({ success: true, commandId: "s1" });
+    expect(env.anchorRange.insertComment).toHaveBeenCalledWith("[Estilo]\nMejora la claridad");
+    expect(env.anchorRange.insertContentControl).toHaveBeenCalledOnce();
+  });
+
   it("aborts before mutation when an existing stylistic content control covers the anchor", async () => {
     const coveredParentCC: ParentCC = {
       tag: "stylistic:track-change:s1",
