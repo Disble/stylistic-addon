@@ -13,6 +13,8 @@ export type BatchApplyDependencies = {
   getDocumentReviewState: () => Promise<DocumentReviewState>;
   /** Derives the explicit UI state from a review snapshot. */
   deriveDocumentState: (state: DocumentReviewState) => DocumentReviewUiState;
+  /** Reads the document body text, used to apply hintless suggestions last context first. */
+  readDocumentText?: () => Promise<string>;
   /** Optionally refreshes one snapshot hint when local patch reseed is insufficient. */
   rereadSuggestionPositionHint?: (
     suggestion: Suggestion,
