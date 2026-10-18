@@ -124,7 +124,7 @@ export async function packComponent({ root = process.cwd(), dir, out, ...release
   zipfile.end();
 
   mkdirSync(target, { recursive: true });
-  const zip = join(target, `${release.id}-${release.version}.zip`);
+  const zip = resolveInside(target, `${release.id}-${release.version}.zip`, "id");
   await pipeline(zipfile.outputStream, createWriteStream(zip));
 
   const bytes = readFileSync(zip);
