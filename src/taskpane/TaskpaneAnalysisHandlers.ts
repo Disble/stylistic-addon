@@ -1,10 +1,9 @@
 import type { PipelineContext } from "../domain/pipeline/PipelineContext";
 import type { PipelineObserver } from "../domain/pipeline/PipelineEvents.types";
 import { PipelineEventEmitter } from "../domain/pipeline/PipelineEvents";
-import { DEFAULT_MAX_CHUNK_SIZE } from "../infrastructure/config";
+import { DEFAULT_MAX_CHUNK_SIZE, POLL_INTERVAL_MS } from "../infrastructure/config";
 import { hideResultsPanel } from "./ResultsPanelStore";
 import { buildApplyStatusMessage, renderResultsPanel } from "./SuggestionCardRenderer";
-import { BACKEND_UNAVAILABLE_ABORT_REASON } from "./TaskpaneAnalysis.constants";
 import type { TaskpaneAnalysisHandlersRuntime } from "./TaskpaneAnalysisHandlers.types";
 import {
   clearTaskpaneAsyncAnalysisSession,
@@ -25,31 +24,28 @@ import {
 } from "./TaskpaneShellStore";
 import type { TaskpaneAnalysisRetryKind } from "./TaskpaneShellStore.types";
 import { toTaskpaneUserMessage } from "./TaskpaneError.helpers";
-import type {
-  AnalysisRunSessionSnapshot,
-  ChunkPollResult,
-  ChunkRunReference,
-} from "../domain/mastra/MastraWorkflow.types";
+import {
+  collectAnalysisSuggestions,
+  describeAnalysisFailures,
+  describeNoSuggestionsReason,
+} from "../domain/analysis/Analysis.helpers";
+import type { AnalysisSessionSnapshot, AnalysisSnapshot } from "../domain/analysis/Analysis.types";
+import { AnalysisPoller } from "../domain/analysis/AnalysisPoller";
+import type { AnalysisPollOutcome } from "../domain/analysis/AnalysisPoller.types";
 
-/** Applies successful retry-query results and republishes the results surface. */
+/** Applies the suggestions a retry query recovered and republishes the results surface. */
 async function applyRetriedSuggestions(
   runtime: TaskpaneAnalysisHandlersRuntime,
-  successfulPolls: ChunkPollResult[],
-  terminalErrors: ChunkPollResult[],
+  snapshot: AnalysisSnapshot,
   isSelection: boolean
 ): Promise<void> {
-  const recoveredSuggestions = successfulPolls.flatMap((result) => result.suggestions);
-  if (recoveredSuggestions.length === 0) {
-    showTaskpaneStatus("La consulta se recuperó, pero no devolvió sugerencias nuevas.", "success");
-    return;
-  }
-
+  const recoveredSuggestions = collectAnalysisSuggestions(snapshot);
   const applyResult = await runtime.documentPort.applySuggestions(recoveredSuggestions);
   clearTaskpaneAnalysisError();
   renderResultsPanel(
     recoveredSuggestions,
     applyResult,
-    terminalErrors.flatMap((result) => (result.error ? [result.error] : [])),
+    describeAnalysisFailures(snapshot),
     isSelection,
     runtime.cardRendererDeps
   );
@@ -61,42 +57,39 @@ async function applyRetriedSuggestions(
 }
 
 /** Maps pipeline abort reasons to the retry affordance the taskpane should expose. */
-function getAbortRetryKind(
-  ctx: PipelineContext,
-  reason: string
-): TaskpaneAnalysisRetryKind | undefined {
-  if ((ctx.retryableRunReferences?.length ?? 0) > 0) {
+function getAbortRetryKind(ctx: PipelineContext): TaskpaneAnalysisRetryKind | undefined {
+  if (ctx.retryableAnalysisId) {
     return "retry-query";
   }
 
-  if ((ctx.chunkErrors?.length ?? 0) > 0 || reason === BACKEND_UNAVAILABLE_ABORT_REASON) {
+  if ((ctx.chunkErrors?.length ?? 0) > 0 || ctx.backendUnavailable) {
     return "full-retry";
   }
 
   return undefined;
 }
 
-/** Publishes pipeline-owned backend run references into the taskpane session store. */
-function publishAsyncSessionSnapshot(snapshot: AnalysisRunSessionSnapshot): void {
+/** Publishes pipeline-owned analysis references into the taskpane session store. */
+function publishAsyncSessionSnapshot(snapshot: AnalysisSessionSnapshot): void {
   setTaskpaneAsyncAnalysisSnapshot(snapshot);
   syncTaskpaneAsyncAnalysisProgressSession();
 }
 
-/** Reads the active pipeline run references into the frontend async-session shape. */
-function readAsyncRunSessionSnapshot(ctx: PipelineContext): AnalysisRunSessionSnapshot {
+/** Reads the pipeline's analysis references into the frontend async-session shape. */
+function readAsyncRunSessionSnapshot(ctx: PipelineContext): AnalysisSessionSnapshot {
   return {
     isSelection: ctx.isSelection ?? false,
-    activeRuns: ctx.activeRunReferences ?? [],
-    retryableRuns: ctx.retryableRunReferences ?? [],
+    activeAnalysisId: ctx.activeAnalysisId ?? null,
+    retryableAnalysisId: ctx.retryableAnalysisId ?? null,
   };
 }
 
-/** Cancels every backend run currently tracked by the taskpane progress session. */
+/** Cancels the analysis currently tracked by the taskpane progress session. */
 export async function handleCancelAnalysis(
   runtime: TaskpaneAnalysisHandlersRuntime
 ): Promise<void> {
   const session = getTaskpaneAsyncAnalysisSessionState();
-  if (session.activeRuns.length === 0) {
+  if (session.activeAnalysisId === null) {
     return;
   }
 
@@ -105,12 +98,12 @@ export async function handleCancelAnalysis(
   runtime.cancelState.value = true;
   syncTaskpaneAsyncAnalysisProgressSession();
 
-  const results = await Promise.all(
-    session.activeRuns.map((run) =>
-      runtime.analysisPort.cancelChunkAnalysis(run.chunkIndex, run.runId)
-    )
-  );
-  const failedCancellations = results.filter((result) => !result.canceled);
+  let cancelError: string | undefined;
+  try {
+    await runtime.analysisPort.cancelAnalysis(session.activeAnalysisId);
+  } catch (error) {
+    cancelError = toTaskpaneUserMessage(error);
+  }
 
   clearTaskpaneAsyncAnalysisSession();
   syncTaskpaneAsyncAnalysisProgressSession();
@@ -118,11 +111,8 @@ export async function handleCancelAnalysis(
   setTaskpaneAnalyzeLoading(false);
   runtime.stateMachine.reset();
 
-  if (failedCancellations.length > 0) {
-    showTaskpaneStatus(
-      `No se pudo cancelar ${failedCancellations.length} run(s) activo(s).`,
-      "error"
-    );
+  if (cancelError) {
+    showTaskpaneStatus(`No se pudo cancelar el análisis: ${cancelError}`, "error");
     return;
   }
 
@@ -130,12 +120,47 @@ export async function handleCancelAnalysis(
   hideResultsPanel();
 }
 
-/** Re-runs only backend polling for previously known run ids. */
+/** Reads a retryable analysis again and waits for it to finish, without starting a new one. */
+async function queryRetryableAnalysis(
+  runtime: TaskpaneAnalysisHandlersRuntime,
+  analysisId: string
+): Promise<AnalysisPollOutcome> {
+  let snapshot: AnalysisSnapshot;
+  try {
+    snapshot = await runtime.analysisPort.getAnalysis(analysisId);
+  } catch (error) {
+    return { kind: "poll-failed", message: toTaskpaneUserMessage(error) };
+  }
+
+  return new AnalysisPoller(runtime.analysisPort, POLL_INTERVAL_MS).waitUntilFinished(snapshot, {
+    shouldCancel: () => runtime.cancelState.value,
+  });
+}
+
+/** Publishes a retry query that failed locally again, keeping the retry affordance. */
+function showRetryQueryFailedAgain(
+  isSelection: boolean,
+  analysisId: string,
+  message: string
+): void {
+  publishAsyncSessionSnapshot({
+    isSelection,
+    activeAnalysisId: null,
+    retryableAnalysisId: analysisId,
+  });
+  clearTaskpaneProgress();
+  const reason = `La consulta volvió a fallar localmente: ${message}. Puedes reintentar otra vez.`;
+  showTaskpaneAnalysisError(reason, "retry-query");
+  showTaskpaneStatus(reason, "error");
+}
+
+/** Re-runs only backend polling for the analysis whose polling failed locally. */
 export async function handleRetryAnalysisQuery(
   runtime: TaskpaneAnalysisHandlersRuntime
 ): Promise<void> {
   const session = getTaskpaneAsyncAnalysisSessionState();
-  if (session.retryableRuns.length === 0) {
+  const analysisId = session.retryableAnalysisId;
+  if (analysisId === null) {
     return;
   }
 
@@ -144,72 +169,43 @@ export async function handleRetryAnalysisQuery(
   runtime.cancelState.value = false;
   publishAsyncSessionSnapshot({
     isSelection: session.isSelection,
-    activeRuns: session.retryableRuns,
-    retryableRuns: [],
+    activeAnalysisId: analysisId,
+    retryableAnalysisId: null,
   });
-  updateTaskpaneProgress(0, session.retryableRuns.length, "Reintentando consulta del backend...");
+  updateTaskpaneProgress(0, 1, "Reintentando consulta del backend...");
 
-  const settled = await Promise.all(
-    session.retryableRuns.map((reference) => runtime.analysisPort.retryPollChunkAnalysis(reference))
-  );
-
-  const successfulPolls = settled.filter((result) => result.status === "success");
-  const stillRetryable: ChunkRunReference[] = [];
-  for (const result of settled) {
-    if (result.status === "retryable-failure") {
-      stillRetryable.push({ chunkIndex: result.chunkIndex, runId: result.runId });
-    }
-  }
-  const terminalErrors = settled.filter(
-    (result) => result.status !== "success" && result.status !== "retryable-failure"
-  );
-
-  if (successfulPolls.length > 0) {
-    await applyRetriedSuggestions(runtime, successfulPolls, terminalErrors, session.isSelection);
-  }
-
-  publishAsyncSessionSnapshot({
-    isSelection: session.isSelection,
-    activeRuns: [],
-    retryableRuns: stillRetryable,
-  });
+  const outcome = await queryRetryableAnalysis(runtime, analysisId);
   setTaskpaneAnalyzeLoading(false);
+
+  if (outcome.kind === "poll-failed") {
+    showRetryQueryFailedAgain(session.isSelection, analysisId, outcome.message);
+    return;
+  }
+
+  clearTaskpaneAsyncAnalysisSession();
   syncTaskpaneAsyncAnalysisProgressSession();
+  hideTaskpaneProgress();
 
-  if (stillRetryable.length > 0) {
+  if (outcome.kind === "canceled-locally" || outcome.snapshot.status === "canceled") {
+    showTaskpaneStatus("Análisis cancelado por el usuario.", "success");
+    return;
+  }
+
+  if (collectAnalysisSuggestions(outcome.snapshot).length > 0) {
+    await applyRetriedSuggestions(runtime, outcome.snapshot, session.isSelection);
+    return;
+  }
+
+  const failures = describeAnalysisFailures(outcome.snapshot);
+  const reason = describeNoSuggestionsReason(failures);
+  if (failures.length > 0) {
     clearTaskpaneProgress();
-    showTaskpaneAnalysisError(
-      "La consulta volvió a fallar localmente. Puedes reintentar otra vez.",
-      "retry-query"
-    );
-    showTaskpaneStatus(
-      "La consulta volvió a fallar localmente. Puedes reintentar otra vez.",
-      "error"
-    );
+    showTaskpaneAnalysisError(reason, "full-retry");
+    showTaskpaneStatus(reason, "error");
     return;
   }
 
-  if (terminalErrors.length > 0) {
-    if (successfulPolls.length === 0) {
-      clearTaskpaneProgress();
-      showTaskpaneAnalysisError(
-        `${terminalErrors.length} run(s) terminaron con estado terminal en backend.`,
-        "full-retry"
-      );
-    }
-    showTaskpaneStatus(
-      `${terminalErrors.length} run(s) terminaron con estado terminal en backend.`,
-      "error"
-    );
-    return;
-  }
-
-  if (successfulPolls.length > 0) {
-    clearTaskpaneAnalysisError();
-    clearTaskpaneAsyncAnalysisSession();
-    syncTaskpaneAsyncAnalysisProgressSession();
-    hideTaskpaneProgress();
-  }
+  showTaskpaneStatus(reason, "success");
 }
 
 /** Runs the main analysis pipeline and republishes state through the taskpane stores. */
@@ -248,7 +244,7 @@ export async function handleAnalyze(runtime: TaskpaneAnalysisHandlersRuntime): P
       publishAsyncSessionSnapshot(readAsyncRunSessionSnapshot(ctx));
       clearTaskpaneProgress();
 
-      const retryKind = getAbortRetryKind(ctx, reason);
+      const retryKind = getAbortRetryKind(ctx);
       if (retryKind) {
         showTaskpaneAnalysisError(reason, retryKind);
       } else {

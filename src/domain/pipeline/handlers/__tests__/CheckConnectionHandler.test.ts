@@ -3,9 +3,7 @@ import type { PipelineContext } from "../../PipelineContext";
 import { PipelineEventEmitter } from "../../PipelineEvents";
 import { CheckConnectionHandler } from "../CheckConnectionHandler";
 
-vi.mock("../../../../infrastructure/config", () => ({
-  MASTRA_POLL_BYPASS_ENABLED: false,
-}));
+const NOT_READY_REASON = "Elegí un proveedor y un modelo en el hub.";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,11 +26,10 @@ function makeContext(overrides: Partial<PipelineContext> = {}): PipelineContext 
   };
 
   const analysisPort: IAnalysisPort = {
-    checkConnection: vi.fn(),
-    submitChunkAnalysis: vi.fn(),
-    pollChunkAnalysis: vi.fn(),
-    cancelChunkAnalysis: vi.fn(),
-    retryPollChunkAnalysis: vi.fn(),
+    getReadiness: vi.fn(),
+    startAnalysis: vi.fn(),
+    getAnalysis: vi.fn(),
+    cancelAnalysis: vi.fn(),
   };
 
   return {
@@ -63,9 +60,9 @@ describe("CheckConnectionHandler", () => {
   // -----------------------------------------------------------------------
 
   describe("happy path: backend connected", () => {
-    it("calls next() when checkConnection returns true", async () => {
+    it("calls next() when the backend is ready", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(true);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: true });
 
       await handler.handle(ctx, next);
 
@@ -74,7 +71,7 @@ describe("CheckConnectionHandler", () => {
 
     it("does not set aborted when connected", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(true);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: true });
 
       await handler.handle(ctx, next);
 
@@ -82,29 +79,13 @@ describe("CheckConnectionHandler", () => {
       expect(ctx.abortReason).toBeUndefined();
     });
 
-    it("calls analysisPort.checkConnection exactly once", async () => {
+    it("calls analysisPort.getReadiness exactly once", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(true);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: true });
 
       await handler.handle(ctx, next);
 
-      expect(ctx.analysisPort.checkConnection).toHaveBeenCalledOnce();
-    });
-
-    it("skips the backend connectivity check entirely when the bypass is enabled", async () => {
-      vi.doMock("../../../../infrastructure/config", () => ({
-        MASTRA_POLL_BYPASS_ENABLED: true,
-      }));
-      vi.resetModules();
-      const { CheckConnectionHandler: BypassCheckConnectionHandler } =
-        await import("../CheckConnectionHandler");
-      const bypassHandler = new BypassCheckConnectionHandler();
-      const ctx = makeContext();
-
-      await bypassHandler.handle(ctx, next);
-
-      expect(ctx.analysisPort.checkConnection).not.toHaveBeenCalled();
-      expect(next).toHaveBeenCalledOnce();
+      expect(ctx.analysisPort.getReadiness).toHaveBeenCalledOnce();
     });
   });
 
@@ -113,29 +94,47 @@ describe("CheckConnectionHandler", () => {
   // -----------------------------------------------------------------------
 
   describe("abort: backend not connected", () => {
-    it("aborts when checkConnection returns false", async () => {
+    it("aborts when the backend is not ready", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(false);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({
+        ready: false,
+        reason: NOT_READY_REASON,
+      });
 
       await handler.handle(ctx, next);
 
       expect(ctx.aborted).toBe(true);
     });
 
-    it("sets abort reason with backend unavailable message", async () => {
+    it("uses the backend's reason as the abort reason", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(false);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({
+        ready: false,
+        reason: NOT_READY_REASON,
+      });
 
       await handler.handle(ctx, next);
 
-      expect(ctx.abortReason).toBe(
-        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose."
-      );
+      expect(ctx.abortReason).toBe(NOT_READY_REASON);
+      expect(ctx.backendUnavailable).toBe(true);
+    });
+
+    it("falls back to a generic reason when the backend gives none", async () => {
+      const ctx = makeContext();
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: false });
+
+      await handler.handle(ctx, next);
+
+      expect(ctx.abortReason).toBe("El hub no puede analizar en este momento.");
+      expect(ctx.backendUnavailable).toBe(true);
     });
 
     it("does NOT call next() when connection fails", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(false);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({
+        ready: false,
+        reason: NOT_READY_REASON,
+      });
 
       await handler.handle(ctx, next);
 
@@ -154,7 +153,7 @@ describe("CheckConnectionHandler", () => {
       emitter.subscribe({ onPhaseStart });
 
       const ctx = makeContext({ emitter });
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(true);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: true });
 
       await handler.handle(ctx, next);
 
@@ -167,31 +166,10 @@ describe("CheckConnectionHandler", () => {
       emitter.subscribe({ onPhaseComplete });
 
       const ctx = makeContext({ emitter });
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(true);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: true });
 
       await handler.handle(ctx, next);
 
-      expect(onPhaseComplete).toHaveBeenCalledWith("connecting");
-    });
-
-    it("does not emit phaseStart('connecting') when the bypass is enabled", async () => {
-      vi.doMock("../../../../infrastructure/config", () => ({
-        MASTRA_POLL_BYPASS_ENABLED: true,
-      }));
-      vi.resetModules();
-      const { CheckConnectionHandler: BypassCheckConnectionHandler } =
-        await import("../CheckConnectionHandler");
-      const bypassHandler = new BypassCheckConnectionHandler();
-      const emitter = new PipelineEventEmitter();
-      const onPhaseStart = vi.fn();
-      const onPhaseComplete = vi.fn();
-      emitter.subscribe({ onPhaseStart, onPhaseComplete });
-
-      const ctx = makeContext({ emitter });
-
-      await bypassHandler.handle(ctx, next);
-
-      expect(onPhaseStart).not.toHaveBeenCalled();
       expect(onPhaseComplete).toHaveBeenCalledWith("connecting");
     });
 
@@ -202,7 +180,10 @@ describe("CheckConnectionHandler", () => {
       emitter.subscribe({ onPhaseStart, onPhaseComplete });
 
       const ctx = makeContext({ emitter });
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(false);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({
+        ready: false,
+        reason: NOT_READY_REASON,
+      });
 
       await handler.handle(ctx, next);
 
@@ -216,13 +197,14 @@ describe("CheckConnectionHandler", () => {
       emitter.subscribe({ onAbort });
 
       const ctx = makeContext({ emitter });
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(false);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({
+        ready: false,
+        reason: NOT_READY_REASON,
+      });
 
       await handler.handle(ctx, next);
 
-      expect(onAbort).toHaveBeenCalledWith(
-        "Backend no disponible. Verifica que el servidor Mastra esté ejecutándose."
-      );
+      expect(onAbort).toHaveBeenCalledWith(NOT_READY_REASON);
     });
 
     it("event order on success: phaseStart before phaseComplete", async () => {
@@ -234,7 +216,7 @@ describe("CheckConnectionHandler", () => {
       });
 
       const ctx = makeContext({ emitter });
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(true);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: true });
 
       await handler.handle(ctx, next);
 
@@ -250,7 +232,10 @@ describe("CheckConnectionHandler", () => {
       });
 
       const ctx = makeContext({ emitter });
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(false);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({
+        ready: false,
+        reason: NOT_READY_REASON,
+      });
 
       await handler.handle(ctx, next);
 
@@ -263,9 +248,9 @@ describe("CheckConnectionHandler", () => {
   // -----------------------------------------------------------------------
 
   describe("error handling", () => {
-    it("propagates errors thrown by analysisPort.checkConnection", async () => {
+    it("propagates errors thrown by analysisPort.getReadiness", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockRejectedValue(new Error("Network error"));
+      vi.mocked(ctx.analysisPort.getReadiness).mockRejectedValue(new Error("Network error"));
 
       await expect(handler.handle(ctx, next)).rejects.toThrow("Network error");
       expect(next).not.toHaveBeenCalled();
@@ -279,7 +264,7 @@ describe("CheckConnectionHandler", () => {
   describe("isolation", () => {
     it("does not call any documentPort methods", async () => {
       const ctx = makeContext();
-      vi.mocked(ctx.analysisPort.checkConnection).mockResolvedValue(true);
+      vi.mocked(ctx.analysisPort.getReadiness).mockResolvedValue({ ready: true });
 
       await handler.handle(ctx, next);
 

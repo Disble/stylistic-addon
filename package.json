@@ -15,6 +15,7 @@
     "prepare": "lefthook install",
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
+    "build:hub": "webpack --mode production --env hub",
     "dev-server": "webpack serve --mode development",
     "lint": "office-addin-lint check",
     "lint:fix": "office-addin-lint fix",
@@ -40,8 +41,6 @@
   "dependencies": {
     "@fluentui/react-components": "^9.55.1",
     "@fluentui/react-icons": "^2.0.264",
-    "@mastra/client-js": "^1.17.1",
-    "better-auth": "^1.6.9",
     "core-js": "^3.36.0",
     "es6-promise": "^4.2.8",
     "react": "^18.2.0",

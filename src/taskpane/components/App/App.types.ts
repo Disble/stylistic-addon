@@ -11,8 +11,6 @@ export type AppProps = Readonly<{
   onRetryAnalysisQuery: () => Promise<void> | void;
   onCleanup: () => Promise<void> | void;
   onDisableTrackChanges: () => Promise<void> | void;
-  onSignIn: () => Promise<void> | void;
-  onSignOut: () => Promise<void> | void;
   loadPreferences: SettingsLoadPreferences;
   savePreferences: SettingsSavePreferences;
   onMount?: () => void;

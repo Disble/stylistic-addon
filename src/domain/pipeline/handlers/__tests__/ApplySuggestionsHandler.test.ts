@@ -63,11 +63,10 @@ function makeMockDocumentPort(
 
 function makeMockAnalysisPort(): IAnalysisPort {
   return {
-    checkConnection: vi.fn(),
-    submitChunkAnalysis: vi.fn(),
-    pollChunkAnalysis: vi.fn(),
-    cancelChunkAnalysis: vi.fn(),
-    retryPollChunkAnalysis: vi.fn(),
+    getReadiness: vi.fn(),
+    startAnalysis: vi.fn(),
+    getAnalysis: vi.fn(),
+    cancelAnalysis: vi.fn(),
   };
 }
 

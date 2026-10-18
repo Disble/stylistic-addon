@@ -1,22 +1,25 @@
 import type { IAnalysisPort, IDocumentPort } from "../../../ports";
 import type { TextChunk } from "../../../chunking/TextChunk.types";
-import type { ChunkPollResult } from "../../../mastra/MastraWorkflow.types";
+import type { AnalysisSnapshot, ChunkAnalysisResult } from "../../../analysis/Analysis.types";
+import { AnalysisRequestError } from "../../../analysis/AnalysisRequestError";
 import type { Suggestion } from "../../../suggestion/Suggestion.types";
 import type { PipelineContext } from "../../PipelineContext";
 import { PipelineEventEmitter } from "../../PipelineEvents";
 import { AnalyzeChunksHandler } from "../AnalyzeChunksHandler";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const DOCUMENT_UUID = "11111111-1111-4111-8111-111111111111";
+
 /** Builds a canonical suggestion fixture for analysis tests. */
 function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
   const anchor = overrides.anchor ?? "texto original";
   return {
-    id: "s1",
+    id: "0123456789abcdef",
     context: overrides.context ?? `Contexto con ${anchor}.`,
     anchor,
     suggestedText: "texto mejorado",
     justification: "Mejora de estilo",
-    category: "Redundancia",
+    category: "estilo",
     severity: "medium",
     type: "track-change",
     ...overrides,
@@ -34,26 +37,39 @@ function makeChunk(overrides: Partial<TextChunk> = {}): TextChunk {
   };
 }
 
-/** Builds a poll result fixture with sane defaults. */
-function makePollResult(overrides: Partial<ChunkPollResult> = {}): ChunkPollResult {
+/** Builds one chunk outcome inside an analysis snapshot. */
+function makeChunkResult(overrides: Partial<ChunkAnalysisResult> = {}): ChunkAnalysisResult {
   return {
     chunkIndex: 0,
-    runId: "run-0",
-    status: "success",
-    origin: "backend",
+    status: "completed",
     suggestions: [makeSuggestion()],
+    dropped: 0,
     ...overrides,
   };
 }
 
-/** Creates a mocked analysis port for one handler run. */
+/** Builds an analysis snapshot fixture with sane defaults. */
+function makeSnapshot(overrides: Partial<AnalysisSnapshot> = {}): AnalysisSnapshot {
+  return {
+    analysisId: "a1",
+    status: "completed",
+    chunks: [makeChunkResult()],
+    ...overrides,
+  };
+}
+
+/** Creates a mocked analysis port whose analysis is running, then completed. */
 function makeMockAnalysisPort(): IAnalysisPort {
   return {
-    checkConnection: vi.fn().mockResolvedValue(true),
-    submitChunkAnalysis: vi.fn().mockResolvedValue({ chunkIndex: 0, runId: "run-0" }),
-    pollChunkAnalysis: vi.fn().mockResolvedValue(makePollResult()),
-    cancelChunkAnalysis: vi.fn(),
-    retryPollChunkAnalysis: vi.fn(),
+    getReadiness: vi.fn().mockResolvedValue({ ready: true }),
+    startAnalysis: vi.fn().mockResolvedValue(
+      makeSnapshot({
+        status: "running",
+        chunks: [makeChunkResult({ status: "queued", suggestions: [] })],
+      })
+    ),
+    getAnalysis: vi.fn().mockResolvedValue(makeSnapshot()),
+    cancelAnalysis: vi.fn(),
   };
 }
 
@@ -77,7 +93,7 @@ function makeMockDocumentPort(): IDocumentPort {
 
 /** Creates the pipeline context consumed by AnalyzeChunksHandler. */
 function makePipelineContext(overrides: Partial<PipelineContext> = {}): PipelineContext {
-  const context: PipelineContext = {
+  return {
     documentPort: makeMockDocumentPort(),
     analysisPort: makeMockAnalysisPort(),
     emitter: new PipelineEventEmitter(),
@@ -85,11 +101,9 @@ function makePipelineContext(overrides: Partial<PipelineContext> = {}): Pipeline
     maxChunkSize: 100_000,
     chunks: [makeChunk()],
     isSelection: false,
-    documentUuid: "11111111-1111-4111-8111-111111111111",
+    documentUuid: DOCUMENT_UUID,
     ...overrides,
   };
-
-  return context;
 }
 
 describe("AnalyzeChunksHandler", () => {
@@ -101,71 +115,71 @@ describe("AnalyzeChunksHandler", () => {
     next = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   });
 
-  it("submits and polls each chunk, then collects all suggestions", async () => {
+  it("starts one analysis for every chunk, polls it, then collects suggestions in chunk order", async () => {
     const chunks = [
       makeChunk({ index: 0, total: 2, text: "Chunk uno." }),
       makeChunk({ index: 1, total: 2, text: "Chunk dos." }),
     ];
     const analysisPort = makeMockAnalysisPort();
-    (analysisPort.submitChunkAnalysis as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ chunkIndex: 0, runId: "run-0" })
-      .mockResolvedValueOnce({ chunkIndex: 1, runId: "run-1" });
-    (analysisPort.pollChunkAnalysis as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(
-        makePollResult({
-          chunkIndex: 0,
-          runId: "run-0",
-          suggestions: [makeSuggestion({ id: "s-0" })],
-        })
-      )
-      .mockResolvedValueOnce(
-        makePollResult({
-          chunkIndex: 1,
-          runId: "run-1",
-          suggestions: [makeSuggestion({ id: "s-1" })],
-        })
-      );
+    vi.mocked(analysisPort.getAnalysis).mockResolvedValueOnce(
+      makeSnapshot({
+        chunks: [
+          makeChunkResult({ chunkIndex: 0, suggestions: [makeSuggestion({ id: "s-0" })] }),
+          makeChunkResult({ chunkIndex: 1, suggestions: [makeSuggestion({ id: "s-1" })] }),
+        ],
+      })
+    );
 
     const ctx = makePipelineContext({ chunks, analysisPort });
     await handler.handle(ctx, next);
 
-    expect(analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(1, chunks[0], {
-      documentUuid: "11111111-1111-4111-8111-111111111111",
-      genero: "general",
+    expect(analysisPort.startAnalysis).toHaveBeenCalledOnce();
+    expect(analysisPort.startAnalysis).toHaveBeenCalledWith({
+      documentUuid: DOCUMENT_UUID,
+      genre: "general",
+      chunks,
     });
-    expect(analysisPort.submitChunkAnalysis).toHaveBeenNthCalledWith(2, chunks[1], {
-      documentUuid: "11111111-1111-4111-8111-111111111111",
-      genero: "general",
-    });
-    expect(analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(0, "run-0");
-    expect(analysisPort.pollChunkAnalysis).toHaveBeenCalledWith(1, "run-1");
+    expect(analysisPort.getAnalysis).toHaveBeenCalledWith("a1");
     expect(ctx.rawSuggestions?.map((suggestion) => suggestion.id)).toEqual(["s-0", "s-1"]);
     expect(ctx.chunkErrors).toEqual([]);
+    expect(ctx.activeAnalysisId).toBeUndefined();
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it("keeps successful suggestions when another chunk fails", async () => {
+  it("keeps polling while the analysis is running", async () => {
     const analysisPort = makeMockAnalysisPort();
-    (analysisPort.submitChunkAnalysis as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ chunkIndex: 0, runId: "run-0" })
-      .mockResolvedValueOnce({ chunkIndex: 1, runId: "run-1" });
-    (analysisPort.pollChunkAnalysis as ReturnType<typeof vi.fn>)
+    vi.mocked(analysisPort.getAnalysis)
       .mockResolvedValueOnce(
-        makePollResult({
-          chunkIndex: 0,
-          runId: "run-0",
-          suggestions: [makeSuggestion({ id: "ok" })],
+        makeSnapshot({
+          status: "running",
+          chunks: [makeChunkResult({ status: "running", suggestions: [] })],
         })
       )
-      .mockResolvedValueOnce(
-        makePollResult({
-          chunkIndex: 1,
-          runId: "run-1",
-          status: "failed",
-          suggestions: [],
-          error: "Backend timeout",
-        })
-      );
+      .mockResolvedValueOnce(makeSnapshot());
+
+    const ctx = makePipelineContext({ analysisPort });
+    await handler.handle(ctx, next);
+
+    expect(analysisPort.getAnalysis).toHaveBeenCalledTimes(2);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("keeps successful suggestions of a partial analysis and reports each failed chunk's real cause", async () => {
+    const analysisPort = makeMockAnalysisPort();
+    vi.mocked(analysisPort.getAnalysis).mockResolvedValueOnce(
+      makeSnapshot({
+        status: "partial",
+        chunks: [
+          makeChunkResult({ chunkIndex: 0, suggestions: [makeSuggestion({ id: "ok" })] }),
+          makeChunkResult({
+            chunkIndex: 1,
+            status: "failed",
+            suggestions: [],
+            error: "The model request failed: 400 MissingSessionID",
+          }),
+        ],
+      })
+    );
 
     const ctx = makePipelineContext({
       analysisPort,
@@ -174,54 +188,45 @@ describe("AnalyzeChunksHandler", () => {
     await handler.handle(ctx, next);
 
     expect(ctx.rawSuggestions?.map((suggestion) => suggestion.id)).toEqual(["ok"]);
-    expect(ctx.chunkErrors).toEqual(["Backend timeout"]);
+    expect(ctx.chunkErrors).toEqual([
+      "Fragmento 2: The model request failed: 400 MissingSessionID",
+    ]);
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it("aborts with a chunk-error message when no suggestions survive analysis", async () => {
+  it("aborts with the backend's real cause when the analysis fails", async () => {
     const analysisPort = makeMockAnalysisPort();
-    (analysisPort.submitChunkAnalysis as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ chunkIndex: 0, runId: "run-0" })
-      .mockResolvedValueOnce({ chunkIndex: 1, runId: "run-1" });
-    (analysisPort.pollChunkAnalysis as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(
-        makePollResult({
-          chunkIndex: 0,
-          runId: "run-0",
-          status: "failed",
-          suggestions: [],
-          error: "fail 1",
-        })
-      )
-      .mockResolvedValueOnce(
-        makePollResult({
-          chunkIndex: 1,
-          runId: "run-1",
-          status: "failed",
-          suggestions: [],
-          error: "fail 2",
-        })
-      );
+    vi.mocked(analysisPort.getAnalysis).mockResolvedValueOnce(
+      makeSnapshot({
+        status: "failed",
+        chunks: [
+          makeChunkResult({
+            status: "failed",
+            suggestions: [],
+            error: "The model request failed: 400 MissingSessionID",
+          }),
+        ],
+      })
+    );
 
     const emitter = new PipelineEventEmitter();
     const emitAbort = vi.spyOn(emitter, "emitAbort");
-    const ctx = makePipelineContext({
-      analysisPort,
-      emitter,
-      chunks: [makeChunk({ index: 0, total: 2 }), makeChunk({ index: 1, total: 2 })],
-    });
+    const ctx = makePipelineContext({ analysisPort, emitter });
     await handler.handle(ctx, next);
 
     expect(ctx.aborted).toBe(true);
-    expect(ctx.abortReason).toContain("2 fragmento(s)");
+    expect(ctx.abortReason).toBe(
+      "El análisis falló: The model request failed: 400 MissingSessionID"
+    );
+    expect(ctx.chunkErrors).toEqual(["The model request failed: 400 MissingSessionID"]);
     expect(emitAbort).toHaveBeenCalledWith(ctx.abortReason);
     expect(next).not.toHaveBeenCalled();
   });
 
   it("aborts with a no-suggestions message when analysis succeeds but finds nothing", async () => {
     const analysisPort = makeMockAnalysisPort();
-    (analysisPort.pollChunkAnalysis as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makePollResult({ suggestions: [] })
+    vi.mocked(analysisPort.getAnalysis).mockResolvedValueOnce(
+      makeSnapshot({ chunks: [makeChunkResult({ suggestions: [] })] })
     );
     const ctx = makePipelineContext({ analysisPort });
     await handler.handle(ctx, next);
@@ -232,66 +237,87 @@ describe("AnalyzeChunksHandler", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("emits queue and poll progress for each chunk", async () => {
-    const emitter = new PipelineEventEmitter();
-    const emitProgress = vi.spyOn(emitter, "emitProgress");
-    const ctx = makePipelineContext({
-      emitter,
-      chunks: [makeChunk({ index: 0, total: 1 })],
-    });
+  it("aborts with the backend's explanation when the analysis cannot start", async () => {
+    const analysisPort = makeMockAnalysisPort();
+    vi.mocked(analysisPort.startAnalysis).mockRejectedValueOnce(
+      new AnalysisRequestError("No model is chosen in the hub.", 409)
+    );
+    const ctx = makePipelineContext({ analysisPort });
     await handler.handle(ctx, next);
 
-    expect(emitProgress).toHaveBeenCalledWith(0, 2, "Encolando fragmento 1 de 1...");
-    expect(emitProgress).toHaveBeenCalledWith(
-      1,
-      2,
-      "Consultando resultado del fragmento 1 de 1..."
-    );
+    expect(ctx.aborted).toBe(true);
+    expect(ctx.abortReason).toBe("No se pudo iniciar el análisis: No model is chosen in the hub.");
+    expect(ctx.chunkErrors).toEqual(["No model is chosen in the hub."]);
+    expect(analysisPort.getAnalysis).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 
-  it("preserves retryable runs when polling fails locally without backend terminal status", async () => {
+  it("keeps the analysis for a retry query when polling fails locally", async () => {
     const analysisPort = makeMockAnalysisPort();
-    (analysisPort.submitChunkAnalysis as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      chunkIndex: 0,
-      runId: "run-0",
-    });
-    (analysisPort.pollChunkAnalysis as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      makePollResult({
-        status: "retryable-failure",
-        origin: "frontend-retryable",
-        suggestions: [],
-        error: "Chunk 1: poll timeout",
-      })
+    vi.mocked(analysisPort.getAnalysis).mockRejectedValueOnce(
+      new AnalysisRequestError("Failed to fetch")
     );
 
     const ctx = makePipelineContext({ analysisPort });
     await handler.handle(ctx, next);
 
-    expect(ctx.retryableRunReferences).toEqual([{ chunkIndex: 0, runId: "run-0" }]);
-    expect(ctx.activeRunReferences).toEqual([]);
-    expect(ctx.chunkErrors).toEqual(["Chunk 1: poll timeout"]);
-    expect(next).not.toHaveBeenCalled();
+    expect(ctx.retryableAnalysisId).toBe("a1");
+    expect(ctx.activeAnalysisId).toBeUndefined();
     expect(ctx.aborted).toBe(true);
+    expect(ctx.abortReason).toBe(
+      "La consulta del análisis falló localmente: Failed to fetch. Reintentá la consulta."
+    );
+    expect(next).not.toHaveBeenCalled();
   });
 
-  it("publishes active run references before polling progress snapshots are observed", async () => {
+  it("stops polling when the user cancels", async () => {
     const analysisPort = makeMockAnalysisPort();
+    const ctx = makePipelineContext({ analysisPort, shouldCancelAnalysis: () => true });
+
+    await handler.handle(ctx, next);
+
+    expect(analysisPort.getAnalysis).not.toHaveBeenCalled();
+    expect(ctx.aborted).toBe(true);
+    expect(ctx.abortReason).toBe("Análisis cancelado por el usuario.");
+    expect(ctx.activeAnalysisId).toBeUndefined();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("aborts as canceled when the backend reports the analysis canceled", async () => {
+    const analysisPort = makeMockAnalysisPort();
+    vi.mocked(analysisPort.getAnalysis).mockResolvedValueOnce(
+      makeSnapshot({
+        status: "canceled",
+        chunks: [makeChunkResult({ status: "canceled", suggestions: [] })],
+      })
+    );
+    const ctx = makePipelineContext({ analysisPort });
+
+    await handler.handle(ctx, next);
+
+    expect(ctx.aborted).toBe(true);
+    expect(ctx.abortReason).toBe("Análisis cancelado por el usuario.");
+    expect(ctx.chunkErrors).toEqual([]);
+  });
+
+  it("publishes the active analysis before polling progress is observed, with finished-chunk counts", async () => {
     const emitter = new PipelineEventEmitter();
-    const pollingSnapshots: Array<PipelineContext["activeRunReferences"]> = [];
+    const observed: Array<[number, number, string, string | undefined]> = [];
+    const ctx = makePipelineContext({ emitter });
     emitter.subscribe({
       onPhaseStart: vi.fn(),
       onAbort: vi.fn(),
       onComplete: vi.fn(),
-      onProgress: (_current, _total, message) => {
-        if (message.includes("Consultando resultado")) {
-          pollingSnapshots.push(ctx.activeRunReferences);
-        }
+      onProgress: (current, total, message) => {
+        observed.push([current, total, message, ctx.activeAnalysisId]);
       },
     });
-    const ctx = makePipelineContext({ analysisPort, emitter });
 
     await handler.handle(ctx, next);
 
-    expect(pollingSnapshots).toEqual([[{ chunkIndex: 0, runId: "run-0" }]]);
+    expect(observed).toEqual([
+      [0, 1, "Analizando 1 fragmento(s)...", "a1"],
+      [1, 1, "Fragmentos terminados: 1 de 1.", "a1"],
+    ]);
   });
 });

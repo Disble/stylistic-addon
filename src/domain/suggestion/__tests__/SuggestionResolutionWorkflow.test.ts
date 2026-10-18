@@ -70,16 +70,11 @@ describe("SuggestionResolutionWorkflow", () => {
     const result = await workflow.acceptSuggestion(suggestion, "Muy buen cambio");
 
     expect(result.feedbackStatus).toBe("sent");
-    expect(feedbackPort.sendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        documentUuid,
-        context: suggestion.context,
-        anchor: suggestion.anchor,
-        action: "accept",
-        suggestionType: suggestion.type,
-        comment: "Muy buen cambio",
-      })
-    );
+    expect(feedbackPort.sendFeedback).toHaveBeenCalledWith({
+      suggestionId: suggestion.id,
+      action: "accept",
+      comment: "Muy buen cambio",
+    });
   });
 
   it("still dispatches feedback for accepted terminal results", async () => {
@@ -105,15 +100,10 @@ describe("SuggestionResolutionWorkflow", () => {
     const result = await workflow.rejectSuggestion(suggestion);
 
     expect(result.feedbackStatus).toBe("sent");
-    expect(feedbackPort.sendFeedback).toHaveBeenCalledWith(
-      expect.objectContaining({
-        documentUuid,
-        context: suggestion.context,
-        anchor: suggestion.anchor,
-        action: "reject",
-        suggestionType: suggestion.type,
-      })
-    );
+    expect(feedbackPort.sendFeedback).toHaveBeenCalledWith({
+      suggestionId: suggestion.id,
+      action: "reject",
+    });
   });
 
   it("skips feedback for cc-not-found terminal results", async () => {
@@ -227,7 +217,7 @@ describe("SuggestionResolutionWorkflow", () => {
     expect(result.feedbackStatus).toBe("failed");
   });
 
-  it("returns failed feedback status when document identity lookup fails", async () => {
+  it("sends feedback by suggestion id without reading the document identity", async () => {
     vi.mocked(documentPort.acceptSuggestion).mockResolvedValue(
       makeActionResult({ status: "accepted" })
     );
@@ -235,7 +225,8 @@ describe("SuggestionResolutionWorkflow", () => {
 
     const result = await workflow.acceptSuggestion(makeSuggestion());
 
-    expect(result.feedbackStatus).toBe("failed");
-    expect(feedbackPort.sendFeedback).not.toHaveBeenCalled();
+    expect(result.feedbackStatus).toBe("sent");
+    expect(documentPort.getDocumentUuid).not.toHaveBeenCalled();
+    expect(feedbackPort.sendFeedback).toHaveBeenCalledOnce();
   });
 });

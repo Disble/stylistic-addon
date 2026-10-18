@@ -20,7 +20,7 @@ type CleanupComment = {
 };
 
 type CleanupContentControl = {
-  tag: string;
+  tag: string | null;
   getRange: ReturnType<typeof vi.fn>;
 };
 
@@ -41,7 +41,7 @@ function makeComment(authorName: string, range?: CleanupRange, content?: string)
 }
 
 /** Creates a fake active content control with a stable range. */
-function makeCC(tag: string, range?: CleanupRange): CleanupContentControl {
+function makeCC(tag: string | null, range?: CleanupRange): CleanupContentControl {
   const actualRange =
     range ??
     ({
@@ -196,6 +196,25 @@ describe("CommentCleanup", () => {
 
     expect(keptComment.delete).not.toHaveBeenCalled();
     expect(orphanComment.delete).toHaveBeenCalledOnce();
+  });
+
+  it("ignores template content controls whose tag is null", async () => {
+    const stylisticComment = makeComment("Usuario de prueba", undefined, "[Claridad]\nMas claro");
+
+    installWordCleanupContext({
+      comments: [stylisticComment],
+      contentControls: [makeCC(null)],
+    });
+
+    await expect(getCleanupPreview()).resolves.toEqual({
+      deletable: 1,
+      kept: 0,
+    });
+    await expect(cleanupResolvedComments()).resolves.toEqual({
+      deleted: 1,
+      kept: 0,
+    });
+    expect(stylisticComment.delete).toHaveBeenCalledOnce();
   });
 
   it("treats Stylistic-shaped comments by content, not by author name", async () => {

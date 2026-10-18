@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PROFILES, DOCUMENT_UUID_SETTINGS_KEY, FEEDBACK_WORKFLOW_ID } from "../config";
+import { DEFAULT_PROFILES, DOCUMENT_UUID_SETTINGS_KEY } from "../config";
 
 describe("DEFAULT_PROFILES", () => {
   it("contains all expected profile ids", () => {
@@ -22,12 +22,6 @@ describe("DEFAULT_PROFILES", () => {
 
   it("narrativa-literaria is the first profile (default)", () => {
     expect(DEFAULT_PROFILES[0].id).toBe("narrativa-literaria");
-  });
-});
-
-describe("FEEDBACK_WORKFLOW_ID", () => {
-  it('equals "feedback-workflow"', () => {
-    expect(FEEDBACK_WORKFLOW_ID).toBe("feedback-workflow");
   });
 });
 

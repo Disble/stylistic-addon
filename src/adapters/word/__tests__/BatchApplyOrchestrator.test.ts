@@ -45,6 +45,42 @@ describe("BatchApplyOrchestrator", () => {
     expect(hoistedCommandMocks.constructor).toHaveBeenNthCalledWith(3, early);
   });
 
+  it("applies hintless suggestions from the document's last context to its first", async () => {
+    const documentText =
+      "Tardó mucho en darse cuenta de que el café, y el sabor amargo, no le gustaban.\rFin.";
+    const orchestrator = makeOrchestrator({
+      readDocumentText: vi.fn().mockResolvedValue(documentText),
+    });
+    const spanning = makeHintlessSuggestion(
+      "s-spanning",
+      "en darse cuenta",
+      "Tardó mucho en darse cuenta de que el café, y el sabor amargo, no le gustaban."
+    );
+    const inner = makeHintlessSuggestion("s-inner", ", y el sabor", "el café, y el sabor amargo");
+    const last = makeHintlessSuggestion("s-last", "Fin", "Fin.");
+    const missing = makeHintlessSuggestion("s-missing", "nada", "no está en el documento");
+
+    await orchestrator.run([spanning, last, inner, missing]);
+
+    expect(hoistedCommandMocks.constructor.mock.calls.map(([suggestion]) => suggestion.id)).toEqual(
+      ["s-last", "s-spanning", "s-inner", "s-missing"]
+    );
+  });
+
+  it("applies hintless suggestions in reverse order when the document text is unavailable", async () => {
+    const orchestrator = makeOrchestrator({
+      readDocumentText: vi.fn().mockRejectedValue(new Error("Word unavailable")),
+    });
+    const first = makeHintlessSuggestion("s-first", "a", "a b");
+    const second = makeHintlessSuggestion("s-second", "c", "c d");
+
+    await orchestrator.run([first, second]);
+
+    expect(hoistedCommandMocks.constructor.mock.calls.map(([suggestion]) => suggestion.id)).toEqual(
+      ["s-second", "s-first"]
+    );
+  });
+
   it("marks overlapping comparable hints for local reread and rebases safe later hints", async () => {
     const orchestrator = makeOrchestrator();
     const applied = makeLegacySuggestion("s-applied");
@@ -245,6 +281,7 @@ function makeOrchestrator(
       suggestion: Suggestion,
       patch: NonNullable<CommandResult["mutationPatch"]>
     ) => Promise<Suggestion["positionHint"] | undefined>;
+    readDocumentText: () => Promise<string>;
   }> = {}
 ): BatchApplyOrchestrator {
   return new BatchApplyOrchestrator({
@@ -294,4 +331,8 @@ function makeLegacySuggestion(id: string): Suggestion {
     severity: "medium",
     type: "track-change",
   };
+}
+
+function makeHintlessSuggestion(id: string, anchor: string, context: string): Suggestion {
+  return { ...makeLegacySuggestion(id), anchor, context };
 }

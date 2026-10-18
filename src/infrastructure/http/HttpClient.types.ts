@@ -6,7 +6,7 @@
  * or adding interceptors should require only changes inside `HttpClient.ts`.
  */
 
-/** Supplies the current Better Auth bearer token for authenticated HTTP calls. */
+/** Supplies the bearer token (the Stylistic Hub token) for authenticated HTTP calls. */
 export type HttpAuthTokenProvider = () => string | undefined;
 
 /** Supported HTTP methods used by the project's REST adapters. */

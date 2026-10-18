@@ -1,230 +1,147 @@
-# API Contract — Backend Requirements
+# API Contract — Stylistic Hub API v1
 
-This document specifies what the Stylistic frontend (Word add-in) expects from the Mastra backend. The backend team must implement a Mastra workflow that conforms to this contract.
+This document records what the Stylistic Word add-in uses from Stylistic Hub
+API v1. The hub owns the contract: its source of truth is the hub's
+`docs/api.md` and the OpenAPI document it serves at `/api/v1/openapi.json`.
+This page only describes the add-in's side of it.
 
-## Technology
+## Connection
 
-- **Framework:** [Mastra](https://mastra.ai/) (TypeScript AI framework)
-- **Communication:** The frontend uses `@mastra/client-js` v1.7.1 to call the workflow
-- **Protocol:** Mastra's built-in HTTP API for workflows, plus Better Auth routes for login/session management
-- **Authentication:** Better Auth bearer session token sent as `Authorization: Bearer <token>` on Mastra workflow calls
+- **Base URL:** the task pane's own origin plus `/api/v1` (the hub serves the
+  task pane, for example `https://localhost:3000/api/v1`).
+- **Authentication:** there are no accounts. The hub injects its API token into
+  the task pane as `<meta name="stylistic-hub-token" content="...">`; the add-in
+  sends it as `Authorization: Bearer <token>` on every request
+  (`src/infrastructure/hub/HubConnection.helpers.ts`).
+- **No token:** when the task pane was not served by the hub, analysis refuses to
+  start and tells the user to open the pane from the hub. There is no fallback
+  backend.
+- **Errors:** every refusal is `application/problem+json`
+  `{ type, title, status, detail, code }`. The add-in shows `detail` (falling
+  back to `title`) as the cause (`src/adapters/hub/HubProblemParser.helpers.ts`).
 
-## Workflow Definitions
+| Code                | Status   | Meaning for the add-in                       |
+| ------------------- | -------- | -------------------------------------------- |
+| `unauthorized`      | 401      | Missing or wrong hub token.                  |
+| `validation_failed` | 400, 415 | The request body broke the contract.         |
+| `not_found`         | 404      | Unknown analysis, suggestion or feedback id. |
+| `no_model`          | 409      | The hub has no model configured to analyze.  |
+| `payload_too_large` | 413      | The request exceeded the hub's size limit.   |
+| `internal_error`    | 500      | The hub failed; `detail` carries the cause.  |
 
-### 1. `stylistic-workflow`
+## Endpoints used
 
-```
-stylistic-workflow
-```
+| Method and path                         | Adapter                               | Purpose                                    |
+| --------------------------------------- | ------------------------------------- | ------------------------------------------ |
+| `GET /status`                           | `HubAnalysisAdapter.getReadiness`     | Readiness check before every analysis.     |
+| `POST /documents/{documentId}/analyses` | `HubAnalysisAdapter.startAnalysis`    | Starts one analysis for all chunks (202).  |
+| `GET /analyses/{analysisId}`            | `HubAnalysisAdapter.getAnalysis`      | Polls the analysis until it stops running. |
+| `POST /analyses/{analysisId}/cancel`    | `HubAnalysisAdapter.cancelAnalysis`   | Cancels the whole analysis.                |
+| `POST /feedback`                        | `HubFeedbackAdapter.sendFeedback`     | Fire-and-forget accept/reject feedback.    |
+| `GET /preferences`, `PUT /preferences`  | `HubUserCorrectionPreferencesAdapter` | Standing correction instructions.          |
 
-The frontend calls this workflow via:
+## Analysis
 
-```typescript
-const workflow = client.getWorkflow("stylistic-workflow");
-const run = await workflow.createRun();
-await run.start({ inputData: { ... } });
-const { runId } = run;
-const result = await workflow.runById(runId, {
-  fields: ["result", "error"],
-  withNestedWorkflows: false,
-});
-```
+### Readiness
 
-In `@mastra/client-js` v1.7.1, async submission is implemented as `createRun()` + `run.start()` + later `workflow.runById(runId)`. The frontend submits each chunk, stores `run.runId`, and polls `workflow.runById(runId)` until the run reaches a supported terminal state.
+`GET /status` returns `{ version, analysis: { ready, reason?, model? } }`. When
+`analysis.ready` is false, the pipeline aborts before reading the document and
+shows `analysis.reason` with a full-retry action. An unreachable hub counts as
+not ready, with the transport error as the reason.
 
-Important: in this SDK version, `status` is always included in the response metadata and must NOT be requested inside `fields`. The frontend only requests explicit payload fields such as `result` and `error`; adding `status` to `fields` causes a deterministic HTTP 400.
-
-### Mastra Server
-
-- **Default URL:** `http://localhost:4111` (Mastra's default port)
-- **CORS:** Must allow requests from `https://localhost:3000` (add-in dev server)
-
-### Authentication Contract
-
-Before calling the workflow, the taskpane must have a valid Better Auth session.
-The backend is expected to expose:
-
-| Route                  | Purpose                                                     |
-| ---------------------- | ----------------------------------------------------------- |
-| `/auth/*`              | Better Auth sign-in, callback, session, and logout routes.  |
-| `/auth-complete`       | Backend OAuth completion bridge used after Google callback. |
-| `/auth-bridge-session` | One-time code exchange used by the Office Dialog page.      |
-
-The add-in stores the Better Auth session token with `OfficeRuntime.storage` and
-creates Mastra clients with the current bearer token. If the backend returns 401
-for a protected workflow call, the taskpane should clear the local session and
-require the user to sign in again.
-
-The add-in also stores the user-selected analysis profile in
-`OfficeRuntime.storage`, but that preference remains frontend-owned state. The
-selection is validated against the frontend's supported `AnalysisProfileId`
-whitelist during bootstrap, then forwarded as `genero` in each workflow call.
-The backend should trust the incoming `genero` value; it does not need a
-separate preference endpoint for profile persistence.
-
-The add-in must not store Google provider access/refresh tokens. Provider tokens
-belong to the backend/auth provider boundary; the frontend only uses the Better
-Auth session token.
-
-## Input Schema
-
-The analysis workflow must accept this `inputData`:
-
-```typescript
-interface WorkflowInput {
-  /** Text to analyze (up to ~100K characters). */
-  text: string;
-
-  /** Stable document UUID generated and persisted by the add-in. */
-  documentUuid: string;
-
-  /** Editorial genre for analysis style. */
-  genero?: "narrativa-literaria" | "ensayo-academico" | "periodismo-cultural" | "general";
-
-  /** Optional document title shown/stored by the backend. */
-  title?: string;
-
-  /** Optional document-level processing preferences. */
-  processingConfig?: Record<string, unknown>;
-}
-```
-
-### Example Input
+### Start
 
 ```json
+POST /documents/11111111-1111-4111-8111-111111111111/analyses
 {
-  "text": "Básicamente, es completamente necesario utilizar este periodo de tiempo con el objetivo de realizar la tarea.",
-  "documentUuid": "11111111-1111-4111-8111-111111111111",
-  "genero": "general",
-  "title": "Draft chapter 03",
-  "processingConfig": {
-    "chunking": {
-      "mode": "default"
-    }
-  },
-}
-```
-
-### Notes on Input Fields
-
-- **`text`** — The frontend chunks large documents at paragraph boundaries and sends each chunk as a separate workflow execution. The backend receives plain text and should not assume anything about document structure.
-- **`documentUuid`** — Stable add-in-generated UUID that identifies the Word document across analysis and feedback flows. The add-in persists it in `Office.context.document.settings` and reuses it across runs.
-- **`genero`** — Optional document-level editorial style. Supported values: `narrativa-literaria`, `ensayo-academico`, `periodismo-cultural`, `general`. Backend default remains `general`.
-- **`title`** — Optional document title metadata sent by the add-in.
-- **`processingConfig`** — Optional document-level processing preferences that the backend stores with the document context.
-
-### Contract Rules
-
-- Normal analysis must enter through `stylistic-workflow`.
-- The add-in must **not** call `POST /documents/resolve` before analysis. The backend resolves document context and auto-upserts persisted document data inside the workflow when `documentUuid` is present.
-- The frontend sends `documentUuid` on every analysis request; `autorSlug` is no longer part of the add-in contract.
-- The contract is document-based, not author-slug-based.
-
-## Output Format
-
-When polling returns `status: "success"`, `result.result` must conform to:
-
-```typescript
-interface WorkflowOutput {
-  /** Array of editorial suggestions for the analyzed text. */
-  suggestions: Array<{
-    /** Paragraph-level context used to locate the suggestion in the document. */
-    context: string;
-
-    /** Exact substring within `context` targeted by the suggestion. */
-    anchor: string;
-
-    /**
-     * Transport text for "track-change" suggestions.
-     *
-     * Required for "track-change" and optional for "comment-only".
-     * For track-change:
-     * - plain non-empty text means replace anchor with that text,
-     * - empty string means delete-only,
-     * - exact markdown `*anchor*` / `**anchor**` means italic/bold formatting.
-     */
-    suggestedText?: string;
-
-    /** Human-readable justification shown to the user. */
-    justification: string;
-
-    /** Category label (e.g., "Redundancia", "Muletilla", "Elección de palabra"). */
-    category: string;
-
-    /** How critical the suggestion is. */
-    severity: "high" | "medium" | "low";
-
-    /** Suggestion type. Defaults to "track-change" if not specified. */
-    type?: "track-change" | "comment-only";
-  }>;
-
-  /** Optional warnings from the backend (e.g., "text too short for meaningful analysis"). */
-  warnings?: string[];
-}
-```
-
-### Example Output
-
-```json
-{
-  "suggestions": [
-    {
-      "context": "Básicamente, es completamente necesario utilizar este periodo de tiempo.",
-      "anchor": "Básicamente, ",
-      "suggestedText": "",
-      "justification": "Muletilla que debilita la afirmación.",
-      "category": "Muletilla",
-      "severity": "medium",
-      "type": "track-change"
-    },
-    {
-      "context": "Era completamente necesario terminarlo hoy.",
-      "anchor": "completamente necesario",
-      "suggestedText": "necesario",
-      "justification": "\"Necesario\" ya implica completitud.",
-      "category": "Redundancia",
-      "severity": "high",
-      "type": "track-change"
-    },
-    {
-      "context": "El periodo de tiempo era necesario.",
-      "anchor": "periodo de tiempo",
-      "suggestedText": "periodo",
-      "justification": "\"Periodo\" ya denota tiempo.",
-      "category": "Redundancia",
-      "severity": "high",
-      "type": "track-change"
-    },
-    {
-      "context": "Ese era el inicio del post mortem reportado por PRIME.",
-      "anchor": "post mortem",
-      "suggestedText": "*post mortem*",
-      "justification": "Locución latina que debe ir en cursiva.",
-      "category": "Formato tipográfico",
-      "severity": "medium",
-      "type": "track-change"
-    },
-    {
-      "context": "El informe fue marcado por PRIME.",
-      "anchor": "PRIME",
-      "suggestedText": "**PRIME**",
-      "justification": "Sigla editorial que debe destacarse en negrita.",
-      "category": "Formato tipográfico",
-      "severity": "low",
-      "type": "track-change"
-    },
-    {
-      "context": "Utilizar este periodo de tiempo con el objetivo de realizar la tarea.",
-      "anchor": "con el objetivo de",
-      "suggestedText": "para",
-      "justification": "\"Para\" es más directo.",
-      "category": "Elección de palabra",
-      "severity": "medium",
-      "type": "track-change"
-    }
+  "genre": "general",
+  "chunks": [
+    { "id": "0", "text": "Básicamente, es completamente necesario..." },
+    { "id": "1", "text": "Segundo fragmento..." }
   ]
 }
 ```
+
+- `documentId` is the stable document UUID the add-in persists in
+  `Office.context.document.settings` (`stylistic.document.uuid.v1`).
+- `genre` is the selected analysis profile: `narrativa-literaria`,
+  `ensayo-academico`, `periodismo-cultural` or `general`.
+- Chunk ids are the add-in's chunk indexes as strings (1–64 characters), so the
+  hub's per-chunk results map back to the add-in's chunks. The add-in splits the
+  document at paragraph boundaries into chunks of up to 100,000 characters; the
+  hub may split them further internally.
+
+### Poll and finish
+
+`GET /analyses/{analysisId}` returns:
+
+```typescript
+interface HubAnalysis {
+  id: string;
+  documentId: string;
+  status: "running" | "completed" | "partial" | "failed" | "canceled";
+  chunks: Array<{
+    id: string;
+    status: "queued" | "running" | "completed" | "failed" | "canceled";
+    suggestions: HubSuggestion[];
+    dropped: number; // invalid or blank suggestions the hub discarded
+    error?: string; // provider error for a failed chunk
+  }>;
+  profile: unknown;
+  createdAt: string;
+  finishedAt?: string;
+}
+```
+
+The add-in polls every second while `status` is `running`, then:
+
+- applies every suggestion from completed chunks, so a `partial` analysis still
+  applies what succeeded;
+- shows each failed chunk's `error` as the cause (prefixed with its fragment
+  number when there is more than one chunk);
+- treats `canceled` as a cancellation by the user;
+- shows "No se encontraron sugerencias editoriales." when nothing failed and no
+  suggestion came back.
+
+A poll that fails on the add-in side keeps the analysis id and offers "retry the
+query", which reads the same analysis again instead of starting a new one.
+Analyses persist across hub restarts.
+
+### Retries
+
+`RetryAnalysisDecorator` retries `startAnalysis` and `getAnalysis` up to 3 times
+with exponential backoff (1 s base) on transport errors, 5xx, 408 and 429. Any
+other 4xx is a deterministic refusal and surfaces at once. Retrying
+`startAnalysis` after a transport failure can create a duplicate analysis on the
+hub if the first request did arrive; this is accepted.
+
+## Suggestion Format
+
+```typescript
+interface HubSuggestion {
+  /** 16 lowercase hex characters, issued by the hub, unique for good. */
+  id: string;
+  /** Paragraph-level context used to locate the suggestion in the document. */
+  context: string;
+  /** Exact substring within `context` targeted by the suggestion. */
+  anchor: string;
+  /**
+   * Required for "track-change" and ignored for "comment-only":
+   * - plain non-empty text replaces the anchor,
+   * - an empty string deletes the anchor,
+   * - exact markdown `*anchor*` / `**anchor**` applies italic / bold.
+   */
+  suggestedText?: string;
+  justification: string;
+  /** Category label, e.g. "Redundancia", "Muletilla". */
+  category: string;
+  severity: "high" | "medium" | "low";
+  type: "track-change" | "comment-only";
+}
+```
+
+The suggestion id goes into the Word content-control tag as
+`stylistic:<type>:<id>` and is the key for feedback.
 
 ### Severity Guidelines
 
@@ -268,9 +185,9 @@ localization safe.
 - Return literal asterisks when the desired result is typography. Markdown is a
   transport encoding for formatting, not visible document text.
 
-## Genre (genero) Behavior
+## Genre Behavior
 
-The `genero` field tells the workflow what analysis style to apply:
+The `genre` field tells the hub which analysis style to apply:
 
 | Genre                 | Description                   |
 | --------------------- | ----------------------------- |
@@ -279,71 +196,15 @@ The `genero` field tells the workflow what analysis style to apply:
 | `ensayo-academico`    | Academic essay style          |
 | `periodismo-cultural` | Cultural journalism style     |
 
-## Error Handling
+## Feedback
 
-The frontend handles workflow failures gracefully during explicit submit/poll:
+`POST /feedback` with `{ suggestionId, action: "accept" | "reject", comment? }`
+(`comment` up to 4,000 characters) returns 202. The hub already knows the
+suggestion by its id. The add-in never waits for or shows the outcome: every
+failure is logged and swallowed so it cannot block resolving suggestions.
 
-- **Submit without `runId`** — The frontend retries chunk submission up to 3 times.
-- **Submit with `runId`** — The frontend assumes the run was accepted and switches to polling.
-- **Polling `status: "running" | "pending" | "waiting"`** — Not an error; the frontend keeps polling.
-- **Polling `status: "suspended" | "paused"`** — Treated as a failed chunk because the run would require `resume()` and this frontend does not implement resume flows.
-- **Polling `status: "failed" | "tripwire" | "canceled" | "bailed"`** — Treated as a failed chunk.
-- **Polling network errors / thrown errors** — The frontend retries the poll up to 3 times, then marks the chunk as failed.
-- **Empty suggestions array** — Treated as "no issues found" (valid response).
-- **Malformed output** — Treated as a failed chunk (suggestions array missing or not an array).
+## Correction Preferences
 
-The backend does **not** need to implement error responses — Mastra handles HTTP error codes automatically.
-
-## Text Size Expectations
-
-The frontend splits documents into chunks of up to 100,000 characters. The backend should expect:
-
-| Chunk Size     | Words (~)    | Processing Time |
-| -------------- | ------------ | --------------- |
-| < 5K chars     | < 800 words  | < 10s           |
-| 5K–30K chars   | 800–5K words | 10–30s          |
-| 30K–100K chars | 5K–16K words | 30–120s         |
-
-The backend should be able to handle 100K characters in a single workflow execution without timing out. If the backend's AI model has a smaller context window, the workflow should handle internal sub-chunking transparently.
-
----
-
-## 2. `feedback-workflow`
-
-Explicit suggestion feedback is fire-and-forget from the add-in point of view and uses the same document-scoped identity model as analysis.
-
-The frontend calls this workflow via:
-
-```typescript
-const workflow = client.getWorkflow("feedback-workflow");
-const run = await workflow.createRun();
-await run.start({ inputData: payload });
-```
-
-The add-in does not poll for a semantic result today. Feedback must remain non-blocking for UX.
-
-### Input Schema
-
-```typescript
-interface FeedbackWorkflowInput {
-  /** Stable document UUID generated and persisted by the add-in. */
-  documentUuid: string;
-
-  category: string;
-  context: string;
-  anchor: string;
-  suggestedText?: string;
-  justification: string;
-  action: "accept" | "reject";
-  severity: "high" | "medium" | "low";
-  suggestionType: "track-change" | "comment-only";
-  comment?: string;
-}
-```
-
-### Feedback Contract Rules
-
-- The payload key is `documentUuid`.
-- The backend updates persisted `document_style_profile` data using that `documentUuid`.
-- Feedback remains fire-and-forget and must never block the resolution UX.
-- `FeedbackPayload`, `SuggestionResolutionWorkflow`, and `FeedbackAdapter` must stay aligned with this document-based contract.
+`GET /preferences` and `PUT /preferences { correctionInstructions: string | null }`
+both return `{ correctionInstructions, correctionInstructionsMaxLength }`.
+The analysis profile stays add-in state in `OfficeRuntime.storage`.

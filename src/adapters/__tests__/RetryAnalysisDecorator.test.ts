@@ -1,295 +1,144 @@
 import type { IAnalysisPort } from "../../domain/ports";
-import type { TextChunk } from "../../domain/chunking/TextChunk.types";
-import type {
-  ChunkPollResult,
-  ChunkSubmitResult,
-  WorkflowSubmitContext,
-} from "../../domain/mastra/MastraWorkflow.types";
+import type { AnalysisRequest, AnalysisSnapshot } from "../../domain/analysis/Analysis.types";
+import { AnalysisRequestError } from "../../domain/analysis/AnalysisRequestError";
 import { RetryAnalysisDecorator } from "../RetryAnalysisDecorator";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Creates a mock IAnalysisPort with vi.fn() stubs. */
 type MockAnalysisPort = IAnalysisPort & {
-  checkConnection: ReturnType<typeof vi.fn<IAnalysisPort["checkConnection"]>>;
-  submitChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["submitChunkAnalysis"]>>;
-  pollChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["pollChunkAnalysis"]>>;
-  cancelChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["cancelChunkAnalysis"]>>;
-  retryPollChunkAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["retryPollChunkAnalysis"]>>;
+  getReadiness: ReturnType<typeof vi.fn<IAnalysisPort["getReadiness"]>>;
+  startAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["startAnalysis"]>>;
+  getAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["getAnalysis"]>>;
+  cancelAnalysis: ReturnType<typeof vi.fn<IAnalysisPort["cancelAnalysis"]>>;
 };
 
 /** Creates a mock IAnalysisPort with vi.fn() stubs. */
 function createMockPort(): MockAnalysisPort {
   return {
-    checkConnection: vi.fn<IAnalysisPort["checkConnection"]>(),
-    submitChunkAnalysis: vi.fn<IAnalysisPort["submitChunkAnalysis"]>(),
-    pollChunkAnalysis: vi.fn<IAnalysisPort["pollChunkAnalysis"]>(),
-    cancelChunkAnalysis: vi.fn<IAnalysisPort["cancelChunkAnalysis"]>(),
-    retryPollChunkAnalysis: vi.fn<IAnalysisPort["retryPollChunkAnalysis"]>(),
+    getReadiness: vi.fn<IAnalysisPort["getReadiness"]>(),
+    startAnalysis: vi.fn<IAnalysisPort["startAnalysis"]>(),
+    getAnalysis: vi.fn<IAnalysisPort["getAnalysis"]>(),
+    cancelAnalysis: vi.fn<IAnalysisPort["cancelAnalysis"]>(),
   };
 }
 
-/** A reusable TextChunk fixture. */
-function makeChunk(overrides: Partial<TextChunk> = {}): TextChunk {
-  return {
-    text: "Some text to analyze.",
-    index: 0,
-    total: 1,
-    startOffset: 0,
-    ...overrides,
-  };
-}
-
-function submitSuccess(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkSubmitResult {
-  return { chunkIndex, runId };
-}
-
-function submitFailure(chunkIndex = 0, error = "Backend timeout"): ChunkSubmitResult {
-  return { chunkIndex, error };
-}
-
-function pollRunning(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResult {
-  return { chunkIndex, runId, status: "running", origin: "backend", suggestions: [] };
-}
-
-function pollSuccess(chunkIndex = 0, runId = `run-${chunkIndex}`): ChunkPollResult {
-  return { chunkIndex, runId, status: "success", origin: "backend", suggestions: [] };
-}
-
-function makeSubmitContext(overrides: Partial<WorkflowSubmitContext> = {}): WorkflowSubmitContext {
+function makeRequest(): AnalysisRequest {
   return {
     documentUuid: "11111111-1111-4111-8111-111111111111",
-    genero: "general",
-    ...overrides,
+    genre: "general",
+    chunks: [{ text: "Some text to analyze.", index: 0, total: 1, startOffset: 0 }],
   };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+function makeSnapshot(status: AnalysisSnapshot["status"] = "running"): AnalysisSnapshot {
+  return { analysisId: "a1", status, chunks: [] };
+}
 
 describe("RetryAnalysisDecorator", () => {
   const MAX_RETRIES = 3;
   const BASE_DELAY_MS = 1_000;
 
-  let mockPort: ReturnType<typeof createMockPort>;
+  let mockPort: MockAnalysisPort;
   let decorator: RetryAnalysisDecorator;
-
-  let warnSpy: ReturnType<typeof vi.spyOn>;
-  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     mockPort = createMockPort();
     decorator = new RetryAnalysisDecorator(mockPort, MAX_RETRIES, BASE_DELAY_MS);
-    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    warnSpy.mockRestore();
-    errorSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
-  // -----------------------------------------------------------------------
-  // checkConnection — pure passthrough, no retry
-  // -----------------------------------------------------------------------
-  describe("checkConnection", () => {
-    it("delegates to the wrapped port and returns its result", async () => {
-      mockPort.checkConnection.mockResolvedValue(true);
+  it("delegates getReadiness without retrying", async () => {
+    mockPort.getReadiness.mockResolvedValue({ ready: false, reason: "No model" });
 
-      const result = await decorator.checkConnection();
-
-      expect(result).toBe(true);
-      expect(mockPort.checkConnection).toHaveBeenCalledOnce();
-    });
-
-    it("returns false when the wrapped port returns false", async () => {
-      mockPort.checkConnection.mockResolvedValue(false);
-
-      const result = await decorator.checkConnection();
-
-      expect(result).toBe(false);
-    });
-
-    it("does NOT retry if checkConnection rejects", async () => {
-      mockPort.checkConnection.mockRejectedValue(new Error("Network down"));
-
-      await expect(decorator.checkConnection()).rejects.toThrow("Network down");
-      expect(mockPort.checkConnection).toHaveBeenCalledOnce();
-    });
+    await expect(decorator.getReadiness()).resolves.toEqual({ ready: false, reason: "No model" });
+    expect(mockPort.getReadiness).toHaveBeenCalledOnce();
   });
 
-  describe("submitChunkAnalysis", () => {
-    it("returns the first successful submission without retrying", async () => {
-      mockPort.submitChunkAnalysis.mockResolvedValue(submitSuccess(0, "run-123"));
+  it("returns the started analysis on the first successful attempt", async () => {
+    mockPort.startAnalysis.mockResolvedValue(makeSnapshot());
 
-      const result = await decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext());
-
-      expect(result).toEqual({ chunkIndex: 0, runId: "run-123" });
-      expect(mockPort.submitChunkAnalysis).toHaveBeenCalledOnce();
-      expect(warnSpy).not.toHaveBeenCalled();
-    });
-
-    it("retries when the wrapped port returns no runId and later succeeds", async () => {
-      mockPort.submitChunkAnalysis
-        .mockResolvedValueOnce(submitFailure(0, "temporary submit failure"))
-        .mockResolvedValueOnce(submitSuccess(0, "run-456"));
-
-      const promise = decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext());
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
-
-      await expect(promise).resolves.toEqual({
-        chunkIndex: 0,
-        runId: "run-456",
-      });
-      expect(mockPort.submitChunkAnalysis).toHaveBeenCalledTimes(2);
-    });
-
-    it("retries thrown submit errors and returns a normalized failure after exhaustion", async () => {
-      mockPort.submitChunkAnalysis.mockRejectedValue(new Error("socket hang up"));
-
-      const promise = decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext());
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 2);
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 4);
-
-      await expect(promise).resolves.toEqual({
-        chunkIndex: 0,
-        error: "Chunk 1: socket hang up",
-      });
-      expect(mockPort.submitChunkAnalysis).toHaveBeenCalledTimes(MAX_RETRIES + 1);
-      expect(errorSpy).toHaveBeenCalled();
-    });
-
-    it("does not retry deterministic 4xx submit errors", async () => {
-      const error = Object.assign(new Error("HTTP error! status: 400"), {
-        status: 400,
-      });
-      mockPort.submitChunkAnalysis.mockRejectedValue(error);
-
-      await expect(
-        decorator.submitChunkAnalysis(makeChunk(), makeSubmitContext())
-      ).resolves.toEqual({
-        chunkIndex: 0,
-        error: "Chunk 1: HTTP error! status: 400",
-      });
-
-      expect(mockPort.submitChunkAnalysis).toHaveBeenCalledOnce();
-    });
+    await expect(decorator.startAnalysis(makeRequest())).resolves.toEqual(makeSnapshot());
+    expect(mockPort.startAnalysis).toHaveBeenCalledOnce();
+    expect(mockPort.startAnalysis).toHaveBeenCalledWith(makeRequest());
   });
 
-  describe("pollChunkAnalysis", () => {
-    it("returns running without retrying because it is not an error", async () => {
-      mockPort.pollChunkAnalysis.mockResolvedValue(pollRunning(0, "run-123"));
+  it("retries a transport failure with exponential backoff, then succeeds", async () => {
+    mockPort.startAnalysis
+      .mockRejectedValueOnce(new AnalysisRequestError("Failed to fetch"))
+      .mockRejectedValueOnce(new AnalysisRequestError("Service Unavailable", 503))
+      .mockResolvedValueOnce(makeSnapshot());
 
-      const result = await decorator.pollChunkAnalysis(0, "run-123");
+    const promise = decorator.startAnalysis(makeRequest());
+    await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
+    expect(mockPort.startAnalysis).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 2);
 
-      expect(result).toEqual({
-        chunkIndex: 0,
-        runId: "run-123",
-        status: "running",
-        origin: "backend",
-        suggestions: [],
-      });
-      expect(mockPort.pollChunkAnalysis).toHaveBeenCalledOnce();
-    });
+    await expect(promise).resolves.toEqual(makeSnapshot());
+    expect(mockPort.startAnalysis).toHaveBeenCalledTimes(3);
+  });
 
-    it("retries thrown poll errors and eventually returns success", async () => {
-      mockPort.pollChunkAnalysis
-        .mockRejectedValueOnce(new Error("temporary outage"))
-        .mockResolvedValueOnce(pollSuccess(0, "run-123"));
+  it("throws the last error after exhausting retries", async () => {
+    mockPort.startAnalysis.mockRejectedValue(new AnalysisRequestError("Failed to fetch"));
 
-      const promise = decorator.pollChunkAnalysis(0, "run-123");
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
+    const settled = decorator.startAnalysis(makeRequest()).catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
 
-      await expect(promise).resolves.toEqual({
-        chunkIndex: 0,
-        runId: "run-123",
-        status: "success",
-        origin: "backend",
-        suggestions: [],
-      });
-      expect(mockPort.pollChunkAnalysis).toHaveBeenCalledTimes(2);
-    });
+    expect(await settled).toEqual(new AnalysisRequestError("Failed to fetch"));
+    expect(mockPort.startAnalysis).toHaveBeenCalledTimes(MAX_RETRIES + 1);
+  });
 
-    it("returns a failed poll result after exhausting thrown poll errors", async () => {
-      mockPort.pollChunkAnalysis.mockRejectedValue(new Error("poll timeout"));
+  it.each([400, 401, 404, 409])("does not retry a deterministic %i refusal", async (status) => {
+    mockPort.startAnalysis.mockRejectedValue(new AnalysisRequestError("Refused", status));
 
-      const promise = decorator.pollChunkAnalysis(4, "run-789");
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 2);
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 4);
+    await expect(decorator.startAnalysis(makeRequest())).rejects.toThrow("Refused");
+    expect(mockPort.startAnalysis).toHaveBeenCalledOnce();
+  });
 
-      await expect(promise).resolves.toEqual({
-        chunkIndex: 4,
-        runId: "run-789",
-        status: "retryable-failure",
-        origin: "frontend-retryable",
-        suggestions: [],
-        error: "Chunk 5: poll timeout",
-      });
-      expect(mockPort.pollChunkAnalysis).toHaveBeenCalledTimes(MAX_RETRIES + 1);
-    });
+  it.each([408, 429])("retries a %i answer", async (status) => {
+    mockPort.startAnalysis
+      .mockRejectedValueOnce(new AnalysisRequestError("Slow down", status))
+      .mockResolvedValueOnce(makeSnapshot());
 
-    it("does not retry deterministic 4xx poll errors", async () => {
-      const error = Object.assign(new Error("HTTP error! status: 400"), {
-        status: 400,
-      });
-      mockPort.pollChunkAnalysis.mockRejectedValue(error);
+    const promise = decorator.startAnalysis(makeRequest());
+    await vi.runAllTimersAsync();
 
-      await expect(decorator.pollChunkAnalysis(4, "run-789")).resolves.toEqual({
-        chunkIndex: 4,
-        runId: "run-789",
-        status: "retryable-failure",
-        origin: "frontend-retryable",
-        suggestions: [],
-        error: "Chunk 5: HTTP error! status: 400",
-      });
+    await expect(promise).resolves.toEqual(makeSnapshot());
+    expect(mockPort.startAnalysis).toHaveBeenCalledTimes(2);
+  });
 
-      expect(mockPort.pollChunkAnalysis).toHaveBeenCalledOnce();
-    });
+  it("retries getAnalysis on transport failures and returns the snapshot", async () => {
+    mockPort.getAnalysis
+      .mockRejectedValueOnce(new AnalysisRequestError("Failed to fetch"))
+      .mockResolvedValueOnce(makeSnapshot("completed"));
 
-    it("still retries 429 poll errors because they can be transient", async () => {
-      const error = Object.assign(new Error("HTTP error! status: 429"), {
-        status: 429,
-      });
-      mockPort.pollChunkAnalysis.mockRejectedValue(error);
+    const promise = decorator.getAnalysis("a1");
+    await vi.runAllTimersAsync();
 
-      const promise = decorator.pollChunkAnalysis(4, "run-789");
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS);
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 2);
-      await vi.advanceTimersByTimeAsync(BASE_DELAY_MS * 4);
+    await expect(promise).resolves.toEqual(makeSnapshot("completed"));
+    expect(mockPort.getAnalysis).toHaveBeenCalledTimes(2);
+    expect(mockPort.getAnalysis).toHaveBeenCalledWith("a1");
+  });
 
-      await expect(promise).resolves.toEqual({
-        chunkIndex: 4,
-        runId: "run-789",
-        status: "retryable-failure",
-        origin: "frontend-retryable",
-        suggestions: [],
-        error: "Chunk 5: HTTP error! status: 429",
-      });
+  it("throws from getAnalysis after exhausting retries so the caller can offer a retry query", async () => {
+    mockPort.getAnalysis.mockRejectedValue(new AnalysisRequestError("Failed to fetch"));
 
-      expect(mockPort.pollChunkAnalysis).toHaveBeenCalledTimes(MAX_RETRIES + 1);
-    });
+    const settled = decorator.getAnalysis("a1").catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
 
-    it("delegates cancelChunkAnalysis without adding retry behavior", async () => {
-      mockPort.cancelChunkAnalysis.mockResolvedValue({
-        chunkIndex: 2,
-        runId: "run-2",
-        canceled: true,
-      });
+    expect(await settled).toEqual(new AnalysisRequestError("Failed to fetch"));
+    expect(mockPort.getAnalysis).toHaveBeenCalledTimes(MAX_RETRIES + 1);
+  });
 
-      await expect(decorator.cancelChunkAnalysis(2, "run-2")).resolves.toEqual({
-        chunkIndex: 2,
-        runId: "run-2",
-        canceled: true,
-      });
+  it("delegates cancelAnalysis without retrying", async () => {
+    mockPort.cancelAnalysis.mockRejectedValue(new AnalysisRequestError("Failed to fetch"));
 
-      expect(mockPort.cancelChunkAnalysis).toHaveBeenCalledWith(2, "run-2");
-    });
+    await expect(decorator.cancelAnalysis("a1")).rejects.toThrow("Failed to fetch");
+    expect(mockPort.cancelAnalysis).toHaveBeenCalledOnce();
+    expect(mockPort.cancelAnalysis).toHaveBeenCalledWith("a1");
   });
 });

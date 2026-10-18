@@ -24,30 +24,19 @@ Las instrucciones guardadas aquí:
 
 ## Dónde vive en la API
 
-- Lectura: `GET /api/user/preferences`
-- Escritura: `PUT /api/user/preferences`
+- Lectura: `GET /api/v1/preferences`
+- Escritura: `PUT /api/v1/preferences`
 
-Ambos endpoints requieren autenticación con Better Auth bearer token.
+Ambos endpoints de Stylistic Hub requieren el token que el hub inyecta en el
+panel (`<meta name="stylistic-hub-token">`).
 
 ```http
-Authorization: Bearer <better-auth-session-token>
+Authorization: Bearer <stylistic-hub-token>
 ```
 
 ## OpenAPI como fuente navegable
 
-El contrato publicado por el backend puede consultarse en:
-
-- OpenAPI JSON: `/api/openapi.json`
-- Swagger UI: `/swagger-ui`
-
-Buscar en OpenAPI por estos operation ids:
-
-- `getUserPreferences`
-- `updateUserPreferences`
-
-> Importante: en desarrollo estas rutas están disponibles desde Mastra. En
-> producción no hay que asumirlo automáticamente: depende de la configuración de
-> build del servidor.
+El contrato publicado por el hub puede consultarse en `/api/v1/openapi.json`.
 
 ## Casos de uso esperados
 
@@ -57,7 +46,7 @@ Cuando el usuario abre la pantalla de configuración, el frontend debe pedir el
 estado actual para precargar el textarea.
 
 ```ts
-GET /api/user/preferences
+GET /api/v1/preferences
 ```
 
 Respuesta:
@@ -211,9 +200,9 @@ No sirve para:
 
 Flujo sugerido:
 
-1. llamar `GET /api/user/preferences` al abrir configuración
+1. llamar `GET /api/v1/preferences` al abrir configuración
 2. poblar textarea y contador con `correctionInstructionsMaxLength`
-3. guardar con `PUT /api/user/preferences`
+3. guardar con `PUT /api/v1/preferences`
 4. usar la respuesta del backend como fuente de verdad final
 5. mostrar errores de autenticación o validación con mensajes específicos
 

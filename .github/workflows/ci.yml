@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.1
+
+      - name: Install
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Validate
+        run: bun run validate
+
+      - name: Test
+        run: bun run test
+
+      - name: Build for the hub
+        run: bun run build:hub
+
+      # Stylistic Hub add-in contract: stylistic-hub docs/addin-contract.md
+      - name: Check the hub add-in contract
+        run: |
+          test -f dist/manifest.xml || { echo "dist/manifest.xml is missing"; exit 1; }
+          grep -q '</head>' dist/taskpane.html || { echo "dist/taskpane.html has no </head>"; exit 1; }

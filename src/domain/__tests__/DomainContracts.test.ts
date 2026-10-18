@@ -1,6 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest";
 import type { ApplySuggestionsResult } from "../DocumentApplication.types";
-import type { WorkflowSuggestion } from "../mastra/MastraWorkflow.types";
 import type { IDocumentPort, IFeedbackPort } from "../ports";
 import type {
   DocumentReviewState,
@@ -128,12 +127,8 @@ describe("domain types (compile-time checks)", () => {
 
   it("keeps suggestion contracts free of originalText", () => {
     type SuggestionHasOriginalText = "originalText" extends keyof Suggestion ? true : false;
-    type WorkflowSuggestionHasOriginalText = "originalText" extends keyof WorkflowSuggestion
-      ? true
-      : false;
 
     expectTypeOf<SuggestionHasOriginalText>().toEqualTypeOf<false>();
-    expectTypeOf<WorkflowSuggestionHasOriginalText>().toEqualTypeOf<false>();
   });
 
   it("preserves the suggestion payload shapes", () => {
@@ -147,17 +142,8 @@ describe("domain types (compile-time checks)", () => {
       severity: "medium",
       type: "track-change",
     };
-    const workflowSuggestion: WorkflowSuggestion = {
-      context: "El texto original aparece dentro de este contexto.",
-      anchor: "texto original",
-      suggestedText: "texto mejorado",
-      justification: "Mejora la claridad",
-      category: "Claridad",
-      severity: "medium",
-    };
 
     expectTypeOf(suggestion).toEqualTypeOf<Suggestion>();
-    expectTypeOf(workflowSuggestion).toEqualTypeOf<WorkflowSuggestion>();
   });
 
   it("exposes the expected review methods on IDocumentPort", () => {
@@ -178,32 +164,18 @@ describe("domain types (compile-time checks)", () => {
 describe("IFeedbackPort (compile-time checks)", () => {
   it("preserves the feedback payload shape", () => {
     const feedbackMinimal: FeedbackPayload = {
-      documentUuid: "11111111-1111-4111-8111-111111111111",
-      category: "Redundancia",
-      context: "Frase con completamente necesario.",
-      anchor: "completamente necesario",
-      suggestedText: "necesario",
-      justification: "Ya implica completitud.",
+      suggestionId: "0123456789abcdef",
       action: "accept",
-      severity: "high",
-      suggestionType: "track-change",
     };
     const feedbackWithComment: FeedbackPayload = {
-      documentUuid: "11111111-1111-4111-8111-111111111111",
-      category: "Muletilla",
-      context: "Frase con básicamente.",
-      anchor: "básicamente",
-      suggestedText: "",
-      justification: "Filler word.",
+      suggestionId: "fedcba9876543210",
       action: "reject",
-      severity: "medium",
-      suggestionType: "track-change",
       comment: "Estoy de acuerdo",
     };
 
     expectTypeOf(feedbackMinimal).toEqualTypeOf<FeedbackPayload>();
     expectTypeOf(feedbackWithComment).toEqualTypeOf<FeedbackPayload>();
-    expectTypeOf<FeedbackPayload["justification"]>().toEqualTypeOf<string>();
+    expectTypeOf<FeedbackPayload["suggestionId"]>().toEqualTypeOf<string>();
     expectTypeOf<FeedbackPayload["action"]>().toEqualTypeOf<"accept" | "reject">();
 
     type HasOptionalComment = {} extends Pick<FeedbackPayload, "comment"> ? true : false;

@@ -1,7 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { installWordWithContext } from "../../__tests__/WordAdapterTestHelper";
 import { DocumentReviewStateInspector } from "../DocumentReviewStateInspector";
 
 describe("DocumentReviewStateInspector", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("ignores template content controls whose tag is null", async () => {
+    const inspector = new DocumentReviewStateInspector();
+    const context = {
+      document: {
+        contentControls: {
+          items: [{ tag: null }, { tag: "stylistic:track-change:s1" }],
+          load: vi.fn(),
+        },
+        load: vi.fn(),
+        changeTrackingMode: "off",
+      },
+      sync: vi.fn().mockResolvedValue(undefined),
+    };
+    installWordWithContext(context);
+
+    await expect(inspector.inspect(context as unknown as Word.RequestContext)).resolves.toEqual({
+      pendingStylisticArtifacts: 1,
+      hasPendingStylisticArtifacts: true,
+      trackChangesActive: false,
+    });
+  });
+
   it("builds the safest empty fallback state", () => {
     const inspector = new DocumentReviewStateInspector();
 

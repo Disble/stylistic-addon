@@ -576,8 +576,8 @@ This layer map is the corrected interpretation for the add-in.
 ### Adapters / Infrastructure
 
 - `WordAdapter`
-- `MastraAdapter`
-- `FeedbackAdapter`
+- `HubAnalysisAdapter`
+- `HubFeedbackAdapter`
 - Office.js document operations
 - backend SDK transport details
 

@@ -51,6 +51,27 @@ describe("HttpClient.get", () => {
     expect(init.body).toBeUndefined();
   });
 
+  it("parses application/problem+json error bodies as JSON", async () => {
+    const problem = {
+      title: "Not Found",
+      status: 404,
+      detail: "No such analysis",
+      code: "not_found",
+    };
+    fetchImpl.mockResolvedValueOnce(
+      new Response(JSON.stringify(problem), {
+        status: 404,
+        headers: { "content-type": "application/problem+json" },
+      })
+    );
+    const client = new HttpClient({ baseUrl: "http://api.example", fetchImpl });
+
+    const error = await client.get("/analyses/a1").catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(HttpError);
+    expect((error as HttpError).body).toEqual(problem);
+  });
+
   it("attaches the bearer token from the provider when present", async () => {
     fetchImpl.mockResolvedValueOnce(makeJsonResponse(200, {}));
     const client = new HttpClient({

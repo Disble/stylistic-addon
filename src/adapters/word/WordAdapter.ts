@@ -79,6 +79,13 @@ export class WordAdapter implements IDocumentPort {
         Word.run((ctx) => this.trackChangesAdapter.ensureTrackChangesActive(ctx)),
       getDocumentReviewState: () => this.trackChangesAdapter.getDocumentReviewState(),
       deriveDocumentState: (state) => this.trackChangesAdapter.deriveDocumentState(state),
+      readDocumentText: () =>
+        Word.run(async (context) => {
+          const body = context.document.body;
+          body.load("text");
+          await context.sync();
+          return body.text;
+        }),
       rereadSuggestionPositionHint: (suggestion, patch) =>
         this.rereadSuggestionPositionHint(suggestion, patch),
     });

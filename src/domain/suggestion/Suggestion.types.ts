@@ -32,11 +32,11 @@ export interface SuggestionBatchPositionHint {
 }
 
 /**
- * A single editorial suggestion, either received from the Mastra workflow
+ * A single editorial suggestion, either received from the analysis backend
  * or prepared for insertion into the Word document.
  */
 export interface Suggestion {
-  /** Unique identifier assigned by the frontend (e.g., "chunk0-3"). */
+  /** Unique identifier issued by the analysis backend (16 hex characters from the hub). */
   id: string;
 
   /** Paragraph-level context used to locate the suggestion in the document. */

@@ -260,7 +260,7 @@ export class ApplySuggestionCommand {
         parentCC.load("tag");
         await context.sync();
 
-        const existingTag = parentCC.isNullObject ? "" : parentCC.tag;
+        const existingTag = parentCC.isNullObject ? "" : (parentCC.tag ?? "");
         const isAlreadyCovered =
           existingTag.startsWith("stylistic:") || /^chunk\d+-\d+$/.test(existingTag);
 

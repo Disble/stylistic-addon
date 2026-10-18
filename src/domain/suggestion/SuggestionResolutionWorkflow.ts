@@ -80,7 +80,7 @@ export class SuggestionResolutionWorkflow {
     }
 
     try {
-      const payload = await this.buildFeedbackPayload(suggestion, action, comment);
+      const payload = this.buildFeedbackPayload(suggestion, action, comment);
       const feedbackPromise = this.feedbackPort.sendFeedback(payload);
       void feedbackPromise.catch(() => undefined);
       return "sent";
@@ -101,26 +101,16 @@ export class SuggestionResolutionWorkflow {
   /**
    * Creates the feedback payload that mirrors the user's explicit action.
    */
-  private async buildFeedbackPayload(
+  private buildFeedbackPayload(
     suggestion: Suggestion,
     action: ResolutionAction,
     comment?: string
-  ): Promise<FeedbackPayload> {
+  ): FeedbackPayload {
     const trimmedComment = comment?.trim();
-    const documentUuid = await this.documentPort.getDocumentUuid();
 
     return {
-      documentUuid,
-      category: suggestion.category,
-      context: suggestion.context,
-      anchor: suggestion.anchor,
-      ...(suggestion.suggestedText === undefined
-        ? {}
-        : { suggestedText: suggestion.suggestedText }),
-      justification: suggestion.justification,
+      suggestionId: suggestion.id,
       action,
-      severity: suggestion.severity,
-      suggestionType: suggestion.type,
       ...(trimmedComment ? { comment: trimmedComment } : {}),
     };
   }

@@ -13,15 +13,11 @@
  * @module taskpane
  */
 
-import { FeedbackAdapter } from "../adapters/mastra/FeedbackAdapter";
-import { BetterAuthAdapter } from "../adapters/auth/BetterAuthAdapter";
-import { MastraAdapter } from "../adapters/mastra/MastraAdapter";
-import { MastraClientFactory } from "../adapters/mastra/MastraClientFactory";
+import { HubAnalysisAdapter } from "../adapters/hub/HubAnalysisAdapter";
+import { HubFeedbackAdapter } from "../adapters/hub/HubFeedbackAdapter";
+import { HubUserCorrectionPreferencesAdapter } from "../adapters/hub/HubUserCorrectionPreferencesAdapter";
 import { ConsoleResolutionObservabilityAdapter } from "../adapters/observability/ConsoleResolutionObservabilityAdapter";
-import { OfficeAuthSessionStorageAdapter } from "../adapters/auth/OfficeAuthSessionStorageAdapter";
-import { OfficeDialogAuthAdapter } from "../adapters/auth/OfficeDialogAuthAdapter";
 import { OfficeUserPreferencesAdapter } from "../adapters/preferences/OfficeUserPreferencesAdapter";
-import { BackendUserCorrectionPreferencesAdapter } from "../adapters/preferences/BackendUserCorrectionPreferencesAdapter";
 import { RetryAnalysisDecorator } from "../adapters/RetryAnalysisDecorator";
 import { WordAdapter } from "../adapters/word/WordAdapter";
 import { AnalyzeChunksHandler } from "../domain/pipeline/handlers/AnalyzeChunksHandler";
@@ -42,15 +38,11 @@ import type {
 import type { UserCorrectionPreferences } from "../domain/user-preferences/UserCorrectionPreferences.types";
 import { ReviewSessionMediator } from "../domain/review/ReviewSessionMediator";
 import { HttpClient } from "../infrastructure/http/HttpClient";
-import {
-  DEFAULT_PROFILES,
-  MASTRA_BASE_URL,
-  MAX_RETRIES,
-  RETRY_BASE_DELAY_MS,
-} from "../infrastructure/config";
+import { buildHubApiBaseUrl, readHubToken } from "../infrastructure/hub/HubConnection.helpers";
+import { HUB_TOKEN_MISSING_MESSAGE } from "./taskpane.constants";
+import { DEFAULT_PROFILES, MAX_RETRIES, RETRY_BASE_DELAY_MS } from "../infrastructure/config";
 import { setSelectionPreviewSnapshot } from "./SelectionPreviewStore";
 import type { ResultsPanelDeps } from "./SuggestionCardRenderer.types";
-import { getTaskpaneAuthToken } from "./TaskpaneAuthStore";
 import {
   getTaskpaneShellState,
   setTaskpaneSelectedGenero,
@@ -68,8 +60,6 @@ import {
   handleDisableTrackChanges as disableTrackChangesTaskpaneRuntime,
   handleLoadPreferences as loadTaskpanePreferences,
   handleSavePreferences as saveTaskpanePreferences,
-  handleSignIn as signInTaskpaneRuntime,
-  handleSignOut as signOutTaskpaneRuntime,
   refreshCleanupVisibility,
 } from "./TaskpaneBootstrap";
 import type { TaskpaneBootstrapRuntime } from "./TaskpaneBootstrap.types";
@@ -80,24 +70,21 @@ import type { TaskpaneBootstrapRuntime } from "./TaskpaneBootstrap.types";
 
 const observabilityPort = new ConsoleResolutionObservabilityAdapter();
 const documentPort = new WordAdapter(undefined, observabilityPort);
-const authPort = new BetterAuthAdapter();
-const authSessionStoragePort = new OfficeAuthSessionStorageAdapter();
-const officeDialogAuthAdapter = new OfficeDialogAuthAdapter();
 const userPreferencesPort: IUserPreferencesPort = new OfficeUserPreferencesAdapter();
-const httpClient = new HttpClient({
-  baseUrl: MASTRA_BASE_URL,
-  getAuthToken: getTaskpaneAuthToken,
+const hubToken = readHubToken(globalThis.document);
+const hubHttpClient = new HttpClient({
+  baseUrl: buildHubApiBaseUrl(globalThis.location?.origin ?? ""),
+  getAuthToken: () => hubToken,
 });
 const userCorrectionPreferencesPort: IUserCorrectionPreferencesPort =
-  new BackendUserCorrectionPreferencesAdapter(httpClient);
-const mastraClientFactory = new MastraClientFactory(getTaskpaneAuthToken);
+  new HubUserCorrectionPreferencesAdapter(hubHttpClient);
 const analysisPort = new RetryAnalysisDecorator(
-  new MastraAdapter(mastraClientFactory),
+  new HubAnalysisAdapter(hubHttpClient),
   MAX_RETRIES,
   RETRY_BASE_DELAY_MS
 );
 
-const feedbackPort: IFeedbackPort = new FeedbackAdapter(mastraClientFactory);
+const feedbackPort: IFeedbackPort = new HubFeedbackAdapter(hubHttpClient);
 const reviewSessionMediator = new ReviewSessionMediator(documentPort, feedbackPort);
 
 const orchestrator = new PipelineOrchestrator([
@@ -132,12 +119,9 @@ const analysisHandlersRuntime: TaskpaneAnalysisHandlersRuntime = {
   stateMachine,
 };
 
-/** Shared runtime injected into bootstrap/auth/settings handlers. */
+/** Shared runtime injected into bootstrap and settings handlers. */
 const bootstrapRuntime: TaskpaneBootstrapRuntime = {
-  authPort,
-  authSessionStoragePort,
   documentPort,
-  officeDialogAuthAdapter,
   onSelectionSnapshot: setSelectionPreviewSnapshot,
   reviewSessionMediator,
   setSelectedGenero: setTaskpaneSelectedGenero,
@@ -181,16 +165,6 @@ export async function handleSavePreferences(
   return saveTaskpanePreferences(bootstrapRuntime)(correctionInstructions, analysisProfile);
 }
 
-/** Starts the OAuth flow through Office Dialog API and persists the session. */
-export async function handleSignIn(): Promise<void> {
-  return signInTaskpaneRuntime(bootstrapRuntime);
-}
-
-/** Revokes the Better Auth session and clears all local auth state. */
-export async function handleSignOut(): Promise<void> {
-  return signOutTaskpaneRuntime(bootstrapRuntime);
-}
-
 // ---------------------------------------------------------------------------
 // Main Event Handler — Analysis Pipeline
 // ---------------------------------------------------------------------------
@@ -203,8 +177,8 @@ export async function handleSignOut(): Promise<void> {
  * All UI updates come back via `PipelineEventEmitter` (Observer pattern).
  */
 export async function handleAnalyze(): Promise<void> {
-  if (!getTaskpaneAuthToken()) {
-    showTaskpaneStatus("Iniciá sesión con Google antes de analizar.", "error");
+  if (!hubToken) {
+    showTaskpaneStatus(HUB_TOKEN_MISSING_MESSAGE, "error");
     return;
   }
 

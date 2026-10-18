@@ -21,8 +21,9 @@ export const SETTINGS_SAVE_SUCCESS_MESSAGE = "Configuración guardada.";
 export const SETTINGS_SAVE_INVALID_REQUEST_MESSAGE =
   "Las instrucciones no cumplen el formato esperado.";
 
-/** Specific message used when the backend rejects the request as unauthenticated. */
-export const SETTINGS_SAVE_UNAUTHENTICATED_MESSAGE = "Tu sesión expiró. Iniciá sesión nuevamente.";
+/** Specific message used when the hub rejects the task pane's token (missing or wrong). */
+export const SETTINGS_SAVE_UNAUTHENTICATED_MESSAGE =
+  "Stylistic Hub rechazó el token de este panel. Ábrelo de nuevo desde el hub.";
 
 /** Specific message used when the network is unreachable. */
 export const SETTINGS_SAVE_NETWORK_ERROR_MESSAGE =

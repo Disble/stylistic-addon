@@ -24,7 +24,10 @@ import type { ProgressCallback } from "../../domain/pipeline/PipelineEvents.type
 import type { Suggestion } from "../../domain/suggestion/Suggestion.types";
 import { applySuggestionObservability } from "../observability/ConsoleApplySuggestionObservabilityAdapter";
 import { ApplySuggestionCommand } from "./ApplySuggestionCommand";
-import { areComparableSnapshotHints } from "./BatchApplyOrchestrator.helpers";
+import {
+  areComparableSnapshotHints,
+  sortByContextPosition,
+} from "./BatchApplyOrchestrator.helpers";
 import type { BatchApplyDependencies } from "./BatchApplyOrchestrator.types";
 import { getDefaultTextLocator } from "./WordTextLocatorContext";
 
@@ -62,7 +65,7 @@ export class BatchApplyOrchestrator {
       };
     }
 
-    let pendingSuggestions = this.sortByDocumentPosition([...suggestions]);
+    let pendingSuggestions = await this.sortByDocumentPosition([...suggestions]);
     applySuggestionObservability.logPreparedApplicationOrder(pendingSuggestions);
 
     const failedSuggestions: SuggestionApplicationFailure[] = [];
@@ -86,7 +89,7 @@ export class BatchApplyOrchestrator {
               pendingSuggestions[0]?.positionHint?.paragraphId
         )
       ) {
-        pendingSuggestions = this.sortByDocumentPosition(pendingSuggestions);
+        pendingSuggestions = await this.sortByDocumentPosition(pendingSuggestions);
       }
       const suggestion = pendingSuggestions.shift();
       if (!suggestion) {
@@ -144,9 +147,10 @@ export class BatchApplyOrchestrator {
 
   /**
    * Sorts suggestions by snapshot-derived document position when available,
-   * falling back to reverse array order only for legacy suggestion batches.
+   * otherwise by where each context sits in the document text, falling back to
+   * reverse array order only when that text cannot be read.
    */
-  private sortByDocumentPosition(suggestions: Suggestion[]): Suggestion[] {
+  private async sortByDocumentPosition(suggestions: Suggestion[]): Promise<Suggestion[]> {
     if (suggestions.length <= 1) return suggestions;
 
     const firstHint = suggestions[0]?.positionHint;
@@ -173,7 +177,22 @@ export class BatchApplyOrchestrator {
       });
     }
 
-    return [...suggestions].reverse();
+    return this.sortByContextPosition(suggestions);
+  }
+
+  /** Orders hintless suggestions by context position in the current document text. */
+  private async sortByContextPosition(suggestions: Suggestion[]): Promise<Suggestion[]> {
+    if (!this.deps.readDocumentText) return [...suggestions].reverse();
+
+    try {
+      return sortByContextPosition(suggestions, await this.deps.readDocumentText());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `⚠️ [BatchApplyOrchestrator] Document text unavailable for ordering: ${message}`
+      );
+      return [...suggestions].reverse();
+    }
   }
 
   /**

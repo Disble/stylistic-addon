@@ -96,32 +96,24 @@ must stop owning location, observation, cleanup, and result mapping in one file.
 The command should orchestrate collaborators. The collaborators should own the
 real responsibilities.
 
-### 2.5 Authentication is a host/application boundary
+### 2.5 The hub token is a host boundary
 
-Authentication is part of the add-in application boundary, not editorial domain
-logic. The domain owns auth/session ports and session types; adapters own Better
-Auth, Office Dialog API, and OfficeRuntime storage details.
-
-The taskpane stores auth state in Zustand only for presentation. The persistent
-source of truth is `OfficeRuntime.storage` through
-`OfficeAuthSessionStorageAdapter`. Do not persist bearer tokens in Word document
-settings, custom XML parts, or Content Controls; those are document-scoped and
-can travel with files.
-
-The OAuth dialog follows the official Office fallback-auth pattern: the parent
-taskpane opens a same-origin dialog page and resolves only from
-`DialogMessageReceived`. `DialogEventReceived` is not treated as fatal because
-real Word hosts can emit transient 12006 events while the dialog is still
-navigating and later sends a valid success message.
+There are no user accounts. Stylistic Hub serves the task pane and injects its
+API token as `<meta name="stylistic-hub-token">`. The composition root reads it
+once with `readHubToken()` and builds one `HttpClient` against the task pane's
+own origin plus `/api/v1` (`src/infrastructure/hub/`). Every hub adapter
+(analysis, feedback, preferences) shares that client and sends the token as a
+bearer token. Without the token, analysis refuses to start and tells the user to
+open the pane from the hub; there is no fallback backend. Do not persist the
+token anywhere: not in `OfficeRuntime.storage`, document settings, custom XML
+parts or Content Controls.
 
 ### 2.6 Taskpane shell — main vs settings views
 
 The taskpane shell is a state-driven view switcher, not a single page. Three
 surfaces are mutually exclusive at the App level:
 
-- **unauthenticated** → `AuthSection` only (login screen). No toolbar, no gear,
-  no settings entry point.
-- **authenticated + `view === "main"`** → analysis workflow (analyze CTA,
+- **`view === "main"`** → analysis workflow (analyze CTA,
   selection preview, progress, results, cleanup CTAs, status bar) plus a
   persistent bottom `SettingsToolbar` exposing the gear icon. The workflow
   itself has two presentational modes derived from runtime state: an **idle
@@ -132,21 +124,16 @@ surfaces are mutually exclusive at the App level:
   layout) once the user has triggered analysis or there are results on
   screen. The branch is owned by the `App` shell via an `isIdle` selector
   composed from `TaskpaneShellStore` and `ResultsPanelStore`.
-- **authenticated + `view === "settings"`** → `SettingsView` page (back arrow,
-  "Settings" title, `AccountSettings` row with email + Log out, and the
-  analysis-profile preference selector). Designed to host additional setting
+- **`view === "settings"`** → `SettingsView` page (back arrow, "Settings"
+  title, the analysis-profile preference selector and the correction
+  instructions). Designed to host additional setting
   groups (display language, defaults, etc.) over time without touching the
   shell.
 
 Active view is owned by `TaskpaneViewStore` (Zustand) with a single field
-`view: "main" | "settings"`. Toggling is mediated by `setTaskpaneView`. Auth
-status keeps living in `TaskpaneAuthStore`; the two stores are composed at the
-App level rather than merged so each presentational surface keeps a focused
-contract.
+`view: "main" | "settings"`. Toggling is mediated by `setTaskpaneView`.
 
-Account/logout controls intentionally do **not** appear in the main workflow.
-The session is consolidated into the secondary settings page so the primary
-real estate stays dedicated to analysis. Components must follow the strict
+Components must follow the strict
 folder anatomy required by `checkReactComponentRails.mjs` (`index.ts`,
 `Component.tsx`, `Component.types.ts`, optional `Component.hooks.ts`, sibling
 `__tests__/`).
@@ -163,9 +150,6 @@ While an analysis run is active, the selector in `SettingsView` must stay
 disabled so the persisted preference cannot diverge from the pipeline snapshot
 already in flight.
 
-`AuthSection` is **narrowed** to the loading/unauthenticated branches only;
-once `status === "authenticated"`, the component is no longer rendered and the
-App takes over the surface decision.
 
 ---
 
@@ -207,7 +191,7 @@ flowchart LR
   end
 
   subgraph DOMAIN["Domain / Application"]
-    PORTS["ports.ts\nIDocumentPort / IAnalysisPort / IFeedbackPort / IAuthPort"]
+    PORTS["ports.ts\nIDocumentPort / IAnalysisPort / IFeedbackPort"]
     PIPE["PipelineOrchestrator"]
     HANDLERS["Read / Check / Chunk / Analyze / Guard / Apply Handlers"]
     MED["ReviewSessionMediator"]
@@ -225,18 +209,12 @@ flowchart LR
     CLEAN["CommentCleanup"]
   end
 
-  subgraph BACKEND["Adapters / Backend"]
-    MA["MastraAdapter"]
-    MCF["MastraClientFactory\nBearer token headers"]
+  subgraph BACKEND["Adapters / Stylistic Hub"]
+    MA["HubAnalysisAdapter"]
+    MCF["HttpClient\nHub token bearer header"]
     RETRY["RetryAnalysisDecorator"]
-    FB["FeedbackAdapter / MockFeedbackAdapter"]
-  end
-
-  subgraph AUTH["Adapters / Auth"]
-    BA["BetterAuthAdapter"]
-    ODA["OfficeDialogAuthAdapter"]
-    STORE["OfficeAuthSessionStorageAdapter"]
-    DIALOG["auth-dialog.ts\nOffice Dialog bridge"]
+    FB["HubFeedbackAdapter"]
+    PREF["HubUserCorrectionPreferencesAdapter"]
   end
 
   subgraph HOST["Word Host Artifacts"]
@@ -250,8 +228,7 @@ flowchart LR
   IDX --> APP
   APP --> ZS
   TP --> PIPE
-  TP --> ODA
-  TP --> STORE
+  TP --> PREF
   PIPE --> HANDLERS
   HANDLERS --> PORTS
   HANDLERS --> WA
@@ -259,6 +236,7 @@ flowchart LR
   RETRY --> MA
   MA --> MCF
   FB --> MCF
+  PREF --> MCF
 
   TP --> MED
   APP --> MED
@@ -282,8 +260,6 @@ flowchart LR
   DOC --> TC
   DOC --> COM
 
-  ODA --> DIALOG
-  DIALOG --> BA
 ```
 
 ### 3.2 Current file map
@@ -314,10 +290,6 @@ src/
 │   └── suggestion/
 │       └── SuggestionResolutionWorkflow.ts
 ├── adapters/
-│   ├── auth/
-│   │   ├── BetterAuthAdapter.ts
-│   │   ├── OfficeAuthSessionStorageAdapter.ts
-│   │   └── OfficeDialogAuthAdapter.ts
 │   ├── word/
 │   │   ├── WordAdapter.ts
 │   │   ├── ApplySuggestionCommand.ts
@@ -336,21 +308,20 @@ src/
 │   │   ├── StylisticCommentBuilder.ts
 │   │   └── cleanup/
 │   │       └── CommentCleanup.ts
-│   ├── mastra/
-│   │   ├── MastraAdapter.ts
-│   │   ├── FeedbackAdapter.ts
-│   │   ├── MastraClientFactory.ts
-│   │   └── MockFeedbackAdapter.ts
+│   ├── hub/
+│   │   ├── HubAnalysisAdapter.ts
+│   │   ├── HubFeedbackAdapter.ts
+│   │   ├── HubUserCorrectionPreferencesAdapter.ts
+│   │   └── HubProblemParser.helpers.ts
 │   └── RetryAnalysisDecorator.ts
 ├── infrastructure/
 │   ├── config.ts
-│   └── chunker.ts
+│   ├── chunker.ts
+│   ├── http/HttpClient.ts
+│   └── hub/HubConnection.helpers.ts
 └── taskpane/
     ├── taskpane.ts
     ├── index.tsx
-    ├── auth-dialog.html
-    ├── auth-dialog.ts
-    ├── TaskpaneAuthStore.ts
     ├── TaskpaneShellStore.ts
     ├── TaskpaneViewStore.ts
     ├── ResultsPanelStore.ts

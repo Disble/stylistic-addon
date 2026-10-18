@@ -1,7 +1,6 @@
 import * as React from "react";
 import { Button } from "@fluentui/react-components";
 import { ArrowLeftRegular } from "@fluentui/react-icons";
-import { AccountSettings } from "../AccountSettings";
 import { AnalysisProfileSection } from "../AnalysisProfileSection";
 import { CorrectionInstructionsSection } from "../CorrectionInstructionsSection";
 import { SettingsSaveBar } from "../SettingsSaveBar";
@@ -12,19 +11,16 @@ import { useSettingsView } from "./SettingsView.hooks";
  * Renders the secondary settings page accessed from the main toolbar gear.
  *
  * Hosts user-level configuration that does not belong in the per-run flow
- * (account info, analysis-profile selection, global correction instructions).
+ * (analysis-profile selection, global correction instructions).
  * Uses an explicit draft-and-save model: nothing is persisted until the user
  * clicks the bottom Save bar. While an analysis run is active, the form is
  * disabled so the persisted preferences cannot diverge from the pipeline
  * snapshot already in flight.
  */
 export function SettingsView({
-  isSigningOut,
   loadPreferences,
   onBack,
-  onSignOut,
   savePreferences,
-  session,
 }: SettingsViewProps): React.JSX.Element {
   const {
     classes,
@@ -58,11 +54,6 @@ export function SettingsView({
         <span aria-hidden="true" />
       </header>
       <div className={classes.body}>
-        <AccountSettings
-          isSigningOut={isSigningOut}
-          onSignOut={onSignOut}
-          session={session}
-        />
         <AnalysisProfileSection
           isDisabled={isFormDisabled || isSaving}
           onGeneroChange={onProfileChange}

@@ -2,7 +2,7 @@
  * Application constants for the Stylistic add-in.
  *
  * All configurable values live here as named exports. No UI-facing settings —
- * these are internal defaults that control backend communication, text chunking,
+ * these are internal defaults that control host storage, text chunking,
  * Word API batching, and retry behavior.
  *
  * @module config
@@ -11,32 +11,11 @@
 import type { Profile } from "../domain/Profile.types";
 
 // ---------------------------------------------------------------------------
-// Mastra Backend
+// Host Storage Keys
 // ---------------------------------------------------------------------------
-
-/** Base URL of the Mastra server. */
-export const MASTRA_BASE_URL = "http://localhost:4111";
-
-/** Better Auth base path mounted by the Mastra backend custom route. */
-export const BETTER_AUTH_BASE_PATH = "/auth";
-
-/** Backend page that completes OAuth on the same origin as Better Auth cookies. */
-export const AUTH_COMPLETE_URL = `${MASTRA_BASE_URL}/auth-complete`;
-
-/** Taskpane-hosted dialog page used as the first URL for Office OAuth. */
-export const AUTH_DIALOG_PATH = "/auth-dialog.html";
-
-/** Storage key for the Better Auth bearer session in OfficeRuntime.storage. */
-export const AUTH_SESSION_STORAGE_KEY = "stylistic.auth.session.v1";
 
 /** Storage key for the user-selected analysis profile in OfficeRuntime.storage. */
 export const ANALYSIS_PROFILE_STORAGE_KEY = "stylistic.preferences.analysis-profile.v1";
-
-/** Identifier of the editorial workflow registered in Mastra. */
-export const WORKFLOW_ID = "stylistic-workflow";
-
-/** Identifier of the feedback workflow registered in Mastra. */
-export const FEEDBACK_WORKFLOW_ID = "feedback-workflow";
 
 /** Document settings key used to persist the stable Word document UUID. */
 export const DOCUMENT_UUID_SETTINGS_KEY = "stylistic.document.uuid.v1";
@@ -73,25 +52,11 @@ export const MAX_RETRIES = 3;
 /** Base delay (ms) for exponential backoff between retries: base * 2^attempt. */
 export const RETRY_BASE_DELAY_MS = 1_000;
 
-/** Delay (ms) between round-robin polling passes while chunks are still running. */
+/** Delay (ms) between reads of an analysis that is still running. */
 export const POLL_INTERVAL_MS = 1_000;
 
 /** Duration (ms) of the taskpane card reorder animation. */
 export const SUGGESTION_CARD_REORDER_ANIMATION_MS = 500;
-
-// ---------------------------------------------------------------------------
-// Development Analysis Bypass
-// ---------------------------------------------------------------------------
-
-/**
- * Enables a development-only bypass for the full Mastra analysis path.
- *
- * When `true`, the frontend no longer depends on the backend for the analysis
- * flow: connection check, submit, and poll all use local mock behavior. This
- * keeps the rest of the pipeline and UI flow unchanged while letting the backend
- * rest completely during debugging sessions.
- */
-export const MASTRA_POLL_BYPASS_ENABLED = false;
 
 // ---------------------------------------------------------------------------
 // Word Artifact Identity

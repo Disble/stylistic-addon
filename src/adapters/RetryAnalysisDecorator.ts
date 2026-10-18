@@ -5,21 +5,17 @@
  *
  * Adds retry-with-exponential-backoff behavior to any `IAnalysisPort`
  * implementation without modifying the underlying adapter. This separates
- * the retry concern from the Mastra communication concern.
+ * the retry concern from the HTTP communication concern.
  *
- * The `MastraAdapter` focuses purely on the HTTP protocol. The decorator
- * wraps it transparently, retrying chunk submission only while no `runId`
- * was confirmed, and retrying chunk polling only on thrown transport errors.
- *
- * Benefits:
- * - `MastraAdapter` is clean and single-purpose.
- * - Tests can inject the raw adapter without retry noise.
- * - A future circuit-breaker or caching layer can be added as another decorator.
+ * Starting and reading an analysis are retried on transport failures, 5xx,
+ * 408 and 429. Any other 4xx is a deterministic refusal and is thrown at once,
+ * with the backend's explanation intact. Readiness and cancellation are
+ * delegated as-is: readiness never throws, and cancel stays user-driven.
  *
  * Usage:
  * ```typescript
  * const analysisPort = new RetryAnalysisDecorator(
- *   new MastraAdapter(),
+ *   new HubAnalysisAdapter(httpClient),
  *   MAX_RETRIES,
  *   RETRY_BASE_DELAY_MS
  * );
@@ -28,14 +24,11 @@
  * @module RetryAnalysisDecorator
  */
 
-import type { TextChunk } from "../domain/chunking/TextChunk.types";
 import type {
-  ChunkCancelResult,
-  ChunkPollResult,
-  ChunkRunReference,
-  ChunkSubmitResult,
-  WorkflowSubmitContext,
-} from "../domain/mastra/MastraWorkflow.types";
+  AnalysisReadiness,
+  AnalysisRequest,
+  AnalysisSnapshot,
+} from "../domain/analysis/Analysis.types";
 import type { IAnalysisPort } from "../domain/ports";
 
 /** Adds retry and backoff semantics to an analysis port. */
@@ -46,145 +39,59 @@ export class RetryAnalysisDecorator implements IAnalysisPort {
     private readonly baseDelayMs: number
   ) {}
 
-  /** Delegates connection check directly — no retry needed. */
-  checkConnection(): Promise<boolean> {
-    return this.wrapped.checkConnection();
+  /** Delegates the readiness check directly — no retry needed. */
+  getReadiness(): Promise<AnalysisReadiness> {
+    return this.wrapped.getReadiness();
   }
 
-  /**
-   * Submits a chunk with up to `maxRetries` retry attempts while no `runId`
-   * was obtained. Uses exponential backoff: `baseDelayMs * 2^(attempt-1)`.
-   */
-  async submitChunkAnalysis(
-    chunk: TextChunk,
-    input: WorkflowSubmitContext
-  ): Promise<ChunkSubmitResult> {
-    let lastError = "Unknown analysis error";
+  /** Starts an analysis, retrying transient failures. */
+  startAnalysis(request: AnalysisRequest): Promise<AnalysisSnapshot> {
+    return this.withRetry("start analysis", () => this.wrapped.startAnalysis(request));
+  }
+
+  /** Reads an analysis, retrying transient failures. */
+  getAnalysis(analysisId: string): Promise<AnalysisSnapshot> {
+    return this.withRetry(`poll analysis ${analysisId}`, () =>
+      this.wrapped.getAnalysis(analysisId)
+    );
+  }
+
+  /** Delegates cancellation directly — retry semantics stay user-driven. */
+  cancelAnalysis(analysisId: string): Promise<void> {
+    return this.wrapped.cancelAnalysis(analysisId);
+  }
+
+  /** Runs `operation` up to `maxRetries + 1` times with exponential backoff. */
+  private async withRetry<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    let lastError: unknown;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       if (attempt > 0) {
         const delayMs = this.baseDelayMs * 2 ** (attempt - 1);
         console.warn(
-          `🔄 [RetryDecorator] Retry ${attempt}/${this.maxRetries} chunk #${chunk.index} — esperando ${delayMs}ms`
+          `🔄 [RetryDecorator] Retry ${attempt}/${this.maxRetries} ${label} — esperando ${delayMs}ms`
         );
         await this.delay(delayMs);
       }
 
       try {
-        const result = await this.wrapped.submitChunkAnalysis(chunk, input);
-
-        if (this.hasRunId(result.runId)) {
-          return result;
-        }
-
-        lastError =
-          this.normalizeError(result.error) ?? "Workflow submission did not return a runId";
-        console.warn(
-          `⚠️ [RetryDecorator] Submit chunk #${chunk.index} intento ${attempt} falló: ${lastError}`
-        );
+        return await operation();
       } catch (error) {
-        lastError = this.normalizeThrownError(error);
-        console.warn(
-          `⚠️ [RetryDecorator] Submit chunk #${chunk.index} intento ${attempt} falló: ${lastError}`
-        );
+        lastError = error;
+        console.warn(`⚠️ [RetryDecorator] ${label} intento ${attempt} falló:`, error);
 
         if (this.isDeterministicClientError(error)) {
-          break;
+          throw error;
         }
       }
     }
 
-    console.error(
-      `❌ [RetryDecorator] Submit chunk #${chunk.index} agotó ${this.maxRetries} reintentos. Último error: ${lastError}`
-    );
-    return {
-      chunkIndex: chunk.index,
-      error: `Chunk ${chunk.index + 1}: ${lastError}`,
-    };
-  }
-
-  /**
-   * Polls a submitted chunk run. Retries only on thrown transport errors;
-   * intermediate statuses like `running` are returned as-is.
-   */
-  async pollChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkPollResult> {
-    let lastError = "Unknown analysis error";
-
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      if (attempt > 0) {
-        const delayMs = this.baseDelayMs * 2 ** (attempt - 1);
-        console.warn(
-          `🔄 [RetryDecorator] Retry ${attempt}/${this.maxRetries} poll chunk #${chunkIndex} — esperando ${delayMs}ms`
-        );
-        await this.delay(delayMs);
-      }
-
-      try {
-        return await this.wrapped.pollChunkAnalysis(chunkIndex, runId);
-      } catch (error) {
-        lastError = this.normalizeThrownError(error);
-        console.warn(
-          `⚠️ [RetryDecorator] Poll chunk #${chunkIndex} intento ${attempt} falló: ${lastError}`
-        );
-
-        if (this.isDeterministicClientError(error)) {
-          break;
-        }
-      }
-    }
-
-    console.error(
-      `❌ [RetryDecorator] Poll chunk #${chunkIndex} agotó ${this.maxRetries} reintentos. Último error: ${lastError}`
-    );
-    return {
-      chunkIndex,
-      runId,
-      status: "retryable-failure",
-      origin: "frontend-retryable",
-      suggestions: [],
-      error: `Chunk ${chunkIndex + 1}: ${lastError}`,
-    };
-  }
-
-  /** Delegates backend cancellation directly — retry semantics stay user-driven. */
-  cancelChunkAnalysis(chunkIndex: number, runId: string): Promise<ChunkCancelResult> {
-    return this.wrapped.cancelChunkAnalysis(chunkIndex, runId);
-  }
-
-  /** Re-polls a known runId without resubmission, preserving the same retry policy. */
-  retryPollChunkAnalysis(reference: ChunkRunReference): Promise<ChunkPollResult> {
-    return this.pollChunkAnalysis(reference.chunkIndex, reference.runId);
+    console.error(`❌ [RetryDecorator] ${label} agotó ${this.maxRetries} reintentos.`);
+    throw lastError;
   }
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private hasRunId(runId: string | undefined): runId is string {
-    return typeof runId === "string" && runId.trim().length > 0;
-  }
-
-  private normalizeError(error: string | undefined): string | undefined {
-    if (error === undefined) {
-      return undefined;
-    }
-
-    const normalized = error.trim();
-    return normalized.length > 0 ? normalized : "Unknown analysis error";
-  }
-
-  private normalizeThrownError(error: unknown): string {
-    if (error instanceof Error) {
-      const normalized = error.message.trim();
-      return normalized.length > 0 ? normalized : "Unknown analysis error";
-    }
-
-    if (typeof error === "string") {
-      const normalized = error.trim();
-      return normalized.length > 0 ? normalized : "Unknown analysis error";
-    }
-
-    return "Unknown analysis error";
   }
 
   private isDeterministicClientError(error: unknown): boolean {

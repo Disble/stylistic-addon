@@ -77,13 +77,13 @@
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Get started with your sample add-in!"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="Commands Group"/>
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
+        <bt:String id="GetStarted.Title" DefaultValue="Stylistic"/>
+        <bt:String id="CommandsGroup.Label" DefaultValue="Stylistic"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="Stylistic"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded successfully. Go to the HOME tab and click the 'Show Task Pane' button to get started."/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Click to Show a Taskpane"/>
+        <bt:String id="GetStarted.Description" DefaultValue="Editorial suggestions with tracked changes, inside your document."/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Show Stylistic's editorial suggestions"/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

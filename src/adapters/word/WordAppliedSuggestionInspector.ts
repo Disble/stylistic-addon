@@ -13,7 +13,9 @@ export class WordAppliedSuggestionInspector {
       allCCs.load("items/tag,items/title");
       await context.sync();
 
-      const stylisticCCs = allCCs.items.filter((cc) => cc.tag.startsWith(STYLISTIC_TAG_PREFIX));
+      const stylisticCCs = allCCs.items.filter((cc) =>
+        (cc.tag ?? "").startsWith(STYLISTIC_TAG_PREFIX)
+      );
 
       if (stylisticCCs.length === 0) {
         return new Set<string>();
@@ -29,7 +31,7 @@ export class WordAppliedSuggestionInspector {
           continue;
         }
 
-        if (cc.tag.startsWith("stylistic:track-change:")) {
+        if ((cc.tag ?? "").startsWith("stylistic:track-change:")) {
           continue;
         }
 

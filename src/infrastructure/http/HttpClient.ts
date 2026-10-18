@@ -14,7 +14,7 @@ import type {
  *
  * Responsibilities:
  * - Join the base URL and a relative path without surprising slashes.
- * - Inject the Better Auth bearer token through the configured provider.
+ * - Inject the bearer token (the Stylistic Hub token) through the configured provider.
  * - Serialize JSON request bodies and parse JSON or text responses.
  * - Translate non-2xx responses into a typed {@link HttpError}.
  *
@@ -148,7 +148,7 @@ export class HttpClient {
       return null;
     }
     const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
+    if (contentType.includes("application/json") || contentType.includes("+json")) {
       return response.json();
     }
     const text = await response.text();

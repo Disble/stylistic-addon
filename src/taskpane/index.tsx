@@ -10,8 +10,6 @@ import {
   handleLoadPreferences,
   handleRetryAnalysisQuery,
   handleSavePreferences,
-  handleSignIn,
-  handleSignOut,
 } from "./taskpane";
 import { App } from "./components/App";
 
@@ -47,8 +45,6 @@ function renderTaskpaneShell(): void {
           onRetryAnalysisQuery: handleRetryAnalysisQuery,
           onCleanup: handleCleanup,
           onDisableTrackChanges: handleDisableTrackChanges,
-          onSignIn: handleSignIn,
-          onSignOut: handleSignOut,
           loadPreferences: handleLoadPreferences,
           savePreferences: handleSavePreferences,
           onMount: () => bootstrapTaskpane(),

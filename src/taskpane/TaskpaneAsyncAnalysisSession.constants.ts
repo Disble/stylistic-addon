@@ -4,6 +4,6 @@ import type { TaskpaneAsyncAnalysisSessionState } from "./TaskpaneAsyncAnalysisS
 export const INITIAL_TASKPANE_ASYNC_ANALYSIS_SESSION_STATE: TaskpaneAsyncAnalysisSessionState = {
   phase: "idle",
   isSelection: false,
-  activeRuns: [],
-  retryableRuns: [],
+  activeAnalysisId: null,
+  retryableAnalysisId: null,
 };

@@ -1,14 +1,6 @@
 import type { AnalysisProfileId } from "../domain/Profile.types";
 import type { UserCorrectionPreferences } from "../domain/user-preferences/UserCorrectionPreferences.types";
 import {
-  getTaskpaneAuthToken,
-  setTaskpaneAuthenticated,
-  setTaskpaneAuthLoading,
-  setTaskpaneSigningIn,
-  setTaskpaneSigningOut,
-  setTaskpaneUnauthenticated,
-} from "./TaskpaneAuthStore";
-import {
   getTaskpaneShellState,
   setTaskpaneCleanupLoading,
   setTaskpaneCleanupVisible,
@@ -42,30 +34,6 @@ async function bootstrapAnalysisProfile(runtime: TaskpaneBootstrapRuntime): Prom
   }
 }
 
-/** Restores and validates the persisted Better Auth session during taskpane bootstrap. */
-async function bootstrapAuthSession(runtime: TaskpaneBootstrapRuntime): Promise<void> {
-  setTaskpaneAuthLoading();
-  try {
-    const persisted = await runtime.authSessionStoragePort.restore();
-    if (!persisted) {
-      setTaskpaneUnauthenticated();
-      return;
-    }
-
-    const validSession = await runtime.authPort.getSession(persisted.token);
-    if (!validSession) {
-      await runtime.authSessionStoragePort.clear();
-      setTaskpaneUnauthenticated();
-      return;
-    }
-
-    await runtime.authSessionStoragePort.persist(validSession);
-    setTaskpaneAuthenticated(validSession);
-  } catch (error) {
-    setTaskpaneUnauthenticated(toTaskpaneUserMessage(error));
-  }
-}
-
 /** Syncs cleanup CTA visibility with the authoritative document state. */
 export async function refreshCleanupVisibility(runtime: TaskpaneBootstrapRuntime): Promise<void> {
   try {
@@ -91,7 +59,6 @@ async function refreshTrackChangesCtaVisibility(runtime: TaskpaneBootstrapRuntim
 
 /** Initializes taskpane-side subscriptions and store hydration once React is mounted. */
 export function bootstrapTaskpane(runtime: TaskpaneBootstrapRuntime): void {
-  void bootstrapAuthSession(runtime);
   void bootstrapAnalysisProfile(runtime);
   void refreshCleanupVisibility(runtime);
   void refreshTrackChangesCtaVisibility(runtime);
@@ -116,37 +83,6 @@ export const handleSavePreferences = (
     return result;
   };
 };
-
-/** Starts the OAuth flow through the Office dialog bridge and persists the session. */
-export async function handleSignIn(runtime: TaskpaneBootstrapRuntime): Promise<void> {
-  setTaskpaneSigningIn(true);
-  try {
-    const session = await runtime.officeDialogAuthAdapter.signIn();
-    await runtime.authSessionStoragePort.persist(session);
-    setTaskpaneAuthenticated(session);
-    showTaskpaneStatus("Sesión iniciada correctamente.", "success");
-  } catch (error) {
-    setTaskpaneUnauthenticated(toTaskpaneUserMessage(error));
-  } finally {
-    setTaskpaneSigningIn(false);
-  }
-}
-
-/** Revokes the current Better Auth session and clears all local auth state. */
-export async function handleSignOut(runtime: TaskpaneBootstrapRuntime): Promise<void> {
-  const token = getTaskpaneAuthToken();
-  setTaskpaneSigningOut(true);
-  try {
-    await runtime.authPort.signOut(token);
-  } catch (error) {
-    console.warn("⚠️ [Taskpane] No se pudo revocar sesión en backend:", error);
-  } finally {
-    await runtime.authSessionStoragePort.clear();
-    setTaskpaneUnauthenticated();
-    setTaskpaneSigningOut(false);
-    showTaskpaneStatus("Sesión cerrada.", "success");
-  }
-}
 
 /** Cleans up resolved Stylistic comments from the active document. */
 export async function handleCleanup(runtime: TaskpaneBootstrapRuntime): Promise<void> {

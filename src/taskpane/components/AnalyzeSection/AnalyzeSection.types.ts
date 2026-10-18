@@ -8,4 +8,6 @@ export type AnalyzeSectionProps = Readonly<{
 export type AnalyzeSectionClasses = Readonly<{
   root: string;
   button: string;
+  /** Muted privacy notice under the CTA. */
+  privacyNotice: string;
 }>;

@@ -23,10 +23,10 @@ export function ProgressPanel({
   const total = progress.total > 0 ? progress.total : 1;
   const value = Math.min(progress.current, total);
   const canCancel =
-    progress.asyncSession.phase === "polling" && progress.asyncSession.activeRuns.length > 0;
+    progress.asyncSession.phase === "polling" && progress.asyncSession.activeAnalysisId !== null;
   const canRetryQuery =
     progress.asyncSession.phase === "retryable-failure" &&
-    progress.asyncSession.retryableRuns.length > 0;
+    progress.asyncSession.retryableAnalysisId !== null;
 
   return (
     <div className={classes.root} data-testid="progress-panel">

@@ -2,7 +2,6 @@ import * as React from "react";
 import { AnalysisErrorState } from "../AnalysisErrorState";
 import { AnalysisProgressHero } from "../AnalysisProgressHero";
 import { AnalyzeSection } from "../AnalyzeSection";
-import { AuthSection } from "../AuthSection";
 import { CleanupSection } from "../CleanupSection";
 import { DisableTrackChangesSection } from "../DisableTrackChangesSection";
 import { HeroEmptyState } from "../HeroEmptyState";
@@ -34,14 +33,11 @@ export function App({
   onRetryAnalysisQuery,
   onCleanup,
   onDisableTrackChanges,
-  onSignIn,
-  onSignOut,
   loadPreferences,
   savePreferences,
   onMount,
 }: AppProps): React.JSX.Element {
   const {
-    authState,
     shellState,
     viewState,
     isIdle,
@@ -57,29 +53,13 @@ export function App({
     onMount?.();
   }, [onMount]);
 
-  if (authState.status !== "authenticated") {
-    return (
-      <main id="app-body">
-        <AuthSection
-          error={authState.error}
-          isSigningIn={authState.isSigningIn}
-          onSignIn={onSignIn}
-          status={authState.status}
-        />
-      </main>
-    );
-  }
-
   if (viewState.view === "settings") {
     return (
       <main id="app-body">
         <SettingsView
-          isSigningOut={authState.isSigningOut}
           loadPreferences={loadPreferences}
           onBack={handleCloseSettings}
-          onSignOut={onSignOut}
           savePreferences={savePreferences}
-          session={authState.session}
         />
       </main>
     );

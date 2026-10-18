@@ -25,8 +25,8 @@ change you are making.
   ubiquitous language, and Track Changes lifecycle policy.
 - `docs/linting-and-file-anatomy.md` — enforced file anatomy, component folder
   contracts, `__tests__/` placement, and runtime-module rules.
-- `docs/api-contract.md` — backend/Mastra contract, workflow shape, and auth
-  expectations.
+- `docs/api-contract.md` — Stylistic Hub API v1 contract, hub token, and
+  problem+json errors.
 - `docs/troubleshooting.md` — host quirks, auth/debugging gotchas, and known
   operational pitfalls.
 
