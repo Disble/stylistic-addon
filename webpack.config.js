@@ -19,6 +19,8 @@ async function getHttpsOptions() {
 
 module.exports = async function createWebpackConfig(env, options) {
   const dev = options.mode === "development";
+  // `--env hub`: production build served by the local Stylistic Hub on https://localhost:3000.
+  const keepLocalhostUrls = dev || Boolean(env && env.hub);
   const config = {
     devtool: "source-map",
     entry: {
@@ -80,7 +82,7 @@ module.exports = async function createWebpackConfig(env, options) {
             from: "manifest*.xml",
             to: "[name]" + "[ext]",
             transform(content) {
-              if (dev) {
+              if (keepLocalhostUrls) {
                 return content;
               } else {
                 return content
