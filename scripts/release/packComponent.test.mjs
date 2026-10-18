@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash, generateKeyPairSync, verify } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { canonicalJson, keyId, packComponent, rawPublicKey } from "./packComponent.mjs";
@@ -16,7 +16,7 @@ function makeDist() {
   writeFileSync(join(dist, "taskpane.html"), "<html><head></head></html>");
   writeFileSync(join(dist, "taskpane.js.map"), "{}".repeat(50));
   writeFileSync(join(dist, "assets", "icon-16.png"), "png");
-  return { dist, out: join(root, "release") };
+  return { root, dist, out: join(root, "release") };
 }
 
 const release = {
@@ -35,10 +35,13 @@ afterEach(() => {
 
 describe("packComponent", () => {
   it("zips the build without source maps and signs a component.json that pins the zip", async () => {
-    const { dist, out } = makeDist();
+    const { root, dist, out } = makeDist();
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
 
-    const { zip, component } = await packComponent({ ...release, dir: dist, out }, privateKey);
+    const { zip, component } = await packComponent(
+      { ...release, root, dir: dist, out },
+      privateKey
+    );
 
     const zipBytes = readFileSync(zip);
     expect(zip).toBe(join(out, "stylistic-word-addin-1.0.0.zip"));
@@ -63,12 +66,27 @@ describe("packComponent", () => {
   });
 
   it("refuses a component.json the hub would reject", async () => {
-    const { dist, out } = makeDist();
+    const { root, dist, out } = makeDist();
     const { privateKey } = generateKeyPairSync("ed25519");
 
     await expect(
-      packComponent({ ...release, version: "v1.0.0", dir: dist, out }, privateKey)
+      packComponent({ ...release, version: "v1.0.0", root, dir: dist, out }, privateKey)
     ).rejects.toThrow('Invalid component.json: version "v1.0.0"');
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it("refuses a build or output directory outside the root", async () => {
+    const { root, dist } = makeDist();
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const escape = join(root, "..", "escaped-release");
+
+    await expect(
+      packComponent({ ...release, root, dir: dist, out: escape }, privateKey)
+    ).rejects.toThrow(`--out "${escape}" is outside ${root}`);
+    await expect(
+      packComponent({ ...release, root: dist, dir: root, out: join(dist, "release") }, privateKey)
+    ).rejects.toThrow(`--dir "${root}" is outside ${dist}`);
+    expect(existsSync(escape)).toBe(false);
   });
 });
 

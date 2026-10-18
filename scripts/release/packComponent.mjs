@@ -23,7 +23,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -31,8 +31,7 @@ import yazl from "yazl";
 
 const NAME = /^[a-z][a-z0-9-]{1,40}$/;
 const VERSION = /^\d+\.\d+\.\d+(-beta\.\d+)?$/;
-const SHA256 = /^[0-9a-f]{64}$/;
-const CHANNELS = ["stable", "beta"];
+const CHANNELS = new Set(["stable", "beta"]);
 
 /** The raw 32 bytes of an ed25519 public key. */
 export function rawPublicKey(key) {
@@ -51,7 +50,8 @@ export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {
     const entries = Object.entries(value).sort(([a], [b]) => (a < b ? -1 : 1));
-    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
+    const members = entries.map(([key, item]) => JSON.stringify(key) + ":" + canonicalJson(item));
+    return `{${members.join(",")}}`;
   }
   return JSON.stringify(value);
 }
@@ -64,34 +64,53 @@ function signEnvelope(document, privateKey) {
   };
 }
 
-/** Throws unless `component` matches the hub's `component.json` schema. */
-function assertComponent(component) {
+/**
+ * Throws unless the release fields match the hub's `component.json` schema.
+ * Runs before any file is written, since `id` and `version` name the zip.
+ */
+function assertRelease(release) {
   const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-  const isBytes = (value) => Number.isInteger(value) && value >= 0;
-  const isUrl = (value) => URL.canParse(value);
   const checks = [
-    ["id", NAME.test(component.id)],
-    ["kind", NAME.test(component.kind)],
-    ["version", VERSION.test(component.version)],
-    ["channel", CHANNELS.includes(component.channel)],
-    ["sha256", SHA256.test(component.sha256)],
-    ["size", isBytes(component.size)],
-    ["maxUncompressedSize", isBytes(component.maxUncompressedSize)],
-    ["requires", isObject(component.requires)],
-    ["provides", isObject(component.provides)],
-    ["releaseNotes", typeof component.releaseNotes === "string" && isUrl(component.releaseNotes)],
+    ["id", NAME.test(release.id)],
+    ["kind", NAME.test(release.kind)],
+    ["version", VERSION.test(release.version)],
+    ["channel", CHANNELS.has(release.channel)],
+    ["requires", isObject(release.requires)],
+    ["provides", isObject(release.provides)],
+    [
+      "releaseNotes",
+      typeof release.releaseNotes === "string" && URL.canParse(release.releaseNotes),
+    ],
   ];
   const invalid = checks.filter(([, valid]) => !valid).map(([field]) => field);
 
   if (invalid.length > 0) {
-    const fields = invalid.map((field) => `${field} ${JSON.stringify(component[field])}`);
+    const fields = invalid.map((field) => `${field} ${JSON.stringify(release[field])}`);
     throw new Error(`Invalid component.json: ${fields.join(", ")}`);
   }
 }
 
-/** Zips `dir` without source maps and writes the signed `component.json` beside the zip. */
-export async function packComponent({ dir, out, ...release }, privateKey) {
-  const files = readdirSync(dir, { recursive: true, withFileTypes: true })
+/** Resolves `path` against `root`, refusing anything outside it. */
+function resolveInside(root, path, option) {
+  const base = resolve(root);
+  const target = resolve(base, path);
+  const fromBase = relative(base, target);
+
+  if (fromBase.startsWith("..") || isAbsolute(fromBase)) {
+    throw new Error(`--${option} "${path}" is outside ${base}`);
+  }
+  return target;
+}
+
+/**
+ * Zips `dir` without source maps and writes the signed `component.json` beside
+ * the zip. `dir` and `out` must lie inside `root` (the working directory).
+ */
+export async function packComponent({ root = process.cwd(), dir, out, ...release }, privateKey) {
+  assertRelease(release);
+  const source = resolveInside(root, dir, "dir");
+  const target = resolveInside(root, out, "out");
+  const files = readdirSync(source, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile() && !entry.name.endsWith(".map"))
     .map((entry) => join(entry.parentPath, entry.name))
     .sort();
@@ -99,13 +118,13 @@ export async function packComponent({ dir, out, ...release }, privateKey) {
   let uncompressed = 0;
 
   for (const file of files) {
-    zipfile.addFile(file, relative(dir, file).split(sep).join("/"));
+    zipfile.addFile(file, relative(source, file).split(sep).join("/"));
     uncompressed += statSync(file).size;
   }
   zipfile.end();
 
-  mkdirSync(out, { recursive: true });
-  const zip = join(out, `${release.id}-${release.version}.zip`);
+  mkdirSync(target, { recursive: true });
+  const zip = join(target, `${release.id}-${release.version}.zip`);
   await pipeline(zipfile.outputStream, createWriteStream(zip));
 
   const bytes = readFileSync(zip);
@@ -115,11 +134,10 @@ export async function packComponent({ dir, out, ...release }, privateKey) {
     size: bytes.length,
     maxUncompressedSize: uncompressed,
   };
-  assertComponent(component);
 
-  writeFileSync(join(out, "component.json"), `${JSON.stringify(component, null, 2)}\n`);
+  writeFileSync(join(target, "component.json"), `${JSON.stringify(component, null, 2)}\n`);
   writeFileSync(
-    join(out, "component.json.sig"),
+    join(target, "component.json.sig"),
     `${JSON.stringify(signEnvelope(component, privateKey), null, 2)}\n`
   );
   return { zip, component };
