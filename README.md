@@ -193,7 +193,7 @@ stylistic-addon/
 | `bun run stop`              | Stop the dev server and unload the add-in                                                  |
 | `bun run dev-server`        | Start only the webpack dev server                                                          |
 | `bun run watch`             | Rebuild continuously during development                                                    |
-| `bun run build:hub`         | Production build that keeps `https://localhost:3000`, the origin Stylistic Hub serves from |
+| `bun run build:hub`         | Production build pointed at `https://localhost:41730`, the origin Stylistic Hub serves from |
 | `bun run build:module`      | Production build released as the signed Stylistic Hub module (`/m/stylistic-word-addin/`) |
 | `bun run test`              | Run the Vitest suite                                                                       |
 | `bun run test:coverage`     | Run tests with coverage reporting                                                          |

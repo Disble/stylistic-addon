@@ -9,12 +9,17 @@
  * the hub's production add-in id (stylistic-hub docs/addin-contract.md).
  */
 
-/** Origin the manifest source names; Stylistic Hub serves from it too. */
+/** Origin the manifest source names: the add-in's own dev server. */
 const LOCAL_BASE_URL = "https://localhost:3000/";
+/**
+ * Origin Stylistic Hub serves from (stylistic-hub `HUB_PORT`), off the ports
+ * development servers use by default.
+ */
+const HUB_BASE_URL = "https://localhost:41730/";
 /** Component id of the signed add-in module. */
 const MODULE_ID = "stylistic-word-addin";
 /** Where Stylistic Hub serves the add-in module. */
-const MODULE_BASE_URL = `${LOCAL_BASE_URL}m/${MODULE_ID}/`;
+const MODULE_BASE_URL = `${HUB_BASE_URL}m/${MODULE_ID}/`;
 /** Add-in id Word knows the installed hub's add-in by; `Stylistic.docx` is built for it. */
 const PRODUCTION_ADDIN_ID = "5d0c6b1e-7f2a-4c3e-9b8d-1a2f3e4c5d6e";
 
@@ -29,7 +34,12 @@ function transformManifest(content, { version, baseUrl = LOCAL_BASE_URL, id }) {
     .replace(/<Version>[^<]*<\/Version>/, `<Version>${version}.0</Version>`);
 
   if (baseUrl !== LOCAL_BASE_URL) {
-    manifest = manifest.split(LOCAL_BASE_URL).join(baseUrl);
+    // Full URLs move under the base URL; a bare origin (SupportUrl, AppDomain) takes its origin.
+    manifest = manifest
+      .split(LOCAL_BASE_URL)
+      .join(baseUrl)
+      .split(new URL(LOCAL_BASE_URL).origin)
+      .join(new URL(baseUrl).origin);
   }
 
   if (id) {
@@ -41,6 +51,7 @@ function transformManifest(content, { version, baseUrl = LOCAL_BASE_URL, id }) {
 
 module.exports = {
   LOCAL_BASE_URL,
+  HUB_BASE_URL,
   MODULE_BASE_URL,
   MODULE_ID,
   PRODUCTION_ADDIN_ID,
