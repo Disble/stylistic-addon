@@ -8,7 +8,7 @@ This page only describes the add-in's side of it.
 ## Connection
 
 - **Base URL:** the task pane's own origin plus `/api/v1` (the hub serves the
-  task pane, for example `https://localhost:3000/api/v1`).
+  task pane, for example `https://localhost:41730/api/v1` under Stylistic Hub).
 - **Authentication:** there are no accounts. The hub injects its API token into
   the task pane as `<meta name="stylistic-hub-token" content="...">`; the add-in
   sends it as `Authorization: Bearer <token>` on every request

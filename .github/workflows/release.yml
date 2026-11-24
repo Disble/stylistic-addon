@@ -53,7 +53,7 @@ jobs:
         run: |
           test -f dist/manifest.xml || { echo "dist/manifest.xml is missing"; exit 1; }
           grep -q '</head>' dist/taskpane.html || { echo "dist/taskpane.html has no </head>"; exit 1; }
-          grep -q 'SourceLocation DefaultValue="https://localhost:3000/m/stylistic-word-addin/taskpane.html"' dist/manifest.xml \
+          grep -q 'SourceLocation DefaultValue="https://localhost:41730/m/stylistic-word-addin/taskpane.html"' dist/manifest.xml \
             || { echo "dist/manifest.xml does not point under /m/stylistic-word-addin/"; exit 1; }
           grep -q '<Id>5d0c6b1e-7f2a-4c3e-9b8d-1a2f3e4c5d6e</Id>' dist/manifest.xml \
             || { echo "dist/manifest.xml does not carry the hub's production add-in id"; exit 1; }

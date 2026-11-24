@@ -6,6 +6,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 const { version } = require("./package.json");
 const {
+  HUB_BASE_URL,
   MODULE_BASE_URL,
   PRODUCTION_ADDIN_ID,
   transformManifest,
@@ -24,9 +25,9 @@ async function getHttpsOptions() {
 
 module.exports = async function createWebpackConfig(env, options) {
   const dev = options.mode === "development";
-  // `--env hub`: production build served by the local Stylistic Hub on https://localhost:3000.
+  // `--env hub`: production build served by the local Stylistic Hub at its root (HUB_BASE_URL).
   // `--env module`: production build released as the signed Stylistic Hub module.
-  const keepLocalhostUrls = dev || Boolean(env && env.hub);
+  const hubBuild = Boolean(env && env.hub);
   const moduleBuild = Boolean(env && env.module);
   const config = {
     devtool: "source-map",
@@ -96,7 +97,10 @@ module.exports = async function createWebpackConfig(env, options) {
                   id: PRODUCTION_ADDIN_ID,
                 });
               }
-              if (keepLocalhostUrls) {
+              if (hubBuild) {
+                return transformManifest(content, { version, baseUrl: HUB_BASE_URL });
+              }
+              if (dev) {
                 return transformManifest(content, { version });
               }
               return transformManifest(content, { version, baseUrl: urlProd });

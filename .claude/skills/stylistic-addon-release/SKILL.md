@@ -41,7 +41,7 @@ Use when publishing a new add-in version for Stylistic Hub. A release is the Git
 ## Execution Steps
 
 1. **Prepare.** Fetch `main` through gh (see Pushing). Create `chore/release-<version>` from `FETCH_HEAD`. Set `version` in `package.json`; the lockfile does not store it. Commit as `chore(release): <version>`.
-2. **Check locally.** Run `bun run validate`, `bun run test` and `bun run build:module`. Then confirm `dist/manifest.xml` has `<Version><version>.0`, `<Id>5d0c6b1e-7f2a-4c3e-9b8d-1a2f3e4c5d6e` and `SourceLocation` under `https://localhost:3000/m/stylistic-word-addin/`.
+2. **Check locally.** Run `bun run validate`, `bun run test` and `bun run build:module`. Then confirm `dist/manifest.xml` has `<Version><version>.0`, `<Id>5d0c6b1e-7f2a-4c3e-9b8d-1a2f3e4c5d6e` and `SourceLocation` under `https://localhost:41730/m/stylistic-word-addin/`.
 3. **Merge.** Push the branch and open a PR to `main`. Wait for `check` and SonarCloud to pass, then merge with a merge commit (`gh pr merge <n> --merge`). Wait for CI on `main` to pass.
 4. **Confirm.** Ask the user: "¿Publico `v<version>` sobre `<merge sha>`?" Then STOP and wait.
 5. **Tag.** Run `git tag -a v<version> <merge sha> -m "v<version>"` and push the tag (see Pushing).
