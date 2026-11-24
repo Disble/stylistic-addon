@@ -96,7 +96,7 @@ export function HeroEmptyState({ children }: HeroEmptyStateProps): React.JSX.Ele
             Listo para revisar tu texto
           </h2>
           <p className={classes.subtitle}>
-            Analizá el documento completo o seleccioná un fragmento para empezar.
+            Analiza el documento completo o selecciona un fragmento para empezar.
           </p>
         </div>
       </div>

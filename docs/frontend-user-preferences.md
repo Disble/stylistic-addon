@@ -80,7 +80,7 @@ Ejemplo:
 
 ```json
 {
-  "correctionInstructions": "Vigilá subordinadas demasiado largas, repeticiones léxicas cercanas y adverbios terminados en -mente cuando no aporten precisión."
+  "correctionInstructions": "Vigila subordinadas demasiado largas, repeticiones léxicas cercanas y adverbios terminados en -mente cuando no aporten precisión."
 }
 ```
 
@@ -121,7 +121,7 @@ Ejemplo con valor guardado:
 
 ```json
 {
-  "correctionInstructions": "Vigilá subordinadas demasiado largas y muletillas repetidas.",
+  "correctionInstructions": "Vigila subordinadas demasiado largas y muletillas repetidas.",
   "correctionInstructionsMaxLength": 4000
 }
 ```

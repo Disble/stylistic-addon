@@ -7,6 +7,5 @@ export function useAnalyzeSection(): AnalyzeSectionClasses {
   return {
     root: styles.root,
     button: styles.button,
-    privacyNotice: styles.privacyNotice,
   };
 }

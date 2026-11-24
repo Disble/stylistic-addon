@@ -9,9 +9,4 @@ export const useAnalyzeSectionStyles = makeStyles({
     width: "100%",
     justifyContent: "center",
   },
-  privacyNotice: {
-    display: "block",
-    marginTop: tokens.spacingVerticalS,
-    color: tokens.colorNeutralForeground3,
-  },
 });
